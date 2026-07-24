@@ -61,6 +61,73 @@
             display: none;
         }
 
+        .money-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            font-size: 14px;
+        }
+
+        .money-input-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        .money-input-wrap .form-control {
+            width: 100%;
+            padding-right: 22px;
+        }
+
+        .money-stepper {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            bottom: 1px;
+            width: 18px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #dee2e6;
+            border-radius: 0 6px 6px 0;
+            overflow: hidden;
+        }
+
+        .money-step-btn {
+            flex: 1;
+            border: none;
+            background: #f8f9fa;
+            color: #6b7280;
+            font-size: 9px;
+            line-height: 1;
+            padding: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .money-step-btn:hover {
+            background: #e9ecef;
+            color: #111827;
+        }
+
+        .form-check-input:checked {
+            background-color: #059669;
+            border-color: #059669;
+        }
+
+        .income-inline-error {
+            display: none;
+            width: 100%;
+            margin-top: 0.25rem;
+            font-size: 0.875em;
+            color: #dc3545;
+        }
+
+        .income-inline-error.is-visible {
+            display: block;
+        }
+
         @media (max-width: 991.98px) {
             .income-page-content {
                 padding-top: 84px !important;
@@ -86,8 +153,6 @@
                 Quay lại danh sách
             </a>
         </div>
-
-        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
 
         <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="incomeForm">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -129,6 +194,9 @@
                                         Khách A
                                     </option>
                                 </select>
+                                <div class="income-inline-error" id="customerIdError">
+                                    Vui lòng chọn khách hàng.
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6 reference-field" id="debtInvoiceField">
@@ -142,6 +210,9 @@
                                         HD-001
                                     </option>
                                 </select>
+                                <div class="income-inline-error" id="invoiceIdError">
+                                    Vui lòng chọn hóa đơn bán hàng còn nợ.
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6 party-field" id="supplierField">
@@ -152,6 +223,9 @@
                                             th:value="${item.id}"
                                             th:text="${item.name}">NCC A</option>
                                 </select>
+                                <div class="income-inline-error" id="supplierIdError">
+                                    Vui lòng chọn nhà cung cấp.
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6 reference-field" id="supplierReturnField">
@@ -165,6 +239,9 @@
                                         THNCC-001
                                     </option>
                                 </select>
+                                <div class="income-inline-error" id="returnIdError">
+                                    Vui lòng chọn phiếu trả hàng nhà cung cấp.
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6 party-field" id="employeeField">
@@ -175,6 +252,9 @@
                                             th:value="${item.id}"
                                             th:text="${item.name}">NV A</option>
                                 </select>
+                                <div class="income-inline-error" id="accountIdError">
+                                    Vui lòng chọn nhân viên.
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6 reference-field" id="stockAdjustmentField">
@@ -187,45 +267,30 @@
                                         PDC-001
                                     </option>
                                 </select>
+                                <div class="income-inline-error" id="stockAdjustmentIdError">
+                                    Vui lòng chọn phiếu điều chỉnh kho.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 party-field" id="manualAmountField">
+                                <label class="form-label">Số tiền thu <span class="text-danger">*</span></label>
+                                <div class="input-group has-validation">
+                                    <input type="number" min="0" step="1" class="form-control"
+                                           id="manualAmountInput" placeholder="0"
+                                           oninput="handleManualAmountInput(this)">
+                                    <span class="input-group-text">đ</span>
+                                    <div class="invalid-feedback" id="manualAmountError" style="display:none;">
+                                        Vui lòng nhập số tiền thu lớn hơn 0.
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-12">
                                 <label class="form-label">Nội dung thu <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" th:field="*{reason}"
+                                <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
                                        placeholder="VD: Thu nợ khách hàng, hoàn ứng nhân viên…">
-                            </div>
-
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Tổng số tiền thu <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="number" min="0" step="1" class="form-control"
-                                           th:field="*{amount}" id="amountInput" placeholder="0">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                            </div>
-
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Tiền mặt</label>
-                                <div class="input-group">
-                                    <input type="number" min="0" step="1" class="form-control"
-                                           th:field="*{paidByCash}" id="cashInput" placeholder="0">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                            </div>
-
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Chuyển khoản</label>
-                                <div class="input-group">
-                                    <input type="number" min="0" step="1" class="form-control"
-                                           th:field="*{paidByBanking}" id="bankingInput" placeholder="0">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <div class="form-text">
-                                    <i class="ti ti-info-circle me-1"></i>
-                                    Để trống tiền mặt và chuyển khoản sẽ mặc định ghi nhận toàn bộ bằng tiền mặt.
+                                <div class="income-inline-error" id="reasonError">
+                                    Vui lòng nhập nội dung thu.
                                 </div>
                             </div>
 
@@ -240,6 +305,85 @@
                 </div>
 
                 <div class="col-12 col-xl-4">
+                    <div class="income-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-calculator text-success me-1"></i>
+                            Thanh toán
+                        </div>
+
+                        <input type="hidden" th:field="*{amount}" id="amountField">
+
+                        <div class="money-summary-row">
+                            <span class="text-secondary">Tổng số tiền thu</span>
+                            <strong class="text-success" id="totalDisplay">0đ</strong>
+                        </div>
+
+                        <hr>
+
+                        <div class="mb-3">
+                            <label class="form-label d-block mb-2">Hình thức thanh toán</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payCash" value="cash" checked onchange="onPayMethodChange()">
+                                    <label class="form-check-label" for="payCash">Tiền mặt</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payBanking" value="banking" onchange="onPayMethodChange()">
+                                    <label class="form-check-label" for="payBanking">Chuyển khoản</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payBoth" value="both" onchange="onPayMethodChange()">
+                                    <label class="form-check-label" for="payBoth">Tiền mặt + Chuyển khoản</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="singlePaidBox">
+                            <label class="form-label">Số tiền thu</label>
+                            <input type="text" inputmode="numeric" class="form-control"
+                                   id="paidAmount" readonly tabindex="-1">
+                        </div>
+
+                        <div id="splitPaidBox" style="display:none;">
+                            <div class="mb-3">
+                                <label class="form-label">Tiền mặt</label>
+                                <div class="money-input-wrap">
+                                    <input type="text" inputmode="numeric" class="form-control"
+                                           id="cashAmount" oninput="handlePaidInput(this)">
+                                    <div class="money-stepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('cashAmount', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('cashAmount', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Chuyển khoản</label>
+                                <div class="money-input-wrap">
+                                    <input type="text" inputmode="numeric" class="form-control"
+                                           id="bankingAmount" oninput="handlePaidInput(this)">
+                                    <div class="money-stepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('bankingAmount', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('bankingAmount', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <input type="hidden" th:field="*{paidByCash}" id="paidByCashField">
+                        <input type="hidden" th:field="*{paidByBanking}" id="paidByBankingField">
+
+                        <div class="text-danger small" id="overpaidWarning" style="display:none;">
+                            Số tiền thu đang lớn hơn tổng số tiền thu.
+                        </div>
+                    </div>
+
                     <div class="income-card p-4">
                         <button th:if="${#strings.startsWith(basePath, '/owner')}"
                                 type="submit" name="action" value="submit"
@@ -271,6 +415,240 @@
 <script th:inline="javascript">
     const basePath = /*[[${basePath}]]*/ '/owner/incomes';
 
+    const AMOUNT_REQUIRED_MSG = 'Vui lòng nhập số tiền thu lớn hơn 0.';
+    const REASON_REQUIRED_MSG = 'Vui lòng nhập nội dung thu.';
+    const serverErrorMessage = /*[[${errorMessage != null ? errorMessage : ''}]]*/ '';
+
+    const PARTY_REFERENCE_FIELDS = {
+        customerIdInput: { errorId: 'customerIdError', message: 'Vui lòng chọn khách hàng.' },
+        invoiceIdInput: { errorId: 'invoiceIdError', message: 'Vui lòng chọn hóa đơn bán hàng còn nợ.' },
+        supplierIdInput: { errorId: 'supplierIdError', message: 'Vui lòng chọn nhà cung cấp.' },
+        returnIdInput: { errorId: 'returnIdError', message: 'Vui lòng chọn phiếu trả hàng nhà cung cấp.' },
+        accountIdInput: { errorId: 'accountIdError', message: 'Vui lòng chọn nhân viên.' },
+        stockAdjustmentIdInput: { errorId: 'stockAdjustmentIdError', message: 'Vui lòng chọn phiếu điều chỉnh kho.' }
+    };
+
+    const touchedPartyFields = new Set();
+
+    function setErrorVisible(errorEl, visible) {
+        if (!errorEl) {
+            return;
+        }
+        errorEl.classList.toggle('is-visible', visible);
+    }
+
+    function clearSelectError(selectId) {
+        const select = document.getElementById(selectId);
+        const config = PARTY_REFERENCE_FIELDS[selectId];
+        if (!select || !config) {
+            return;
+        }
+        select.classList.remove('is-invalid');
+        setErrorVisible(document.getElementById(config.errorId), false);
+    }
+
+    function showSelectError(selectId, message) {
+        const select = document.getElementById(selectId);
+        const config = PARTY_REFERENCE_FIELDS[selectId];
+        if (!select || !config || select.value) {
+            return false;
+        }
+        select.classList.add('is-invalid');
+        const error = document.getElementById(config.errorId);
+        if (error) {
+            error.textContent = message || config.message;
+            setErrorVisible(error, true);
+        }
+        return true;
+    }
+
+    function clearAllPartyReferenceErrors() {
+        Object.keys(PARTY_REFERENCE_FIELDS).forEach(clearSelectError);
+    }
+
+    function isPartyReferenceRequired(selectId, type) {
+        if (type === 'CUSTOMER') {
+            return selectId === 'customerIdInput' || selectId === 'invoiceIdInput';
+        }
+        if (type === 'SUPPLIER') {
+            return selectId === 'supplierIdInput' || selectId === 'returnIdInput';
+        }
+        if (type === 'EMPLOYEE') {
+            return selectId === 'accountIdInput' || selectId === 'stockAdjustmentIdInput';
+        }
+        return false;
+    }
+
+    function canValidateReferenceField(selectId, type) {
+        if (type === 'CUSTOMER' && selectId === 'invoiceIdInput') {
+            return !!document.getElementById('customerIdInput').value;
+        }
+        if (type === 'SUPPLIER' && selectId === 'returnIdInput') {
+            return !!document.getElementById('supplierIdInput').value;
+        }
+        if (type === 'EMPLOYEE' && selectId === 'stockAdjustmentIdInput') {
+            return !!document.getElementById('accountIdInput').value;
+        }
+        return true;
+    }
+
+    function syncSelectError(selectId, force) {
+        const select = document.getElementById(selectId);
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!select || !isPartyReferenceRequired(selectId, type)) {
+            clearSelectError(selectId);
+            return;
+        }
+        if (select.value) {
+            clearSelectError(selectId);
+            return;
+        }
+        if (!force && !touchedPartyFields.has(selectId)) {
+            clearSelectError(selectId);
+            return;
+        }
+        if (!canValidateReferenceField(selectId, type)) {
+            clearSelectError(selectId);
+            return;
+        }
+        showSelectError(selectId);
+    }
+
+    function validatePartyReferenceFields(type) {
+        clearAllPartyReferenceErrors();
+        let valid = true;
+        let firstInvalid = null;
+
+        function markInvalid(selectId) {
+            touchedPartyFields.add(selectId);
+            if (!canValidateReferenceField(selectId, type)) {
+                return;
+            }
+            const select = document.getElementById(selectId);
+            if (!select || select.value) {
+                return;
+            }
+            if (showSelectError(selectId)) {
+                valid = false;
+                if (!firstInvalid) {
+                    firstInvalid = select;
+                }
+            }
+        }
+
+        if (type === 'CUSTOMER') {
+            if (!document.getElementById('customerIdInput').value) {
+                markInvalid('customerIdInput');
+            } else if (!document.getElementById('invoiceIdInput').value) {
+                markInvalid('invoiceIdInput');
+            }
+        } else if (type === 'SUPPLIER') {
+            if (!document.getElementById('supplierIdInput').value) {
+                markInvalid('supplierIdInput');
+            } else if (!document.getElementById('returnIdInput').value) {
+                markInvalid('returnIdInput');
+            }
+        } else if (type === 'EMPLOYEE') {
+            if (!document.getElementById('accountIdInput').value) {
+                markInvalid('accountIdInput');
+            } else if (!document.getElementById('stockAdjustmentIdInput').value) {
+                markInvalid('stockAdjustmentIdInput');
+            }
+        }
+
+        if (firstInvalid) {
+            firstInvalid.focus();
+            firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return valid;
+    }
+
+    function requiresManualAmount(type) {
+        return type === 'OTHER' || type === 'EMPLOYEE';
+    }
+
+    function clearAmountError() {
+        const manualInput = document.getElementById('manualAmountInput');
+        const manualError = document.getElementById('manualAmountError');
+        if (manualInput) {
+            manualInput.classList.remove('is-invalid');
+        }
+        if (manualError) {
+            manualError.style.display = 'none';
+        }
+    }
+
+    function showAmountError(message) {
+        clearAmountError();
+        const manualInput = document.getElementById('manualAmountInput');
+        const manualError = document.getElementById('manualAmountError');
+        const text = message || AMOUNT_REQUIRED_MSG;
+
+        if (!manualInput || Number(manualInput.value || 0) > 0) {
+            return;
+        }
+
+        manualInput.classList.add('is-invalid');
+        if (manualError) {
+            manualError.textContent = text;
+            manualError.style.display = 'block';
+        }
+        manualInput.focus();
+        manualInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function clearReasonError() {
+        const input = document.getElementById('reasonInput');
+        const error = document.getElementById('reasonError');
+        if (input) {
+            input.classList.remove('is-invalid');
+        }
+        setErrorVisible(error, false);
+    }
+
+    function showReasonError(message) {
+        clearReasonError();
+        const input = document.getElementById('reasonInput');
+        const error = document.getElementById('reasonError');
+        const text = message || REASON_REQUIRED_MSG;
+
+        if (!input || (input.value || '').trim()) {
+            return false;
+        }
+
+        input.classList.add('is-invalid');
+        if (error) {
+            error.textContent = text;
+            setErrorVisible(error, true);
+        }
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
+    }
+
+    function validateReasonField() {
+        const input = document.getElementById('reasonInput');
+        if (input && (input.value || '').trim()) {
+            clearReasonError();
+            return true;
+        }
+        showReasonError(REASON_REQUIRED_MSG);
+        return false;
+    }
+
+    function applyServerFieldErrors() {
+        if (!serverErrorMessage) {
+            return;
+        }
+        if (serverErrorMessage.indexOf('nội dung thu') >= 0) {
+            showReasonError(serverErrorMessage);
+        } else if (window.pmToast) {
+            pmToast(serverErrorMessage, 'error');
+        } else {
+            alert(serverErrorMessage);
+        }
+    }
+
     function formatMoney(value) {
         if (value == null || value === '') {
             return '';
@@ -278,7 +656,172 @@
         return Number(value).toLocaleString('vi-VN') + 'đ';
     }
 
-    function toggleTypeFields() {
+    function formatPriceDisplay(value) {
+        if (value == null || value === '') {
+            return '';
+        }
+        const num = Number(String(value).replace(/\./g, ''));
+        if (!Number.isFinite(num)) {
+            return '';
+        }
+        return num.toLocaleString('vi-VN');
+    }
+
+    function parsePrice(input) {
+        if (!input || !input.value) {
+            return 0;
+        }
+        const num = Number(String(input.value).replace(/\./g, ''));
+        return Number.isFinite(num) ? num : 0;
+    }
+
+    let paidTouched = false;
+    let lastSplitPaidField = null;
+
+    function currentPayMethod() {
+        const method = document.querySelector('input[name="payMethod"]:checked');
+        return method ? method.value : 'cash';
+    }
+
+    function setAmount(total) {
+        const normalized = total > 0 ? Math.round(total) : 0;
+        document.getElementById('amountField').value = normalized > 0 ? normalized : '';
+        const manualInput = document.getElementById('manualAmountInput');
+        if (manualInput && document.getElementById('manualAmountField').classList.contains('show')) {
+            manualInput.value = normalized > 0 ? normalized : '';
+        }
+        if (normalized > 0) {
+            clearAmountError();
+        }
+        paidTouched = false;
+        lastSplitPaidField = null;
+        syncPayment();
+    }
+
+    function handleManualAmountInput(input) {
+        const value = Number(input.value || 0);
+        setAmount(value);
+        if (value > 0) {
+            input.classList.remove('is-invalid');
+            const manualError = document.getElementById('manualAmountError');
+            if (manualError) {
+                manualError.style.display = 'none';
+            }
+        }
+    }
+
+    function onPayMethodChange() {
+        const both = currentPayMethod() === 'both';
+        document.getElementById('singlePaidBox').style.display = both ? 'none' : 'block';
+        document.getElementById('splitPaidBox').style.display = both ? 'block' : 'none';
+        paidTouched = false;
+        lastSplitPaidField = null;
+        syncPayment();
+    }
+
+    function handlePaidInput(input) {
+        const digits = String(input.value).replace(/[^\d]/g, '');
+        input.value = digits ? Number(digits).toLocaleString('vi-VN') : '';
+        paidTouched = true;
+        if (currentPayMethod() === 'both') {
+            if (input.id === 'cashAmount') {
+                lastSplitPaidField = 'cash';
+            } else if (input.id === 'bankingAmount') {
+                lastSplitPaidField = 'banking';
+            }
+        }
+        syncPayment();
+    }
+
+    function stepMoney(inputId, delta) {
+        const input = document.getElementById(inputId);
+        if (!input || input.readOnly || input.disabled) {
+            return;
+        }
+        const next = Math.max(0, parsePrice(input) + delta);
+        input.value = next ? next.toLocaleString('vi-VN') : '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function balanceSplitPayment(total) {
+        const cashInput = document.getElementById('cashAmount');
+        const bankingInput = document.getElementById('bankingAmount');
+        let cash = parsePrice(cashInput);
+        let banking = parsePrice(bankingInput);
+
+        if (!paidTouched) {
+            cash = total;
+            banking = 0;
+        } else if (lastSplitPaidField === 'banking') {
+            banking = Math.min(Math.max(0, banking), total);
+            cash = total - banking;
+        } else {
+            cash = Math.min(Math.max(0, cash), total);
+            banking = total - cash;
+        }
+
+        cashInput.value = cash > 0 ? formatPriceDisplay(cash) : '';
+        bankingInput.value = banking > 0 ? formatPriceDisplay(banking) : '';
+        return { cash: cash, banking: banking };
+    }
+
+    function syncPayment() {
+        const total = Number(document.getElementById('amountField').value || 0);
+        const cashField = document.getElementById('paidByCashField');
+        const bankingField = document.getElementById('paidByBankingField');
+        const method = currentPayMethod();
+        let paid;
+
+        if (method === 'both') {
+            const { cash, banking } = balanceSplitPayment(total);
+            cashField.value = cash;
+            bankingField.value = banking;
+            paid = cash + banking;
+        } else {
+            const paidAmountInput = document.getElementById('paidAmount');
+            paidAmountInput.value = total > 0 ? formatPriceDisplay(total) : '';
+            paid = total;
+            if (method === 'banking') {
+                cashField.value = 0;
+                bankingField.value = paid;
+            } else {
+                cashField.value = paid;
+                bankingField.value = 0;
+            }
+        }
+
+        document.getElementById('totalDisplay').textContent = formatMoney(total);
+        document.getElementById('overpaidWarning').style.display = paid > total && total > 0 ? 'block' : 'none';
+    }
+
+    function initPaymentFromForm() {
+        const amountField = document.getElementById('amountField');
+        const manualInput = document.getElementById('manualAmountInput');
+        const existingAmount = Number(amountField && amountField.value ? amountField.value : 0);
+        if (manualInput && existingAmount > 0) {
+            manualInput.value = amountField.value;
+        }
+
+        const cash = Number(document.getElementById('paidByCashField').value || 0);
+        const banking = Number(document.getElementById('paidByBankingField').value || 0);
+        if (cash > 0 && banking > 0) {
+            document.getElementById('payBoth').checked = true;
+            document.getElementById('cashAmount').value = formatPriceDisplay(cash);
+            document.getElementById('bankingAmount').value = formatPriceDisplay(banking);
+            paidTouched = true;
+        } else if (banking > 0) {
+            document.getElementById('payBanking').checked = true;
+        } else {
+            document.getElementById('payCash').checked = true;
+        }
+        onPayMethodChange();
+        if (existingAmount > 0) {
+            syncPayment();
+        }
+    }
+
+    function toggleTypeFields(options) {
+        options = options || {};
         const type = document.getElementById('incomeTypeInput').value;
         document.getElementById('supplierField').classList.toggle('show', type === 'SUPPLIER');
         document.getElementById('customerField').classList.toggle('show', type === 'CUSTOMER');
@@ -286,6 +829,17 @@
         document.getElementById('debtInvoiceField').classList.toggle('show', type === 'CUSTOMER');
         document.getElementById('supplierReturnField').classList.toggle('show', type === 'SUPPLIER');
         document.getElementById('stockAdjustmentField').classList.toggle('show', type === 'EMPLOYEE');
+        document.getElementById('manualAmountField').classList.toggle('show', type === 'OTHER' || type === 'EMPLOYEE');
+        if (!requiresManualAmount(type)) {
+            clearAmountError();
+        } else {
+            clearAllPartyReferenceErrors();
+        }
+        if (options.resetLinkedAmount && (type === 'CUSTOMER' || type === 'SUPPLIER')) {
+            setAmount(0);
+        }
+        touchedPartyFields.clear();
+        clearAllPartyReferenceErrors();
     }
 
     function populateReferenceSelect(selectId, placeholder, items, selectedValue, buildLabel) {
@@ -354,87 +908,135 @@
         });
     }
 
+    function bindPartyReferenceField(selectId, onChange) {
+        const select = document.getElementById(selectId);
+        if (!select) {
+            return;
+        }
+        select.addEventListener('change', function () {
+            touchedPartyFields.add(selectId);
+            syncSelectError(selectId);
+            if (onChange) {
+                onChange.call(this);
+            }
+        });
+        select.addEventListener('blur', function () {
+            touchedPartyFields.add(selectId);
+            syncSelectError(selectId);
+        });
+    }
+
     function applySuggestedAmount(selectElement) {
         const option = selectElement.options[selectElement.selectedIndex];
         const amount = option && option.dataset.amount ? Number(option.dataset.amount) : null;
         if (amount && amount > 0) {
-            document.getElementById('amountInput').value = Math.round(amount);
-            document.getElementById('cashInput').value = '';
-            document.getElementById('bankingInput').value = '';
+            setAmount(amount);
+        } else if (!selectElement.value) {
+            setAmount(0);
         }
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const invoiceIdInput = document.getElementById('invoiceIdInput');
-        const returnIdInput = document.getElementById('returnIdInput');
-        const stockAdjustmentIdInput = document.getElementById('stockAdjustmentIdInput');
-
         document.getElementById('incomeTypeInput').addEventListener('change', function () {
-            toggleTypeFields();
+            toggleTypeFields({ resetLinkedAmount: true });
         });
 
-        document.getElementById('customerIdInput').addEventListener('change', function () {
+        bindPartyReferenceField('customerIdInput', function () {
+            clearSelectError('invoiceIdInput');
             loadDebtInvoices(this.value, null);
         });
 
-        document.getElementById('supplierIdInput').addEventListener('change', function () {
+        bindPartyReferenceField('supplierIdInput', function () {
+            clearSelectError('returnIdInput');
             loadSupplierReturns(this.value, null);
         });
 
-        document.getElementById('accountIdInput').addEventListener('change', function () {
+        bindPartyReferenceField('accountIdInput', function () {
+            clearSelectError('stockAdjustmentIdInput');
             loadStockAdjustments(this.value, null);
         });
 
-        invoiceIdInput.addEventListener('change', function () { applySuggestedAmount(this); });
-        returnIdInput.addEventListener('change', function () { applySuggestedAmount(this); });
+        bindPartyReferenceField('invoiceIdInput', function () {
+            applySuggestedAmount(this);
+        });
+        bindPartyReferenceField('returnIdInput', function () {
+            applySuggestedAmount(this);
+        });
+        bindPartyReferenceField('stockAdjustmentIdInput');
+
+        const reasonInput = document.getElementById('reasonInput');
+        if (reasonInput) {
+            reasonInput.addEventListener('input', function () {
+                if ((this.value || '').trim()) {
+                    clearReasonError();
+                }
+            });
+            reasonInput.addEventListener('blur', function () {
+                if (!(this.value || '').trim()) {
+                    showReasonError(REASON_REQUIRED_MSG);
+                }
+            });
+        }
+
+        const manualAmountInput = document.getElementById('manualAmountInput');
+        if (manualAmountInput) {
+            manualAmountInput.addEventListener('blur', function () {
+                const type = document.getElementById('incomeTypeInput').value;
+                if (!requiresManualAmount(type) || Number(this.value || 0) > 0) {
+                    return;
+                }
+                if (type === 'EMPLOYEE' && !validatePartyReferenceFields(type)) {
+                    return;
+                }
+                showAmountError(AMOUNT_REQUIRED_MSG);
+            });
+        }
 
         toggleTypeFields();
+        initPaymentFromForm();
+        applyServerFieldErrors();
 
         document.getElementById('incomeForm').addEventListener('submit', function (event) {
+            syncPayment();
+
             const type = document.getElementById('incomeTypeInput').value;
-            const amount = Number(document.getElementById('amountInput').value || 0);
+            clearAmountError();
+            clearReasonError();
+
+            if (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE') {
+                if (!validatePartyReferenceFields(type)) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+
+            const amount = Number(document.getElementById('amountField').value || 0);
             if (amount <= 0) {
                 event.preventDefault();
-                if (window.pmToast) {
-                    pmToast('Vui lòng nhập số tiền thu lớn hơn 0.', 'error');
+                if (requiresManualAmount(type)) {
+                    showAmountError(AMOUNT_REQUIRED_MSG);
+                } else if (window.pmToast) {
+                    pmToast(AMOUNT_REQUIRED_MSG, 'error');
                 } else {
-                    alert('Vui lòng nhập số tiền thu lớn hơn 0.');
+                    alert(AMOUNT_REQUIRED_MSG);
                 }
                 return;
             }
 
-            if (type === 'CUSTOMER' && !document.getElementById('invoiceIdInput').value) {
+            if (!validateReasonField()) {
                 event.preventDefault();
-                const message = 'Vui lòng chọn hóa đơn bán hàng còn nợ.';
-                if (window.pmToast) { pmToast(message, 'error'); } else { alert(message); }
-                return;
-            }
-            if (type === 'SUPPLIER' && !document.getElementById('returnIdInput').value) {
-                event.preventDefault();
-                const message = 'Vui lòng chọn phiếu trả hàng nhà cung cấp.';
-                if (window.pmToast) { pmToast(message, 'error'); } else { alert(message); }
-                return;
-            }
-            if (type === 'EMPLOYEE' && !document.getElementById('stockAdjustmentIdInput').value) {
-                event.preventDefault();
-                const message = 'Vui lòng chọn phiếu điều chỉnh kho.';
-                if (window.pmToast) { pmToast(message, 'error'); } else { alert(message); }
                 return;
             }
 
-            const cashRaw = document.getElementById('cashInput').value;
-            const bankingRaw = document.getElementById('bankingInput').value;
-            if (cashRaw !== '' || bankingRaw !== '') {
-                const cash = Number(cashRaw || 0);
-                const banking = Number(bankingRaw || 0);
-                if (cash + banking !== amount) {
-                    event.preventDefault();
-                    const message = 'Tiền mặt + chuyển khoản phải bằng tổng số tiền thu.';
-                    if (window.pmToast) {
-                        pmToast(message, 'error');
-                    } else {
-                        alert(message);
-                    }
+            const cash = Number(document.getElementById('paidByCashField').value || 0);
+            const banking = Number(document.getElementById('paidByBankingField').value || 0);
+            if (cash + banking !== amount) {
+                event.preventDefault();
+                const message = 'Tiền mặt + chuyển khoản phải bằng tổng số tiền thu.';
+                if (window.pmToast) {
+                    pmToast(message, 'error');
+                } else {
+                    alert(message);
                 }
             }
         });

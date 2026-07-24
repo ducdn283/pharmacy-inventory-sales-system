@@ -302,6 +302,14 @@
                     th:selected="${filterStatus == item}">
             </option>
           </select>
+          <select class="filter-select" name="paymentType">
+            <option value="">Hình thức</option>
+            <option th:each="entry : ${paymentTypeLabels}"
+                    th:value="${entry.key}"
+                    th:text="${entry.value}"
+                    th:selected="${filterPaymentType == entry.key}">
+            </option>
+          </select>
           <select class="filter-select" name="applicantId">
             <option value="">Người lập</option>
             <option th:each="applicant : ${applicants}"
@@ -372,18 +380,18 @@
           <ul class="pagination mb-0">
             <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
               <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, applicantId=${filterApplicantId}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
+                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, paymentType=${filterPaymentType}, applicantId=${filterApplicantId}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
             </li>
             <li class="page-item"
                 th:each="p : ${#numbers.sequence(0, totalPages - 1)}"
                 th:classappend="${p == currentPage} ? ' active'">
               <a class="page-link"
                  th:text="${p + 1}"
-                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, applicantId=${filterApplicantId}, page=${p}, size=${pageSize})}">1</a>
+                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, paymentType=${filterPaymentType}, applicantId=${filterApplicantId}, page=${p}, size=${pageSize})}">1</a>
             </li>
             <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
               <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, applicantId=${filterApplicantId}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
+                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, paymentType=${filterPaymentType}, applicantId=${filterApplicantId}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
             </li>
           </ul>
         </nav>

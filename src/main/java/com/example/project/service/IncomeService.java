@@ -58,6 +58,10 @@ public class IncomeService {
     private static final String SUPPLIER_RETURN_STATUS_APPROVED = "Đã duyệt";
     private static final String STOCK_ADJUSTMENT_STATUS_APPROVED = "Duyệt";
 
+    private static final String PAYMENT_CASH = "CASH";
+    private static final String PAYMENT_BANKING = "BANKING";
+    private static final String PAYMENT_MIXED = "MIXED";
+
     private final IncomeRepository incomeRepository;
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
@@ -98,6 +102,7 @@ public class IncomeService {
                                        String toDate,
                                        String incomeType,
                                        String status,
+                                       String paymentType,
                                        Integer applicantId,
                                        Pageable pageable) {
         String normalizedKeyword = normalize(search);
@@ -112,6 +117,7 @@ public class IncomeService {
                         || resolveIncomeType(income).equals(IncomeTypeOptionResponse.codeOf(incomeType)))
                 .filter(income -> applicantId == null || matchesApplicant(income, applicantId))
                 .filter(income -> normalizedStatus.isEmpty() || matchesStatus(income, normalizedStatus))
+                .filter(income -> matchesPaymentType(income, paymentType))
                 .sorted(Comparator.comparing(Income::getDate, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Income::getId, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(this::toListItem)
@@ -147,6 +153,14 @@ public class IncomeService {
 
     public List<IncomeTypeOptionResponse> listIncomeTypes() {
         return IncomeTypeOptionResponse.all();
+    }
+
+    public Map<String, String> paymentTypeLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        labels.put(PAYMENT_CASH, "Tiền mặt");
+        labels.put(PAYMENT_BANKING, "Chuyển khoản");
+        labels.put(PAYMENT_MIXED, "TM + CK");
+        return labels;
     }
 
     @Transactional(readOnly = true)
@@ -482,6 +496,20 @@ public class IncomeService {
 
     private boolean matchesApplicant(Income income, Integer applicantId) {
         return income.getApplicantID() != null && applicantId.equals(income.getApplicantID().getId());
+    }
+
+    private boolean matchesPaymentType(Income income, String paymentType) {
+        if (paymentType == null || paymentType.isBlank()) {
+            return true;
+        }
+        boolean cash = isPositive(income.getPaidByCash());
+        boolean banking = isPositive(income.getPaidByBanking());
+        return switch (paymentType.toUpperCase(Locale.ROOT)) {
+            case PAYMENT_CASH -> cash && !banking;
+            case PAYMENT_BANKING -> banking && !cash;
+            case PAYMENT_MIXED -> cash && banking;
+            default -> true;
+        };
     }
 
     private boolean matchesStatus(Income income, String filterStatus) {

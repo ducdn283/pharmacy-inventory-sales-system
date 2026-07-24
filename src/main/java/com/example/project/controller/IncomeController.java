@@ -50,6 +50,7 @@ public class IncomeController {
                              @RequestParam(name = "toDate", required = false) String toDate,
                              @RequestParam(name = "incomeType", required = false) String incomeType,
                              @RequestParam(name = "status", required = false) String status,
+                             @RequestParam(name = "paymentType", required = false) String paymentType,
                              @RequestParam(name = "applicantId", required = false) Integer applicantId,
                              @RequestParam(name = "page", defaultValue = "0") int page,
                              @RequestParam(name = "size", defaultValue = "5") int size,
@@ -63,7 +64,7 @@ public class IncomeController {
         }
 
         Page<IncomeListItemResponse> incomePage = incomeService.list(
-                search, fromDate, toDate, incomeType, status, applicantId, PageRequest.of(page, size));
+                search, fromDate, toDate, incomeType, status, paymentType, applicantId, PageRequest.of(page, size));
         String basePath = resolveBasePath(request);
 
         model.addAttribute("incomes", incomePage.getContent());
@@ -77,11 +78,13 @@ public class IncomeController {
         model.addAttribute("statuses", incomeService.listStatuses());
         model.addAttribute("applicants", incomeService.listApplicants());
         model.addAttribute("incomeTypes", incomeService.listIncomeTypes());
+        model.addAttribute("paymentTypeLabels", incomeService.paymentTypeLabels());
         model.addAttribute("search", search);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
         model.addAttribute("filterIncomeType", incomeType);
         model.addAttribute("filterStatus", status);
+        model.addAttribute("filterPaymentType", paymentType);
         model.addAttribute("filterApplicantId", applicantId);
         model.addAttribute("currentPage", incomePage.getNumber());
         model.addAttribute("totalPages", incomePage.getTotalPages());
