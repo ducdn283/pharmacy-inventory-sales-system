@@ -194,7 +194,7 @@
 
         .info-row {
             display: grid;
-            grid-template-columns: 180px 1fr;
+            grid-template-columns: 180px minmax(0, 1fr);
             padding: 12px 0;
             border-bottom: 1px solid #f1f5f9;
             font-size: 14px;
@@ -202,6 +202,12 @@
 
         .info-label {
             color: #6b7280;
+        }
+
+        .info-row > div:last-child {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            min-width: 0;
         }
 
         .status-badge {
@@ -227,6 +233,8 @@
         .reference-detail-section .table tbody td {
             font-size: 13px;
             vertical-align: middle;
+            word-break: break-word;
+            overflow-wrap: anywhere;
         }
 
         @media (max-width: 991.98px) {
@@ -524,8 +532,8 @@
 
                         <div class="mb-3">
                             <label class="form-label">Nội dung thu <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
-                                   placeholder="VD: Thu nợ khách hàng, hoàn ứng nhân viên…">
+                            <textarea class="form-control" rows="2" th:field="*{reason}" id="reasonInput"
+                                      placeholder="VD: Thu nợ khách hàng, hoàn ứng nhân viên…"></textarea>
                             <div class="income-inline-error" id="reasonError">
                                 Vui lòng nhập nội dung thu.
                             </div>

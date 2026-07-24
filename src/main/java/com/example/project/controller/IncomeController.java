@@ -2,6 +2,7 @@ package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.IncomeCreateRequest;
+import com.example.project.dto.response.IncomeDetailResponse;
 import com.example.project.dto.response.IncomeListItemResponse;
 import com.example.project.dto.response.IncomeReferenceOptionResponse;
 import com.example.project.dto.response.InvoiceDetailPageResponse;
@@ -112,6 +113,22 @@ public class IncomeController {
         return "income-list";
     }
 
+    @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}"})
+    public String detail(@PathVariable Integer incomeId, HttpServletRequest request, Model model) {
+        IncomeDetailResponse detail = incomeService.getDetail(incomeId);
+        String basePath = resolveBasePath(request);
+        boolean pharmacist = basePath.startsWith(PHARMACIST_BASE);
+
+        model.addAttribute("detail", detail);
+        model.addAttribute("basePath", basePath);
+        model.addAttribute("invoiceBasePath", pharmacist ? "/pharmacist/invoices" : "/owner/invoices");
+        model.addAttribute("returnBasePath", "/owner/return-purchases");
+        model.addAttribute("stockAdjustmentBasePath",
+                pharmacist ? "/pharmacist/stock-adjustments" : "/owner/stock-adjustments");
+        model.addAttribute("pageTitle", "Chi tiết phiếu thu");
+        return "income-detail";
+    }
+
     @GetMapping(value = {OWNER_BASE + "/references/debt-invoices", PHARMACIST_BASE + "/references/debt-invoices"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
@@ -175,7 +192,7 @@ public class IncomeController {
         String basePath = resolveBasePath(request);
         boolean asDraft = "draft".equals(action);
         try {
-            incomeService.createIncome(
+            Integer incomeId = incomeService.createIncome(
                     form,
                     currentUserContext.getCurrentAccountId(),
                     currentUserContext.isOwner(),
@@ -189,8 +206,8 @@ public class IncomeController {
             } else {
                 message = "Đã gửi phiếu thu, đang chờ duyệt";
             }
-            redirectAttributes.addFlashAttribute("success", message);
-            return "redirect:" + basePath;
+            redirectAttributes.addFlashAttribute("successMessage", message);
+            return "redirect:" + basePath + "/" + incomeId;
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);

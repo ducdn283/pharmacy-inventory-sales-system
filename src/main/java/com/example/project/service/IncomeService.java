@@ -2,6 +2,7 @@ package com.example.project.service;
 
 import com.example.project.dto.request.IncomeCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
+import com.example.project.dto.response.IncomeDetailResponse;
 import com.example.project.dto.response.IncomeListItemResponse;
 import com.example.project.dto.response.IncomeReferenceOptionResponse;
 import com.example.project.dto.response.IncomeTypeOptionResponse;
@@ -266,6 +267,13 @@ public class IncomeService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public IncomeDetailResponse getDetail(Integer incomeId) {
+        Income income = incomeRepository.findByIdWithRelations(incomeId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu thu"));
+        return toDetail(income);
+    }
+
     /**
      * Creates a manual income slip. When {@code asDraft} is true it is saved as {@link #STATUS_DRAFT};
      * otherwise the Owner's slip is auto-completed and anyone else's goes to {@link #STATUS_PENDING}.
@@ -411,6 +419,64 @@ public class IncomeService {
                 paymentDisplay(income.getPaidByCash(), income.getPaidByBanking()),
                 statusName,
                 statusCssClass(statusName));
+    }
+
+    private IncomeDetailResponse toDetail(Income income) {
+        String typeCode = resolveIncomeType(income);
+        String statusName = income.getStatus() != null ? displayStatus(income.getStatus()) : "Không rõ";
+
+        String partyName = "—";
+        if (income.getCustomerID() != null && income.getCustomerID().getName() != null) {
+            partyName = income.getCustomerID().getName();
+        } else if (income.getSupplierID() != null && income.getSupplierID().getName() != null) {
+            partyName = income.getSupplierID().getName();
+        } else if (income.getAccountID() != null && income.getAccountID().getName() != null) {
+            partyName = income.getAccountID().getName();
+        }
+
+        String partyTypeDisplay = switch (typeCode) {
+            case IncomeTypeOptionResponse.CUSTOMER -> "Khách hàng";
+            case IncomeTypeOptionResponse.SUPPLIER -> "Nhà cung cấp";
+            case IncomeTypeOptionResponse.EMPLOYEE -> "Nhân viên";
+            default -> "—";
+        };
+
+        String referenceTypeDisplay = null;
+        Integer invoiceId = null;
+        Integer returnId = null;
+        Integer stockAdjustmentId = null;
+        if (income.getInvoiceID() != null) {
+            referenceTypeDisplay = "Hóa đơn bán hàng";
+            invoiceId = income.getInvoiceID().getId();
+        } else if (income.getReturnID() != null) {
+            referenceTypeDisplay = "Phiếu trả hàng NCC";
+            returnId = income.getReturnID().getId();
+        } else if (income.getStockAdjustmentID() != null) {
+            referenceTypeDisplay = "Phiếu điều chỉnh kho";
+            stockAdjustmentId = income.getStockAdjustmentID().getId();
+        }
+
+        return new IncomeDetailResponse(
+                income.getId(),
+                income.getIncomeCode(),
+                formatInstant(income.getDate()),
+                formatIncomeType(typeCode),
+                income.getApplicantID() != null ? income.getApplicantID().getName() : "Không rõ",
+                displayReason(income),
+                income.getAmount(),
+                income.getPaidByCash(),
+                income.getPaidByBanking(),
+                paymentDisplay(income.getPaidByCash(), income.getPaidByBanking()),
+                statusName,
+                statusCssClass(statusName),
+                partyTypeDisplay,
+                partyName,
+                referenceTypeDisplay,
+                referenceCode(income),
+                invoiceId,
+                returnId,
+                stockAdjustmentId,
+                income.getNote());
     }
 
     private String displayReason(Income income) {

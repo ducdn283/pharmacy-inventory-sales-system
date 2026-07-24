@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${pageTitle}">Chi tiết phiếu thu | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .income-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .income-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 180px minmax(0, 1fr);
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #6b7280;
+        }
+
+        .info-row > div:last-child {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            min-width: 0;
+        }
+
+        .income-card {
+            overflow: hidden;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-completed { background: #e8f7f1; color: #059669; }
+        .status-pending { background: #fef3c7; color: #d97706; }
+        .status-draft { background: #f3f4f6; color: #4b5563; }
+        .status-rejected { background: #fee2e2; color: #dc2626; }
+        .status-default { background: #f3f4f6; color: #4b5563; }
+
+        .btn-income-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+            border-radius: 12px;
+        }
+
+        .btn-income-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #fff;
+        }
+
+        @media (max-width: 991.98px) {
+            .income-page-content {
+                padding-top: 84px !important;
+            }
+
+            .info-row {
+                grid-template-columns: 1fr;
+                gap: 4px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content income-page-content">
+    <div class="container-fluid">
+
+        <div class="mb-4">
+            <h1 class="fs-4 mb-1">
+                Chi tiết phiếu thu –
+                <span class="text-success" th:text="${detail.code}">PT-000001</span>
+            </h1>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+        <div th:replace="~{fragments/confirm :: confirm}"></div>
+
+        <div class="row g-4">
+            <div class="col-12 col-xl-8">
+
+                <div class="income-card mb-4">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-info-circle text-success me-1"></i>
+                            Thông tin phiếu thu
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="info-row">
+                            <div class="info-label">Mã phiếu</div>
+                            <div class="fw-semibold text-success" th:text="${detail.code}">PT-000001</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Ngày thu</div>
+                            <div th:text="${detail.dateDisplay}">01/07/2026 14:10</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Loại phiếu thu</div>
+                            <div th:text="${detail.incomeTypeDisplay}">Khách hàng</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Người lập</div>
+                            <div th:text="${detail.applicantName}">Dược sĩ A</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Nội dung thu</div>
+                            <div th:text="${detail.reason}">Thu nợ khách hàng</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Trạng thái</div>
+                            <div>
+                                <span class="status-badge"
+                                      th:classappend="${' ' + detail.statusCssClass}"
+                                      th:text="${detail.statusName}">Hoàn thành</span>
+                            </div>
+                        </div>
+
+                        <div class="info-row" th:if="${detail.note != null && !detail.note.isBlank()}">
+                            <div class="info-label">Ghi chú</div>
+                            <div th:text="${detail.note}">Ghi chú</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="income-card mb-4"
+                     th:if="${detail.partyTypeDisplay != null and detail.partyTypeDisplay != '—'}">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-users text-success me-1"></i>
+                            Đối tượng
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="info-row">
+                            <div class="info-label">Loại đối tượng</div>
+                            <div th:text="${detail.partyTypeDisplay}">Khách hàng</div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Tên đối tượng</div>
+                            <div class="fw-semibold" th:text="${detail.partyName}">ABC Company</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="income-card"
+                     th:if="${detail.referenceTypeDisplay != null}">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-link text-success me-1"></i>
+                            Phiếu liên quan
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="info-row">
+                            <div class="info-label">Loại phiếu</div>
+                            <div th:text="${detail.referenceTypeDisplay}">Hóa đơn bán hàng</div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Mã phiếu</div>
+                            <div>
+                                <a th:if="${detail.invoiceId != null}"
+                                   th:href="${invoiceBasePath + '/' + detail.invoiceId}"
+                                   class="fw-semibold text-success text-decoration-none"
+                                   th:text="${detail.referenceCode}">HD-001</a>
+                                <a th:if="${detail.returnId != null and #strings.startsWith(basePath, '/owner')}"
+                                   th:href="${returnBasePath + '/' + detail.returnId}"
+                                   class="fw-semibold text-success text-decoration-none"
+                                   th:text="${detail.referenceCode}">THNCC-001</a>
+                                <span th:if="${detail.returnId != null and !#strings.startsWith(basePath, '/owner')}"
+                                      class="fw-semibold"
+                                      th:text="${detail.referenceCode}">THNCC-001</span>
+                                <a th:if="${detail.stockAdjustmentId != null}"
+                                   th:href="${stockAdjustmentBasePath + '/' + detail.stockAdjustmentId}"
+                                   class="fw-semibold text-success text-decoration-none"
+                                   th:text="${detail.referenceCode}">PDC-001</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="col-12 col-xl-4">
+
+                <div class="income-card p-4 mb-4">
+                    <div class="section-title mb-4">
+                        <i class="ti ti-calculator text-success me-1"></i>
+                        Thanh toán
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Tổng số tiền thu</span>
+                        <strong class="text-success"
+                                th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Tiền mặt</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Chuyển khoản</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span class="text-secondary">Hình thức</span>
+                        <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
+                    </div>
+                </div>
+
+                <div class="income-card p-4">
+                    <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
+                        <i class="ti ti-arrow-left me-1"></i>
+                        Quay lại danh sách
+                    </a>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</main>
+
+</body>
+</html>

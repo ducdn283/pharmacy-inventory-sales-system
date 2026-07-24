@@ -144,9 +144,9 @@
     }
     .btn-search.reset:hover { background: #f9fafb; color: #111827; }
 
-    .sup-table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    .sup-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .sup-table th {
-      padding: 10px 14px;
+      padding: 10px 10px;
       text-align: left;
       font-size: 12px;
       font-weight: 600;
@@ -156,15 +156,39 @@
       white-space: nowrap;
     }
     .sup-table td {
-      padding: 13px 14px;
+      padding: 13px 10px;
       font-size: 13px;
       color: #374151;
       border-bottom: 1px solid #f3f4f6;
       vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .sup-table tr:last-child td { border-bottom: none; }
     .sup-table tr:hover td { background: #fafafa; }
     .sup-name { font-weight: 600; color: #111827; }
+
+    .sup-table .col-code { width: 11%; }
+    .sup-table .col-date { width: 15%; }
+    .sup-table .col-type { width: 13%; }
+    .sup-table .col-applicant { width: 17%; }
+    .sup-table .col-amount { width: 14%; }
+    .sup-table .col-payment { width: 12%; }
+    .sup-table .col-status { width: 13%; }
+    .sup-table .col-action { width: 5%; text-align: center; }
+
+    .sup-table th.col-action,
+    .sup-table td.col-action {
+      white-space: nowrap;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .btn-outline-success:hover,
+    .btn-outline-success:active {
+      color: #fff !important;
+    }
 
     .status-badge {
       display: inline-flex;
@@ -327,26 +351,28 @@
         </div>
       </form>
 
-      <div style="overflow-x:auto;">
-        <table class="sup-table">
+      <table class="sup-table">
           <thead>
             <tr>
-              <th>Mã phiếu</th>
-              <th>Ngày thu</th>
-              <th>Loại phiếu thu</th>
-              <th>Nội dung thu</th>
-              <th>Người lập</th>
-              <th>Số tiền</th>
-              <th>Hình thức</th>
-              <th>Trạng thái</th>
+              <th class="col-code">Mã phiếu</th>
+              <th class="col-date">Ngày thu</th>
+              <th class="col-type">Loại phiếu thu</th>
+              <th class="col-applicant">Người lập</th>
+              <th class="col-amount">Số tiền</th>
+              <th class="col-payment">Hình thức</th>
+              <th class="col-status">Trạng thái</th>
+              <th class="col-action">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             <tr th:each="item : ${incomes}">
-              <td><span class="sup-name" th:text="${item.code}">PT-000001</span></td>
+              <td>
+                <a th:href="${basePath + '/' + item.id}"
+                   class="sup-name text-success text-decoration-none"
+                   th:text="${item.code}">PT-000001</a>
+              </td>
               <td th:text="${item.dateDisplay}">01/07/2026 14:10</td>
               <td th:text="${item.incomeTypeDisplay}">Bán hàng</td>
-              <td th:text="${item.reason}">Thu tiền trả hàng NCC</td>
               <td th:text="${item.applicantName}">Dược sĩ A</td>
               <td class="sup-name"
                   th:text="${#numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
@@ -358,6 +384,13 @@
                       th:classappend="${' ' + item.statusCssClass}"
                       th:text="${item.statusName}">Hoàn thành</span>
               </td>
+              <td class="col-action">
+                <a class="btn btn-sm btn-outline-success"
+                   th:href="${basePath + '/' + item.id}"
+                   title="Xem chi tiết">
+                  <i class="ti ti-eye"></i>
+                </a>
+              </td>
             </tr>
 
             <tr th:if="${#lists.isEmpty(incomes)}" class="empty-row">
@@ -367,7 +400,6 @@
             </tr>
           </tbody>
         </table>
-      </div>
 
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
            th:if="${totalItems > 0}">
