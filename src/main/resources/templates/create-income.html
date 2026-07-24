@@ -128,6 +128,57 @@
             display: block;
         }
 
+        .party-search-wrap {
+            position: relative;
+        }
+
+        .party-search-input {
+            padding-right: 2.25rem;
+        }
+
+        .party-search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            pointer-events: none;
+        }
+
+        .party-search-results {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 30;
+            display: none;
+        }
+
+        .party-search-results.show {
+            display: block;
+        }
+
+        .party-search-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .party-search-item:last-child {
+            border-bottom: none;
+        }
+
+        .party-search-item:hover {
+            background: #ecfdf5;
+        }
+
         @media (max-width: 991.98px) {
             .income-page-content {
                 padding-top: 84px !important;
@@ -186,14 +237,16 @@
 
                             <div class="col-12 col-md-6 party-field" id="customerField">
                                 <label class="form-label">Khách hàng <span class="text-danger">*</span></label>
-                                <select class="form-select" th:field="*{customerId}" id="customerIdInput">
-                                    <option value="">-- Chọn khách hàng --</option>
-                                    <option th:each="item : ${customers}"
-                                            th:value="${item.id}"
-                                            th:text="${item.name + (item.phoneNumber != null ? ' — ' + item.phoneNumber : '')}">
-                                        Khách A
-                                    </option>
-                                </select>
+                                <div class="party-search-wrap">
+                                    <input type="text"
+                                           id="customerSearchInput"
+                                           class="form-control party-search-input"
+                                           autocomplete="off"
+                                           placeholder="Tìm khách hàng theo tên hoặc SĐT">
+                                    <i class="ti ti-search party-search-icon"></i>
+                                    <input type="hidden" th:field="*{customerId}" id="customerIdInput">
+                                    <div id="customerSearchResults" class="party-search-results"></div>
+                                </div>
                                 <div class="income-inline-error" id="customerIdError">
                                     Vui lòng chọn khách hàng.
                                 </div>
@@ -217,12 +270,16 @@
 
                             <div class="col-12 col-md-6 party-field" id="supplierField">
                                 <label class="form-label">Nhà cung cấp <span class="text-danger">*</span></label>
-                                <select class="form-select" th:field="*{supplierId}" id="supplierIdInput">
-                                    <option value="">-- Chọn nhà cung cấp --</option>
-                                    <option th:each="item : ${suppliers}"
-                                            th:value="${item.id}"
-                                            th:text="${item.name}">NCC A</option>
-                                </select>
+                                <div class="party-search-wrap">
+                                    <input type="text"
+                                           id="supplierSearchInput"
+                                           class="form-control party-search-input"
+                                           autocomplete="off"
+                                           placeholder="Tìm nhà cung cấp theo tên">
+                                    <i class="ti ti-search party-search-icon"></i>
+                                    <input type="hidden" th:field="*{supplierId}" id="supplierIdInput">
+                                    <div id="supplierSearchResults" class="party-search-results"></div>
+                                </div>
                                 <div class="income-inline-error" id="supplierIdError">
                                     Vui lòng chọn nhà cung cấp.
                                 </div>
@@ -246,12 +303,16 @@
 
                             <div class="col-12 col-md-6 party-field" id="employeeField">
                                 <label class="form-label">Nhân viên <span class="text-danger">*</span></label>
-                                <select class="form-select" th:field="*{accountId}" id="accountIdInput">
-                                    <option value="">-- Chọn nhân viên --</option>
-                                    <option th:each="item : ${employees}"
-                                            th:value="${item.id}"
-                                            th:text="${item.name}">NV A</option>
-                                </select>
+                                <div class="party-search-wrap">
+                                    <input type="text"
+                                           id="employeeSearchInput"
+                                           class="form-control party-search-input"
+                                           autocomplete="off"
+                                           placeholder="Tìm nhân viên theo tên">
+                                    <i class="ti ti-search party-search-icon"></i>
+                                    <input type="hidden" th:field="*{accountId}" id="accountIdInput">
+                                    <div id="employeeSearchResults" class="party-search-results"></div>
+                                </div>
                                 <div class="income-inline-error" id="accountIdError">
                                     Vui lòng chọn nhân viên.
                                 </div>
@@ -414,17 +475,35 @@
 
 <script th:inline="javascript">
     const basePath = /*[[${basePath}]]*/ '/owner/incomes';
+    const customers = /*[[${customers}]]*/ [];
+    const suppliers = /*[[${suppliers}]]*/ [];
+    const employees = /*[[${employees}]]*/ [];
 
     const AMOUNT_REQUIRED_MSG = 'Vui lòng nhập số tiền thu lớn hơn 0.';
     const REASON_REQUIRED_MSG = 'Vui lòng nhập nội dung thu.';
     const serverErrorMessage = /*[[${errorMessage != null ? errorMessage : ''}]]*/ '';
 
     const PARTY_REFERENCE_FIELDS = {
-        customerIdInput: { errorId: 'customerIdError', message: 'Vui lòng chọn khách hàng.' },
+        customerIdInput: {
+            searchId: 'customerSearchInput',
+            resultsId: 'customerSearchResults',
+            errorId: 'customerIdError',
+            message: 'Vui lòng chọn khách hàng.'
+        },
         invoiceIdInput: { errorId: 'invoiceIdError', message: 'Vui lòng chọn hóa đơn bán hàng còn nợ.' },
-        supplierIdInput: { errorId: 'supplierIdError', message: 'Vui lòng chọn nhà cung cấp.' },
+        supplierIdInput: {
+            searchId: 'supplierSearchInput',
+            resultsId: 'supplierSearchResults',
+            errorId: 'supplierIdError',
+            message: 'Vui lòng chọn nhà cung cấp.'
+        },
         returnIdInput: { errorId: 'returnIdError', message: 'Vui lòng chọn phiếu trả hàng nhà cung cấp.' },
-        accountIdInput: { errorId: 'accountIdError', message: 'Vui lòng chọn nhân viên.' },
+        accountIdInput: {
+            searchId: 'employeeSearchInput',
+            resultsId: 'employeeSearchResults',
+            errorId: 'accountIdError',
+            message: 'Vui lòng chọn nhân viên.'
+        },
         stockAdjustmentIdInput: { errorId: 'stockAdjustmentIdError', message: 'Vui lòng chọn phiếu điều chỉnh kho.' }
     };
 
@@ -437,27 +516,54 @@
         errorEl.classList.toggle('is-visible', visible);
     }
 
-    function clearSelectError(selectId) {
-        const select = document.getElementById(selectId);
-        const config = PARTY_REFERENCE_FIELDS[selectId];
-        if (!select || !config) {
+    function getPartyHiddenInput(fieldId) {
+        return document.getElementById(fieldId);
+    }
+
+    function getPartySearchInput(fieldId) {
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        return config && config.searchId ? document.getElementById(config.searchId) : null;
+    }
+
+    function clearSelectError(fieldId) {
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        if (!config) {
             return;
         }
-        select.classList.remove('is-invalid');
+        const hidden = getPartyHiddenInput(fieldId);
+        const search = getPartySearchInput(fieldId);
+        const select = hidden && hidden.tagName === 'SELECT' ? hidden : null;
+        if (search) {
+            search.classList.remove('is-invalid');
+        }
+        if (select) {
+            select.classList.remove('is-invalid');
+        }
         setErrorVisible(document.getElementById(config.errorId), false);
     }
 
-    function showSelectError(selectId, message) {
-        const select = document.getElementById(selectId);
-        const config = PARTY_REFERENCE_FIELDS[selectId];
-        if (!select || !config || select.value) {
+    function showSelectError(fieldId, message) {
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        const hidden = getPartyHiddenInput(fieldId);
+        if (!config || !hidden || hidden.value) {
             return false;
         }
-        select.classList.add('is-invalid');
+        const search = getPartySearchInput(fieldId);
+        const select = hidden.tagName === 'SELECT' ? hidden : null;
+        if (search) {
+            search.classList.add('is-invalid');
+        } else if (select) {
+            select.classList.add('is-invalid');
+        }
         const error = document.getElementById(config.errorId);
         if (error) {
             error.textContent = message || config.message;
             setErrorVisible(error, true);
+        }
+        const focusTarget = search || select;
+        if (focusTarget) {
+            focusTarget.focus();
+            focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         return true;
     }
@@ -492,26 +598,26 @@
         return true;
     }
 
-    function syncSelectError(selectId, force) {
-        const select = document.getElementById(selectId);
+    function syncSelectError(fieldId, force) {
+        const hidden = getPartyHiddenInput(fieldId);
         const type = document.getElementById('incomeTypeInput').value;
-        if (!select || !isPartyReferenceRequired(selectId, type)) {
-            clearSelectError(selectId);
+        if (!hidden || !isPartyReferenceRequired(fieldId, type)) {
+            clearSelectError(fieldId);
             return;
         }
-        if (select.value) {
-            clearSelectError(selectId);
+        if (hidden.value) {
+            clearSelectError(fieldId);
             return;
         }
-        if (!force && !touchedPartyFields.has(selectId)) {
-            clearSelectError(selectId);
+        if (!force && !touchedPartyFields.has(fieldId)) {
+            clearSelectError(fieldId);
             return;
         }
-        if (!canValidateReferenceField(selectId, type)) {
-            clearSelectError(selectId);
+        if (!canValidateReferenceField(fieldId, type)) {
+            clearSelectError(fieldId);
             return;
         }
-        showSelectError(selectId);
+        showSelectError(fieldId);
     }
 
     function validatePartyReferenceFields(type) {
@@ -519,19 +625,19 @@
         let valid = true;
         let firstInvalid = null;
 
-        function markInvalid(selectId) {
-            touchedPartyFields.add(selectId);
-            if (!canValidateReferenceField(selectId, type)) {
+        function markInvalid(fieldId) {
+            touchedPartyFields.add(fieldId);
+            if (!canValidateReferenceField(fieldId, type)) {
                 return;
             }
-            const select = document.getElementById(selectId);
-            if (!select || select.value) {
+            const hidden = getPartyHiddenInput(fieldId);
+            if (!hidden || hidden.value) {
                 return;
             }
-            if (showSelectError(selectId)) {
+            if (showSelectError(fieldId)) {
                 valid = false;
                 if (!firstInvalid) {
-                    firstInvalid = select;
+                    firstInvalid = getPartySearchInput(fieldId) || hidden;
                 }
             }
         }
@@ -908,6 +1014,152 @@
         });
     }
 
+    function normalizeSearchText(value) {
+        if (!value) {
+            return '';
+        }
+        return value.toString()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/gi, 'd')
+            .toLowerCase()
+            .trim();
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function customerLabel(item) {
+        return item.phoneNumber ? item.name + ' — ' + item.phoneNumber : item.name;
+    }
+
+    function partyLabel(item) {
+        return item.name;
+    }
+
+    function searchPartyItems(items, keyword, buildLabel) {
+        const normalized = normalizeSearchText(keyword);
+        if (!normalized) {
+            return [];
+        }
+        return items
+            .filter(function (item) {
+                return normalizeSearchText(buildLabel(item)).includes(normalized);
+            })
+            .slice(0, 20);
+    }
+
+    function wirePartySearch(fieldId, items, buildLabel, onSelected) {
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        const hidden = getPartyHiddenInput(fieldId);
+        const search = getPartySearchInput(fieldId);
+        const results = config && config.resultsId ? document.getElementById(config.resultsId) : null;
+        const wrap = search ? search.closest('.party-search-wrap') : null;
+        if (!hidden || !search || !results) {
+            return;
+        }
+
+        function hideResults() {
+            results.classList.remove('show');
+        }
+
+        function renderMatches(keyword) {
+            const matches = searchPartyItems(items, keyword, buildLabel);
+            if (!matches.length) {
+                results.innerHTML = '<div class="party-search-item text-secondary">Không tìm thấy kết quả</div>';
+                results.classList.add('show');
+                return;
+            }
+            results.innerHTML = matches.map(function (item) {
+                return '<div class="party-search-item" data-id="' + item.id + '">'
+                    + escapeHtml(buildLabel(item)) + '</div>';
+            }).join('');
+            results.classList.add('show');
+        }
+
+        function selectItem(id, label) {
+            hidden.value = id;
+            search.value = label;
+            hideResults();
+            clearSelectError(fieldId);
+            if (onSelected) {
+                onSelected(id);
+            }
+        }
+
+        search.addEventListener('input', function () {
+            hidden.value = '';
+            renderMatches(search.value);
+        });
+
+        search.addEventListener('focus', function () {
+            if (search.value.trim()) {
+                renderMatches(search.value);
+            }
+        });
+
+        search.addEventListener('blur', function () {
+            touchedPartyFields.add(fieldId);
+            syncSelectError(fieldId);
+        });
+
+        results.addEventListener('mousedown', function (event) {
+            event.preventDefault();
+        });
+
+        results.addEventListener('click', function (event) {
+            const item = event.target.closest('.party-search-item[data-id]');
+            if (!item) {
+                return;
+            }
+            selectItem(item.dataset.id, item.textContent.trim());
+        });
+
+        document.addEventListener('click', function (event) {
+            if (wrap && !wrap.contains(event.target)) {
+                hideResults();
+            }
+        });
+    }
+
+    function initPartySearchDisplays() {
+        wirePartySearch('customerIdInput', customers, customerLabel, function (customerId) {
+            clearSelectError('invoiceIdInput');
+            loadDebtInvoices(customerId, null);
+        });
+        wirePartySearch('supplierIdInput', suppliers, partyLabel, function (supplierId) {
+            clearSelectError('returnIdInput');
+            loadSupplierReturns(supplierId, null);
+        });
+        wirePartySearch('accountIdInput', employees, partyLabel, function (accountId) {
+            clearSelectError('stockAdjustmentIdInput');
+            loadStockAdjustments(accountId, null);
+        });
+
+        [
+            { fieldId: 'customerIdInput', items: customers, buildLabel: customerLabel, searchId: 'customerSearchInput' },
+            { fieldId: 'supplierIdInput', items: suppliers, buildLabel: partyLabel, searchId: 'supplierSearchInput' },
+            { fieldId: 'accountIdInput', items: employees, buildLabel: partyLabel, searchId: 'employeeSearchInput' }
+        ].forEach(function (entry) {
+            const hidden = getPartyHiddenInput(entry.fieldId);
+            const search = document.getElementById(entry.searchId);
+            if (!hidden || !search || !hidden.value) {
+                return;
+            }
+            const selected = entry.items.find(function (item) {
+                return String(item.id) === String(hidden.value);
+            });
+            if (selected) {
+                search.value = entry.buildLabel(selected);
+            }
+        });
+    }
+
     function bindPartyReferenceField(selectId, onChange) {
         const select = document.getElementById(selectId);
         if (!select) {
@@ -941,21 +1193,6 @@
             toggleTypeFields({ resetLinkedAmount: true });
         });
 
-        bindPartyReferenceField('customerIdInput', function () {
-            clearSelectError('invoiceIdInput');
-            loadDebtInvoices(this.value, null);
-        });
-
-        bindPartyReferenceField('supplierIdInput', function () {
-            clearSelectError('returnIdInput');
-            loadSupplierReturns(this.value, null);
-        });
-
-        bindPartyReferenceField('accountIdInput', function () {
-            clearSelectError('stockAdjustmentIdInput');
-            loadStockAdjustments(this.value, null);
-        });
-
         bindPartyReferenceField('invoiceIdInput', function () {
             applySuggestedAmount(this);
         });
@@ -963,6 +1200,8 @@
             applySuggestedAmount(this);
         });
         bindPartyReferenceField('stockAdjustmentIdInput');
+
+        initPartySearchDisplays();
 
         const reasonInput = document.getElementById('reasonInput');
         if (reasonInput) {
