@@ -4,7 +4,13 @@ import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.IncomeCreateRequest;
 import com.example.project.dto.response.IncomeListItemResponse;
 import com.example.project.dto.response.IncomeReferenceOptionResponse;
+import com.example.project.dto.response.InvoiceDetailPageResponse;
+import com.example.project.dto.response.ReturnPurchaseDetailPageResponse;
+import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
 import com.example.project.service.IncomeService;
+import com.example.project.service.InvoiceService;
+import com.example.project.service.ReturnPurchaseService;
+import com.example.project.service.StockadjustmentService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.propertyeditors.CustomNumberEditor;
 import org.springframework.data.domain.Page;
@@ -16,6 +22,7 @@ import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -31,10 +38,20 @@ public class IncomeController {
     private static final String PHARMACIST_BASE = "/pharmacist/incomes";
 
     private final IncomeService incomeService;
+    private final InvoiceService invoiceService;
+    private final ReturnPurchaseService returnPurchaseService;
+    private final StockadjustmentService stockadjustmentService;
     private final CurrentUserContext currentUserContext;
 
-    public IncomeController(IncomeService incomeService, CurrentUserContext currentUserContext) {
+    public IncomeController(IncomeService incomeService,
+                            InvoiceService invoiceService,
+                            ReturnPurchaseService returnPurchaseService,
+                            StockadjustmentService stockadjustmentService,
+                            CurrentUserContext currentUserContext) {
         this.incomeService = incomeService;
+        this.invoiceService = invoiceService;
+        this.returnPurchaseService = returnPurchaseService;
+        this.stockadjustmentService = stockadjustmentService;
         this.currentUserContext = currentUserContext;
     }
 
@@ -114,6 +131,30 @@ public class IncomeController {
     @ResponseBody
     public List<IncomeReferenceOptionResponse> stockAdjustments(@RequestParam(name = "accountId") Integer accountId) {
         return incomeService.listStockAdjustments(accountId);
+    }
+
+    @GetMapping(value = {OWNER_BASE + "/references/invoices/{id}/detail",
+            PHARMACIST_BASE + "/references/invoices/{id}/detail"},
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public InvoiceDetailPageResponse invoiceReferenceDetail(@PathVariable("id") Integer id) {
+        return invoiceService.getDetail(id);
+    }
+
+    @GetMapping(value = {OWNER_BASE + "/references/supplier-returns/{id}/detail",
+            PHARMACIST_BASE + "/references/supplier-returns/{id}/detail"},
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ReturnPurchaseDetailPageResponse supplierReturnReferenceDetail(@PathVariable("id") Integer id) {
+        return returnPurchaseService.getDetail(id);
+    }
+
+    @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments/{id}/detail",
+            PHARMACIST_BASE + "/references/stock-adjustments/{id}/detail"},
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public StockAdjustmentDetailPageResponse stockAdjustmentReferenceDetail(@PathVariable("id") Integer id) {
+        return stockadjustmentService.getDetail(id);
     }
 
     @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create"})

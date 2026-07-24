@@ -179,9 +179,64 @@
             background: #ecfdf5;
         }
 
+        .reference-detail-section {
+            display: none;
+            margin-top: 4px;
+        }
+
+        .reference-detail-section.show {
+            display: block;
+        }
+
+        .reference-detail-section .income-card.border {
+            box-shadow: none;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #6b7280;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .reference-detail-section .table thead th {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f9fafb;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .reference-detail-section .table tbody td {
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
         @media (max-width: 991.98px) {
             .income-page-content {
                 padding-top: 84px !important;
+            }
+
+            .info-row {
+                grid-template-columns: 1fr;
+                gap: 4px;
             }
         }
     </style>
@@ -333,6 +388,36 @@
                                 </div>
                             </div>
 
+                            <div class="col-12 reference-detail-section" id="referenceDetailSection">
+                                <div class="income-card mb-0 border">
+                                    <div class="p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <div class="section-title mb-0" id="referenceDetailTitle">
+                                            <i class="ti ti-info-circle text-success me-1"></i>
+                                            Chi tiết phiếu liên quan
+                                        </div>
+                                        <span class="text-secondary small" id="referenceDetailLoading" style="display:none;">
+                                            Đang tải…
+                                        </span>
+                                    </div>
+                                    <div class="p-4" id="referenceInfoBody"></div>
+                                </div>
+
+                                <div class="income-card mt-3 border">
+                                    <div class="p-4 border-bottom">
+                                        <div class="section-title" id="referenceItemsTitle">
+                                            <i class="ti ti-package text-success me-1"></i>
+                                            Chi tiết hàng hóa
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead id="referenceItemsHead"></thead>
+                                            <tbody id="referenceItemsBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="col-12 col-md-6 party-field" id="manualAmountField">
                                 <label class="form-label">Số tiền thu <span class="text-danger">*</span></label>
                                 <div class="input-group has-validation">
@@ -346,20 +431,6 @@
                                 </div>
                             </div>
 
-                            <div class="col-12">
-                                <label class="form-label">Nội dung thu <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
-                                       placeholder="VD: Thu nợ khách hàng, hoàn ứng nhân viên…">
-                                <div class="income-inline-error" id="reasonError">
-                                    Vui lòng nhập nội dung thu.
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="form-label">Ghi chú</label>
-                                <textarea class="form-control" rows="3" th:field="*{note}"
-                                          placeholder="Nhập ghi chú nếu có"></textarea>
-                            </div>
                         </div>
                     </div>
 
@@ -442,6 +513,28 @@
 
                         <div class="text-danger small" id="overpaidWarning" style="display:none;">
                             Số tiền thu đang lớn hơn tổng số tiền thu.
+                        </div>
+                    </div>
+
+                    <div class="income-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-file-description text-success me-1"></i>
+                            Nội dung phiếu thu
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Nội dung thu <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
+                                   placeholder="VD: Thu nợ khách hàng, hoàn ứng nhân viên…">
+                            <div class="income-inline-error" id="reasonError">
+                                Vui lòng nhập nội dung thu.
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Ghi chú</label>
+                            <textarea class="form-control" rows="3" th:field="*{note}"
+                                      placeholder="Nhập ghi chú nếu có"></textarea>
                         </div>
                     </div>
 
@@ -542,7 +635,8 @@
         setErrorVisible(document.getElementById(config.errorId), false);
     }
 
-    function showSelectError(fieldId, message) {
+    function showSelectError(fieldId, message, options) {
+        options = options || {};
         const config = PARTY_REFERENCE_FIELDS[fieldId];
         const hidden = getPartyHiddenInput(fieldId);
         if (!config || !hidden || hidden.value) {
@@ -561,7 +655,7 @@
             setErrorVisible(error, true);
         }
         const focusTarget = search || select;
-        if (focusTarget) {
+        if (focusTarget && options.autoFocus !== false) {
             focusTarget.focus();
             focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -617,7 +711,7 @@
             clearSelectError(fieldId);
             return;
         }
-        showSelectError(fieldId);
+        showSelectError(fieldId, undefined, { autoFocus: false });
     }
 
     function validatePartyReferenceFields(type) {
@@ -946,6 +1040,334 @@
         }
         touchedPartyFields.clear();
         clearAllPartyReferenceErrors();
+        hideReferenceDetailSection();
+    }
+
+    let referenceDetailRequestId = 0;
+
+    const REFERENCE_DETAIL_BY_SELECT = {
+        invoiceIdInput: {
+            type: 'invoice',
+            detailUrl: function (id) { return basePath + '/references/invoices/' + id + '/detail'; }
+        },
+        returnIdInput: {
+            type: 'return',
+            detailUrl: function (id) { return basePath + '/references/supplier-returns/' + id + '/detail'; }
+        },
+        stockAdjustmentIdInput: {
+            type: 'stockAdjustment',
+            detailUrl: function (id) { return basePath + '/references/stock-adjustments/' + id + '/detail'; }
+        }
+    };
+
+    function hideReferenceDetailSection() {
+        const section = document.getElementById('referenceDetailSection');
+        if (section) {
+            section.classList.remove('show');
+        }
+        const loading = document.getElementById('referenceDetailLoading');
+        if (loading) {
+            loading.style.display = 'none';
+        }
+    }
+
+    function showReferenceDetailSection() {
+        const section = document.getElementById('referenceDetailSection');
+        if (section) {
+            section.classList.add('show');
+        }
+    }
+
+    function infoRowHtml(label, valueHtml) {
+        return '<div class="info-row">'
+            + '<div class="info-label">' + escapeHtml(label) + '</div>'
+            + '<div>' + (valueHtml || '—') + '</div>'
+            + '</div>';
+    }
+
+    function statusBadgeHtml(name, cssClass) {
+        return '<span class="status-badge' + (cssClass ? ' ' + escapeHtml(cssClass) : '') + '">'
+            + escapeHtml(name || '—') + '</span>';
+    }
+
+    function renderInvoiceReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin hóa đơn';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-shopping-cart text-success me-1"></i>Hàng hóa bán';
+
+        let infoHtml = infoRowHtml('Số hóa đơn',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.invoiceCode) + '</span>');
+        infoHtml += infoRowHtml('Thời gian lập', escapeHtml(detail.dateDisplay));
+        infoHtml += infoRowHtml('Khách hàng', escapeHtml(detail.customerName));
+        if (detail.customerPhone) {
+            infoHtml += infoRowHtml('Số điện thoại', escapeHtml(detail.customerPhone));
+        }
+        infoHtml += infoRowHtml('Người bán', escapeHtml(detail.employeeName));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.statusName, detail.statusCssClass));
+        infoHtml += infoRowHtml('Tổng thanh toán',
+            '<span class="fw-semibold text-success">' + formatMoney(detail.total) + '</span>');
+        infoHtml += infoRowHtml('Đã trả tiền mặt', formatMoney(detail.paidByCash));
+        infoHtml += infoRowHtml('Đã trả chuyển khoản', formatMoney(detail.paidByBanking));
+        infoHtml += infoRowHtml('Còn nợ',
+            '<span class="fw-semibold text-warning">' + formatMoney(detail.debtAmount) + '</span>');
+        infoHtml += infoRowHtml('Hình thức thanh toán', escapeHtml(detail.paymentDisplay));
+        if (detail.note) {
+            infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Đơn vị</th><th>SL</th><th>Giá bán</th><th class="text-end">Thành tiền</th>'
+            + '</tr>';
+
+        const items = detail.items || [];
+        if (!items.length) {
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td colspan="8" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+            return;
+        }
+
+        let bodyHtml = items.map(function (item) {
+            return '<tr>'
+                + '<td class="fw-semibold text-success">' + escapeHtml(item.productCode || item.productId) + '</td>'
+                + '<td>' + escapeHtml(item.productName) + '</td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
+                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
+                + '<td>' + escapeHtml(item.quantity) + '</td>'
+                + '<td>' + formatMoney(item.unitSellPrice) + '</td>'
+                + '<td class="text-end fw-semibold">' + formatMoney(item.subtotal) + '</td>'
+                + '</tr>';
+        }).join('');
+        bodyHtml += '<tr class="fw-semibold">'
+            + '<td colspan="7">Tổng cộng</td>'
+            + '<td class="text-end text-success">' + formatMoney(detail.total) + '</td>'
+            + '</tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderReturnReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin phiếu trả hàng';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-package text-success me-1"></i>Hàng hóa trả lại nhà cung cấp';
+
+        let infoHtml = infoRowHtml('Mã phiếu',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.returnCode) + '</span>');
+        infoHtml += infoRowHtml('Ngày trả', escapeHtml(detail.returnDateDisplay));
+        infoHtml += infoRowHtml('Phiếu nhập gốc', escapeHtml(detail.purchaseCode));
+        infoHtml += infoRowHtml('Nhà cung cấp', escapeHtml(detail.supplierName));
+        infoHtml += infoRowHtml('Người tạo', escapeHtml(detail.creatorName));
+        infoHtml += infoRowHtml('Hình thức hoàn', escapeHtml(detail.returnTypeDisplay));
+        infoHtml += infoRowHtml('Lý do', escapeHtml(detail.reason));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.status, detail.statusCssClass));
+        infoHtml += infoRowHtml('Tổng tiền hoàn',
+            '<span class="fw-semibold text-success">' + formatMoney(detail.totalRefund) + '</span>');
+        infoHtml += infoRowHtml('Hoàn tiền mặt', formatMoney(detail.refundCash));
+        infoHtml += infoRowHtml('Hoàn chuyển khoản', formatMoney(detail.refundBanking));
+        if (detail.note) {
+            infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Đơn vị</th><th>SL trả</th><th>Đơn giá nhập</th><th class="text-end">Tiền hoàn</th>'
+            + '</tr>';
+
+        const items = detail.items || [];
+        if (!items.length) {
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td colspan="8" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+            return;
+        }
+
+        let bodyHtml = items.map(function (item) {
+            return '<tr>'
+                + '<td class="fw-semibold text-success">' + escapeHtml(item.productId) + '</td>'
+                + '<td>' + escapeHtml(item.productName) + '</td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
+                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
+                + '<td>' + escapeHtml(item.returnQty) + '</td>'
+                + '<td>' + formatMoney(item.unitImportPrice) + '</td>'
+                + '<td class="text-end fw-semibold">' + formatMoney(item.lineRefund) + '</td>'
+                + '</tr>';
+        }).join('');
+        bodyHtml += '<tr class="fw-semibold">'
+            + '<td colspan="7">Tổng cộng</td>'
+            + '<td class="text-end text-success">' + formatMoney(detail.totalRefund) + '</td>'
+            + '</tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderStockAdjustmentReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin phiếu điều chỉnh';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-package text-success me-1"></i>Hàng hóa điều chỉnh';
+
+        let infoHtml = infoRowHtml('Mã phiếu',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.code) + '</span>');
+        infoHtml += infoRowHtml('Ngày lập', escapeHtml(detail.dateDisplay));
+        infoHtml += infoRowHtml('Loại điều chỉnh', escapeHtml(detail.adjustmentTypeDisplay));
+        infoHtml += infoRowHtml('Người tạo', escapeHtml(detail.createdByName));
+        infoHtml += infoRowHtml('Lý do', escapeHtml(detail.reason));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.statusName, detail.statusCssClass));
+        infoHtml += infoRowHtml('Tổng giá trị ước tính',
+            '<span class="fw-semibold text-success">' + formatMoney(detail.estimatedValue) + '</span>');
+        if (detail.note) {
+            infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        const vatHeader = detail.showOutputVat
+            ? '<th>Thuế GTGT đầu ra</th>' : '';
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Đơn vị</th><th>Tồn hiện tại</th><th>Chênh lệch</th><th>Giá trị ước tính</th>'
+            + vatHeader + '<th>Ghi chú</th>'
+            + '</tr>';
+
+        const items = detail.items || [];
+        const colSpan = detail.showOutputVat ? 10 : 9;
+        if (!items.length) {
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td colspan="' + colSpan + '" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+            return;
+        }
+
+        let bodyHtml = items.map(function (item) {
+            const sign = item.direction === 'IN' ? '+' : '−';
+            const qtyClass = item.direction === 'IN' ? ' text-success' : ' text-danger';
+            const badgeClass = item.direction === 'IN'
+                ? ' bg-success-subtle text-success' : ' bg-danger-subtle text-danger';
+            let vatCell = '';
+            if (detail.showOutputVat) {
+                if (item.vatAmount != null) {
+                    vatCell = '<td><span class="fw-semibold">' + formatMoney(item.vatAmount) + '</span>'
+                        + (item.vatRate != null
+                            ? ' <span class="badge bg-secondary-subtle text-secondary ms-1">'
+                            + escapeHtml(item.vatRate) + '%</span>' : '')
+                        + '</td>';
+                } else {
+                    vatCell = '<td class="text-secondary">—</td>';
+                }
+            }
+            return '<tr>'
+                + '<td class="fw-semibold text-success">' + escapeHtml(item.productId) + '</td>'
+                + '<td>' + escapeHtml(item.productName) + '</td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
+                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
+                + '<td>' + escapeHtml(item.currentStock) + '</td>'
+                + '<td><span class="fw-semibold' + qtyClass + '">' + sign + escapeHtml(item.quantity) + '</span>'
+                + ' <span class="badge ms-1' + badgeClass + '">' + escapeHtml(item.directionDisplay) + '</span></td>'
+                + '<td class="fw-semibold">' + formatMoney(item.lineCost) + '</td>'
+                + vatCell
+                + '<td>' + escapeHtml(item.note || '—') + '</td>'
+                + '</tr>';
+        }).join('');
+
+        const totalColspan = detail.showOutputVat ? 6 : 6;
+        bodyHtml += '<tr class="fw-semibold">'
+            + '<td colspan="' + totalColspan + '">Tổng cộng</td>'
+            + '<td>' + escapeHtml(detail.totalQuantity) + '</td>'
+            + '<td class="text-success">' + formatMoney(detail.estimatedValue) + '</td>';
+        if (detail.showOutputVat) {
+            bodyHtml += '<td class="text-success">' + formatMoney(detail.totalOutputVat) + '</td>';
+        }
+        bodyHtml += '<td></td></tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderReferenceDetail(referenceType, detail) {
+        if (referenceType === 'invoice') {
+            renderInvoiceReferenceDetail(detail);
+        } else if (referenceType === 'return') {
+            renderReturnReferenceDetail(detail);
+        } else if (referenceType === 'stockAdjustment') {
+            renderStockAdjustmentReferenceDetail(detail);
+        }
+    }
+
+    async function loadReferenceDetail(referenceType, referenceId) {
+        if (!referenceId) {
+            hideReferenceDetailSection();
+            return;
+        }
+
+        const requestId = ++referenceDetailRequestId;
+        showReferenceDetailSection();
+        document.getElementById('referenceDetailLoading').style.display = 'inline';
+        document.getElementById('referenceInfoBody').innerHTML =
+            '<div class="text-secondary">Đang tải thông tin phiếu…</div>';
+        document.getElementById('referenceItemsHead').innerHTML = '';
+        document.getElementById('referenceItemsBody').innerHTML =
+            '<tr><td class="text-center text-secondary py-4">Đang tải…</td></tr>';
+
+        let url;
+        if (referenceType === 'invoice') {
+            url = basePath + '/references/invoices/' + referenceId + '/detail';
+        } else if (referenceType === 'return') {
+            url = basePath + '/references/supplier-returns/' + referenceId + '/detail';
+        } else if (referenceType === 'stockAdjustment') {
+            url = basePath + '/references/stock-adjustments/' + referenceId + '/detail';
+        } else {
+            hideReferenceDetailSection();
+            return;
+        }
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('load failed');
+            }
+            const detail = await response.json();
+            if (requestId !== referenceDetailRequestId) {
+                return;
+            }
+            document.getElementById('referenceDetailLoading').style.display = 'none';
+            renderReferenceDetail(referenceType, detail);
+        } catch (error) {
+            if (requestId !== referenceDetailRequestId) {
+                return;
+            }
+            document.getElementById('referenceDetailLoading').style.display = 'none';
+            document.getElementById('referenceInfoBody').innerHTML =
+                '<div class="text-danger">Không tải được chi tiết phiếu. Vui lòng thử chọn lại.</div>';
+            document.getElementById('referenceItemsHead').innerHTML = '';
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td class="text-center text-secondary py-4">—</td></tr>';
+        }
+    }
+
+    function onReferenceSelectionChanged(selectId) {
+        const config = REFERENCE_DETAIL_BY_SELECT[selectId];
+        const select = document.getElementById(selectId);
+        if (!config || !select || !select.value) {
+            hideReferenceDetailSection();
+            return;
+        }
+        loadReferenceDetail(config.type, select.value);
+    }
+
+    function syncReferenceDetailFromForm() {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (type === 'CUSTOMER') {
+            onReferenceSelectionChanged('invoiceIdInput');
+        } else if (type === 'SUPPLIER') {
+            onReferenceSelectionChanged('returnIdInput');
+        } else if (type === 'EMPLOYEE') {
+            onReferenceSelectionChanged('stockAdjustmentIdInput');
+        } else {
+            hideReferenceDetailSection();
+        }
     }
 
     function populateReferenceSelect(selectId, placeholder, items, selectedValue, buildLabel) {
@@ -968,6 +1390,12 @@
             }
             select.appendChild(option);
         });
+
+        if (selectedValue && String(select.value) === String(selectedValue)) {
+            onReferenceSelectionChanged(selectId);
+        } else if (!select.value) {
+            hideReferenceDetailSection();
+        }
     }
 
     async function loadDebtInvoices(customerId, selectedValue) {
@@ -1045,13 +1473,29 @@
     function searchPartyItems(items, keyword, buildLabel) {
         const normalized = normalizeSearchText(keyword);
         if (!normalized) {
-            return [];
+            return items.slice(0, 20);
         }
         return items
             .filter(function (item) {
                 return normalizeSearchText(buildLabel(item)).includes(normalized);
             })
             .slice(0, 20);
+    }
+
+    function resetPartyReferences(fieldId) {
+        hideReferenceDetailSection();
+        if (fieldId === 'customerIdInput') {
+            clearSelectError('invoiceIdInput');
+            populateReferenceSelect('invoiceIdInput', '-- Chọn hóa đơn còn nợ --', [], null, function () { return ''; });
+            setAmount(0);
+        } else if (fieldId === 'supplierIdInput') {
+            clearSelectError('returnIdInput');
+            populateReferenceSelect('returnIdInput', '-- Chọn phiếu trả hàng NCC --', [], null, function () { return ''; });
+            setAmount(0);
+        } else if (fieldId === 'accountIdInput') {
+            clearSelectError('stockAdjustmentIdInput');
+            populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', [], null, function () { return ''; });
+        }
     }
 
     function wirePartySearch(fieldId, items, buildLabel, onSelected) {
@@ -1093,18 +1537,33 @@
         }
 
         search.addEventListener('input', function () {
+            const hadSelection = !!hidden.value;
             hidden.value = '';
+            if (hadSelection) {
+                resetPartyReferences(fieldId);
+            }
             renderMatches(search.value);
         });
 
         search.addEventListener('focus', function () {
-            if (search.value.trim()) {
-                renderMatches(search.value);
-            }
+            renderMatches(search.value);
+            setTimeout(function () {
+                search.select();
+            }, 0);
         });
 
         search.addEventListener('blur', function () {
             touchedPartyFields.add(fieldId);
+            if (!hidden.value && search.value.trim()) {
+                const trimmed = search.value.trim();
+                const exact = items.find(function (item) {
+                    return buildLabel(item) === trimmed;
+                });
+                if (exact) {
+                    hidden.value = exact.id;
+                    clearSelectError(fieldId);
+                }
+            }
             syncSelectError(fieldId);
         });
 
@@ -1130,14 +1589,17 @@
     function initPartySearchDisplays() {
         wirePartySearch('customerIdInput', customers, customerLabel, function (customerId) {
             clearSelectError('invoiceIdInput');
+            hideReferenceDetailSection();
             loadDebtInvoices(customerId, null);
         });
         wirePartySearch('supplierIdInput', suppliers, partyLabel, function (supplierId) {
             clearSelectError('returnIdInput');
+            hideReferenceDetailSection();
             loadSupplierReturns(supplierId, null);
         });
         wirePartySearch('accountIdInput', employees, partyLabel, function (accountId) {
             clearSelectError('stockAdjustmentIdInput');
+            hideReferenceDetailSection();
             loadStockAdjustments(accountId, null);
         });
 
@@ -1168,6 +1630,7 @@
         select.addEventListener('change', function () {
             touchedPartyFields.add(selectId);
             syncSelectError(selectId);
+            onReferenceSelectionChanged(selectId);
             if (onChange) {
                 onChange.call(this);
             }
@@ -1234,6 +1697,7 @@
         toggleTypeFields();
         initPaymentFromForm();
         applyServerFieldErrors();
+        syncReferenceDetailFromForm();
 
         document.getElementById('incomeForm').addEventListener('submit', function (event) {
             syncPayment();
