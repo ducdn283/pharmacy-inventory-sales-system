@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Reusable money-input formatting: turns any <input data-money> into a thousand-separated field
+  (500000 -> 500.000, dấu chấm theo chuẩn vi-VN, giống Kế hoạch mua hàng) while still POSTing a
+  plain number the server can bind to a BigDecimal.
+
+  Cách dùng:
+      <input type="text" inputmode="numeric" data-money th:field="*{amount}">
+      ...
+      <div th:replace="~{fragments/money-input :: moneyInputs}"></div>   (đặt cuối <body>)
+
+  Đọc giá trị số trong JS của trang: pmMoneyValue(document.getElementById('amountInput'))
+-->
+<th:block th:fragment="moneyInputs">
+    <script>
+        (function () {
+            /** Digits only — dùng cho chuỗi người dùng đang gõ, nơi dấu chấm là dấu phân cách. */
+            function separatorDigits(value) {
+                return String(value == null ? '' : value).replace(/[^\d]/g, '');
+            }
+
+            /**
+             * Digits của giá trị do server render. Ở đây dấu chấm là dấu thập phân của BigDecimal
+             * ("500000.00"), không phải dấu phân cách — bóc thẳng ký tự sẽ ra "50000000".
+             */
+            function initialDigits(value) {
+                var raw = String(value == null ? '' : value).trim();
+                if (!raw) return '';
+                var num = Number(raw.replace(/\s/g, ''));
+                if (Number.isFinite(num)) {
+                    return num > 0 ? String(Math.round(num)) : (num === 0 ? '0' : '');
+                }
+                return separatorDigits(raw);
+            }
+
+            function group(digits) {
+                return digits ? Number(digits).toLocaleString('vi-VN') : '';
+            }
+
+            function reformat(input, digits) {
+                var caretFromEnd = input.value.length - (input.selectionStart == null ? input.value.length : input.selectionStart);
+                input.value = group(digits);
+                if (document.activeElement === input) {
+                    var pos = Math.max(0, input.value.length - caretFromEnd);
+                    try { input.setSelectionRange(pos, pos); } catch (ignored) { /* not a text input yet */ }
+                }
+            }
+
+            /** Numeric value of a money input, ignoring the separators. */
+            window.pmMoneyValue = function (input) {
+                var digits = separatorDigits(input && input.value);
+                return digits ? Number(digits) : 0;
+            };
+
+            function initInput(input) {
+                // type=number refuses a value containing dots, so these must be plain text fields.
+                input.setAttribute('type', 'text');
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('autocomplete', 'off');
+                reformat(input, initialDigits(input.value));
+
+                input.addEventListener('input', function () {
+                    reformat(input, separatorDigits(input.value));
+                });
+                input.addEventListener('blur', function () {
+                    reformat(input, separatorDigits(input.value));
+                });
+            }
+
+            function initForm(form) {
+                // Runs after the page's own submit listeners, so a validation handler that called
+                // preventDefault() leaves the field formatted instead of flashing back to raw digits.
+                form.addEventListener('submit', function (event) {
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+                    form.querySelectorAll('input[data-money]').forEach(function (input) {
+                        input.value = separatorDigits(input.value);
+                    });
+                });
+            }
+
+            function init() {
+                document.querySelectorAll('input[data-money]').forEach(initInput);
+                document.querySelectorAll('form').forEach(initForm);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+</th:block>
+</body>
+</html>

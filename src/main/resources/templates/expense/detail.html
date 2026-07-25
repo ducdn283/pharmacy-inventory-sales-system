@@ -265,12 +265,12 @@
                         <label class="form-label small mb-1">Ghi nhận thanh toán (số tiền còn lại)</label>
                         <div class="input-group input-group-sm mb-2">
                             <span class="input-group-text">Tiền mặt</span>
-                            <input type="number" min="0" step="1" class="form-control" name="cashPortion"
+                            <input type="text" inputmode="numeric" data-money class="form-control" name="cashPortion"
                                    id="markPaidCash" placeholder="0">
                         </div>
                         <div class="input-group input-group-sm mb-2">
                             <span class="input-group-text">Chuyển khoản</span>
-                            <input type="number" min="0" step="1" class="form-control" name="bankingPortion"
+                            <input type="text" inputmode="numeric" data-money class="form-control" name="bankingPortion"
                                    id="markPaidBanking" placeholder="0">
                         </div>
                         <button type="submit" class="btn btn-expense-primary w-100">
@@ -307,6 +307,8 @@
 
     </div>
 </main>
+
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 
 </body>
 </html>

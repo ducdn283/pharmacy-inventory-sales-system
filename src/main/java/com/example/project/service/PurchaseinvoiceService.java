@@ -954,15 +954,25 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Trạng thái hiển thị cho danh sách/chi tiết: phiếu đã hủy luôn hiển thị "Đã hủy" — không
-     * suy lại từ paid/totalAmount như các trạng thái thanh toán khác (giá trị đó vẫn còn nguyên
-     * trên phiếu để lưu vết, nhưng không còn ý nghĩa công nợ thật một khi đã hủy).
+     * Trạng thái hiển thị cho danh sách/chi tiết — <strong>lấy đúng giá trị đang lưu trong DB</strong>.
+     *
+     * <p>Trước đây hàm này suy lại trạng thái từ {@code paid}/{@code totalAmount} và chỉ đọc cột
+     * {@code status} cho mỗi trường hợp "Đã hủy". Hậu quả: sửa {@code status} thẳng trong DB thành
+     * một giá trị bất kỳ (kể cả rác như {@code "aaa"}) thì màn hình vẫn hiển thị "Nợ" như cũ — web
+     * nói dối về dữ liệu thật. Cột {@code status} chỉ được ghi lúc tạo phiếu và lúc hủy, và
+     * {@code paid} không bao giờ đổi sau khi tạo, nên giá trị lưu và giá trị suy lại luôn trùng
+     * nhau với dữ liệu hợp lệ — đọc thẳng từ DB không đổi hành vi, chỉ thôi che giấu sai lệch.</p>
+     *
+     * <p>Chỉ khi cột rỗng (dòng cũ/thiếu dữ liệu) mới suy lại từ tiền để còn có gì đó mà hiển thị.
+     * Giá trị lạ được trả về nguyên văn và {@link #statusCssClass(String)} sẽ tô nó thành
+     * "không xác định".</p>
      */
     private String resolveDisplayStatus(Purchaseinvoice invoice, BigDecimal totalAmount, BigDecimal paid) {
-        if (PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
-            return PurchaseInvoiceStatus.CANCELLED;
+        String storedStatus = invoice.getStatus() == null ? null : invoice.getStatus().trim();
+        if (storedStatus == null || storedStatus.isEmpty()) {
+            return resolveInvoiceStatus(totalAmount, paid);
         }
-        return resolveInvoiceStatus(totalAmount, paid);
+        return storedStatus;
     }
 
     private static final BigDecimal VAT_DEDUCTION_THRESHOLD = BigDecimal.valueOf(5_000_000);
@@ -1004,12 +1014,18 @@ public class PurchaseinvoiceService {
         return PurchaseInvoiceStatus.PARTIAL_DEBT;
     }
 
+    /**
+     * A status the app doesn't recognise gets its own style rather than falling into
+     * {@code status-pending}, so a row whose {@code status} was edited to something arbitrary in
+     * the DB is obviously wrong on screen instead of passing for a normal unpaid invoice.
+     */
     private String statusCssClass(String paymentStatus) {
         return switch (paymentStatus) {
             case PurchaseInvoiceStatus.COMPLETED -> "status-completed";
             case PurchaseInvoiceStatus.PARTIAL_DEBT -> "status-partial";
             case PurchaseInvoiceStatus.CANCELLED -> "status-cancelled";
-            default -> "status-pending";
+            case PurchaseInvoiceStatus.DEBT, PurchaseInvoiceStatus.DRAFT -> "status-pending";
+            default -> "status-unknown";
         };
     }
 
