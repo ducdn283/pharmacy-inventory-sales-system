@@ -1,6 +1,6 @@
 package com.example.project.controller;
 
-import com.example.project.dto.response.PriceSettingRowResponse;
+import com.example.project.dto.response.PriceSettingProductRowResponse;
 import com.example.project.service.PricesettingService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,8 +18,8 @@ import java.math.BigDecimal;
  * Owner-only "Cài đặt giá bán" screen — lets the Owner change any product's sell price directly
  * from one list instead of opening each product's own edit page (see
  * {@link PricesettingService} for the full framing). Same permission scope as Product
- * create/edit, which are also Owner-only. Each row saves independently via {@code /cell}, same
- * shape as {@code PermissionController}'s per-cell save.
+ * create/edit, which are also Owner-only. Each unit row saves independently via {@code /cell},
+ * same shape as {@code PermissionController}'s per-cell save.
  */
 @Controller
 @RequestMapping("/owner/price-settings")
@@ -37,8 +37,11 @@ public class PriceSettingPageController {
     @GetMapping
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                         @RequestParam(name = "typeId", required = false) Integer typeId,
+                        @RequestParam(name = "sort", required = false,
+                                defaultValue = PricesettingService.SORT_NAME_ASC) String sort,
                         @RequestParam(name = "page", defaultValue = "0") int page,
                         @RequestParam(name = "size", defaultValue = "10") int size,
+                        @RequestParam(name = "expandProductId", required = false) Integer expandProductId,
                         Model model) {
         if (page < 0) {
             page = 0;
@@ -47,8 +50,8 @@ public class PriceSettingPageController {
             size = DEFAULT_SIZE;
         }
 
-        Page<PriceSettingRowResponse> rowPage =
-                pricesettingService.search(keyword, typeId, PageRequest.of(page, size));
+        Page<PriceSettingProductRowResponse> rowPage =
+                pricesettingService.search(keyword, typeId, sort, PageRequest.of(page, size));
 
         model.addAttribute("rowPage", rowPage);
         model.addAttribute("rows", rowPage.getContent());
@@ -56,6 +59,10 @@ public class PriceSettingPageController {
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("filterTypeId", typeId);
+        model.addAttribute("sort", sort);
+        // Set only right after a /cell save, so the product whose price just changed re-opens
+        // instead of collapsing back and hiding the result of the edit.
+        model.addAttribute("expandProductId", expandProductId);
 
         model.addAttribute("currentPage", rowPage.getNumber());
         model.addAttribute("totalPages", rowPage.getTotalPages());
@@ -70,8 +77,10 @@ public class PriceSettingPageController {
                             @RequestParam BigDecimal sellPrice,
                             @RequestParam(required = false) String keyword,
                             @RequestParam(required = false) Integer typeId,
+                            @RequestParam(required = false) String sort,
                             @RequestParam(required = false, defaultValue = "0") int page,
                             @RequestParam(required = false, defaultValue = "10") int size,
+                            @RequestParam(required = false) Integer expandProductId,
                             RedirectAttributes redirectAttributes) {
         try {
             int cascaded = pricesettingService.updatePrice(productUnitId, sellPrice);
@@ -90,6 +99,12 @@ public class PriceSettingPageController {
         }
         if (typeId != null) {
             redirectAttributes.addAttribute("typeId", typeId);
+        }
+        if (sort != null && !sort.isBlank()) {
+            redirectAttributes.addAttribute("sort", sort);
+        }
+        if (expandProductId != null) {
+            redirectAttributes.addAttribute("expandProductId", expandProductId);
         }
 
         return "redirect:/owner/price-settings";

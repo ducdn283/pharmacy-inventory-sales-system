@@ -1,5 +1,6 @@
 package com.example.project.service;
 
+import com.example.project.dto.response.PriceSettingProductRowResponse;
 import com.example.project.dto.response.PriceSettingRowResponse;
 import com.example.project.entity.Batch;
 import com.example.project.entity.Product;
@@ -18,13 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -32,12 +31,25 @@ import java.util.stream.Collectors;
  * from one screen instead of opening each product's own edit page. Per the user's own framing
  * (2026-07-23): "cho phép thay đổi giá bán của các sản phẩm ... thay vì phải mở chi tiết của từng
  * sản phẩm". Deliberately NOT a markup/cost-based price calculator — it edits
- * {@code Productunit.sellPrice} directly; the latest import price shown per row is read-only
- * reference info only, never written back or used in a formula. No schema change: reuses the
- * existing {@code Productunit}/{@code Product}/{@code Batch} tables.
+ * {@code Productunit.sellPrice} directly; the import price shown per row is read-only reference
+ * info only, never written back or used in a formula. No schema change: reuses the existing
+ * {@code Productunit}/{@code Product}/{@code Batch} tables.
+ *
+ * <p>The screen lists <strong>products</strong>, each expanding to its unit rows (2026-07-25) — the
+ * flat one-row-per-unit table got long and repetitive once products carried several units. Paging
+ * therefore counts products, not units.</p>
  */
 @Service
 public class PricesettingService {
+
+    /** Product name A→Z (accent-insensitive). Default when no sort is supplied. */
+    public static final String SORT_NAME_ASC = "name_asc";
+    /** Product name Z→A. */
+    public static final String SORT_NAME_DESC = "name_desc";
+    /** Base-unit sell price ascending; products with no priced unit sink to the bottom. */
+    public static final String SORT_PRICE_ASC = "price_asc";
+    /** Base-unit sell price descending; products with no priced unit sink to the bottom. */
+    public static final String SORT_PRICE_DESC = "price_desc";
 
     private final ProductunitRepository productunitRepository;
     private final ProductRepository productRepository;
@@ -54,33 +66,41 @@ public class PricesettingService {
         this.typeRepository = typeRepository;
     }
 
+    /**
+     * @param keyword matched against product code and product name only (accent-insensitive)
+     * @param typeId  optional "Loại hàng" filter
+     * @param sort    one of the {@code SORT_*} constants; anything unrecognised falls back to
+     *                {@link #SORT_NAME_ASC}
+     */
     @Transactional(readOnly = true)
-    public Page<PriceSettingRowResponse> search(String keyword, Integer typeId, Pageable pageable) {
+    public Page<PriceSettingProductRowResponse> search(String keyword, Integer typeId, String sort,
+                                                       Pageable pageable) {
         final String normalizedKeyword = normalize(keyword);
 
         Map<Integer, Product> productById = productRepository.findAllWithRelations().stream()
                 .collect(Collectors.toMap(Product::getProductID, product -> product));
 
-        Map<Integer, Batch> latestBatchByProduct = latestBatchPerProduct();
+        Map<Integer, BigDecimal> averageImportByProduct = averageInStockImportPricePerProduct();
 
-        List<Productunit> units = productunitRepository.findAllWithProduct();
-
-        List<PriceSettingRowResponse> filtered = units.stream()
+        Map<Integer, List<Productunit>> unitsByProduct = productunitRepository.findAllWithProduct().stream()
                 .filter(unit -> unit.getProductID() != null)
                 .filter(unit -> productById.containsKey(unit.getProductID().getProductID()))
-                .filter(unit -> matchesType(productById.get(unit.getProductID().getProductID()), typeId))
-                .filter(unit -> matchesKeyword(productById.get(unit.getProductID().getProductID()), unit,
-                        normalizedKeyword))
-                .sorted(Comparator
-                        .comparing((Productunit u) -> productById.get(u.getProductID().getProductID()).getName())
-                        .thenComparing(u -> u.getRatio()))
-                .map(unit -> toRow(unit, productById.get(unit.getProductID().getProductID()),
-                        latestBatchByProduct.get(unit.getProductID().getProductID())))
+                .collect(Collectors.groupingBy(unit -> unit.getProductID().getProductID()));
+
+        List<PriceSettingProductRowResponse> filtered = productById.values().stream()
+                .filter(product -> unitsByProduct.containsKey(product.getProductID()))
+                .filter(product -> matchesType(product, typeId))
+                .filter(product -> matchesKeyword(product, normalizedKeyword))
+                .map(product -> toProductRow(product,
+                        unitsByProduct.get(product.getProductID()),
+                        averageImportByProduct.get(product.getProductID())))
+                .sorted(comparatorFor(sort))
                 .toList();
 
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), filtered.size());
-        List<PriceSettingRowResponse> content = start >= filtered.size() ? List.of() : filtered.subList(start, end);
+        List<PriceSettingProductRowResponse> content =
+                start >= filtered.size() ? List.of() : filtered.subList(start, end);
 
         return new PageImpl<>(content, pageable, filtered.size());
     }
@@ -110,20 +130,26 @@ public class PricesettingService {
      */
     @Transactional
     public int updatePrice(Integer productUnitId, BigDecimal sellPrice) {
-        if (sellPrice == null || sellPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        if (sellPrice == null) {
+            throw new IllegalArgumentException("Giá bán phải lớn hơn 0");
+        }
+        // Round first, then validate: an entry that rounds away to 0 must be rejected with the
+        // usual message rather than silently saved as a free product.
+        BigDecimal roundedPrice = roundMoney(sellPrice);
+        if (roundedPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Giá bán phải lớn hơn 0");
         }
         Productunit unit = productunitRepository.findById(productUnitId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn vị sản phẩm"));
 
         BigDecimal oldBasePrice = unit.getSellPrice();
-        unit.setSellPrice(sellPrice);
+        unit.setSellPrice(roundedPrice);
         productunitRepository.save(unit);
 
         if (!Boolean.TRUE.equals(unit.getIsBaseUnit()) || unit.getProductID() == null) {
             return 0;
         }
-        return cascadeToSiblings(unit, oldBasePrice, sellPrice);
+        return cascadeToSiblings(unit, oldBasePrice, roundedPrice);
     }
 
     private int cascadeToSiblings(Productunit baseUnit, BigDecimal oldBasePrice, BigDecimal newBasePrice) {
@@ -131,7 +157,8 @@ public class PricesettingService {
 
         int cascaded = 0;
         for (Productunit sibling : siblings) {
-            if (sibling.getId().equals(baseUnit.getId()) || sibling.getRatio() == null) {
+            if (sibling.getId().equals(baseUnit.getId()) || sibling.getRatio() == null
+                    || sibling.getSellPrice() == null) {
                 continue;
             }
             BigDecimal expectedOldPrice = roundMoney(oldBasePrice.multiply(sibling.getRatio()));
@@ -146,19 +173,66 @@ public class PricesettingService {
         return cascaded;
     }
 
+    /**
+     * Money on this screen carries no decimals — every amount is rounded to a whole đồng with
+     * HALF_UP (…,3 → down; …,5 → up), per the user's 2026-07-25 call. The DB columns stay
+     * {@code decimal(15,2)}; the fractional part is simply always zero from here on. Rows written
+     * before this change keep their stored decimals until the next save, but are displayed rounded.
+     */
     private BigDecimal roundMoney(BigDecimal value) {
-        return value.setScale(2, RoundingMode.HALF_UP);
+        return value.setScale(0, RoundingMode.HALF_UP);
+    }
+
+    // ------------------------------------------------------------------ sorting
+
+    private Comparator<PriceSettingProductRowResponse> comparatorFor(String sort) {
+        Comparator<PriceSettingProductRowResponse> byName =
+                Comparator.comparing(row -> normalize(row.getProductName()));
+
+        return switch (sort == null ? "" : sort) {
+            case SORT_NAME_DESC -> byName.reversed();
+            case SORT_PRICE_ASC -> Comparator
+                    .comparing(PriceSettingProductRowResponse::getBasePrice,
+                            Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(byName);
+            case SORT_PRICE_DESC -> Comparator
+                    .comparing(PriceSettingProductRowResponse::getBasePrice,
+                            Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(byName);
+            default -> byName;
+        };
     }
 
     // ------------------------------------------------------------------ helpers
 
-    private Map<Integer, Batch> latestBatchPerProduct() {
-        return batchRepository.findAll().stream()
-                .filter(batch -> batch.getProductID() != null && batch.getImportDate() != null)
-                .collect(Collectors.toMap(
+    /**
+     * Arithmetic mean ("trung bình cộng") of {@code importPricePerBase} per product, over that
+     * product's <strong>in-stock</strong> batches only — a fully-sold-out lot no longer says
+     * anything about what the stock on hand cost. Products with no in-stock batch are simply absent
+     * from the map (the row then renders "Chưa có lô tồn").
+     */
+    private Map<Integer, BigDecimal> averageInStockImportPricePerProduct() {
+        Map<Integer, List<BigDecimal>> pricesByProduct = batchRepository.findAll().stream()
+                .filter(batch -> batch.getProductID() != null)
+                .filter(batch -> batch.getImportPricePerBase() != null)
+                .filter(this::isInStock)
+                .collect(Collectors.groupingBy(
                         batch -> batch.getProductID().getProductID(),
-                        batch -> batch,
-                        (a, b) -> a.getImportDate().isAfter(b.getImportDate()) ? a : b));
+                        Collectors.mapping(Batch::getImportPricePerBase, Collectors.toList())));
+
+        return pricesByProduct.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                    List<BigDecimal> prices = entry.getValue();
+                    BigDecimal sum = prices.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return sum.divide(BigDecimal.valueOf(prices.size()), 0, RoundingMode.HALF_UP);
+                }));
+    }
+
+    /** {@code status} is nullable in the schema and defaults to true, so only an explicit false deactivates. */
+    private boolean isInStock(Batch batch) {
+        return batch.getStorageQuantity() != null
+                && batch.getStorageQuantity() > 0
+                && !Boolean.FALSE.equals(batch.getStatus());
     }
 
     private boolean matchesType(Product product, Integer typeId) {
@@ -168,37 +242,54 @@ public class PricesettingService {
         return product.getTypeID() != null && typeId.equals(product.getTypeID().getId());
     }
 
-    private boolean matchesKeyword(Product product, Productunit unit, String normalizedKeyword) {
+    private boolean matchesKeyword(Product product, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
         }
         return containsNormalized(product.getCode(), normalizedKeyword)
-                || containsNormalized(product.getName(), normalizedKeyword)
-                || containsNormalized(unit.getUnitName(), normalizedKeyword);
+                || containsNormalized(product.getName(), normalizedKeyword);
     }
 
-    private PriceSettingRowResponse toRow(Productunit unit, Product product, Batch latestBatch) {
-        return new PriceSettingRowResponse(
-                unit.getId(),
+    private PriceSettingProductRowResponse toProductRow(Product product, List<Productunit> units,
+                                                        BigDecimal averageImportPrice) {
+        List<PriceSettingRowResponse> unitRows = units.stream()
+                .sorted(Comparator.comparing(Productunit::getRatio,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(unit -> new PriceSettingRowResponse(
+                        unit.getId(),
+                        unit.getUnitName(),
+                        Boolean.TRUE.equals(unit.getIsBaseUnit()),
+                        unit.getRatio(),
+                        // Displayed without decimals even for rows stored before the rounding rule.
+                        unit.getSellPrice() == null ? null : roundMoney(unit.getSellPrice())))
+                .toList();
+
+        return new PriceSettingProductRowResponse(
                 product.getProductID(),
                 product.getCode(),
                 product.getName(),
                 product.getTypeID() != null ? product.getTypeID().getName() : "—",
-                unit.getUnitName(),
-                Boolean.TRUE.equals(unit.getIsBaseUnit()),
-                unit.getSellPrice(),
-                latestBatch != null ? latestBatch.getImportPricePerBase() : null,
-                latestBatch != null ? formatInstant(latestBatch.getImportDate()) : null
-        );
+                averageImportPrice,
+                representativePrice(unitRows),
+                unitRows);
     }
 
-    private String formatInstant(Instant instant) {
-        if (instant == null) {
-            return null;
-        }
-        return DateTimeFormatter.ofPattern("dd/MM/yyyy")
-                .withZone(ZoneId.systemDefault())
-                .format(instant);
+    /**
+     * Sort key for the price asc/desc options: the base unit's price, since every other unit is
+     * derived from it by ratio. Falls back to the first priced unit for the (data-error) case of a
+     * product with no base unit flagged.
+     */
+    private BigDecimal representativePrice(List<PriceSettingRowResponse> unitRows) {
+        return unitRows.stream()
+                .filter(PriceSettingRowResponse::isBaseUnit)
+                .map(PriceSettingRowResponse::getCurrentSellPrice)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseGet(() -> unitRows.stream()
+                        .map(PriceSettingRowResponse::getCurrentSellPrice)
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse(null));
     }
 
     private boolean containsNormalized(String value, String normalizedKeyword) {
