@@ -169,7 +169,7 @@ public class InvoiceService {
             }
         }
         return byId.entrySet().stream()
-                .map(entry -> new CustomerOptionResponse(entry.getKey(), entry.getValue(), null))
+                .map(entry -> new CustomerOptionResponse(entry.getKey(), entry.getValue(), null, null))
                 .sorted(Comparator.comparing(CustomerOptionResponse::getName,
                         Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
@@ -318,7 +318,7 @@ public class InvoiceService {
         return customerRepository.findAll().stream()
                 .sorted(Comparator.comparing(Customer::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .map(customer -> new CustomerOptionResponse(
-                        customer.getId(), customer.getName(), customer.getPhoneNumber()))
+                        customer.getId(), customer.getName(), customer.getPhoneNumber(), customer.getCustomerType()))
                 .toList();
     }
 
