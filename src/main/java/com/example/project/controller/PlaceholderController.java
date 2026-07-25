@@ -52,18 +52,18 @@ public class PlaceholderController {
         return render(request, model);
     }
 
-    // "/accountant/incomes" và "/accountant/returns" mới có trong sidebar (2026-07-25) nhưng
-    // Income/Return hiện chỉ có route cho Owner + Pharmacist — để placeholder thay vì mở quyền
-    // truy cập màn hình thật cho Kế toán, vì đó là quyết định nghiệp vụ chứ không phải việc của
-    // một thay đổi sidebar.
+    // "/accountant/incomes" mới có trong sidebar (2026-07-25) nhưng Income hiện chỉ có route cho
+    // Owner + Pharmacist — để placeholder thay vì mở quyền truy cập màn hình thật cho Kế toán, vì đó
+    // là quyết định nghiệp vụ chứ không phải việc của một thay đổi sidebar.
+    // ("/accountant/returns" đã bỏ khỏi đây 2026-07-25 — ReturnController nay có route xem-thôi thật
+    // sự cho Accountant, xem ReturnController.ACCOUNTANT_BASE.)
     @GetMapping({
             "/accountant/dashboard",
             "/accountant/debts",
             "/accountant/daily-reports",
             "/accountant/vat-invoices",
             "/accountant/notifications",
-            "/accountant/incomes",
-            "/accountant/returns"
+            "/accountant/incomes"
     })
     public String accountant(HttpServletRequest request, Model model) {
         return render(request, model);
