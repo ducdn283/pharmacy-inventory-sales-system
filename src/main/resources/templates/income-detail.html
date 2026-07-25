@@ -210,10 +210,13 @@
                                 <span th:if="${detail.returnId != null and !#strings.startsWith(basePath, '/owner')}"
                                       class="fw-semibold"
                                       th:text="${detail.referenceCode}">THNCC-001</span>
-                                <a th:if="${detail.stockAdjustmentId != null}"
+                                <a th:if="${detail.stockAdjustmentId != null and !#strings.startsWith(basePath, '/accountant')}"
                                    th:href="${stockAdjustmentBasePath + '/' + detail.stockAdjustmentId}"
                                    class="fw-semibold text-success text-decoration-none"
                                    th:text="${detail.referenceCode}">PDC-001</a>
+                                <span th:if="${detail.stockAdjustmentId != null and #strings.startsWith(basePath, '/accountant')}"
+                                      class="fw-semibold"
+                                      th:text="${detail.referenceCode}">PDC-001</span>
                             </div>
                         </div>
                     </div>
