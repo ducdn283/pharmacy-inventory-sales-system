@@ -326,6 +326,15 @@
                             </div>
                         </div>
 
+                        <div class="info-row" th:if="${detail.rootInvoiceId != null}">
+                            <div class="info-label">Hóa đơn nguồn gốc</div>
+                            <div>
+                                <a th:href="${basePath + '/' + detail.rootInvoiceId}"
+                                   class="text-success fw-semibold text-decoration-none"
+                                   th:text="${detail.rootInvoiceCode}">HD000040</a>
+                            </div>
+                        </div>
+
                         <div class="info-row">
                             <div class="info-label">Khách hàng</div>
                             <div th:text="${detail.customerName}">Khách lẻ</div>

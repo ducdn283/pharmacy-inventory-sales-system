@@ -778,6 +778,7 @@ public class InvoiceService {
 
         Customer customer = invoice.getCustomerID();
         Invoice original = invoice.getOriginalInvoiceID();
+        Invoice root = invoice.getRootInvoiceID();
 
         Map<Integer, String> returnSlips = returnRepository
                 .findByInvoiceID_IdOrderByReturnDateDesc(invoiceId)
@@ -807,6 +808,8 @@ public class InvoiceService {
                 returnSlips,
                 original != null ? original.getId() : null,
                 original != null ? invoiceCode(original) : null,
+                root != null ? root.getId() : null,
+                root != null ? invoiceCode(root) : null,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
                 totalVATOutput,
