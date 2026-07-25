@@ -24,6 +24,16 @@ public final class PurchaseInvoiceStatus {
     /** All valid statuses, in workflow order. */
     public static final List<String> ALL = List.of(DRAFT, DEBT, PARTIAL_DEBT, COMPLETED, CANCELLED);
 
+    /**
+     * Whether a stored {@code Purchaseinvoice.status} is one this app actually knows about. The
+     * column is a free-form {@code varchar(50)}, so a value edited straight into the DB (or written
+     * by an older/other tool) can be anything at all — screens use this to render such a row as
+     * visibly unrecognised instead of dressing it up as a valid status.
+     */
+    public static boolean isKnown(String status) {
+        return status != null && ALL.contains(status.trim());
+    }
+
     private PurchaseInvoiceStatus() {
     }
 }

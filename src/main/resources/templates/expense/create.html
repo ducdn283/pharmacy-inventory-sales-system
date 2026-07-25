@@ -133,7 +133,7 @@
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Số tiền cần chi <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <input type="number" min="0" step="1" class="form-control"
+                                    <input type="text" inputmode="numeric" data-money class="form-control"
                                            th:field="*{amount}" id="amountInput" placeholder="0">
                                     <span class="input-group-text">đ</span>
                                 </div>
@@ -154,7 +154,7 @@
                                     <div class="col-12 col-md-4">
                                         <label class="form-label">Số tiền đã chi thực tế</label>
                                         <div class="input-group">
-                                            <input type="number" min="0" step="1" class="form-control"
+                                            <input type="text" inputmode="numeric" data-money class="form-control"
                                                    th:field="*{paid}" id="paidInput" placeholder="0">
                                             <span class="input-group-text">đ</span>
                                         </div>
@@ -162,7 +162,7 @@
                                     <div class="col-12 col-md-4">
                                         <label class="form-label">Trong đó tiền mặt</label>
                                         <div class="input-group">
-                                            <input type="number" min="0" step="1" class="form-control"
+                                            <input type="text" inputmode="numeric" data-money class="form-control"
                                                    th:field="*{paidByCash}" id="cashInput" placeholder="0">
                                             <span class="input-group-text">đ</span>
                                         </div>
@@ -170,7 +170,7 @@
                                     <div class="col-12 col-md-4">
                                         <label class="form-label">Trong đó chuyển khoản</label>
                                         <div class="input-group">
-                                            <input type="number" min="0" step="1" class="form-control"
+                                            <input type="text" inputmode="numeric" data-money class="form-control"
                                                    th:field="*{paidByBanking}" id="bankingInput" placeholder="0">
                                             <span class="input-group-text">đ</span>
                                         </div>
@@ -247,7 +247,8 @@
         togglePartialPaymentFields();
 
         document.getElementById('expenseForm').addEventListener('submit', function (event) {
-            const amount = Number(document.getElementById('amountInput').value || 0);
+            // pmMoneyValue ignores the thousand separators — Number("500.000") would read 500.
+            const amount = pmMoneyValue(document.getElementById('amountInput'));
             if (amount <= 0) {
                 event.preventDefault();
                 if (window.pmToast) {
@@ -259,6 +260,10 @@
         });
     });
 </script>
+
+<!-- Sau khối script trên: listener submit của fragment phải chạy SAU listener kiểm tra ở trên,
+     để khi validate chặn submit thì ô tiền vẫn giữ định dạng có dấu phân cách. -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 
 </body>
 </html>
