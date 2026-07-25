@@ -69,6 +69,27 @@
             vertical-align: middle;
         }
 
+        /* Cột thẳng hàng theo tỉ lệ cố định — tránh "Mã phiếu" (vd CA-00005) bị đẩy hẹp và xuống dòng
+           khi "Tóm tắt" (chuỗi dài) chiếm hết chỗ trống dưới auto-layout mặc định của bảng. */
+        .approval-table {
+            table-layout: fixed;
+        }
+
+        .approval-table td {
+            overflow: hidden;
+        }
+
+        .approval-table td.col-nowrap {
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .approval-table td.col-summary {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
         .type-badge {
             display: inline-flex;
             align-items: center;
@@ -327,7 +348,17 @@
             </div>
 
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0 approval-table">
+                    <colgroup>
+                        <col style="width:44px;">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                    </colgroup>
                     <thead>
                     <tr>
                         <th style="width:44px;text-align:center;">
@@ -354,21 +385,21 @@
                                    form="bulkApproveForm">
                         </td>
 
-                        <td>
+                        <td class="col-nowrap">
                             <span class="type-badge" th:text="${item.type}">Trả hàng</span>
                         </td>
 
-                        <td>
+                        <td class="col-nowrap">
                             <span class="fw-semibold text-success" th:text="${item.code}">TH-000001</span>
                         </td>
 
-                        <td th:text="${item.requesterName}">Nguyễn Văn A</td>
+                        <td class="col-nowrap" th:text="${item.requesterName}">Nguyễn Văn A</td>
 
-                        <td th:text="${item.requestedAtDisplay}">01/06/2026 10:00</td>
+                        <td class="col-nowrap" th:text="${item.requestedAtDisplay}">01/06/2026 10:00</td>
 
-                        <td th:text="${item.summary}">Hoàn 100.000đ</td>
+                        <td class="col-summary" th:text="${item.summary}">Hoàn 100.000đ</td>
 
-                        <td>
+                        <td class="col-nowrap">
                             <span class="status-badge"
                                   th:classappend="${' ' + item.statusCssClass}"
                                   th:text="${item.status}">Chờ duyệt</span>
