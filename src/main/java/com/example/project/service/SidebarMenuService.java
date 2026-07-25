@@ -140,7 +140,8 @@ public class SidebarMenuService {
                 menuGroup("Cung ứng", ICON_SUPPLY,
                         i("Danh sách nhà cung cấp", "/supplier", ICON_SUPPLY),
                         i("Danh sách phiếu nhập", "/owner/purchase-invoices", "ti ti-receipt"),
-                        i("Danh sách dự trù", "/owner/procurements", "ti ti-clipboard-list")),
+                        i("Danh sách dự trù", "/owner/procurements", "ti ti-clipboard-list"),
+                        i("Danh sách trả hàng NCC", "/owner/return-purchases", "ti ti-rotate-2")),
 
                 menuGroup("Kho", ICON_WAREHOUSE,
                         i("Danh sách điều chỉnh tồn", "/owner/stock-adjustments", ICON_WAREHOUSE),
