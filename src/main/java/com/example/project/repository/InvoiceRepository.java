@@ -24,6 +24,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
        left join fetch i.employeeID
        left join fetch i.customerID
        left join fetch i.originalInvoiceID
+       left join fetch i.rootInvoiceID
        where i.id = :invoiceId
        """)
     Optional<Invoice> findByIdWithRelations(@Param("invoiceId") Integer invoiceId);

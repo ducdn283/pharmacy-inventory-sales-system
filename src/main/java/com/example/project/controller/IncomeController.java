@@ -37,6 +37,7 @@ public class IncomeController {
 
     private static final String OWNER_BASE = "/owner/incomes";
     private static final String PHARMACIST_BASE = "/pharmacist/incomes";
+    private static final String ACCOUNTANT_BASE = "/accountant/incomes";
 
     private final IncomeService incomeService;
     private final InvoiceService invoiceService;
@@ -62,7 +63,7 @@ public class IncomeController {
         binder.registerCustomEditor(Integer.class, new CustomNumberEditor(Integer.class, true));
     }
 
-    @GetMapping({OWNER_BASE, PHARMACIST_BASE})
+    @GetMapping({OWNER_BASE, PHARMACIST_BASE, ACCOUNTANT_BASE})
     public String incomeList(@RequestParam(name = "search", required = false) String search,
                              @RequestParam(name = "fromDate", required = false) String fromDate,
                              @RequestParam(name = "toDate", required = false) String toDate,
@@ -113,37 +114,38 @@ public class IncomeController {
         return "income-list";
     }
 
-    @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}"})
+    @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}", ACCOUNTANT_BASE + "/{incomeId}"})
     public String detail(@PathVariable Integer incomeId, HttpServletRequest request, Model model) {
         IncomeDetailResponse detail = incomeService.getDetail(incomeId);
         String basePath = resolveBasePath(request);
-        boolean pharmacist = basePath.startsWith(PHARMACIST_BASE);
 
         model.addAttribute("detail", detail);
         model.addAttribute("basePath", basePath);
-        model.addAttribute("invoiceBasePath", pharmacist ? "/pharmacist/invoices" : "/owner/invoices");
+        model.addAttribute("invoiceBasePath", resolveInvoiceBasePath(basePath));
         model.addAttribute("returnBasePath", "/owner/return-purchases");
-        model.addAttribute("stockAdjustmentBasePath",
-                pharmacist ? "/pharmacist/stock-adjustments" : "/owner/stock-adjustments");
+        model.addAttribute("stockAdjustmentBasePath", resolveStockAdjustmentBasePath(basePath));
         model.addAttribute("pageTitle", "Chi tiết phiếu thu");
         return "income-detail";
     }
 
-    @GetMapping(value = {OWNER_BASE + "/references/debt-invoices", PHARMACIST_BASE + "/references/debt-invoices"},
+    @GetMapping(value = {OWNER_BASE + "/references/debt-invoices", PHARMACIST_BASE + "/references/debt-invoices",
+            ACCOUNTANT_BASE + "/references/debt-invoices"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<IncomeReferenceOptionResponse> debtInvoices(@RequestParam(name = "customerId") Integer customerId) {
         return incomeService.listDebtInvoices(customerId);
     }
 
-    @GetMapping(value = {OWNER_BASE + "/references/supplier-returns", PHARMACIST_BASE + "/references/supplier-returns"},
+    @GetMapping(value = {OWNER_BASE + "/references/supplier-returns", PHARMACIST_BASE + "/references/supplier-returns",
+            ACCOUNTANT_BASE + "/references/supplier-returns"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<IncomeReferenceOptionResponse> supplierReturns(@RequestParam(name = "supplierId") Integer supplierId) {
         return incomeService.listSupplierReturns(supplierId);
     }
 
-    @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments", PHARMACIST_BASE + "/references/stock-adjustments"},
+    @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments", PHARMACIST_BASE + "/references/stock-adjustments",
+            ACCOUNTANT_BASE + "/references/stock-adjustments"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<IncomeReferenceOptionResponse> stockAdjustments(@RequestParam(name = "accountId") Integer accountId) {
@@ -151,7 +153,8 @@ public class IncomeController {
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/invoices/{id}/detail",
-            PHARMACIST_BASE + "/references/invoices/{id}/detail"},
+            PHARMACIST_BASE + "/references/invoices/{id}/detail",
+            ACCOUNTANT_BASE + "/references/invoices/{id}/detail"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public InvoiceDetailPageResponse invoiceReferenceDetail(@PathVariable("id") Integer id) {
@@ -159,7 +162,8 @@ public class IncomeController {
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/supplier-returns/{id}/detail",
-            PHARMACIST_BASE + "/references/supplier-returns/{id}/detail"},
+            PHARMACIST_BASE + "/references/supplier-returns/{id}/detail",
+            ACCOUNTANT_BASE + "/references/supplier-returns/{id}/detail"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public ReturnPurchaseDetailPageResponse supplierReturnReferenceDetail(@PathVariable("id") Integer id) {
@@ -167,14 +171,15 @@ public class IncomeController {
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments/{id}/detail",
-            PHARMACIST_BASE + "/references/stock-adjustments/{id}/detail"},
+            PHARMACIST_BASE + "/references/stock-adjustments/{id}/detail",
+            ACCOUNTANT_BASE + "/references/stock-adjustments/{id}/detail"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public StockAdjustmentDetailPageResponse stockAdjustmentReferenceDetail(@PathVariable("id") Integer id) {
         return stockadjustmentService.getDetail(id);
     }
 
-    @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create"})
+    @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
     public String createPage(HttpServletRequest request, Model model) {
         if (!model.containsAttribute("form")) {
             model.addAttribute("form", new IncomeCreateRequest());
@@ -183,7 +188,7 @@ public class IncomeController {
         return "create-income";
     }
 
-    @PostMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create"})
+    @PostMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
     public String create(@ModelAttribute("form") IncomeCreateRequest form,
                          @RequestParam(name = "action", required = false) String action,
                          HttpServletRequest request,
@@ -234,8 +239,30 @@ public class IncomeController {
     }
 
     private String resolveBasePath(HttpServletRequest request) {
-        return request.getRequestURI().startsWith(PHARMACIST_BASE)
-                ? PHARMACIST_BASE
-                : OWNER_BASE;
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return PHARMACIST_BASE;
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return ACCOUNTANT_BASE;
+        }
+        return OWNER_BASE;
+    }
+
+    private String resolveInvoiceBasePath(String basePath) {
+        if (basePath.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/invoices";
+        }
+        if (basePath.startsWith(ACCOUNTANT_BASE)) {
+            return "/accountant/invoices";
+        }
+        return "/owner/invoices";
+    }
+
+    private String resolveStockAdjustmentBasePath(String basePath) {
+        if (basePath.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/stock-adjustments";
+        }
+        return "/owner/stock-adjustments";
     }
 }

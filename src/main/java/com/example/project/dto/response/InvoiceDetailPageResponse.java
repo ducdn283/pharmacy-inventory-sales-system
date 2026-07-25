@@ -41,6 +41,9 @@ public class InvoiceDetailPageResponse {
     private Integer originalInvoiceId;
     private String originalInvoiceCode;
 
+    private Integer rootInvoiceId;
+    private String rootInvoiceCode;
+
     private BigDecimal subtotal;
     private BigDecimal discount;
     private BigDecimal totalVATOutput;
