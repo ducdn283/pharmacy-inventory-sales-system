@@ -146,7 +146,7 @@ public class IncomeService {
             }
         }
         return byId.entrySet().stream()
-                .map(entry -> new CustomerOptionResponse(entry.getKey(), entry.getValue(), null))
+                .map(entry -> new CustomerOptionResponse(entry.getKey(), entry.getValue(), null, null))
                 .sorted(Comparator.comparing(CustomerOptionResponse::getName,
                         Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
@@ -169,7 +169,7 @@ public class IncomeService {
         return customerRepository.findAll().stream()
                 .sorted(Comparator.comparing(Customer::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .map(customer -> new CustomerOptionResponse(
-                        customer.getId(), customer.getName(), customer.getPhoneNumber()))
+                        customer.getId(), customer.getName(), customer.getPhoneNumber(), customer.getCustomerType()))
                 .toList();
     }
 
@@ -177,7 +177,7 @@ public class IncomeService {
     public List<CustomerOptionResponse> listSuppliers() {
         return supplierRepository.findAll().stream()
                 .sorted(Comparator.comparing(Supplier::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .map(supplier -> new CustomerOptionResponse(supplier.getId(), supplier.getName(), null))
+                .map(supplier -> new CustomerOptionResponse(supplier.getId(), supplier.getName(), null, null))
                 .toList();
     }
 
@@ -186,7 +186,7 @@ public class IncomeService {
         return accountRepository.findAll().stream()
                 .filter(account -> Boolean.TRUE.equals(account.getStatus()))
                 .sorted(Comparator.comparing(Account::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .map(account -> new CustomerOptionResponse(account.getId(), account.getName(), null))
+                .map(account -> new CustomerOptionResponse(account.getId(), account.getName(), null, null))
                 .toList();
     }
 
