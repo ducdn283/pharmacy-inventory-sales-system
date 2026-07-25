@@ -856,7 +856,7 @@ public class ReturnPurchaseService {
      * A validated, priced return chunk (one batch worth of a returned purchase line). The supplier refunds
      * 100% of the import value.
      *
-     * <p><b>Chốt nhóm 2026-07-22 (BA xác nhận tài liệu sheet 10 SAI):</b> "Giá nhập" bên phiếu nhập là
+     * <p>"Giá nhập" bên phiếu nhập là
      * GIÁ CUỐI ĐÃ GỒM THUẾ (gross) → {@code batch.importPricePerBase} lưu gross/đơn vị cơ sở → {@code
      * unitImportPrice} là GROSS. Vì vậy tiền hoàn NCC = gross = ĐÚNG số nhà thuốc đã trả (không cộng thêm
      * VAT lên trên); net/VAT được TÁCH RA từ trong gross để ghi sổ thuế (giảm GTGT đầu vào Nhóm 3).</p>
