@@ -162,6 +162,31 @@
                             <div th:text="${detail.reason}">Tiền điện tháng 7</div>
                         </div>
 
+                        <div class="info-row" th:if="${detail.purchaseId != null}">
+                            <div class="info-label">Phiếu nhập</div>
+                            <div>
+                                <a class="fw-semibold text-success text-decoration-none"
+                                   th:href="@{${#strings.replace(basePath, '/expenses', '/purchase-invoices') + '/' + detail.purchaseId}}"
+                                   th:text="${detail.purchaseCode}">PN-000001</a>
+                                <span class="text-secondary"
+                                      th:if="${detail.supplierName != null}"
+                                      th:text="${' · ' + detail.supplierName}"></span>
+                            </div>
+                        </div>
+
+                        <!-- Owner: /owner/expenses -> /owner/returns; Accountant có route trả hàng riêng. -->
+                        <div class="info-row" th:if="${detail.returnId != null}">
+                            <div class="info-label">Phiếu trả hàng</div>
+                            <div>
+                                <a class="fw-semibold text-success text-decoration-none"
+                                   th:href="@{${#strings.replace(basePath, '/expenses', '/returns') + '/' + detail.returnId}}"
+                                   th:text="${detail.returnCode}">PT-000001</a>
+                                <span class="text-secondary"
+                                      th:if="${detail.customerName != null}"
+                                      th:text="${' · ' + detail.customerName}"></span>
+                            </div>
+                        </div>
+
                         <div class="info-row">
                             <div class="info-label">Số tiền cần chi</div>
                             <div class="fw-semibold"

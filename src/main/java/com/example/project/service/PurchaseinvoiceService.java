@@ -959,9 +959,15 @@ public class PurchaseinvoiceService {
      * <p>Trước đây hàm này suy lại trạng thái từ {@code paid}/{@code totalAmount} và chỉ đọc cột
      * {@code status} cho mỗi trường hợp "Đã hủy". Hậu quả: sửa {@code status} thẳng trong DB thành
      * một giá trị bất kỳ (kể cả rác như {@code "aaa"}) thì màn hình vẫn hiển thị "Nợ" như cũ — web
-     * nói dối về dữ liệu thật. Cột {@code status} chỉ được ghi lúc tạo phiếu và lúc hủy, và
-     * {@code paid} không bao giờ đổi sau khi tạo, nên giá trị lưu và giá trị suy lại luôn trùng
-     * nhau với dữ liệu hợp lệ — đọc thẳng từ DB không đổi hành vi, chỉ thôi che giấu sai lệch.</p>
+     * nói dối về dữ liệu thật. Với dữ liệu hợp lệ, giá trị lưu và giá trị suy lại luôn trùng nhau —
+     * đọc thẳng từ DB không đổi hành vi, chỉ thôi che giấu sai lệch.</p>
+     *
+     * <p><strong>Bất biến này giờ được duy trì chủ động, không còn tự nhiên mà có.</strong> Trước
+     * đây nó đúng vì {@code paid} không bao giờ đổi sau khi tạo. Từ khi phiếu chi trả nợ nhà cung
+     * cấp được nối vào ({@link #applyPayment}), {@code paid} có thể tăng/giảm sau khi tạo — nên
+     * <em>mọi</em> chỗ ghi {@code paid} bắt buộc phải ghi lại {@code status} bằng
+     * {@link #resolveInvoiceStatus} trong cùng một transaction. Quên một chỗ là màn hình lại hiển
+     * thị "Nợ" trên phiếu đã trả đủ, tái phát đúng con bug mà hàm này sinh ra để sửa.</p>
      *
      * <p>Chỉ khi cột rỗng (dòng cũ/thiếu dữ liệu) mới suy lại từ tiền để còn có gì đó mà hiển thị.
      * Giá trị lạ được trả về nguyên văn và {@link #statusCssClass(String)} sẽ tô nó thành
@@ -1002,6 +1008,66 @@ public class PurchaseinvoiceService {
      * both to persist the status on creation and to render it (as {@code paymentStatus}) on the
      * list/detail screens, so the two never drift apart.
      */
+    // ------------------------------------------------------------------ payment from an Expense
+
+    /**
+     * Phiếu nhập còn nợ, cho ô chọn "chứng từ tham chiếu" của phiếu chi trả nợ NCC. Phiếu đã hủy bị
+     * loại vì không còn nghĩa vụ trả tiền. Trả về entity để bên gọi tự tính phần đã cam kết bởi các
+     * phiếu chi đang dở (kiến thức đó thuộc về {@code ExpenseService}, không thuộc về phiếu nhập).
+     */
+    @Transactional(readOnly = true)
+    public List<Purchaseinvoice> findPayableInvoices() {
+        return purchaseinvoiceRepository.findAllWithRelations().stream()
+                .filter(invoice -> !PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus()))
+                .filter(invoice -> remainingDebt(invoice).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+    }
+
+    /** Số tiền còn nợ nhà cung cấp trên một phiếu nhập, không bao giờ âm. */
+    public BigDecimal remainingDebt(Purchaseinvoice invoice) {
+        return safe(invoice.getTotalAmount()).subtract(safe(invoice.getPaid())).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Ghi nhận tiền thực trả cho phiếu nhập từ một phiếu chi. {@code delta} dương là chi thêm, âm là
+     * hoàn lại (phiếu chi bị hủy sau khi đã duyệt).
+     *
+     * <p>Đây là nơi <strong>duy nhất</strong> {@code paid} thay đổi sau khi tạo phiếu, và nó luôn
+     * ghi lại {@code status} kèm theo — xem {@link #resolveDisplayStatus} để hiểu vì sao hai thứ đó
+     * bắt buộc phải đi cùng nhau.</p>
+     *
+     * <p>{@code isValidForDeduction} cố tình <em>không</em> được cập nhật ở đây: nó vốn đã được tính
+     * lại mỗi lần đọc và cột lưu trong DB không được tin (xem javadoc của
+     * {@link #isValidForDeduction}).</p>
+     */
+    @Transactional
+    public void applyPayment(Integer purchaseId, BigDecimal delta) {
+        if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Không thể ghi nhận thanh toán cho phiếu nhập đã hủy");
+        }
+
+        BigDecimal totalAmount = safe(invoice.getTotalAmount());
+        BigDecimal newPaid = safe(invoice.getPaid()).add(delta);
+
+        if (newPaid.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Số tiền hoàn lại vượt quá số đã trả cho phiếu nhập");
+        }
+        if (newPaid.compareTo(totalAmount) > 0) {
+            throw new IllegalArgumentException("Số tiền trả vượt quá tổng tiền phiếu nhập");
+        }
+
+        invoice.setPaid(newPaid);
+        invoice.setStatus(resolveInvoiceStatus(totalAmount, newPaid));
+        purchaseinvoiceRepository.save(invoice);
+    }
+
     private String resolveInvoiceStatus(BigDecimal totalAmount, BigDecimal paid) {
         if (paid.compareTo(BigDecimal.ZERO) <= 0) {
             return PurchaseInvoiceStatus.DEBT;
