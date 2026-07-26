@@ -30,7 +30,6 @@ public class PlaceholderController {
     }
 
     @GetMapping({
-            "/owner/dashboard",
             "/owner/suppliers",
             "/owner/debts",
             "/owner/vat-invoices",
@@ -43,7 +42,6 @@ public class PlaceholderController {
     }
 
     @GetMapping({
-            "/pharmacist/dashboard",
             "/pharmacist/customers",
             "/pharmacist/notifications",
             "/pharmacist/stock-outs/create"
