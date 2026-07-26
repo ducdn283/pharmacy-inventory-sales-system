@@ -200,31 +200,6 @@ public class StockadjustmentService {
 
         String statusName = getStatusName(adjustment);
 
-        boolean itemsChecked = totalItems > 0;
-        boolean batchChecked = totalItems > 0;
-        boolean valueChecked;
-        boolean approvalChecked;
-
-        if (isStatus(statusName, StockAdjustmentStatus.APPROVED)) {
-            valueChecked = true;
-            approvalChecked = true;
-        } else if (isStatus(statusName, StockAdjustmentStatus.REJECTED)) {
-            valueChecked = false;
-            approvalChecked = false;
-        } else {
-            valueChecked = estimatedValue.compareTo(BigDecimal.ZERO) > 0;
-            approvalChecked = false;
-        }
-
-        int done = 0;
-        if (itemsChecked) done++;
-        if (batchChecked) done++;
-        if (valueChecked) done++;
-        if (approvalChecked) done++;
-
-        int total = 4;
-        int percent = done * 100 / total;
-
         return new StockAdjustmentDetailPageResponse(
                 adjustment.getId(),
                 formatCode(adjustment.getId()),
@@ -243,13 +218,6 @@ public class StockadjustmentService {
                 totalQuantity,
                 estimatedValue,
                 costImpactDisplay(adjustment),
-                done,
-                total,
-                percent,
-                itemsChecked,
-                batchChecked,
-                valueChecked,
-                approvalChecked,
                 itemResponses,
                 VAT_OUTPUT_TYPES.contains(adjustment.getAdjustmentType()),
                 totalOutputVat

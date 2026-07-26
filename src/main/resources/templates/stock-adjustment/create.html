@@ -155,31 +155,6 @@
             font-size: 14px;
         }
 
-        .check-line {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
-            font-size: 14px;
-        }
-
-        .check-icon {
-            width: 22px;
-            height: 22px;
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #d1d5db;
-            color: #9ca3af;
-        }
-
-        .check-icon.done {
-            background: #059669;
-            border-color: #059669;
-            color: #ffffff;
-        }
-
         @media (max-width: 991.98px) {
             .destroy-page-content {
                 padding-top: 84px !important;
@@ -443,38 +418,6 @@
                         <div class="summary-row">
                             <span class="text-secondary">Tổng giá trị ước tính</span>
                             <strong class="text-danger" id="totalValueDisplay">0đ</strong>
-                        </div>
-                    </div>
-
-                    <div class="destroy-card p-4 mb-4">
-                        <div class="section-title mb-4">Kiểm tra trước khi tạo</div>
-
-                        <div class="check-line">
-                            <span class="check-icon" id="checkItemsIcon">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã chọn hàng hóa chưa?</span>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" id="checkQuantityIcon">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Số lượng có nằm trong tồn kho chưa?</span>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" id="checkReasonIcon">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã nhập lý do chưa?</span>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" id="checkExpiryIcon">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã kiểm tra lô và hạn dùng chưa?</span>
                         </div>
                     </div>
 
@@ -857,21 +800,6 @@
         document.getElementById('totalItemsDisplay').textContent = totalItems;
         document.getElementById('totalQuantityDisplay').textContent = totalQuantity;
         document.getElementById('totalValueDisplay').textContent = formatMoney(totalValue);
-
-        setCheck('checkItemsIcon', totalItems > 0);
-        setCheck('checkQuantityIcon', totalItems > 0 && quantityValid);
-        setCheck('checkReasonIcon', document.querySelector('[name="reason"]').value.trim().length > 0);
-        setCheck('checkExpiryIcon', totalItems > 0);
-    }
-
-    function setCheck(id, done) {
-        const icon = document.getElementById(id);
-
-        if (done) {
-            icon.classList.add('done');
-        } else {
-            icon.classList.remove('done');
-        }
     }
 
     // ------------------------------------------------ source mode (folded into the type dropdown)
@@ -910,8 +838,8 @@
         } else {
             document.getElementById('countPreviewSection').style.display = 'none';
             toggleItemsSection();
+            calculateSummary();
         }
-        recomputeChecks();
     }
 
     /** Manual mode: item selection makes sense only after a real (non-STOCK_COUNT) type is chosen. */
@@ -1044,27 +972,11 @@
         document.getElementById('totalQuantityDisplay').textContent = totalQuantity;
         document.getElementById('totalValueDisplay').textContent = formatMoney(totalValue);
 
-        recomputeChecks();
-    }
-
-    /** Mode-aware checklist update (manual delegates to calculateSummary). */
-    function recomputeChecks() {
-        if (currentMode() === 'STOCK_COUNT') {
-            const hasLines = countLines.length > 0;
-            const hasCount = !!document.getElementById('stockCountIdInput').value;
-            setCheck('checkItemsIcon', hasCount && hasLines);
-            setCheck('checkQuantityIcon', hasLines);
-            setCheck('checkReasonIcon', document.querySelector('[name="reason"]').value.trim().length > 0);
-            setCheck('checkExpiryIcon', hasLines);
-        } else {
-            calculateSummary();
-        }
     }
 
     function onFormChanged() {
-        if (currentMode() === 'STOCK_COUNT') {
-            recomputeChecks();
-        } else {
+        // Nguồn kiểm kê tự dựng số liệu tóm tắt riêng ở trên; nguồn thủ công tính lại từ các dòng đang chọn.
+        if (currentMode() !== 'STOCK_COUNT') {
             calculateSummary();
         }
         saveDraftLocal();

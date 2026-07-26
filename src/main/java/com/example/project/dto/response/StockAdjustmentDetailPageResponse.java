@@ -36,15 +36,6 @@ public class StockAdjustmentDetailPageResponse {
 
     private String costImpactDisplay;
 
-    private int accountingCheckDone;
-    private int accountingCheckTotal;
-    private int accountingCheckPercent;
-
-    private boolean itemsChecked;
-    private boolean batchChecked;
-    private boolean valueChecked;
-    private boolean approvalChecked;
-
     private List<StockAdjustmentDetailItemResponse> items;
 
     /** True chỉ khi loại phiếu là INTERNAL_USE/GIFT/SAMPLE → hiện cột thuế GTGT đầu ra trên màn chi tiết. */
