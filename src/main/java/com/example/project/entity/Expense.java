@@ -71,6 +71,10 @@ public class Expense {
     @Column(name = "paidByBanking", precision = 15, scale = 2)
     private BigDecimal paidByBanking;
 
+    @ColumnDefault("0.00")
+    @Column(name = "paidByCredit", precision = 15, scale = 2)
+    private BigDecimal paidByCredit;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplierID")
     private Supplier supplierID;

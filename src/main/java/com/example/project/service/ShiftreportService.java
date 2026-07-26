@@ -342,6 +342,8 @@ public class ShiftreportService {
                 .map(Return::getTotalRefund)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Từ 2026-07-26 phiếu trả chỉ TÍNH tiền, không chi tiền — refundCash chỉ khác 0 sau khi phiếu chi
+        // bên Kế toán thực chi và ghi ngược lại cột này, nên tiền chi trong ca chỉ lên khi tiền thật ra khỏi két.
         BigDecimal totalCashOut = returns.stream()
                 .map(Return::getRefundCash)
                 .filter(Objects::nonNull)

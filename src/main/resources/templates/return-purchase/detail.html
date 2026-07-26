@@ -72,7 +72,13 @@
                         </div>
                         <div class="info-row">
                             <div class="info-label">Phiếu nhập gốc</div>
-                            <div class="fw-semibold" th:text="${detail.purchaseCode}">PN000046</div>
+                            <div class="fw-semibold">
+                                <a th:if="${detail.purchaseId != null}"
+                                   class="text-success text-decoration-none"
+                                   th:href="${'/owner/purchase-invoices/' + detail.purchaseId}"
+                                   th:text="${detail.purchaseCode}">PN000046</a>
+                                <span th:if="${detail.purchaseId == null}" th:text="${detail.purchaseCode}">—</span>
+                            </div>
                         </div>
                         <div class="info-row">
                             <div class="info-label">Nhà cung cấp</div>
@@ -83,8 +89,8 @@
                             <div th:text="${detail.creatorName}">Chủ nhà thuốc</div>
                         </div>
                         <div class="info-row">
-                            <div class="info-label">Hình thức hoàn</div>
-                            <div th:text="${detail.returnTypeDisplay}">Tiền mặt</div>
+                            <div class="info-label">Đối tượng trả</div>
+                            <div th:text="${detail.returnTypeDisplay}">Nhà cung cấp</div>
                         </div>
                         <div class="info-row">
                             <div class="info-label">Lý do</div>
@@ -176,16 +182,8 @@
                             <strong th:text="${detail.itemCount}">2</strong>
                         </div>
                         <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Hoàn tiền mặt</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.refundCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Hoàn chuyển khoản</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.refundBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Trừ vào công nợ NCC</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.refundCredit, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                            <span class="text-secondary">NCC phải hoàn</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between">

@@ -466,7 +466,14 @@
 
         openingInput.addEventListener('input', recalc);
         actualInput.addEventListener('input', recalc);
-        recalc();
+        // Phải đợi money-input.js format xong ô tiền (DOMContentLoaded, listener của nó đăng ký TRƯỚC
+        // listener này nên chạy trước): trước đó ô còn giữ nguyên chuỗi server "1772000.00", pmMoneyValue
+        // hiểu dấu chấm là dấu phân cách → 177.200.000đ cho tới khi người dùng gõ vào ô.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', recalc);
+        } else {
+            recalc();
+        }
     })();
 </script>
 

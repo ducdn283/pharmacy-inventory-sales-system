@@ -50,9 +50,9 @@ public class ReturnPurchaseService {
     private static final String PURCHASE_RETURN_PARTIAL = "PARTIAL";
     private static final String PURCHASE_RETURN_FULL = "FULL";
 
-    private static final String TYPE_CASH = "CASH";
-    private static final String TYPE_BANKING = "BANKING";
-    private static final String TYPE_DEBT = "DEBT";
+    // returnType no longer describes HOW the money comes back (the return screen does
+    // not touch cash at all) — it only says WHO the goods went back to. Customer slips use CUSTOMER.
+    private static final String TYPE_SUPPLIER = "SUPPLIER";
 
     // Thời gian: lưu GIỜ VN gán lên UTC + đọc lại bằng UTC (cùng quy ước InvoiceService/purchase).
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -104,7 +104,6 @@ public class ReturnPurchaseService {
     public Page<ReturnPurchaseListItemResponse> search(String keyword,
                                                        String fromDate,
                                                        String toDate,
-                                                       String returnType,
                                                        String status,
                                                        Pageable pageable) {
         final String normalizedKeyword = normalize(keyword);
@@ -119,7 +118,6 @@ public class ReturnPurchaseService {
         List<ReturnPurchaseListItemResponse> filtered = returns.stream()
                 .filter(ret -> matchesKeyword(ret, normalizedKeyword))
                 .filter(ret -> matchesDate(ret, from, to))
-                .filter(ret -> returnType == null || returnType.isBlank() || returnType.equals(ret.getReturnType()))
                 .filter(ret -> status == null || status.isBlank() || isStatus(getStatusName(ret), status))
                 .sorted(Comparator.comparing(Return::getId, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(ret -> toListItem(ret, detailMap.getOrDefault(ret.getId(), List.of())))
@@ -153,15 +151,6 @@ public class ReturnPurchaseService {
         return ReturnPurchaseStatus.ALL;
     }
 
-    /** Refund-method code → Vietnamese label, in dropdown order. */
-    public Map<String, String> returnTypeLabels() {
-        Map<String, String> labels = new LinkedHashMap<>();
-        labels.put(TYPE_CASH, "Tiền mặt");
-        labels.put(TYPE_BANKING, "Chuyển khoản");
-        labels.put(TYPE_DEBT, "Trừ công nợ NCC");
-        return labels;
-    }
-
     // ------------------------------------------------------------------ create screen sources
 
     /** All supplier-return slips (purchaseID set), read once. */
@@ -186,7 +175,7 @@ public class ReturnPurchaseService {
 
         List<ReturnPurchaseInvoiceResponse> result = new ArrayList<>();
         for (Purchaseinvoice purchase : purchaseinvoiceRepository.findAllWithRelations()) {
-            if (!isReceived(purchase) || isFullyReturned(purchase)) {
+            if (!isReceived(purchase) || isFullyReturned(purchase) || hasOutstandingDebt(purchase)) {
                 continue;
             }
             if (!matchesPurchaseKeyword(purchase, normalizedKeyword)) {
@@ -353,7 +342,6 @@ public class ReturnPurchaseService {
                 ? chunks.stream().map(Chunk::vatAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
                 : BigDecimal.ZERO;
 
-        String returnType = resolveReturnType(request.getReturnType());
         String status = asDraft ? ReturnPurchaseStatus.DRAFT : ReturnPurchaseStatus.APPROVED;
 
         Return ret = new Return();
@@ -362,15 +350,19 @@ public class ReturnPurchaseService {
         ret.setPurchaseID(purchase);
         ret.setReturnedBy(creator);
         ret.setReturnDate(nowVn());
-        ret.setReturnType(returnType);
-        ret.setRefundCash(TYPE_CASH.equals(returnType) ? totalRefund : BigDecimal.ZERO);
-        ret.setRefundBanking(TYPE_BANKING.equals(returnType) ? totalRefund : BigDecimal.ZERO);
-        ret.setRefundCredit(TYPE_DEBT.equals(returnType) ? totalRefund : BigDecimal.ZERO);
+        ret.setReturnType(TYPE_SUPPLIER);
+        // Phiếu trả CHỈ TÍNH tiền, không thu tiền: cách nhận lại (tiền mặt / chuyển khoản) do phiếu thu
+        // bên Kế toán quyết định và ghi đè lại 2 cột này sau. Ở đây để 0 (cột nullable, DB mặc định 0.00).
+        ret.setRefundCash(BigDecimal.ZERO);
+        ret.setRefundBanking(BigDecimal.ZERO);
+        ret.setRefundCredit(BigDecimal.ZERO);
         ret.setTotalRefund(totalRefund);
         ret.setTotalVATRefund(totalVATRefund);
         // NCC hoàn 100% giá trị nhập gốc.
         ret.setAppliedRefundRate(new BigDecimal("100.00"));
-        ret.setOffsetDebtAmount(BigDecimal.ZERO);
+        // Số tiền NCC nợ nhà thuốc sau khi trả hàng = toàn bộ tiền hoàn (phiếu nhập đã thanh toán hết
+        // mới được trả — xem assertReturnable), là mốc để màn phiếu thu đối chiếu khi NCC hoàn tiền.
+        ret.setOffsetDebtAmount(totalRefund);
         ret.setReason(request.getReason().trim());
         ret.setNote(trimToNull(request.getNote()));
         ret.setStatus(status);
@@ -631,6 +623,21 @@ public class ReturnPurchaseService {
         if (isFullyReturned(purchase)) {
             throw new IllegalArgumentException("Phiếu nhập này đã được trả toàn bộ");
         }
+        if (hasOutstandingDebt(purchase)) {
+            throw new IllegalArgumentException(
+                    "Phiếu nhập này nhà thuốc còn nợ nhà cung cấp — phải thanh toán hết mới được trả hàng");
+        }
+    }
+
+    /**
+     * BA 2026-07-26: a purchase the pharmacy has not paid off cannot be returned. Settling first keeps
+     * the return screen out of the money entirely — the supplier then simply owes back the full refund
+     * ({@code offsetDebtAmount}), which the Income module collects.
+     */
+    private boolean hasOutstandingDebt(Purchaseinvoice purchase) {
+        BigDecimal total = purchase.getTotalAmount() != null ? purchase.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal paid = purchase.getPaid() != null ? purchase.getPaid() : BigDecimal.ZERO;
+        return total.subtract(paid).signum() > 0;
     }
 
     // ------------------------------------------------------------------ unit / price helpers
@@ -739,27 +746,11 @@ public class ReturnPurchaseService {
         return "status-default";
     }
 
-    private String resolveReturnType(String rawType) {
-        if (rawType == null || rawType.isBlank()) {
-            return TYPE_CASH;
-        }
-        String type = rawType.trim().toUpperCase(Locale.ROOT);
-        return switch (type) {
-            case TYPE_CASH, TYPE_BANKING, TYPE_DEBT -> type;
-            default -> throw new IllegalArgumentException("Hình thức hoàn tiền không hợp lệ");
-        };
-    }
-
     private String returnTypeDisplay(String type) {
         if (type == null) {
             return "—";
         }
-        return switch (type.toUpperCase(Locale.ROOT)) {
-            case TYPE_CASH -> "Tiền mặt";
-            case TYPE_BANKING -> "Chuyển khoản";
-            case TYPE_DEBT -> "Trừ công nợ NCC";
-            default -> type;
-        };
+        return TYPE_SUPPLIER.equalsIgnoreCase(type) ? "Nhà cung cấp" : type;
     }
 
     private String returnStatusDisplay(String returnStatus) {
