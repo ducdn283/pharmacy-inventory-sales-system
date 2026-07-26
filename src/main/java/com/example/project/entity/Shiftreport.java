@@ -83,6 +83,10 @@ public class Shiftreport {
     @Column(name = "totalCashOut", precision = 15, scale = 2)
     private BigDecimal totalCashOut;
 
+    @ColumnDefault("0.00")
+    @Column(name = "totalBankingOut", precision = 15, scale = 2)
+    private BigDecimal totalBankingOut;
+
     @Column(name = "expectedClosingCash", precision = 15, scale = 2)
     private BigDecimal expectedClosingCash;
 
