@@ -280,27 +280,9 @@
                                 <span class="text-secondary">Tổng tiền hoàn</span>
                                 <strong class="text-success" id="summaryRefund">0đ</strong>
                             </div>
-                            <div class="summary-line" id="offsetLine" style="display:none">
-                                <span class="text-secondary">Trừ công nợ hóa đơn</span>
-                                <strong class="text-warning" id="summaryOffset">−0đ</strong>
-                            </div>
-                            <div class="summary-line">
-                                <span class="text-secondary">Còn phải trả khách</span>
-                                <strong id="summaryPayout">0đ</strong>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Trả bằng tiền mặt</label>
-                                <input type="text" inputmode="numeric" data-money
-                                       class="form-control" id="refundCashInput"
-                                       name="refundCash" th:value="${form.refundCash}" disabled>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Trả bằng chuyển khoản</label>
-                                <input type="text" inputmode="numeric" data-money
-                                       class="form-control" id="refundBankingInput"
-                                       name="refundBanking" th:value="${form.refundBanking}" disabled>
-                                <div class="form-text">Tiền mặt + chuyển khoản phải bằng đúng số còn phải trả khách; sửa một ô thì ô kia tự bù.</div>
+                            <div class="form-text mb-3">
+                                Phiếu trả chỉ tính tiền hoàn, không chi tiền. Việc hoàn tiền cho khách được
+                                thực hiện ở phiếu chi bên Kế toán.
                             </div>
 
                             <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
@@ -339,7 +321,6 @@
                         <th>Nhân viên</th>
                         <th>Khách hàng</th>
                         <th>Tổng cộng</th>
-                        <th>Còn nợ</th>
                         <th>Trạng thái trả</th>
                         <th></th>
                     </tr>
@@ -351,16 +332,12 @@
                                  data-code=${inv.invoiceCode},
                                  data-customer=${inv.customerName},
                                  data-date=${inv.dateDisplay},
-                                 data-debt=${inv.debtAmount},
                                  data-search=${inv.invoiceCode + ' ' + inv.customerName}">
                         <td class="fw-semibold text-success" th:text="${inv.invoiceCode}">HD000046</td>
                         <td th:text="${inv.dateDisplay}">06/07/2026 16:32</td>
                         <td th:text="${inv.employeeName}">Dược sĩ A</td>
                         <td th:text="${inv.customerName}">Anh Hoàng</td>
                         <td th:text="${#numbers.formatDecimal(inv.total, 0, 'POINT', 0, 'COMMA') + 'đ'}">300.000đ</td>
-                        <td th:text="${inv.debtAmount != null and inv.debtAmount.signum() > 0
-                                ? #numbers.formatDecimal(inv.debtAmount, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}"
-                            th:classappend="${inv.debtAmount != null and inv.debtAmount.signum() > 0 ? 'text-warning fw-semibold' : 'text-secondary'}">—</td>
                         <td>
                             <span class="badge bg-secondary-subtle text-secondary"
                                   th:text="${inv.returnStatusDisplay}">Chưa trả</span>
@@ -370,7 +347,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(returnableInvoices)}">
-                        <td colspan="8" class="text-center text-secondary py-4">
+                        <td colspan="7" class="text-center text-secondary py-4">
                             Không có hóa đơn nào đủ điều kiện trả (đã hoàn thành &amp; trong 3 ngày).
                         </td>
                     </tr>
@@ -380,8 +357,6 @@
         </div>
     </div>
 </div>
-
-<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 
 <script th:inline="javascript">
     (function () {
@@ -394,28 +369,18 @@
         const emptyRow = document.getElementById('emptyRow');
         const summaryItems = document.getElementById('summaryItems');
         const summaryRefund = document.getElementById('summaryRefund');
-        const offsetLine = document.getElementById('offsetLine');
-        const summaryOffset = document.getElementById('summaryOffset');
-        const summaryPayout = document.getElementById('summaryPayout');
-        const cashInput = document.getElementById('refundCashInput');
-        const bankInput = document.getElementById('refundBankingInput');
 
         const modal = document.getElementById('invoiceModal');
 
-        // Nợ còn lại của hóa đơn đang chọn — refund cấn trừ khoản này TRƯỚC, phần dư mới chia TM/CK.
-        let currentDebt = 0;
-        let currentPayout = 0;
+        // Số lượng người dùng đã nhập ở lần submit vừa bị validate lỗi (vd quên nhập lý do). Dòng hóa đơn
+        // được nạp lại bằng AJAX nên nếu không giữ lại thì mọi ô SL bị đặt về tối đa, mất công gõ lại.
+        // Chỉ dùng cho LẦN render đầu tiên; chọn lại hóa đơn khác thì quay về mặc định trả toàn bộ.
+        let postedQty = new Map((/*[[${form.items}]]*/ []).
+            filter(it => it && it.invoiceDetailId != null)
+            .map(it => [String(it.invoiceDetailId), it.returnQty]));
 
         function formatMoney(value) {
             return (value || 0).toLocaleString('vi-VN') + 'đ';
-        }
-
-        function moneyVal(input) {
-            return window.pmMoneyValue ? window.pmMoneyValue(input) : (Number(input.value) || 0);
-        }
-
-        function setMoney(input, value) {
-            input.value = value > 0 ? value.toLocaleString('vi-VN') : '0';
         }
 
         // ---- Modal open/close ----
@@ -441,7 +406,6 @@
         function selectInvoice(row) {
             const id = row.getAttribute('data-id');
             invoiceIdField.value = id;
-            currentDebt = Number(row.getAttribute('data-debt')) || 0;
             fillInvoiceHeader(row);
             modal.classList.remove('open');
             loadLines(id);
@@ -469,8 +433,14 @@
 
         function renderLines(lines) {
             lineBody.innerHTML = '';
+            // Khôi phục lựa chọn của lần submit lỗi: chỉ giữ những dòng người dùng chưa xóa, đúng SL đã nhập.
+            const restoring = postedQty.size > 0;
+            if (restoring) {
+                lines = lines.filter(line => postedQty.has(String(line.invoiceDetailId)));
+            }
             if (!lines || lines.length === 0) {
                 lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Hóa đơn này không còn dòng nào có thể trả.</td></tr>';
+                postedQty = new Map();
                 recalc();
                 return;
             }
@@ -478,6 +448,9 @@
                 // Default to a FULL return (the whole returnable quantity); the user lowers it for a partial
                 // return, or removes the whole row for items the customer keeps.
                 const full = line.returnableQty;
+                const qty = restoring
+                    ? Math.min(Math.max(postedQty.get(String(line.invoiceDetailId)) || 0, 0), full)
+                    : full;
                 // Restock is hard-coded by item type (server decides via productunit.isDefault); read-only badge.
                 const canRestock = !!line.restockable;
                 const tr = document.createElement('tr');
@@ -493,7 +466,7 @@
                         '<div class="input-group input-group-sm" style="max-width:130px">' +
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
-                                '" value="' + full + '" data-price="' + line.unitSellPrice + '" name="items[' + i + '].returnQty">' +
+                                '" value="' + qty + '" data-price="' + line.unitSellPrice + '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
                         '<div class="text-secondary small">tối đa ' + full + '</div>' +
@@ -522,6 +495,8 @@
                 }
                 recalc();
             }));
+            // Đã khôi phục xong — chọn hóa đơn khác sau đó quay lại mặc định "trả toàn bộ".
+            postedQty = new Map();
             recalc();
         }
 
@@ -551,42 +526,7 @@
             });
             summaryItems.textContent = itemCount;
             summaryRefund.textContent = formatMoney(totalRefund);
-
-            // Bù trừ công nợ tự động (bắt buộc): trừ nợ trước, phần dư mới phải trả ra.
-            const offset = Math.min(currentDebt, totalRefund);
-            currentPayout = totalRefund - offset;
-            offsetLine.style.display = offset > 0 ? '' : 'none';
-            summaryOffset.textContent = '−' + formatMoney(offset);
-            summaryPayout.textContent = formatMoney(currentPayout);
-            syncPayment('none');
         }
-
-        // Giữ bất biến TM + CK = "còn phải trả khách": sửa ô nào thì ô kia tự bù phần còn thiếu.
-        // source = 'cash' | 'bank' | 'none' (none = số tiền hoàn vừa đổi do sửa SL → ưu tiên giữ CK).
-        function syncPayment(source) {
-            if (currentPayout <= 0) {
-                setMoney(cashInput, 0);
-                setMoney(bankInput, 0);
-                cashInput.disabled = true;
-                bankInput.disabled = true;
-                return;
-            }
-            cashInput.disabled = false;
-            bankInput.disabled = false;
-
-            if (source === 'cash') {
-                const cash = Math.min(moneyVal(cashInput), currentPayout);
-                setMoney(cashInput, cash);
-                setMoney(bankInput, currentPayout - cash);
-            } else {
-                const bank = Math.min(moneyVal(bankInput), currentPayout);
-                setMoney(bankInput, bank);
-                setMoney(cashInput, currentPayout - bank);
-            }
-        }
-
-        cashInput.addEventListener('blur', () => syncPayment('cash'));
-        bankInput.addEventListener('blur', () => syncPayment('bank'));
 
         function escapeHtml(s) {
             return (s == null ? '' : String(s)).replace(/[&<>"']/g, c =>
@@ -603,7 +543,6 @@
         if (invoiceIdField.value) {
             const chosen = document.querySelector('#invoicePickBody .pick-row[data-id="' + invoiceIdField.value + '"]');
             if (chosen) {
-                currentDebt = Number(chosen.getAttribute('data-debt')) || 0;
                 fillInvoiceHeader(chosen);
             } else {
                 document.getElementById('noInvoice').classList.add('d-none');

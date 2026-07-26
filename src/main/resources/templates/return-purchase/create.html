@@ -139,13 +139,9 @@
                         </div>
 
                         <div class="p-4">
-                            <div class="mb-3">
-                                <label class="form-label">Hình thức hoàn tiền</label>
-                                <select class="form-select" name="returnType">
-                                    <option th:each="entry : ${returnTypeLabels}"
-                                            th:value="${entry.key}"
-                                            th:text="${entry.value}"></option>
-                                </select>
+                            <div class="form-text mb-3">
+                                Phiếu trả chỉ tính tiền hoàn, không thu tiền. Việc nhận lại tiền từ nhà
+                                cung cấp được thực hiện ở phiếu thu bên Kế toán.
                             </div>
 
                             <div class="mb-3">
@@ -256,6 +252,13 @@
 
         const modal = document.getElementById('purchaseModal');
 
+        // Số lượng người dùng đã nhập ở lần submit vừa bị validate lỗi (vd quên nhập lý do). Dòng phiếu nhập
+        // được nạp lại bằng AJAX nên nếu không giữ lại thì mọi ô SL bị đặt về tối đa, mất công gõ lại.
+        // Chỉ dùng cho LẦN render đầu tiên; chọn lại phiếu nhập khác thì quay về mặc định trả toàn bộ.
+        let postedQty = new Map((/*[[${form.items}]]*/ [])
+            .filter(it => it && it.purchaseDetailId != null)
+            .map(it => [String(it.purchaseDetailId), it.returnQty]));
+
         function formatMoney(value) {
             return (value || 0).toLocaleString('vi-VN') + 'đ';
         }
@@ -301,8 +304,14 @@
 
         function renderLines(lines) {
             lineBody.innerHTML = '';
+            // Khôi phục lựa chọn của lần submit lỗi: chỉ giữ những dòng người dùng chưa xóa, đúng SL đã nhập.
+            const restoring = postedQty.size > 0;
+            if (restoring) {
+                lines = lines.filter(line => postedQty.has(String(line.purchaseDetailId)));
+            }
             if (!lines || lines.length === 0) {
                 lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Phiếu nhập này không còn dòng nào có thể trả.</td></tr>';
+                postedQty = new Map();
                 recalc();
                 return;
             }
@@ -310,6 +319,9 @@
                 // Default to returning the full on-hand quantity; the user lowers it for a partial return,
                 // or removes the whole row for items kept.
                 const full = line.returnableQty;
+                const qty = restoring
+                    ? Math.min(Math.max(postedQty.get(String(line.purchaseDetailId)) || 0, 0), full)
+                    : full;
                 const tr = document.createElement('tr');
                 tr.innerHTML =
                     '<td>' + escapeHtml(line.productName) + '</td>' +
@@ -324,7 +336,7 @@
                         '<div class="input-group input-group-sm" style="max-width:130px">' +
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
-                                '" value="' + full + '" data-price="' + line.refundUnitPrice + '" name="items[' + i + '].returnQty">' +
+                                '" value="' + qty + '" data-price="' + line.refundUnitPrice + '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
                         '<div class="text-secondary small">tối đa ' + full + '</div>' +
@@ -348,6 +360,8 @@
                 }
                 recalc();
             }));
+            // Đã khôi phục xong — chọn phiếu nhập khác sau đó quay lại mặc định "trả toàn bộ".
+            postedQty = new Map();
             recalc();
         }
 

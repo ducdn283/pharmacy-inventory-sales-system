@@ -76,31 +76,6 @@
             color: #4b5563;
         }
 
-        .check-line {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        .check-icon {
-            width: 22px;
-            height: 22px;
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #d1d5db;
-            color: #9ca3af;
-        }
-
-        .check-icon.done {
-            background: #059669;
-            border-color: #059669;
-            color: #fff;
-        }
-
         .btn-stock-primary {
             background: #059669;
             border-color: #059669;
@@ -350,58 +325,6 @@
                                   th:text="${detail.statusName}">
                                 Chờ duyệt
                             </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="stock-card mb-4">
-                    <div class="p-4 border-bottom">
-                        <div class="section-title">
-                            <i class="ti ti-circle-check text-success me-1"></i>
-                            Tiến độ xử lý
-                        </div>
-                    </div>
-
-                    <div class="p-4">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span th:text="${detail.accountingCheckDone + '/' + detail.accountingCheckTotal + ' mục đã hoàn tất'}">
-                                3/4 mục đã hoàn tất
-                            </span>
-                            <strong class="text-success" th:text="${detail.accountingCheckPercent + '%'}">75%</strong>
-                        </div>
-
-                        <div class="progress mb-4" style="height: 8px;">
-                            <div class="progress-bar bg-success"
-                                 th:style="${'width: ' + detail.accountingCheckPercent + '%'}">
-                            </div>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" th:classappend="${detail.itemsChecked} ? ' done'">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã chọn hàng hóa</span>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" th:classappend="${detail.batchChecked} ? ' done'">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã kiểm tra lô &amp; hạn dùng</span>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" th:classappend="${detail.valueChecked} ? ' done'">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã kiểm tra giá trị hàng</span>
-                        </div>
-
-                        <div class="check-line">
-                            <span class="check-icon" th:classappend="${detail.approvalChecked} ? ' done'">
-                                <i class="ti ti-check"></i>
-                            </span>
-                            <span>Đã duyệt phiếu</span>
                         </div>
                     </div>
                 </div>

@@ -35,7 +35,7 @@ public class ReturnInvoiceLineResponse {
     /**
      * Whether this line's returned goods will be put back into stock — hard-coded by item type
      * (only the manufacturer's default packaging unit, {@code productunit.isDefault}). Shown read-only
-     * on the create screen; there is no manual checkbox (BA 2026-07-12).
+     * on the create screen; there is no manual checkbox .
      */
     private boolean restockable;
 }
