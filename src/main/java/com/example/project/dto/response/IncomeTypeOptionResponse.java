@@ -21,9 +21,9 @@ public class IncomeTypeOptionResponse {
 
     public static List<IncomeTypeOptionResponse> all() {
         return List.of(
-                new IncomeTypeOptionResponse(SUPPLIER, "Nhà cung cấp"),
-                new IncomeTypeOptionResponse(EMPLOYEE, "Nhân viên"),
-                new IncomeTypeOptionResponse(CUSTOMER, "Khách hàng"),
+                new IncomeTypeOptionResponse(SUPPLIER, "Thu nợ nhà cung cấp"),
+                new IncomeTypeOptionResponse(EMPLOYEE, "Thu tiền nhân viên đền bù"),
+                new IncomeTypeOptionResponse(CUSTOMER, "Thu nợ khách hàng"),
                 new IncomeTypeOptionResponse(OTHER, "Khác")
         );
     }
@@ -71,6 +71,18 @@ public class IncomeTypeOptionResponse {
     }
 
     private static boolean matches(IncomeTypeOptionResponse option, String value) {
-        return option.code.equalsIgnoreCase(value) || option.label.equalsIgnoreCase(value);
+        return option.code.equalsIgnoreCase(value)
+                || option.label.equalsIgnoreCase(value)
+                || legacyLabelMatches(option, value);
+    }
+
+    /** Recognizes Vietnamese labels persisted before the income-type rename. */
+    private static boolean legacyLabelMatches(IncomeTypeOptionResponse option, String value) {
+        return switch (option.code) {
+            case CUSTOMER -> "Khách hàng".equalsIgnoreCase(value);
+            case SUPPLIER -> "Nhà cung cấp".equalsIgnoreCase(value);
+            case EMPLOYEE -> "Nhân viên".equalsIgnoreCase(value);
+            default -> false;
+        };
     }
 }

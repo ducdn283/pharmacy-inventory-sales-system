@@ -56,6 +56,7 @@ public class IncomeService {
     private static final String STATUS_REJECTED = "Từ chối";
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
+    private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
     private static final String SUPPLIER_RETURN_STATUS_APPROVED = "Đã duyệt";
     private static final String STOCK_ADJUSTMENT_STATUS_APPROVED = "Duyệt";
 
@@ -321,6 +322,9 @@ public class IncomeService {
         saved.setIncomeCode(formatCode(saved.getId()));
         saved = incomeRepository.save(saved);
         linkReturnIncome(saved, incomeTypeCode, request.getReturnId());
+        if (!asDraft && IncomeTypeOptionResponse.CUSTOMER.equals(incomeTypeCode)) {
+            applyCustomerDebtPayment(saved, split[0], split[1]);
+        }
         return saved.getId();
     }
 
@@ -704,6 +708,7 @@ public class IncomeService {
             if (!isDebtInvoice(invoice)) {
                 throw new IllegalArgumentException("Hóa đơn không còn ở trạng thái nợ");
             }
+            validateCustomerPaymentAmount(invoice, request.getAmount());
         }
         if (IncomeTypeOptionResponse.SUPPLIER.equals(incomeType)) {
             Return ret = returnRepository.findById(request.getReturnId())
@@ -870,6 +875,40 @@ public class IncomeService {
 
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private void validateCustomerPaymentAmount(Invoice invoice, BigDecimal paymentAmount) {
+        if (paymentAmount == null) {
+            return;
+        }
+        BigDecimal debt = nullToZero(invoice.getDebtAmount());
+        if (paymentAmount.setScale(2, RoundingMode.HALF_UP).compareTo(debt.setScale(2, RoundingMode.HALF_UP)) > 0) {
+            throw new IllegalArgumentException(
+                    "Số tiền thu không được vượt quá số tiền nợ (" + formatMoney(debt) + ")");
+        }
+    }
+
+    /** Reduces the linked sales invoice debt when a customer debt-collection income is submitted. */
+    private void applyCustomerDebtPayment(Income income, BigDecimal paidByCash, BigDecimal paidByBanking) {
+        if (income.getInvoiceID() == null || income.getAmount() == null) {
+            return;
+        }
+        Invoice invoice = invoiceRepository.findById(income.getInvoiceID().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn bán hàng"));
+        validateCustomerPaymentAmount(invoice, income.getAmount());
+
+        BigDecimal payment = income.getAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal currentDebt = nullToZero(invoice.getDebtAmount());
+        BigDecimal newDebt = currentDebt.subtract(payment);
+        if (newDebt.compareTo(BigDecimal.ZERO) < 0) {
+            newDebt = BigDecimal.ZERO;
+        }
+
+        invoice.setPaidByCash(nullToZero(invoice.getPaidByCash()).add(nullToZero(paidByCash)));
+        invoice.setPaidByBanking(nullToZero(invoice.getPaidByBanking()).add(nullToZero(paidByBanking)));
+        invoice.setDebtAmount(newDebt);
+        invoice.setStatus(newDebt.compareTo(BigDecimal.ZERO) > 0 ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
+        invoiceRepository.save(invoice);
     }
 
     private String formatInvoiceDate(LocalDateTime dateTime) {
