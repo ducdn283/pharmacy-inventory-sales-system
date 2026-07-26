@@ -47,18 +47,6 @@ public class Return {
     @Column(name = "returnType", nullable = false, length = 50)
     private String returnType;
 
-    @ColumnDefault("0.00")
-    @Column(name = "refundCash", precision = 15, scale = 2)
-    private BigDecimal refundCash;
-
-    @ColumnDefault("0.00")
-    @Column(name = "refundBanking", precision = 15, scale = 2)
-    private BigDecimal refundBanking;
-
-    @ColumnDefault("0.00")
-    @Column(name = "refundCredit", precision = 15, scale = 2)
-    private BigDecimal refundCredit;
-
     @NotNull
     @Column(name = "totalRefund", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalRefund;
