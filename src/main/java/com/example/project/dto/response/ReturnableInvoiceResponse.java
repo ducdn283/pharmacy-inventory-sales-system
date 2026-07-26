@@ -20,9 +20,6 @@ public class ReturnableInvoiceResponse {
 
     private BigDecimal total;
 
-    /** Outstanding balance of the invoice — the create screen offsets the refund against it first. */
-    private BigDecimal debtAmount;
-
     /** Current return status of the invoice (NONE / PARTIAL) — FULL invoices are excluded from the list. */
     private String returnStatusDisplay;
 }
