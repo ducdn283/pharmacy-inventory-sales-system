@@ -842,8 +842,16 @@ public class IncomeService {
         return cashRefundAmount(ret).compareTo(BigDecimal.ZERO) > 0;
     }
 
+    /** Tiền NCC hoàn thực chi (TM hoặc CK), loại trừ hình thức trừ công nợ. */
     private BigDecimal cashRefundAmount(Return ret) {
-        return nullToZero(ret.getRefundCash()).add(nullToZero(ret.getRefundBanking()));
+        if (ret == null || ret.getReturnType() == null) {
+            return BigDecimal.ZERO;
+        }
+        String type = ret.getReturnType().trim().toUpperCase(Locale.ROOT);
+        if (PAYMENT_CASH.equals(type) || PAYMENT_BANKING.equals(type)) {
+            return nullToZero(ret.getTotalRefund());
+        }
+        return BigDecimal.ZERO;
     }
 
     private Set<Integer> linkedReturnIds() {
