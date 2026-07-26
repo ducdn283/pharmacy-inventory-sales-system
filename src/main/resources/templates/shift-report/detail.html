@@ -29,10 +29,12 @@
 
         .info-row {
             display: grid;
-            grid-template-columns: 180px 1fr;
+            grid-template-columns: 180px minmax(0, 1fr);
             padding: 11px 0;
             border-bottom: 1px solid #f1f5f9;
             font-size: 14px;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .info-row:last-child {
@@ -41,6 +43,11 @@
 
         .info-label {
             color: #6b7280;
+        }
+
+        .wrap-anywhere {
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .status-badge {
@@ -324,7 +331,7 @@
 
                     <div th:if="${detail.noteDiscrepancy != null and !detail.noteDiscrepancy.isEmpty()}">
                         <div class="text-secondary small mb-1">Ghi chú chênh lệch</div>
-                        <div th:text="${detail.noteDiscrepancy}">Ghi chú</div>
+                        <div class="wrap-anywhere" th:text="${detail.noteDiscrepancy}">Ghi chú</div>
                     </div>
                 </div>
 
@@ -338,7 +345,7 @@
 
                         <div class="mb-3">
                             <label class="form-label">Tiền mặt đầu ca (lấy từ két)</label>
-                            <input type="number" step="1000" min="0"
+                            <input type="text" inputmode="numeric" data-money
                                    class="form-control"
                                    id="inputOpeningCash"
                                    name="openingCash"
@@ -348,7 +355,7 @@
 
                         <div class="mb-3">
                             <label class="form-label">Tiền mặt cuối ca (thực đếm)</label>
-                            <input type="number" step="1000" min="0"
+                            <input type="text" inputmode="numeric" data-money
                                    class="form-control"
                                    id="inputActualClosingCash"
                                    name="actualClosingCash"
@@ -411,6 +418,8 @@
     </div>
 </main>
 
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
 <script>
     (function () {
         const card = document.getElementById('cashReconCard');
@@ -432,8 +441,10 @@
             return v.toLocaleString('vi-VN') + 'đ';
         }
 
+        // Đọc bằng pmMoneyValue (bóc dấu chấm phân cách của money-input.js) thay vì Number(input.value)
+        // trực tiếp — input giờ là type=text đã format "12.500", Number() sẽ hiểu nhầm dấu chấm là thập phân.
         function recalc() {
-            const opening = Number(openingInput.value || 0);
+            const opening = window.pmMoneyValue ? window.pmMoneyValue(openingInput) : Number(openingInput.value || 0);
             const expected = opening + cashIn - cashOut;
             reconOpening.textContent = fmt(opening);
             reconExpected.textContent = fmt(expected);
@@ -444,7 +455,7 @@
                 return;
             }
 
-            const actual = Number(actualInput.value);
+            const actual = window.pmMoneyValue ? window.pmMoneyValue(actualInput) : Number(actualInput.value);
             const diff = actual - expected;
             reconActual.textContent = fmt(actual);
             reconDiscrepancy.textContent = (diff > 0 ? '+' : '') + fmt(diff);

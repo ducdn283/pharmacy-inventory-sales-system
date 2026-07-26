@@ -19,16 +19,20 @@ import java.util.List;
 /**
  * Customer-return screens (list / detail / create / approve / reject).
  *
- * <p>Reachable by the Owner (approver) and the Pharmacist (creator). Both share the same templates;
- * the active base path (<code>/owner/returns</code> or <code>/pharmacist/returns</code>) is resolved
- * per request so links stay within the caller's role prefix. Approve/reject are Owner-only (enforced
- * by SecurityConfig on <code>/owner/**</code>).</p>
+ * <p>Reachable by the Owner (approver), the Pharmacist (creator), and — read-only — the Accountant.
+ * All three share the same templates; the active base path (<code>/owner/returns</code>,
+ * <code>/pharmacist/returns</code> or <code>/accountant/returns</code>) is resolved per request so
+ * links stay within the caller's role prefix. Create/submit/approve/reject are never mapped under
+ * {@code ACCOUNTANT_BASE} — the create/detail templates additionally hide those actions behind
+ * {@code currentRole != 'ACCOUNTANT'} so the Accountant only ever sees a view link. Approve/reject
+ * remain Owner-only (enforced by SecurityConfig on <code>/owner/**</code>).</p>
  */
 @Controller
 public class ReturnController {
 
     private static final String OWNER_BASE = "/owner/returns";
     private static final String PHARMACIST_BASE = "/pharmacist/returns";
+    private static final String ACCOUNTANT_BASE = "/accountant/returns";
 
     private final ReturnService returnService;
     private final CurrentUserContext currentUserContext;
@@ -38,7 +42,7 @@ public class ReturnController {
         this.currentUserContext = currentUserContext;
     }
 
-    @GetMapping({OWNER_BASE, PHARMACIST_BASE})
+    @GetMapping({OWNER_BASE, PHARMACIST_BASE, ACCOUNTANT_BASE})
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                        @RequestParam(name = "fromDate", required = false) String fromDate,
                        @RequestParam(name = "toDate", required = false) String toDate,
@@ -84,7 +88,6 @@ public class ReturnController {
     public String createPage(HttpServletRequest request, Model model) {
         model.addAttribute("form", new ReturnCreateRequest());
         model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
-        model.addAttribute("returnTypeLabels", returnService.returnTypeLabels());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
         model.addAttribute("basePath", resolveBasePath(request));
         return "return/create";
@@ -126,7 +129,6 @@ public class ReturnController {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
             model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
-            model.addAttribute("returnTypeLabels", returnService.returnTypeLabels());
             model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
             model.addAttribute("basePath", basePath);
             return "return/create";
@@ -150,7 +152,7 @@ public class ReturnController {
         return "redirect:" + basePath + "/" + returnId;
     }
 
-    @GetMapping({OWNER_BASE + "/{returnId}", PHARMACIST_BASE + "/{returnId}"})
+    @GetMapping({OWNER_BASE + "/{returnId}", PHARMACIST_BASE + "/{returnId}", ACCOUNTANT_BASE + "/{returnId}"})
     public String detail(@PathVariable Integer returnId, HttpServletRequest request, Model model) {
         model.addAttribute("detail", returnService.getDetail(returnId));
         model.addAttribute("basePath", resolveBasePath(request));
@@ -185,6 +187,13 @@ public class ReturnController {
     }
 
     private String resolveBasePath(HttpServletRequest request) {
-        return request.getRequestURI().startsWith(PHARMACIST_BASE) ? PHARMACIST_BASE : OWNER_BASE;
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return PHARMACIST_BASE;
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return ACCOUNTANT_BASE;
+        }
+        return OWNER_BASE;
     }
 }

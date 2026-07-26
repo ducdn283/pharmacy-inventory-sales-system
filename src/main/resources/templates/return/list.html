@@ -126,7 +126,7 @@
                 <h1 class="fs-4 mb-1">Danh sách trả hàng</h1>
                 <p class="text-secondary mb-0">Quản lý các phiếu trả hàng của khách (trả một phần hoặc toàn bộ)</p>
             </div>
-            <a th:href="${basePath + '/create'}" class="btn btn-stock-primary">
+            <a th:if="${currentRole != 'ACCOUNTANT'}" th:href="${basePath + '/create'}" class="btn btn-stock-primary">
                 <i class="ti ti-plus me-1"></i>
                 Tạo phiếu trả hàng
             </a>

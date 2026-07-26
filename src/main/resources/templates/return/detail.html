@@ -29,10 +29,12 @@
 
         .info-row {
             display: grid;
-            grid-template-columns: 180px 1fr;
+            grid-template-columns: 180px minmax(0, 1fr);
             padding: 12px 0;
             border-bottom: 1px solid #f1f5f9;
             font-size: 14px;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .info-label {
@@ -355,7 +357,7 @@
                 </div>
 
                 <div class="stock-card p-4"
-                     th:if="${detail.statusName == 'Nháp' or (#strings.startsWith(basePath, '/owner') and detail.statusName == 'Chờ duyệt')}">
+                     th:if="${currentRole != 'ACCOUNTANT' and (detail.statusName == 'Nháp' or (#strings.startsWith(basePath, '/owner') and detail.statusName == 'Chờ duyệt'))}">
                     <!-- Draft: the creator sends it forward (Owner → Nợ, Pharmacist → Chờ duyệt). -->
                     <form th:if="${detail.statusName == 'Nháp'}"
                           id="submitForm"
