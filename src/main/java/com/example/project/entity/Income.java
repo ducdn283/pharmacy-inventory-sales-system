@@ -66,6 +66,10 @@ public class Income {
     @Column(name = "paidByBanking", nullable = false, precision = 15, scale = 2)
     private BigDecimal paidByBanking;
 
+    @NotNull
+    @Column(name = "paidByCredit", nullable = false, precision = 15, scale = 2)
+    private BigDecimal paidByCredit;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplierID")
     private Supplier supplierID;

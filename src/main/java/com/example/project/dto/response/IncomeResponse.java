@@ -26,6 +26,7 @@ public class IncomeResponse {
     private BigDecimal amount;
     private BigDecimal paidByCash;
     private BigDecimal paidByBanking;
+    private BigDecimal paidByCredit;
     private Integer supplierId;
     private Integer customerId;
     private Integer accountId;
@@ -47,6 +48,7 @@ public class IncomeResponse {
                 income.getAmount(),
                 income.getPaidByCash(),
                 income.getPaidByBanking(),
+                income.getPaidByCredit(),
                 income.getSupplierID() != null ? income.getSupplierID().getId() : null,
                 income.getCustomerID() != null ? income.getCustomerID().getId() : null,
                 income.getAccountID() != null ? income.getAccountID().getId() : null,

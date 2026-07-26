@@ -24,6 +24,9 @@ public class Taxperiodsnapshot {
     @Column(name = "periodLabel", length = 10)
     private String periodLabel;
 
+    @Column(name = "nextPeriodTaxType")
+    private Integer nextPeriodTaxType;
+
     @Column(name = "startDate")
     private LocalDate startDate;
 

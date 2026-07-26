@@ -26,6 +26,7 @@ public class ExpenseResponse {
     private BigDecimal paid;
     private BigDecimal paidByCash;
     private BigDecimal paidByBanking;
+    private BigDecimal paidByCredit;
     private Integer supplierId;
     private Integer customerId;
     private Integer accountId;
@@ -48,6 +49,7 @@ public class ExpenseResponse {
                 expense.getPaid(),
                 expense.getPaidByCash(),
                 expense.getPaidByBanking(),
+                expense.getPaidByCredit(),
                 expense.getSupplierID() != null ? expense.getSupplierID().getId() : null,
                 expense.getCustomerID() != null ? expense.getCustomerID().getId() : null,
                 expense.getAccountID() != null ? expense.getAccountID().getId() : null,

@@ -223,7 +223,7 @@ public class IncomeService {
         return returnRepository.findAll().stream()
                 .filter(ret -> ret.getPurchaseID() != null && ret.getInvoiceID() == null)
                 .filter(ret -> SUPPLIER_RETURN_STATUS_APPROVED.equals(ret.getStatus()))
-                .filter(ret -> ret.getIncomeID() == null && !linkedReturnIds.contains(ret.getId()))
+                .filter(ret -> !linkedReturnIds.contains(ret.getId()))
                 .filter(this::hasCashRefund)
                 .filter(ret -> {
                     Purchaseinvoice purchase = purchasesById.get(ret.getPurchaseID().getId());
@@ -321,21 +321,10 @@ public class IncomeService {
         Income saved = incomeRepository.save(income);
         saved.setIncomeCode(formatCode(saved.getId()));
         saved = incomeRepository.save(saved);
-        linkReturnIncome(saved, incomeTypeCode, request.getReturnId());
         if (!asDraft && IncomeTypeOptionResponse.CUSTOMER.equals(incomeTypeCode)) {
             applyCustomerDebtPayment(saved, split[0], split[1]);
         }
         return saved.getId();
-    }
-
-    private void linkReturnIncome(Income saved, String incomeType, Integer returnId) {
-        if (!IncomeTypeOptionResponse.SUPPLIER.equals(incomeType) || returnId == null) {
-            return;
-        }
-        Return ret = returnRepository.findById(returnId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng nhà cung cấp"));
-        ret.setIncomeID(saved);
-        returnRepository.save(ret);
     }
 
     @Transactional(readOnly = true)
@@ -719,7 +708,7 @@ public class IncomeService {
             if (!SUPPLIER_RETURN_STATUS_APPROVED.equals(ret.getStatus())) {
                 throw new IllegalArgumentException("Chỉ có thể thu tiền từ phiếu trả NCC đã duyệt");
             }
-            if (ret.getIncomeID() != null || linkedReturnIds().contains(ret.getId())) {
+            if (linkedReturnIds().contains(ret.getId())) {
                 throw new IllegalArgumentException("Phiếu trả hàng này đã được ghi nhận thu tiền");
             }
             Purchaseinvoice purchase = purchaseinvoiceRepository.findById(ret.getPurchaseID().getId())

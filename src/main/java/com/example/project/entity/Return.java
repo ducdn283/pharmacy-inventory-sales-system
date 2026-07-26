@@ -68,14 +68,6 @@ public class Return {
     private BigDecimal offsetDebtAmount;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "expenseID")
-    private Expense expenseID;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "incomeID")
-    private Income incomeID;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shiftReportID")
     private Shiftreport shiftReportID;
 
