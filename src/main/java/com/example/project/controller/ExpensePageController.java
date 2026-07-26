@@ -85,9 +85,7 @@ public class ExpensePageController {
     @GetMapping({OWNER_BASE + "/create", ACCOUNTANT_BASE + "/create"})
     public String createPage(HttpServletRequest request, Model model) {
         model.addAttribute("form", new ExpenseCreateRequest());
-        model.addAttribute("expenseTypeLabels", expenseService.expenseTypeLabels());
-        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        model.addAttribute("basePath", resolveBasePath(request));
+        addCreateFormOptions(model, resolveBasePath(request));
 
         return "expense/create";
     }
@@ -121,11 +119,24 @@ public class ExpensePageController {
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
-            model.addAttribute("expenseTypeLabels", expenseService.expenseTypeLabels());
-            model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-            model.addAttribute("basePath", basePath);
+            addCreateFormOptions(model, basePath);
             return "expense/create";
         }
+    }
+
+    /**
+     * Everything the create form needs besides the form object itself. Shared by the GET and the
+     * validation-failure re-render so the customer-return picker survives a rejected submit.
+     */
+    private void addCreateFormOptions(Model model, String basePath) {
+        model.addAttribute("expenseTypeLabels", expenseService.expenseTypeLabels());
+        model.addAttribute("customerReturns", expenseService.listCustomerReturns());
+        model.addAttribute("customerReturnAmounts", expenseService.customerReturnAmounts());
+        model.addAttribute("purchaseInvoices", expenseService.listPayablePurchaseInvoices());
+        model.addAttribute("purchaseInvoiceAmounts", expenseService.payablePurchaseInvoiceAmounts());
+        model.addAttribute("purchaseLinkableTypes", expenseService.purchaseLinkableTypes());
+        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+        model.addAttribute("basePath", basePath);
     }
 
     @GetMapping({OWNER_BASE + "/{expenseId}", ACCOUNTANT_BASE + "/{expenseId}"})

@@ -32,4 +32,18 @@ public class ExpenseDetailResponse {
     private String approvedAtDisplay;
 
     private String note;
+
+    /** Linked customer return, or {@code null} when this slip is not a refund payout. */
+    private Integer returnId;
+    private String returnCode;
+
+    /** Customer of the linked return's original invoice; {@code null} for a walk-in sale. */
+    private String customerName;
+
+    /** Linked purchase invoice, or {@code null} when this slip does not settle one. */
+    private Integer purchaseId;
+    private String purchaseCode;
+
+    /** Supplier of the linked purchase invoice. */
+    private String supplierName;
 }

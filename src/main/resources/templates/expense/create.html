@@ -116,12 +116,63 @@
 
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Loại phiếu chi <span class="text-danger">*</span></label>
-                                <select class="form-select" th:field="*{expenseType}" required>
+                                <select class="form-select" th:field="*{expenseType}" id="expenseTypeInput" required>
                                     <option value="">-- Chọn loại phiếu chi --</option>
                                     <option th:each="entry : ${expenseTypeLabels}"
                                             th:value="${entry.key}"
                                             th:text="${entry.value}">Chi phí vận hành</option>
                                 </select>
+                            </div>
+
+                            <!-- Chỉ hiện với loại "Hoàn tiền trả hàng". Danh sách render sẵn từ server
+                                 (khác Phiếu thu phải gọi AJAX vì nó còn phụ thuộc NCC đã chọn). -->
+                            <div class="col-12" id="returnRefundFields" style="display: none;">
+                                <label class="form-label">
+                                    Phiếu trả hàng của khách <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" th:field="*{returnId}" id="returnIdInput">
+                                    <option value="">-- Chọn phiếu trả hàng cần hoàn tiền --</option>
+                                    <option th:each="item : ${customerReturns}"
+                                            th:value="${item.id}"
+                                            th:text="${item.code + ' · ' + item.dateDisplay + ' · '
+                                                     + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA')
+                                                     + 'đ · ' + item.detail}">
+                                        PT-000001
+                                    </option>
+                                </select>
+                                <div class="form-text"
+                                     th:if="${customerReturns != null and customerReturns.isEmpty()}">
+                                    <i class="ti ti-alert-circle me-1"></i>
+                                    Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                </div>
+                                <div class="form-text" th:unless="${customerReturns != null and customerReturns.isEmpty()}">
+                                    <i class="ti ti-info-circle me-1"></i>
+                                    Chỉ liệt kê phiếu trả hàng đã duyệt, còn phát sinh tiền hoàn và chưa có phiếu chi.
+                                    Số tiền được lấy từ phiếu trả, không sửa được.
+                                </div>
+                            </div>
+
+                            <!-- Hiện với các loại trong ExpenseType.PURCHASE_LINKABLE — hiện chỉ "Chi phí
+                                 vận hành", nơi gom mọi khoản chi liên quan phiếu nhập, kể cả nợ NCC.
+                                 Khác ô hoàn tiền ở trên: không bắt buộc chọn (trả tiền NCC không gắn hóa
+                                 đơn cụ thể là hợp lệ) và số tiền vẫn sửa được. -->
+                            <div class="col-12" id="purchaseLinkFields" style="display: none;">
+                                <label class="form-label">Thanh toán cho phiếu nhập</label>
+                                <select class="form-select" th:field="*{purchaseId}" id="purchaseIdInput">
+                                    <option value="">-- Không gắn phiếu nhập (lương, điện, nước…) --</option>
+                                    <option th:each="item : ${purchaseInvoices}"
+                                            th:value="${item.id}"
+                                            th:text="${item.code + ' · ' + item.dateDisplay + ' · còn '
+                                                     + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA')
+                                                     + 'đ · ' + item.detail}">
+                                        PN-000001
+                                    </option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="ti ti-info-circle me-1"></i>
+                                    Chọn phiếu nhập sẽ tự điền số còn phải trả — bạn vẫn sửa được để trả một phần.
+                                    Khi phiếu chi được duyệt, số tiền sẽ được cộng vào phần đã trả của phiếu nhập.
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6">
@@ -136,6 +187,10 @@
                                     <input type="text" inputmode="numeric" data-money class="form-control"
                                            th:field="*{amount}" id="amountInput" placeholder="0">
                                     <span class="input-group-text">đ</span>
+                                </div>
+                                <div class="form-text" id="amountLockedHint" style="display: none;">
+                                    <i class="ti ti-lock me-1"></i>
+                                    Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.
                                 </div>
                             </div>
 
@@ -225,7 +280,14 @@
     </div>
 </main>
 
-<script>
+<script th:inline="javascript">
+    // Map scalar thuần (không phải entity JPA) nên an toàn với th:inline.
+    const RETURN_REFUND_AMOUNTS = /*[[${customerReturnAmounts}]]*/ {};
+    const PURCHASE_PAYABLE_AMOUNTS = /*[[${purchaseInvoiceAmounts}]]*/ {};
+    // Từ ExpenseType.PURCHASE_LINKABLE — không hardcode ở đây để JS không lệch khỏi Java.
+    const PURCHASE_LINKABLE_TYPES = /*[[${purchaseLinkableTypes}]]*/ [];
+    const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
+
     function today() {
         const date = new Date();
         const offset = date.getTimezoneOffset();
@@ -237,6 +299,65 @@
         document.getElementById('partialPaymentFields').style.display = fullyPaid ? 'none' : '';
     }
 
+    function currentType() {
+        return document.getElementById('expenseTypeInput').value;
+    }
+
+    function isRefundPayout() {
+        return currentType() === TYPE_RETURN_REFUND;
+    }
+
+    function supportsPurchaseLink() {
+        return PURCHASE_LINKABLE_TYPES.indexOf(currentType()) !== -1;
+    }
+
+    /** Ghi số tiền rồi phát sự kiện input để fragment money-input định dạng lại (650000 -> 650.000). */
+    function setAmount(value) {
+        const amountInput = document.getElementById('amountInput');
+        amountInput.value = value == null ? '' : String(value);
+        amountInput.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+
+    function syncRefundAmount() {
+        const returnId = document.getElementById('returnIdInput').value;
+        // Khoá ô tiền ngay khi chọn loại hoàn tiền — server cũng ghi đè, đây chỉ là phản ánh cho người dùng thấy.
+        setAmount(returnId ? RETURN_REFUND_AMOUNTS[returnId] : '');
+    }
+
+    /** Phiếu nhập chỉ GỢI Ý số tiền — trả một phần là bình thường nên không khoá ô. */
+    function syncPurchaseAmount() {
+        const purchaseId = document.getElementById('purchaseIdInput').value;
+        if (purchaseId) {
+            setAmount(PURCHASE_PAYABLE_AMOUNTS[purchaseId]);
+        }
+    }
+
+    function toggleReferenceFields() {
+        const refundPayout = isRefundPayout();
+        const purchaseLink = supportsPurchaseLink();
+        const amountInput = document.getElementById('amountInput');
+
+        document.getElementById('returnRefundFields').style.display = refundPayout ? '' : 'none';
+        document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
+        document.getElementById('amountLockedHint').style.display = refundPayout ? '' : 'none';
+
+        // Chỉ hoàn tiền mới khoá ô tiền; trả nợ vẫn cho sửa.
+        amountInput.readOnly = refundPayout;
+        amountInput.classList.toggle('auto-field', refundPayout);
+
+        // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
+        if (!refundPayout) {
+            document.getElementById('returnIdInput').value = '';
+        }
+        if (!purchaseLink) {
+            document.getElementById('purchaseIdInput').value = '';
+        }
+
+        if (refundPayout) {
+            syncRefundAmount();
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const dateInput = document.getElementById('dateInput');
         if (!dateInput.value) {
@@ -246,15 +367,39 @@
         document.getElementById('fullyPaidInput').addEventListener('change', togglePartialPaymentFields);
         togglePartialPaymentFields();
 
+        document.getElementById('expenseTypeInput').addEventListener('change', toggleReferenceFields);
+        document.getElementById('returnIdInput').addEventListener('change', syncRefundAmount);
+        document.getElementById('purchaseIdInput').addEventListener('change', syncPurchaseAmount);
+        toggleReferenceFields();
+
         document.getElementById('expenseForm').addEventListener('submit', function (event) {
+            function reject(message) {
+                event.preventDefault();
+                if (window.pmToast) {
+                    pmToast(message, 'error');
+                } else {
+                    alert(message);
+                }
+            }
+
+            if (isRefundPayout() && !document.getElementById('returnIdInput').value) {
+                reject('Vui lòng chọn phiếu trả hàng của khách cần hoàn tiền.');
+                return;
+            }
             // pmMoneyValue ignores the thousand separators — Number("500.000") would read 500.
             const amount = pmMoneyValue(document.getElementById('amountInput'));
             if (amount <= 0) {
-                event.preventDefault();
-                if (window.pmToast) {
-                    pmToast('Vui lòng nhập số tiền cần chi lớn hơn 0.', 'error');
-                } else {
-                    alert('Vui lòng nhập số tiền cần chi lớn hơn 0.');
+                reject('Vui lòng nhập số tiền cần chi lớn hơn 0.');
+                return;
+            }
+
+            // Chặn sớm ở client cho đỡ mất công submit; server vẫn kiểm lại (mới là nơi quyết định).
+            const purchaseId = supportsPurchaseLink() ? document.getElementById('purchaseIdInput').value : '';
+            if (purchaseId) {
+                const payable = PURCHASE_PAYABLE_AMOUNTS[purchaseId];
+                if (payable != null && amount > payable) {
+                    reject('Số tiền chi vượt quá số còn phải trả cho phiếu nhập này ('
+                        + payable.toLocaleString('vi-VN') + 'đ).');
                 }
             }
         });
