@@ -351,11 +351,9 @@ public class ReturnPurchaseService {
         ret.setReturnedBy(creator);
         ret.setReturnDate(nowVn());
         ret.setReturnType(TYPE_SUPPLIER);
-        // Phiếu trả CHỈ TÍNH tiền, không thu tiền: cách nhận lại (tiền mặt / chuyển khoản) do phiếu thu
-        // bên Kế toán quyết định và ghi đè lại 2 cột này sau. Ở đây để 0 (cột nullable, DB mặc định 0.00).
-        ret.setRefundCash(BigDecimal.ZERO);
-        ret.setRefundBanking(BigDecimal.ZERO);
-        ret.setRefundCredit(BigDecimal.ZERO);
+        // Phiếu trả CHỈ TÍNH tiền, không thu tiền: cách nhận lại (tiền mặt / chuyển khoản) là dữ liệu của
+        // phiếu thu bên Kế toán. 3 cột refundCash/refundBanking/refundCredit đã bị bỏ khỏi
+        // bảng `return` — phiếu trả chỉ còn lưu tổng NCC phải hoàn (totalRefund/offsetDebtAmount).
         ret.setTotalRefund(totalRefund);
         ret.setTotalVATRefund(totalVATRefund);
         // NCC hoàn 100% giá trị nhập gốc.
@@ -527,9 +525,6 @@ public class ReturnPurchaseService {
                 details.size(),
                 totalQuantity,
                 ret.getTotalRefund(),
-                ret.getRefundCash(),
-                ret.getRefundBanking(),
-                ret.getRefundCredit(),
                 ret.getOffsetDebtAmount(),
                 items);
     }
