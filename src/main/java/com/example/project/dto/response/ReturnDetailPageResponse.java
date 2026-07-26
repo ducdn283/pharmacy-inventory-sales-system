@@ -43,14 +43,5 @@ public class ReturnDetailPageResponse {
     private BigDecimal refundCredit;
     private BigDecimal offsetDebtAmount;
 
-    // Processing checklist (mirrors the stock-adjustment detail progress panel).
-    private int checkDone;
-    private int checkTotal;
-    private int checkPercent;
-    private boolean invoiceChecked;
-    private boolean itemsChecked;
-    private boolean refundChecked;
-    private boolean approvalChecked;
-
     private List<ReturnDetailItemResponse> items;
 }

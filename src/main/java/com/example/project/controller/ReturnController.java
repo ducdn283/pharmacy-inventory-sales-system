@@ -46,7 +46,6 @@ public class ReturnController {
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                        @RequestParam(name = "fromDate", required = false) String fromDate,
                        @RequestParam(name = "toDate", required = false) String toDate,
-                       @RequestParam(name = "returnType", required = false) String returnType,
                        @RequestParam(name = "status", required = false) String status,
                        @RequestParam(name = "page", defaultValue = "0") int page,
                        @RequestParam(name = "size", defaultValue = "5") int size,
@@ -60,19 +59,17 @@ public class ReturnController {
         }
 
         Page<ReturnListItemResponse> returnPage =
-                returnService.search(keyword, fromDate, toDate, returnType, status, PageRequest.of(page, size));
+                returnService.search(keyword, fromDate, toDate, status, PageRequest.of(page, size));
 
         model.addAttribute("returnPage", returnPage);
         model.addAttribute("returns", returnPage.getContent());
         model.addAttribute("stats", returnService.getStats());
 
         model.addAttribute("statuses", returnService.listStatuses());
-        model.addAttribute("returnTypeLabels", returnService.returnTypeLabels());
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
-        model.addAttribute("filterReturnType", returnType);
         model.addAttribute("filterStatus", status);
 
         model.addAttribute("currentPage", returnPage.getNumber());
@@ -156,6 +153,8 @@ public class ReturnController {
     public String detail(@PathVariable Integer returnId, HttpServletRequest request, Model model) {
         model.addAttribute("detail", returnService.getDetail(returnId));
         model.addAttribute("basePath", resolveBasePath(request));
+        // Cho phép bấm thẳng từ "Hóa đơn gốc" sang màn chi tiết hóa đơn — cả 3 role đều xem được hóa đơn.
+        model.addAttribute("invoiceBasePath", resolveInvoiceBasePath(request));
         return "return/detail";
     }
 
@@ -195,5 +194,17 @@ public class ReturnController {
             return ACCOUNTANT_BASE;
         }
         return OWNER_BASE;
+    }
+
+    /** Invoice-detail base for the current role (InvoiceController maps all three). */
+    private String resolveInvoiceBasePath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/invoices";
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return "/accountant/invoices";
+        }
+        return "/owner/invoices";
     }
 }

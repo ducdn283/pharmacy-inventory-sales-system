@@ -208,16 +208,6 @@
                     </div>
 
                     <div class="col-12 col-xl-2">
-                        <select class="form-select" name="returnType">
-                            <option value="">Hình thức hoàn</option>
-                            <option th:each="entry : ${returnTypeLabels}"
-                                    th:value="${entry.key}"
-                                    th:text="${entry.value}"
-                                    th:selected="${filterReturnType == entry.key}"></option>
-                        </select>
-                    </div>
-
-                    <div class="col-12 col-xl-2">
                         <select class="form-select" name="status">
                             <option value="">Trạng thái</option>
                             <option th:each="status : ${statuses}"
@@ -264,7 +254,7 @@
                         <th>Người tạo</th>
                         <th>Số mặt hàng</th>
                         <th>Tiền hoàn</th>
-                        <th>Hình thức</th>
+                        <th>Đối tượng</th>
                         <th>Trạng thái</th>
                         <th class="text-end">Thao tác</th>
                     </tr>
@@ -288,7 +278,7 @@
                             th:text="${#numbers.formatDecimal(item.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                             120.000đ
                         </td>
-                        <td th:text="${item.returnTypeDisplay}">Tiền mặt</td>
+                        <td th:text="${item.returnTypeDisplay}">Khách hàng</td>
                         <td>
                             <span class="status-badge"
                                   th:classappend="${' ' + item.statusCssClass}"
@@ -327,7 +317,7 @@
                     <ul class="pagination mb-0">
                         <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, returnType=${filterReturnType}, status=${filterStatus}, page=${currentPage - 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, page=${currentPage - 1}, size=${pageSize})}">
                                 Trước
                             </a>
                         </li>
@@ -337,12 +327,12 @@
                             th:classappend="${pageNumber == currentPage} ? ' active'">
                             <a class="page-link"
                                th:text="${pageNumber + 1}"
-                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, returnType=${filterReturnType}, status=${filterStatus}, page=${pageNumber}, size=${pageSize})}">1</a>
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, page=${pageNumber}, size=${pageSize})}">1</a>
                         </li>
 
                         <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, returnType=${filterReturnType}, status=${filterStatus}, page=${currentPage + 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, page=${currentPage + 1}, size=${pageSize})}">
                                 Sau
                             </a>
                         </li>

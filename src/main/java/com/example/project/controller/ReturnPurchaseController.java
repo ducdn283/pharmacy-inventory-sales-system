@@ -41,7 +41,6 @@ public class ReturnPurchaseController {
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                        @RequestParam(name = "fromDate", required = false) String fromDate,
                        @RequestParam(name = "toDate", required = false) String toDate,
-                       @RequestParam(name = "returnType", required = false) String returnType,
                        @RequestParam(name = "status", required = false) String status,
                        @RequestParam(name = "page", defaultValue = "0") int page,
                        @RequestParam(name = "size", defaultValue = "5") int size,
@@ -54,19 +53,17 @@ public class ReturnPurchaseController {
         }
 
         Page<ReturnPurchaseListItemResponse> returnPage =
-                returnPurchaseService.search(keyword, fromDate, toDate, returnType, status, PageRequest.of(page, size));
+                returnPurchaseService.search(keyword, fromDate, toDate, status, PageRequest.of(page, size));
 
         model.addAttribute("returnPage", returnPage);
         model.addAttribute("returns", returnPage.getContent());
         model.addAttribute("stats", returnPurchaseService.getStats());
 
         model.addAttribute("statuses", returnPurchaseService.listStatuses());
-        model.addAttribute("returnTypeLabels", returnPurchaseService.returnTypeLabels());
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
-        model.addAttribute("filterReturnType", returnType);
         model.addAttribute("filterStatus", status);
 
         model.addAttribute("currentPage", returnPage.getNumber());
@@ -82,7 +79,6 @@ public class ReturnPurchaseController {
     public String createPage(Model model) {
         model.addAttribute("form", new ReturnPurchaseCreateRequest());
         model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
-        model.addAttribute("returnTypeLabels", returnPurchaseService.returnTypeLabels());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
         model.addAttribute("basePath", BASE);
         return "return-purchase/create";
@@ -112,8 +108,7 @@ public class ReturnPurchaseController {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
             model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
-            model.addAttribute("returnTypeLabels", returnPurchaseService.returnTypeLabels());
-            model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+                model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
             model.addAttribute("basePath", BASE);
             return "return-purchase/create";
         }

@@ -145,7 +145,7 @@ public class CustomerService {
         c.setPhoneNumber(trimToNull(req.getPhoneNumber()));
         c.setAddress(trimToNull(req.getAddress()));
         c.setNote(trimToNull(req.getNote()));
-        // taxCode dùng cho CẢ 2 loại (BA 2026-07-16): doanh nghiệp = Mã số thuế (MST),
+        // taxCode dùng cho CẢ 2 loại doanh nghiệp = Mã số thuế (MST),
         // cá nhân = số CCCD/CMND — cần để xuất hóa đơn/hóa đơn điều chỉnh cho khách.
         String taxCode = trimToNull(req.getTaxCode());
         validateTaxCode(company, taxCode);
