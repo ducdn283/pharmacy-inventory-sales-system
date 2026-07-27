@@ -1,5 +1,6 @@
 package com.example.project.constant;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +35,20 @@ public final class TaxRevenueGroup {
 
     /** Selectable groups, in ascending order. */
     public static final List<Integer> ALL = List.of(EXEMPT, DIRECT, DEDUCTION);
+
+    /**
+     * VAT rate applied to revenue under the {@link #DIRECT} method: <strong>1%</strong> for retail
+     * and wholesale of goods, which is what a pharmacy does.
+     *
+     * <p>Hardcoded on purpose — the docx states the per-group GTGT/TNCN formulas are "FIX CỨNG
+     * trong code", and {@code Financialsetting} has thresholds but no rate column. A different
+     * sector would use a different rate (services are 5%), so this constant is only correct because
+     * the whole system models one pharmacy.</p>
+     *
+     * <p>The matching <em>personal income tax</em> of 0.5% is deliberately not modelled:
+     * {@code taxperiodsnapshot} has VAT columns only, and adding PIT would need a schema change.</p>
+     */
+    public static final BigDecimal DIRECT_VAT_RATE = new BigDecimal("0.01");
 
     private static final Map<Integer, String> LABELS = Map.of(
             EXEMPT, "Nhóm 1 — dưới ngưỡng 1 (miễn thuế)",

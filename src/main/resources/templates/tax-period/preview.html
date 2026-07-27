@@ -199,18 +199,19 @@
                                     Phiếu trả hàng của khách (đã duyệt):
                                     <strong th:text="${computation.customerReturnCount}">0</strong>
                                 </li>
-                                <li>
+                                <li th:if="${computation.deductionGroup}">
                                     Phiếu nhập được khấu trừ:
                                     <strong th:text="${computation.purchaseInvoiceCount}">0</strong>
                                 </li>
-                                <li>
+                                <li th:if="${computation.deductionGroup}">
                                     Phiếu trả hàng NCC (đã duyệt):
                                     <strong th:text="${computation.supplierReturnCount}">0</strong>
                                 </li>
                             </ul>
                         </div>
 
-                        <div class="col-12" th:if="${computation.nonDeductiblePurchaseCount > 0}">
+                        <div class="col-12"
+                             th:if="${computation.deductionGroup and computation.nonDeductiblePurchaseCount > 0}">
                             <div class="alert alert-warning small p-3 mb-0">
                                 <i class="ti ti-file-alert me-1"></i>
                                 <strong th:text="${computation.nonDeductiblePurchaseCount}">0</strong>
@@ -229,54 +230,68 @@
 
                     <table class="table vat-table mb-0">
                         <tbody>
-                        <tr class="component">
-                            <td>Thuế GTGT đầu ra của hóa đơn bán hàng</td>
-                            <td class="amount"
-                                th:text="${#numbers.formatDecimal(computation.vatOutputFromSales, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        </tr>
-                        <tr class="component">
-                            <td>Trừ: thuế GTGT của hàng bán bị trả lại trong kỳ</td>
-                            <td class="amount"
-                                th:text="${'−' + #numbers.formatDecimal(computation.vatOutputReturnDeduction, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
-                        </tr>
-                        <tr class="row-subtotal">
-                            <td>Thuế GTGT đầu ra</td>
-                            <td class="amount"
-                                th:text="${#numbers.formatDecimal(computation.vatOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        </tr>
+                        <!-- Nhóm 3 — phương pháp khấu trừ -->
+                        <th:block th:if="${computation.deductionGroup}">
+                            <tr class="component">
+                                <td>Thuế GTGT đầu ra của hóa đơn bán hàng</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.vatOutputFromSales, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr class="component">
+                                <td>Trừ: thuế GTGT của hàng bán bị trả lại trong kỳ</td>
+                                <td class="amount"
+                                    th:text="${'−' + #numbers.formatDecimal(computation.vatOutputReturnDeduction, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                            </tr>
+                            <tr class="row-subtotal">
+                                <td>Thuế GTGT đầu ra</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.vatOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
 
-                        <tr class="component">
-                            <td>Thuế GTGT đầu vào của phiếu nhập đủ điều kiện khấu trừ</td>
-                            <td class="amount"
-                                th:text="${#numbers.formatDecimal(computation.vatInputFromPurchases, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        </tr>
-                        <tr class="component">
-                            <td>Trừ: thuế GTGT của hàng trả lại nhà cung cấp trong kỳ</td>
-                            <td class="amount"
-                                th:text="${'−' + #numbers.formatDecimal(computation.vatInputReturnReversal, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
-                        </tr>
-                        <tr class="row-subtotal">
-                            <td>
-                                Thuế GTGT đầu vào được khấu trừ
-                                <span class="text-secondary small d-block" th:if="${!computation.deductionGroup}">
-                                    Kỳ này thuộc nhóm không áp dụng khấu trừ thuế GTGT đầu vào
-                                </span>
-                            </td>
-                            <td class="amount"
-                                th:text="${#numbers.formatDecimal(computation.vatInput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        </tr>
+                            <tr class="component">
+                                <td>Thuế GTGT đầu vào của phiếu nhập đủ điều kiện khấu trừ</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.vatInputFromPurchases, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr class="component">
+                                <td>Trừ: thuế GTGT của hàng trả lại nhà cung cấp trong kỳ</td>
+                                <td class="amount"
+                                    th:text="${'−' + #numbers.formatDecimal(computation.vatInputReturnReversal, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                            </tr>
+                            <tr class="row-subtotal">
+                                <td>Thuế GTGT đầu vào được khấu trừ</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.vatInput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
 
-                        <tr>
-                            <td>Thuế GTGT còn được khấu trừ chuyển từ kỳ trước</td>
-                            <td class="amount"
-                                th:text="${#numbers.formatDecimal(computation.vatCarryforwardIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        </tr>
+                            <tr>
+                                <td>Thuế GTGT còn được khấu trừ chuyển từ kỳ trước</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.vatCarryforwardIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                        </th:block>
+
+                        <!-- Nhóm 2 — tỷ lệ % trên doanh thu -->
+                        <th:block th:if="${computation.percentageMethod}">
+                            <tr class="component">
+                                <td>Doanh thu của kỳ (đã trừ hàng bán bị trả lại)</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr class="component">
+                                <td>Tỷ lệ thuế GTGT trên doanh thu (bán lẻ hàng hóa)</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.directVatRatePercent, 0, 'POINT', 2, 'COMMA') + '%'}">1,00%</td>
+                            </tr>
+                        </th:block>
+
                         <tr class="row-total">
                             <td>Thuế GTGT còn phải nộp của kỳ</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(computation.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
-                        <tr>
+
+                        <tr th:if="${computation.deductionGroup}">
                             <td>Thuế GTGT còn được khấu trừ chuyển sang kỳ sau</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(computation.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>

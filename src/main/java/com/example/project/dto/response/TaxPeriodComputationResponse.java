@@ -27,6 +27,18 @@ public class TaxPeriodComputationResponse {
     private boolean deductionGroup;
     private boolean taxExempt;
 
+    /**
+     * True for group 2, which owes a flat percentage of revenue instead of output minus input.
+     * The three groups are mutually exclusive, so this is simply "neither of the other two".
+     */
+    private boolean percentageMethod;
+
+    /** Revenue of the period: sales less what customers brought back inside it. */
+    private BigDecimal periodRevenue;
+
+    /** The percentage-method rate as a human number (e.g. {@code 1.00} for 1%). */
+    private BigDecimal directVatRatePercent;
+
     // --- output VAT: sales in the period, less VAT on goods customers returned in the period
     private BigDecimal vatOutputFromSales;
     private BigDecimal vatOutputReturnDeduction;

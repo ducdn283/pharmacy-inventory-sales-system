@@ -23,11 +23,14 @@ public class TaxPeriodListItemResponse {
     private Integer revenueGroup;
     private String revenueGroupDisplay;
 
-    private BigDecimal vatOutput;
-    private BigDecimal vatInput;
-    private BigDecimal vatCarryforwardOut;
-
-    /** {@code vatOutput − vatInput − vatCarryforwardIn}, floored at zero: the VAT actually payable. */
+    /**
+     * The VAT actually payable — the one figure that means the same thing in every group.
+     *
+     * <p>Output and input VAT are deliberately <em>not</em> on this row: they only exist under the
+     * deduction method (group 3). A group-2 period owes a flat percentage of revenue and a group-1
+     * period owes nothing, so columns for them would be blank or misleading on most rows. The full
+     * breakdown lives on the detail screen, where the group is stated alongside it.</p>
+     */
     private BigDecimal vatPayable;
 
     private String recordedAtDisplay;

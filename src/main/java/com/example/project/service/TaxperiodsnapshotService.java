@@ -297,9 +297,29 @@ public class TaxperiodsnapshotService {
                 .filter(purchaseinvoiceService::isDeductible)
                 .toList();
 
-        BigDecimal vatOutputFromSales = exempt ? BigDecimal.ZERO : sum(invoices, Invoice::getTotalVATOutput);
-        BigDecimal vatOutputReturnDeduction =
-                exempt ? BigDecimal.ZERO : sum(customerReturns, Return::getTotalVATRefund);
+        BigDecimal revenue = sum(invoices, Invoice::getTotal)
+                .subtract(sum(customerReturns, Return::getTotalRefund))
+                .max(BigDecimal.ZERO);
+
+        // Only the deduction method has an input side, so only it can carry credit between periods.
+        if (!deduction) {
+            carryIn = BigDecimal.ZERO;
+        }
+
+        BigDecimal vatOutputFromSales;
+        BigDecimal vatOutputReturnDeduction;
+        if (deduction) {
+            vatOutputFromSales = sum(invoices, Invoice::getTotalVATOutput);
+            vatOutputReturnDeduction = sum(customerReturns, Return::getTotalVATRefund);
+        } else if (exempt) {
+            vatOutputFromSales = BigDecimal.ZERO;
+            vatOutputReturnDeduction = BigDecimal.ZERO;
+        } else {
+            // Percentage method: the whole liability is a flat rate on revenue, and the returns
+            // already came off the revenue above rather than off a separate output-VAT figure.
+            vatOutputFromSales = revenue.multiply(TaxRevenueGroup.DIRECT_VAT_RATE);
+            vatOutputReturnDeduction = BigDecimal.ZERO;
+        }
         BigDecimal vatOutput = vatOutputFromSales.subtract(vatOutputReturnDeduction);
 
         BigDecimal vatInputFromPurchases =
@@ -319,6 +339,10 @@ public class TaxperiodsnapshotService {
                 TaxRevenueGroup.label(group),
                 deduction,
                 exempt,
+                !deduction && !exempt,
+                scaled(revenue),
+                TaxRevenueGroup.DIRECT_VAT_RATE.multiply(BigDecimal.valueOf(100))
+                        .setScale(2, RoundingMode.HALF_UP),
                 scaled(vatOutputFromSales),
                 scaled(vatOutputReturnDeduction),
                 scaled(vatOutput),
@@ -543,9 +567,6 @@ public class TaxperiodsnapshotService {
                 formatDate(snapshot.getEndDate()),
                 group,
                 TaxRevenueGroup.shortLabel(group),
-                scaled(vatOutput),
-                scaled(vatInput),
-                scaled(safe(snapshot.getVatCarryforwardOut())),
                 scaled(vatPayable(vatOutput, vatInput, carryIn)),
                 formatDateTime(snapshot.getRecordedAt()),
                 snapshot.getId() != null && snapshot.getId().equals(newestId));

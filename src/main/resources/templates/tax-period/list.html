@@ -175,10 +175,7 @@
                         <th>Từ ngày</th>
                         <th>Đến ngày</th>
                         <th>Nhóm</th>
-                        <th class="text-end">GTGT đầu ra</th>
-                        <th class="text-end">GTGT đầu vào</th>
-                        <th class="text-end">Còn phải nộp</th>
-                        <th class="text-end">Chuyển kỳ sau</th>
+                        <th class="text-end">Thuế GTGT phải nộp</th>
                         <th>Chốt lúc</th>
                         <th class="text-end">Thao tác</th>
                     </tr>
@@ -194,14 +191,8 @@
                                   th:classappend="${item.revenueGroup == null ? '' : (item.revenueGroup >= 3 ? ' group-deduction' : (item.revenueGroup == 1 ? ' group-exempt' : ''))}"
                                   th:text="${item.revenueGroupDisplay}">Nhóm 3</span>
                         </td>
-                        <td class="text-end"
-                            th:text="${#numbers.formatDecimal(item.vatOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        <td class="text-end"
-                            th:text="${#numbers.formatDecimal(item.vatInput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         <td class="text-end fw-semibold"
                             th:text="${#numbers.formatDecimal(item.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                        <td class="text-end"
-                            th:text="${#numbers.formatDecimal(item.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         <td th:text="${item.recordedAtDisplay}">—</td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary"
@@ -213,7 +204,7 @@
                     </tr>
 
                     <tr th:if="${#lists.isEmpty(periods)}">
-                        <td colspan="10" class="text-center text-secondary py-4">
+                        <td colspan="7" class="text-center text-secondary py-4">
                             Chưa có kỳ thuế nào được chốt.
                         </td>
                     </tr>
