@@ -93,10 +93,18 @@ public class ShiftreportController {
         boolean isOwnShift = detail.getCashierId() != null
                 && detail.getCashierId().equals(currentUserContext.getCurrentAccountId());
 
+        // Ca dở dang từ ngày trước: PendingShiftInterceptor đã đá người dùng về đây và chặn mọi thao
+        // tác khác, nên trang này phải nói rõ lý do thay vì để họ tưởng bị lỗi điều hướng.
+        boolean mustCloseNow = isOwnShift
+                && shiftreportService.findStaleDraftShift(currentUserContext.getCurrentAccountId())
+                        .map(stale -> stale.getId().equals(shiftReportId))
+                        .orElse(false);
+
         model.addAttribute("detail", detail);
         model.addAttribute("basePath", resolveBasePath(request));
         model.addAttribute("isOwner", currentUserContext.isOwner());
         model.addAttribute("isOwnShift", isOwnShift);
+        model.addAttribute("mustCloseNow", mustCloseNow);
 
         return "shift-report/detail";
     }

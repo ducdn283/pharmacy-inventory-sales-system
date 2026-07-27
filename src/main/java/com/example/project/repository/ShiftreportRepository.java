@@ -29,6 +29,11 @@ public interface ShiftreportRepository extends JpaRepository<Shiftreport, Intege
     /** Open (Nháp) shift of an account, if any — used by ensureOpenShiftFor / logout guard. */
     Optional<Shiftreport> findFirstByCashierID_IdAndStatusOrderByStartTimeDesc(Integer cashierId, String status);
 
-    /** Most recently approved shift of an account — used to inherit openingCash. */
-    Optional<Shiftreport> findFirstByCashierID_IdAndStatusOrderByApprovedAtDesc(Integer cashierId, String status);
+    /**
+     * OLDEST open (Nháp) shift of an account — used to find one left unclosed from a previous day.
+     * Deliberately not the newest: an account should only ever have one draft, but if an older one
+     * did survive alongside a newer one, the stale one is exactly what must be closed first and
+     * looking at the newest would miss it.
+     */
+    Optional<Shiftreport> findFirstByCashierID_IdAndStatusOrderByStartTimeAsc(Integer cashierId, String status);
 }
