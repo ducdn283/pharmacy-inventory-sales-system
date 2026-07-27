@@ -372,6 +372,13 @@
         document.getElementById('purchaseIdInput').addEventListener('change', syncPurchaseAmount);
         toggleReferenceFields();
 
+        if (document.getElementById('returnIdInput').value) {
+            syncRefundAmount();
+        }
+        if (document.getElementById('purchaseIdInput').value) {
+            syncPurchaseAmount();
+        }
+
         document.getElementById('expenseForm').addEventListener('submit', function (event) {
             function reject(message) {
                 event.preventDefault();

@@ -2136,6 +2136,15 @@
         applyServerFieldErrors();
         syncReferenceDetailFromForm();
 
+        const invoiceSelect = document.getElementById('invoiceIdInput');
+        if (invoiceSelect && invoiceSelect.value) {
+            applySuggestedAmount(invoiceSelect);
+        }
+        const returnSelect = document.getElementById('returnIdInput');
+        if (returnSelect && returnSelect.value) {
+            applySuggestedAmount(returnSelect);
+        }
+
         document.getElementById('incomeForm').addEventListener('submit', function (event) {
             syncPayment();
 
