@@ -54,7 +54,8 @@
 
         .party-field.show,
         .reference-field.show {
-            display: block;
+            display: flex;
+            flex-direction: column;
         }
 
         .reference-field {
@@ -136,6 +137,52 @@
             padding-right: 2.25rem;
         }
 
+        .party-search-input-with-icon {
+            padding-left: 2.25rem;
+        }
+
+        /* Bootstrap is-invalid adds a background icon on the right — hide it here because
+           we already render ti-search (and inline error text below). Keeps icons from stacking. */
+        .party-search-wrap .party-search-input.is-invalid {
+            background-image: none;
+            padding-right: 2.25rem;
+        }
+
+        .party-search-wrap .party-search-input.is-invalid ~ .party-search-leading-icon {
+            color: #dc3545;
+        }
+
+        .party-search-wrap .party-search-input.is-invalid ~ .party-search-icon {
+            color: #dc3545;
+        }
+
+        .party-field .income-inline-error,
+        .reference-field .income-inline-error {
+            margin-top: 0.35rem;
+        }
+
+        #paidAmount.is-invalid {
+            background-image: none;
+        }
+
+        #singlePaidBox .income-inline-error {
+            margin-top: 0.35rem;
+        }
+
+        #reasonInput.is-invalid {
+            background-image: none;
+        }
+
+        .party-search-leading-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #059669;
+            pointer-events: none;
+            font-size: 1.05rem;
+        }
+
         .party-search-icon {
             position: absolute;
             right: 12px;
@@ -165,10 +212,25 @@
         }
 
         .party-search-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             padding: 8px 12px;
             cursor: pointer;
             font-size: 13px;
             border-bottom: 1px solid #f3f4f6;
+        }
+
+        .party-search-item .ti {
+            font-size: 1.05rem;
+            color: #059669;
+            flex-shrink: 0;
+        }
+
+        .party-search-item span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .party-search-item:last-child {
@@ -299,11 +361,15 @@
                             </div>
 
                             <div class="col-12 col-md-6 party-field" id="customerField">
-                                <label class="form-label">Khách hàng <span class="text-danger">*</span></label>
+                                <label class="form-label">
+                                    <i class="ti ti-user text-success me-1"></i>
+                                    Khách hàng <span class="text-danger">*</span>
+                                </label>
                                 <div class="party-search-wrap">
+                                    <i class="ti ti-user party-search-leading-icon" id="customerSearchLeadingIcon"></i>
                                     <input type="text"
                                            id="customerSearchInput"
-                                           class="form-control party-search-input"
+                                           class="form-control party-search-input party-search-input-with-icon"
                                            autocomplete="off"
                                            placeholder="Tìm khách hàng theo tên hoặc SĐT">
                                     <i class="ti ti-search party-search-icon"></i>
@@ -485,12 +551,12 @@
                             <label class="form-label">Số tiền thu</label>
                             <input type="text" inputmode="numeric" class="form-control"
                                    id="paidAmount" readonly tabindex="-1">
+                            <div class="income-inline-error" id="paymentAmountError"></div>
                         </div>
 
                         <div class="form-text text-secondary mb-2" id="customerDebtHint" style="display:none;">
                             Có thể thu một phần; tối đa bằng số tiền nợ của hóa đơn.
                         </div>
-                        <div class="text-danger small mb-2" id="paymentAmountError" style="display:none;"></div>
 
                         <div id="splitPaidBox" style="display:none;">
                             <div class="mb-3">
@@ -800,8 +866,8 @@
             paidAmount.classList.remove('is-invalid');
         }
         if (paymentError) {
-            paymentError.style.display = 'none';
             paymentError.textContent = '';
+            setErrorVisible(paymentError, false);
         }
     }
 
@@ -817,7 +883,7 @@
         }
         if (paymentError) {
             paymentError.textContent = text;
-            paymentError.style.display = 'block';
+            setErrorVisible(paymentError, true);
         }
     }
 
@@ -1622,6 +1688,18 @@
         return item.phoneNumber ? item.name + ' — ' + item.phoneNumber : item.name;
     }
 
+    function customerIconClass(item) {
+        return item && item.customerType === 'COMPANY' ? 'ti-building' : 'ti-user';
+    }
+
+    function updateCustomerSearchLeadingIcon(item) {
+        const icon = document.getElementById('customerSearchLeadingIcon');
+        if (!icon) {
+            return;
+        }
+        icon.className = 'ti ' + customerIconClass(item) + ' party-search-leading-icon';
+    }
+
     function partyLabel(item) {
         return item.name;
     }
@@ -1643,6 +1721,7 @@
         if (fieldId === 'customerIdInput') {
             clearSelectError('invoiceIdInput');
             populateReferenceSelect('invoiceIdInput', '-- Chọn hóa đơn còn nợ --', [], null, function () { return ''; });
+            updateCustomerSearchLeadingIcon(null);
             setAmount(0);
         } else if (fieldId === 'supplierIdInput') {
             clearSelectError('returnIdInput');
@@ -1654,7 +1733,8 @@
         }
     }
 
-    function wirePartySearch(fieldId, items, buildLabel, onSelected) {
+    function wirePartySearch(fieldId, items, buildLabel, onSelected, options) {
+        options = options || {};
         const config = PARTY_REFERENCE_FIELDS[fieldId];
         const hidden = getPartyHiddenInput(fieldId);
         const search = getPartySearchInput(fieldId);
@@ -1662,6 +1742,22 @@
         const wrap = search ? search.closest('.party-search-wrap') : null;
         if (!hidden || !search || !results) {
             return;
+        }
+
+        function renderItemHtml(item) {
+            if (typeof options.renderItem === 'function') {
+                return options.renderItem(item, buildLabel);
+            }
+            return '<div class="party-search-item" data-id="' + item.id + '">'
+                + escapeHtml(buildLabel(item)) + '</div>';
+        }
+
+        function itemLabelFromElement(itemEl) {
+            const labelEl = itemEl.querySelector('[data-label]');
+            if (labelEl) {
+                return labelEl.textContent.trim();
+            }
+            return itemEl.textContent.trim();
         }
 
         function hideResults() {
@@ -1676,17 +1772,19 @@
                 return;
             }
             results.innerHTML = matches.map(function (item) {
-                return '<div class="party-search-item" data-id="' + item.id + '">'
-                    + escapeHtml(buildLabel(item)) + '</div>';
+                return renderItemHtml(item);
             }).join('');
             results.classList.add('show');
         }
 
-        function selectItem(id, label) {
+        function selectItem(id, label, selectedItem) {
             hidden.value = id;
             search.value = label;
             hideResults();
             clearSelectError(fieldId);
+            if (typeof options.onItemSelected === 'function') {
+                options.onItemSelected(selectedItem);
+            }
             if (onSelected) {
                 onSelected(id);
             }
@@ -1718,6 +1816,9 @@
                 if (exact) {
                     hidden.value = exact.id;
                     clearSelectError(fieldId);
+                    if (typeof options.onItemSelected === 'function') {
+                        options.onItemSelected(exact);
+                    }
                 }
             }
             syncSelectError(fieldId);
@@ -1732,7 +1833,10 @@
             if (!item) {
                 return;
             }
-            selectItem(item.dataset.id, item.textContent.trim());
+            const selected = items.find(function (entry) {
+                return String(entry.id) === String(item.dataset.id);
+            }) || null;
+            selectItem(item.dataset.id, itemLabelFromElement(item), selected);
         });
 
         document.addEventListener('click', function (event) {
@@ -1747,6 +1851,17 @@
             clearSelectError('invoiceIdInput');
             hideReferenceDetailSection();
             loadDebtInvoices(customerId, null);
+        }, {
+            renderItem: function (item, buildLabel) {
+                const icon = customerIconClass(item);
+                return '<div class="party-search-item" data-id="' + item.id + '">'
+                    + '<i class="ti ' + icon + '"></i>'
+                    + '<span data-label="1">' + escapeHtml(buildLabel(item)) + '</span>'
+                    + '</div>';
+            },
+            onItemSelected: function (item) {
+                updateCustomerSearchLeadingIcon(item);
+            }
         });
         wirePartySearch('supplierIdInput', suppliers, partyLabel, function (supplierId) {
             clearSelectError('returnIdInput');
@@ -1774,6 +1889,9 @@
             });
             if (selected) {
                 search.value = entry.buildLabel(selected);
+                if (entry.fieldId === 'customerIdInput') {
+                    updateCustomerSearchLeadingIcon(selected);
+                }
             }
         });
     }

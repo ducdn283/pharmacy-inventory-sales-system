@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Comparator;
@@ -63,6 +64,7 @@ public class IncomeService {
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_BANKING = "BANKING";
     private static final String PAYMENT_MIXED = "MIXED";
+    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final IncomeRepository incomeRepository;
     private final AccountRepository accountRepository;
@@ -293,11 +295,14 @@ public class IncomeService {
         Income income = new Income();
         income.setApplicantID(applicant);
         income.setIncomeType(IncomeTypeOptionResponse.storageLabelOf(incomeTypeCode));
-        income.setDate(Instant.now());
+        income.setDate(nowVn());
         income.setReason(request.getReason() != null ? request.getReason().trim() : "");
         income.setAmount(request.getAmount());
         income.setPaidByCash(split[0]);
         income.setPaidByBanking(split[1]);
+        // NOT NULL on income.paidByCredit — Hibernate writes explicit NULL without @DynamicInsert,
+        // so default the unused debt-offset portion to zero (same as ExpenseService.create).
+        income.setPaidByCredit(BigDecimal.ZERO);
         income.setNote(trimToNull(request.getNote()));
         applyPartyLinks(income, incomeTypeCode, request);
         applyReferenceLinks(income, incomeTypeCode, request);
@@ -334,7 +339,7 @@ public class IncomeService {
 
     @Transactional(readOnly = true)
     public long countToday() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(VN_ZONE);
         return incomeRepository.findAll().stream()
                 .filter(income -> income.getDate() != null && toLocalDate(income.getDate()).equals(today))
                 .count();
@@ -342,7 +347,7 @@ public class IncomeService {
 
     @Transactional(readOnly = true)
     public BigDecimal sumTodayAmount() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(VN_ZONE);
         return incomeRepository.findAll().stream()
                 .filter(income -> income.getDate() != null && toLocalDate(income.getDate()).equals(today))
                 .map(Income::getAmount)
@@ -621,13 +626,19 @@ public class IncomeService {
         if (instant == null) {
             return "";
         }
+        // Stored via nowVn() — read back as UTC (same convention as ReturnService).
         return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
-                .withZone(ZoneId.systemDefault())
+                .withZone(ZoneOffset.UTC)
                 .format(instant);
     }
 
     private LocalDate toLocalDate(Instant instant) {
-        return instant.atZone(ZoneId.systemDefault()).toLocalDate();
+        return instant.atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    /** VN wall-clock time stored on a UTC-labelled Instant (matches ReturnService/ShiftreportService). */
+    private Instant nowVn() {
+        return LocalDateTime.now(VN_ZONE).toInstant(ZoneOffset.UTC);
     }
 
     private LocalDate parseDate(String value) {
