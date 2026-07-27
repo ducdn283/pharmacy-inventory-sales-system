@@ -49,16 +49,26 @@ import java.util.stream.Collectors;
  * <em>customer</em> return: {@code ReturnStatus}'s own javadoc has always said "the actual cash
  * payout lives on a separate Expense, handled in a later phase" — this is that phase.
  *
- * <p><strong>Customer vs. supplier returns.</strong> {@code Return.returnType} does <em>not</em>
- * say which side a slip belongs to — since 2026-07-26 it is derived from the amounts and holds a
- * payment method ({@code CASH}/{@code BANKING}/{@code MIXED}/{@code DEBT}). The discriminator used
- * consistently across {@code ReturnService}, {@code ApprovalService}, {@code IncomeService} and
+ * <p><strong>Customer vs. supplier returns.</strong> The discriminator used consistently across
+ * {@code ReturnService}, {@code ApprovalService}, {@code IncomeService} and
  * {@code ShiftreportService} is the FK: {@code invoiceID != null} is a customer return,
  * {@code purchaseID != null && invoiceID == null} is a supplier one. Expense only ever touches the
  * former (the pharmacy pays the customer back); the latter is money coming <em>in</em> and belongs
  * to {@code IncomeService.listSupplierReturns()}, the exact mirror of
  * {@link #listCustomerReturns()}. Returning goods to a supplier costs no cash, so it is out of
  * scope here by design.</p>
+ *
+ * <p><em>{@code Return.returnType} changed meaning on 2026-07-27</em> and now also answers this
+ * question — it holds {@code CUSTOMER}/{@code SUPPLIER} again, no longer the payment method
+ * ({@code CASH}/{@code BANKING}/{@code MIXED}/{@code DEBT}) it briefly derived from the amounts.
+ * The FK check above is kept because it is what every other service uses; the two agree.</p>
+ *
+ * <p><strong>A return slip computes, it does not pay.</strong> {@code b81e80b} dropped
+ * {@code refundCash}/{@code refundBanking}/{@code refundCredit} from the table, leaving only
+ * {@code totalRefund}. Deciding how the money physically leaves — and recording that it did — is
+ * now entirely this module's job, which is what makes {@link #listCustomerReturns()} the single
+ * gateway to paying a customer back. {@code ShiftreportService} relies on the same thing: since
+ * those columns went away, an Expense slip is its <em>only</em> source of cash-out for a shift.</p>
  *
  * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#OPERATIONAL} slip can point at a
  * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
@@ -70,10 +80,10 @@ import java.util.stream.Collectors;
  * {@link #disbursedAmount}.</p>
  *
  * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
- * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. Only
- * the Expense side is wired here; making {@code ShiftreportService.computeTransactionTotals()}
- * actually read those slips is another contributor's work, so a cash expense still does not move
- * {@code totalCashOut} yet.</p>
+ * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. As of
+ * {@code 451b4d5}, {@code ShiftreportService.computeTransactionTotals()} reads those slips and a
+ * shift's whole {@code totalCashOut} is the sum of their {@code paidByCash}, so this stamp is now
+ * load-bearing: a slip left unstamped is cash the register can never account for.</p>
  *
  * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
  * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
@@ -662,16 +672,26 @@ public class ExpenseService {
     }
 
     /**
-     * The part of a return that is real money leaving the register. Deliberately <em>not</em>
-     * {@code totalRefund}: {@code refundCredit}/{@code offsetDebtAmount} was already settled by
-     * reducing the original invoice's debt when the return was approved, so paying it out again
-     * would refund the customer twice. Same helper (and same reasoning) as
-     * {@code IncomeService.cashRefundAmount}.
+     * The part of a return that is real money leaving the register: what the pharmacy owes, less
+     * anything already settled by writing down the original invoice's debt (paying that out again
+     * would refund the customer twice).
+     *
+     * <p>Confirmed 2026-07-27 — this replaces {@code 17e606f}'s "temporary repair". It used to read
+     * {@code refundCash + refundBanking}, but {@code b81e80b} dropped those columns along with
+     * {@code refundCredit}: a return slip now only <em>computes</em> the obligation
+     * ({@code totalRefund}), and how the money physically leaves is this module's business, not the
+     * return's. {@code totalRefund − offsetDebtAmount} is the faithful translation of the old
+     * expression, since the two used to be the two halves of {@code totalRefund}.</p>
+     *
+     * <p>In practice {@code offsetDebtAmount} is always zero on a customer return —
+     * {@code ReturnService.assertReturnable} makes the customer clear the invoice's debt before
+     * returning anything, so there is nothing left to offset. The subtraction is kept because the
+     * column still exists and nothing enforces that zero.</p>
      */
     private BigDecimal cashRefundAmount(Return ret) {
-        // TẠM: b81e80b bỏ refundCash/refundBanking khỏi bảng `return` → không compile
-        // được. Giữ nguyên ý nghĩa cũ "trừ phần đã cấn trừ nợ". Cần xác nhận lại.
-        return nullToZero(ret.getTotalRefund()).subtract(nullToZero(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO);
+        return nullToZero(ret.getTotalRefund())
+                .subtract(nullToZero(ret.getOffsetDebtAmount()))
+                .max(BigDecimal.ZERO);
     }
 
     /**
