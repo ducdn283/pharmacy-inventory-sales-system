@@ -251,6 +251,52 @@ public class TaxperiodsnapshotService {
 
     // ------------------------------------------------------------------ live computation
 
+    // ------------------------------------------------------------------ revenue
+
+    /**
+     * Revenue between two dates, both inclusive: what was sold, less what customers brought back.
+     *
+     * <p>Exists so the pharmacy has <strong>one</strong> definition of revenue. {@link #computePeriod}
+     * needs it per quarter (it is the base of the group-2 percentage tax and of the group-3 profit),
+     * and the revenue-threshold warning needs it per year to decide when the household crosses into
+     * the next group. Two hand-written copies of the same sum would eventually disagree — and then
+     * the yearly figure would stop being the sum of its quarters, on exactly the number that decides
+     * which tax regime applies.</p>
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal revenueBetween(LocalDate from, LocalDate to) {
+        if (from == null || to == null || to.isBefore(from)) {
+            throw new IllegalArgumentException("Khoảng thời gian tính doanh thu không hợp lệ");
+        }
+        TaxPeriod span = new TaxPeriod(from + " → " + to, from, to);
+        List<Invoice> invoices = invoiceRepository.findInPeriod(localStart(span), localEndExclusive(span));
+        List<Return> customerReturns = returnRepository
+                .findInPeriod(instantStart(span), instantEndExclusive(span)).stream()
+                .filter(TaxperiodsnapshotService::isApprovedCustomerReturn)
+                .toList();
+        return scaled(revenueOf(invoices, customerReturns));
+    }
+
+    /**
+     * Revenue of a whole calendar year — what the revenue-threshold warning compares against
+     * {@code Financialsetting.annualRevenueThreshold1/2}. The thresholds are annual, and the group
+     * a household belongs to is decided by the year's revenue, not by any single quarter's.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal revenueForYear(int year) {
+        return revenueBetween(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31));
+    }
+
+    /**
+     * The definition itself: sales less refunds, never negative. Kept private and taking the already
+     * loaded rows so {@link #computePeriod} does not have to fetch them twice.
+     */
+    private static BigDecimal revenueOf(List<Invoice> invoices, List<Return> approvedCustomerReturns) {
+        return sum(invoices, Invoice::getTotal)
+                .subtract(sum(approvedCustomerReturns, Return::getTotalRefund))
+                .max(BigDecimal.ZERO);
+    }
+
     /** Computes {@link #nextPeriodToClose()} without storing anything. */
     @Transactional(readOnly = true)
     public TaxPeriodComputationResponse computeNextPeriod() {
@@ -323,9 +369,7 @@ public class TaxperiodsnapshotService {
                 .filter(purchaseinvoiceService::isDeductible)
                 .toList();
 
-        BigDecimal revenue = sum(invoices, Invoice::getTotal)
-                .subtract(sum(customerReturns, Return::getTotalRefund))
-                .max(BigDecimal.ZERO);
+        BigDecimal revenue = revenueOf(invoices, customerReturns);
 
         // Only the deduction method has an input side, so only it can carry credit between periods.
         if (!deduction) {
