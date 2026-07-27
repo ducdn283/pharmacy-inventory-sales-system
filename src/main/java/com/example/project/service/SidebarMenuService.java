@@ -151,6 +151,7 @@ public class SidebarMenuService {
                         i("Danh sách công nợ", "/owner/debts", "ti ti-credit-card"),
                         i("Danh sách khoản thu", "/owner/incomes", ICON_FINANCE),
                         i("Danh sách khoản chi", "/owner/expenses", "ti ti-cash"),
+                        i("Kỳ thuế", "/owner/tax-periods", "ti ti-receipt-tax"),
                         i("Thiết lập giá", "/owner/price-settings", "ti ti-tag"),
                         i("Thiết lập tài chính", "/owner/financial-setting", "ti ti-settings")),
 
@@ -202,7 +203,8 @@ public class SidebarMenuService {
                 menuGroup("Tài chính", ICON_FINANCE,
                         i("Danh sách công nợ", "/accountant/debts", "ti ti-credit-card"),
                         i("Danh sách khoản thu", "/accountant/incomes", ICON_FINANCE),
-                        i("Danh sách khoản chi", "/accountant/expenses", "ti ti-cash")),
+                        i("Danh sách khoản chi", "/accountant/expenses", "ti ti-cash"),
+                        i("Kỳ thuế", "/accountant/tax-periods", "ti ti-receipt-tax")),
 
                 menuGroup("Cung ứng", ICON_SUPPLY,
                         i("Danh sách phiếu nhập", "/accountant/purchase-invoices", "ti ti-receipt")),

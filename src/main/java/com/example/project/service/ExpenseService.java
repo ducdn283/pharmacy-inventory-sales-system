@@ -3,6 +3,7 @@ package com.example.project.service;
 import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ExpenseType;
 import com.example.project.constant.ReturnStatus;
+import com.example.project.constant.RoleConstants;
 import com.example.project.dto.request.ExpenseCreateRequest;
 import com.example.project.dto.response.ExpenseDetailResponse;
 import com.example.project.dto.response.ExpenseListItemResponse;
@@ -18,6 +19,7 @@ import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
 import com.example.project.entity.Supplier;
 import com.example.project.repository.AccountRepository;
+import com.example.project.repository.AccountpermissionRepository;
 import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.ReturnRepository;
 import org.springframework.data.domain.Page;
@@ -95,17 +97,20 @@ public class ExpenseService {
     private final ExpenseRepository expenseRepository;
     private final AccountRepository accountRepository;
     private final ReturnRepository returnRepository;
+    private final AccountpermissionRepository accountpermissionRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final ShiftreportService shiftreportService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
                           ReturnRepository returnRepository,
+                          AccountpermissionRepository accountpermissionRepository,
                           PurchaseinvoiceService purchaseinvoiceService,
                           ShiftreportService shiftreportService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
+        this.accountpermissionRepository = accountpermissionRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
         this.shiftreportService = shiftreportService;
     }
@@ -344,7 +349,7 @@ public class ExpenseService {
         }
 
         BigDecimal paid = resolvePaid(request, amount);
-        BigDecimal[] split = resolveSplit(request, paid);
+        BigDecimal[] split = resolveSplit(request, paid, isOwner);
         expense.setPaid(paid);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
@@ -432,12 +437,11 @@ public class ExpenseService {
      * cumulative total) — they're added to whatever was already paid. Moves to
      * {@link ExpenseStatus#COMPLETED} once {@code paid >= amount}.
      *
-     * <p>{@code currentAccountId} exists only so a slip approved while no shift was open can still
-     * pick one up here — this is where the cash physically moves for a part-paid slip.</p>
+     * <p>Takes no actor id: the shift stamped here is the <em>creator's</em>, read off the slip, not
+     * whoever happens to be recording the payment (see {@link #attachOpenShift}).</p>
      */
     @Transactional
-    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion,
-                          Integer currentAccountId) {
+    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
 
@@ -452,6 +456,10 @@ public class ExpenseService {
         if (portion.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Số tiền thanh toán phải lớn hơn 0");
         }
+
+        // Keyed on who raised the slip, not on who is paying: otherwise an Accountant's slip could
+        // be topped up in cash here and slip past the rule enforced at create time.
+        assertCashAllowed(cash, raisedByOwner(expense));
 
         BigDecimal previouslyPaid = expense.getPaid() != null ? expense.getPaid() : BigDecimal.ZERO;
         BigDecimal newPaid = previouslyPaid.add(portion);
@@ -601,18 +609,47 @@ public class ExpenseService {
      * out later does not move it to the payer's shift. An Owner approving an Accountant's slip must
      * not drag it onto the Owner's shift.</p>
      *
-     * <p><strong>{@code findDraftShift}, never {@code ensureOpenShiftFor}.</strong> Only Owner and
-     * Pharmacist run a register, so only they have shifts; an Accountant settles by transfer and
-     * never handles cash. Looking a shift up instead of creating one keeps this method free of any
-     * role check — an Accountant simply has none, so the stamp stays {@code null}.
-     * ({@code ShiftreportService.ensureOpenShiftFor} enforces the same rule at the one place shifts
-     * are actually created, so no caller can hand an Accountant a shift by mistake.)</p>
+     * <p><strong>Cash always belongs to a shift; a transfer never opens one.</strong> Paying out of
+     * the drawer is exactly the moment a register session exists, so a cash slip
+     * {@code ensureOpenShiftFor} — opening one if the Owner has not sold anything yet — while a
+     * banking-only slip merely looks up an already-open shift. Without this, an Owner who paid cash
+     * before the day's first sale produced a slip with no {@code shiftReportID}: money out of the
+     * drawer that no shift could ever reconcile, since {@code ShiftreportService.totalCashOut} is the
+     * sum of {@code paidByCash} over the slips carrying that shift.</p>
+     *
+     * <p><em>Calling {@code ensureOpenShiftFor} here used to be forbidden</em>, because it created a
+     * shift for whoever asked and an Accountant holding one could never log out again
+     * ({@code ShiftreportController.logoutGuard} redirects to {@code /accountant/shift-reports/…},
+     * which does not exist). That hazard is gone: the method now checks the role at the single place
+     * shifts are created and returns {@code null} for anyone who does not run a register. Combined
+     * with {@link #resolveSplit} refusing cash from a non-Owner, the cash branch below is only ever
+     * reached by someone who is allowed a shift.</p>
      */
     private void attachOpenShift(Expense expense, Integer accountId) {
         if (expense.getShiftReportID() != null || accountId == null) {
             return;
         }
-        shiftreportService.findDraftShift(accountId).ifPresent(expense::setShiftReportID);
+        Shiftreport shift = touchesCashDrawer(expense)
+                ? shiftreportService.ensureOpenShiftFor(accountId)
+                : shiftreportService.findDraftShift(accountId).orElse(null);
+        if (shift != null) {
+            expense.setShiftReportID(shift);
+        }
+    }
+
+    /** Whether any of this slip's money left as physical cash. */
+    private boolean touchesCashDrawer(Expense expense) {
+        return nullToZero(expense.getPaidByCash()).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    /**
+     * Whether the slip was raised by an Owner — the only role allowed to pay cash, so the rule
+     * survives a later top-up through {@link #markPaid} as well as the original create.
+     */
+    private boolean raisedByOwner(Expense expense) {
+        Integer applicantId = applicantIdOf(expense);
+        return applicantId != null
+                && accountpermissionRepository.existsByAccountIdAndRole(applicantId, RoleConstants.OWNER);
     }
 
     private String resolveExpenseType(String rawType) {
@@ -826,23 +863,43 @@ public class ExpenseService {
         return customerName + " · HĐ " + invoiceNumber;
     }
 
-    /** Returns {@code [paidByCash, paidByBanking]}, defaulting an unsplit amount entirely to cash. */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal paid) {
+    /**
+     * Returns {@code [paidByCash, paidByBanking]}.
+     *
+     * <p><strong>Only the Owner may pay in cash</strong> (BA 2026-07-27): an Accountant settles by
+     * transfer and never opens the drawer — which is also why they have no shift. Enforcing it here
+     * is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe: an Accountant's
+     * slip has no shift, so any cash on it would be money no register could ever account for. The
+     * default therefore flips with the role — an unsplit amount is all cash for the Owner and all
+     * banking for anyone else, rather than silently landing in the drawer.</p>
+     */
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal paid, boolean isOwner) {
         if (paid.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
         BigDecimal cash = request.getPaidByCash();
         BigDecimal banking = request.getPaidByBanking();
         if (cash == null && banking == null) {
-            return new BigDecimal[]{paid, BigDecimal.ZERO};
+            return isOwner
+                    ? new BigDecimal[]{paid, BigDecimal.ZERO}
+                    : new BigDecimal[]{BigDecimal.ZERO, paid};
         }
         cash = nullToZero(cash);
         banking = nullToZero(banking);
+        assertCashAllowed(cash, isOwner);
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
                 .compareTo(paid.setScale(2, RoundingMode.HALF_UP)) != 0) {
             throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền đã chi");
         }
         return new BigDecimal[]{cash, banking};
+    }
+
+    /** @see #resolveSplit */
+    private void assertCashAllowed(BigDecimal cash, boolean isOwner) {
+        if (!isOwner && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException(
+                    "Kế toán chỉ được chi qua chuyển khoản; phần tiền mặt phải do Chủ nhà thuốc chi");
+        }
     }
 
     /**

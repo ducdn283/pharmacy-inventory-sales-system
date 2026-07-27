@@ -29,8 +29,8 @@ public class PurchaseInvoiceCreateRequest {
     @DecimalMin(value = "0.0", message = "Chiết khấu không được âm")
     private BigDecimal discount = BigDecimal.ZERO;
 
-    @DecimalMin(value = "0.0", message = "Số tiền đã trả không được âm")
-    private BigDecimal paid = BigDecimal.ZERO;
+    // Không có `paid` ở đây: phiếu nhập luôn được lập ở trạng thái "Nợ", tiền chỉ chuyển động khi
+    // có phiếu chi trỏ vào phiếu nhập này (PurchaseinvoiceService.applyPayment).
 
     private String note;
 
