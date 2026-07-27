@@ -15,6 +15,7 @@ import com.example.project.entity.Expense;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
+import com.example.project.entity.Shiftreport;
 import com.example.project.entity.Supplier;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.ExpenseRepository;
@@ -68,6 +69,12 @@ import java.util.stream.Collectors;
  * it. Money is only ever considered disbursed once the slip is approved — see
  * {@link #disbursedAmount}.</p>
  *
+ * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
+ * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. Only
+ * the Expense side is wired here; making {@code ShiftreportService.computeTransactionTotals()}
+ * actually read those slips is another contributor's work, so a cash expense still does not move
+ * {@code totalCashOut} yet.</p>
+ *
  * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
  * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
  * Expense tracks real cash leaving the register, not just an approval.</p>
@@ -79,15 +86,18 @@ public class ExpenseService {
     private final AccountRepository accountRepository;
     private final ReturnRepository returnRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final ShiftreportService shiftreportService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
                           ReturnRepository returnRepository,
-                          PurchaseinvoiceService purchaseinvoiceService) {
+                          PurchaseinvoiceService purchaseinvoiceService,
+                          ShiftreportService shiftreportService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.shiftreportService = shiftreportService;
     }
 
     // ------------------------------------------------------------------ generated-REST passthrough
@@ -411,9 +421,13 @@ public class ExpenseService {
      * {@code cashPortion}/{@code bankingPortion} are the amount being paid <em>now</em> (not the
      * cumulative total) — they're added to whatever was already paid. Moves to
      * {@link ExpenseStatus#COMPLETED} once {@code paid >= amount}.
+     *
+     * <p>{@code currentAccountId} exists only so a slip approved while no shift was open can still
+     * pick one up here — this is where the cash physically moves for a part-paid slip.</p>
      */
     @Transactional
-    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion) {
+    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion,
+                          Integer currentAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
 
@@ -448,6 +462,7 @@ public class ExpenseService {
         // Only the increment: the slip was already approved, so everything before this was pushed
         // onto the invoice at approval time.
         settlePurchaseInvoice(expense, portion);
+        attachOpenShift(expense, currentAccountId);
 
         expenseRepository.save(expense);
     }
@@ -508,6 +523,7 @@ public class ExpenseService {
         Customer customer = expense.getCustomerID();
         Purchaseinvoice linkedPurchase = expense.getPurchaseID();
         Supplier supplier = expense.getSupplierID();
+        Shiftreport shift = expense.getShiftReportID();
 
         return new ExpenseDetailResponse(
                 expense.getId(),
@@ -531,7 +547,9 @@ public class ExpenseService {
                 customer != null ? customer.getName() : null,
                 linkedPurchase != null ? linkedPurchase.getId() : null,
                 linkedPurchase != null ? linkedPurchase.getPurchaseInvoiceCode() : null,
-                supplier != null ? supplier.getName() : null
+                supplier != null ? supplier.getName() : null,
+                shift != null ? shift.getId() : null,
+                shift != null ? shift.getShiftReportCode() : null
         );
     }
 
@@ -555,6 +573,31 @@ public class ExpenseService {
                 ? ExpenseStatus.COMPLETED
                 : ExpenseStatus.AWAITING_PAYMENT);
         settlePurchaseInvoice(expense, paid);
+        attachOpenShift(expense, approver.getId());
+    }
+
+    /**
+     * Stamps the slip with the actor's currently open shift, so the cash that just left can be
+     * reconciled against the register. Keeps the existing stamp if there is one — a slip belongs to
+     * the shift that authorised it, not to whichever shift happens to be open when it is topped up
+     * later.
+     *
+     * <p><strong>Deliberately {@code findDraftShift}, never {@code ensureOpenShiftFor}.</strong>
+     * Creating a shift from this screen would be actively harmful: Expense is an Owner + Accountant
+     * screen, {@code ensureOpenShiftFor} does not check the role, and an Accountant is never meant
+     * to have a shift. Give one to an Accountant and
+     * {@code ShiftreportController.logoutGuard()} — which also does not check the role — would
+     * redirect every later logout to {@code /accountant/shift-reports/{id}}, a route that does not
+     * exist (shift screens are Owner + Pharmacist only). They would be unable to log out at all.
+     * Attaching only an already-open shift makes the Accountant case fall out as {@code null} with
+     * no role check anywhere, and matches the rule that shifts open on the first counter sale — an
+     * expense is paid out of a drawer that is already open, it does not open one.</p>
+     */
+    private void attachOpenShift(Expense expense, Integer accountId) {
+        if (expense.getShiftReportID() != null || accountId == null) {
+            return;
+        }
+        shiftreportService.findDraftShift(accountId).ifPresent(expense::setShiftReportID);
     }
 
     private String resolveExpenseType(String rawType) {

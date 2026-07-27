@@ -46,4 +46,11 @@ public class ExpenseDetailResponse {
 
     /** Supplier of the linked purchase invoice. */
     private String supplierName;
+
+    /**
+     * Shift the payout was stamped against, or {@code null} when no shift was open at the time —
+     * always the case for an Accountant, who never has one.
+     */
+    private Integer shiftReportId;
+    private String shiftReportCode;
 }
