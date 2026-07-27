@@ -111,7 +111,7 @@ public class IncomeController {
         model.addAttribute("totalItems", incomePage.getTotalElements());
         model.addAttribute("pageTitle", "Danh sách khoản thu");
         model.addAttribute("basePath", basePath);
-        return "income-list";
+        return "income/income-list";
     }
 
     @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}", ACCOUNTANT_BASE + "/{incomeId}"})
@@ -125,7 +125,7 @@ public class IncomeController {
         model.addAttribute("returnBasePath", "/owner/return-purchases");
         model.addAttribute("stockAdjustmentBasePath", resolveStockAdjustmentBasePath(basePath));
         model.addAttribute("pageTitle", "Chi tiết phiếu thu");
-        return "income-detail";
+        return "income/income-detail";
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/debt-invoices", PHARMACIST_BASE + "/references/debt-invoices",
@@ -185,7 +185,7 @@ public class IncomeController {
             model.addAttribute("form", new IncomeCreateRequest());
         }
         addCreatePageData(request, model);
-        return "create-income";
+        return "income/create-income";
     }
 
     @PostMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
@@ -217,7 +217,7 @@ public class IncomeController {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
             addCreatePageData(request, model);
-            return "create-income";
+            return "income/create-income";
         }
     }
 
