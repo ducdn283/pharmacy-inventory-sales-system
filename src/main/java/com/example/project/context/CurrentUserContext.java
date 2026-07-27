@@ -52,4 +52,9 @@ public class CurrentUserContext {
     public boolean isOwner() {
         return RoleConstants.OWNER.equals(getCurrentRole());
     }
+
+    /** Whether the signed-in user is a Pharmacist. */
+    public boolean isPharmacist() {
+        return RoleConstants.PHARMACIST.equals(getCurrentRole());
+    }
 }

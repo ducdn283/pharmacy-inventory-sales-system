@@ -323,7 +323,7 @@ public class InvoiceService {
     }
 
     @Transactional
-    public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId) {
+    public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId, boolean allowDebt) {
         if (request.getDetails() == null || request.getDetails().isEmpty()) {
             throw new IllegalArgumentException("Hóa đơn phải có ít nhất một sản phẩm");
         }
@@ -394,6 +394,9 @@ public class InvoiceService {
         }
 
         BigDecimal debt = total.subtract(paid);
+        if (debt.compareTo(BigDecimal.ZERO) > 0 && !allowDebt) {
+            throw new IllegalArgumentException("Phải thu đủ tiền, không được ghi nợ");
+        }
         if (debt.compareTo(BigDecimal.ZERO) > 0 && customer == null) {
             throw new IllegalArgumentException("Khách lẻ phải thanh toán đủ; chọn khách hàng để ghi nợ");
         }

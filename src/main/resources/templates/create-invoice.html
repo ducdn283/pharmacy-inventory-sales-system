@@ -886,7 +886,7 @@
                             <strong id="paidDisplay">0đ</strong>
                         </div>
 
-                        <div class="money-summary-row">
+                        <div class="money-summary-row" th:if="${debtAllowed}">
                             <span class="text-secondary">Còn nợ</span>
                             <strong class="text-warning" id="debtDisplay">0đ</strong>
                         </div>
@@ -901,7 +901,8 @@
                         <div class="text-secondary small">
                             <p class="mb-2">1. Tick đơn vị cần bán và nhập số lượng ngay bên cạnh — đơn giá tự điền theo đơn vị.</p>
                             <p class="mb-2">2. Bấm <strong>+</strong> ở cuối dòng để thêm cùng sản phẩm ở lô khác; mặc định lô HSD gần nhất.</p>
-                            <p class="mb-2">3. Khách lẻ phải thanh toán đủ; chọn khách hàng nếu muốn ghi nợ.</p>
+                            <p class="mb-2" th:if="${debtAllowed}">3. Khách lẻ phải thanh toán đủ; chọn khách hàng nếu muốn ghi nợ.</p>
+                            <p class="mb-2" th:unless="${debtAllowed}">3. Phải thu đủ tiền, không được ghi nợ.</p>
                             <p class="mb-0">4. Bật "thuốc kê đơn" thì phải nhập mã đơn thuốc.</p>
                         </div>
                     </div>
@@ -932,6 +933,7 @@
 <script th:inline="javascript">
     const products = /*[[${products}]]*/ [];
     const initialDetails = /*[[${form.details}]]*/ [];
+    const debtAllowed = /*[[${debtAllowed}]]*/ true;
     const productById = {};
     products.forEach(p => productById[p.productId] = p);
 
@@ -1700,6 +1702,11 @@
         return !hidden || hidden.value === '';
     }
 
+    /** Walk-in customers and pharmacists must collect the full invoice total (no debt). */
+    function requiresFullPayment() {
+        return isWalkInCustomer() || !debtAllowed;
+    }
+
     function initCustomerPicker() {
         const picker = document.getElementById('customerPicker');
         const trigger = document.getElementById('customerPickerTrigger');
@@ -1846,7 +1853,7 @@
         if (method === 'both') {
             let cash;
             let banking;
-            if (isWalkInCustomer()) {
+            if (requiresFullPayment()) {
                 ({ cash, banking } = balanceWalkInSplitPayment(total));
             } else {
                 cash = parsePrice(document.getElementById('cashAmount'));
@@ -1857,7 +1864,7 @@
             paid = cash + banking;
         } else {
             const paidAmountInput = document.getElementById('paidAmount');
-            if (isWalkInCustomer()) {
+            if (requiresFullPayment()) {
                 paidAmountInput.value = formatPriceDisplay(total);
                 paidAmountInput.readOnly = true;
             } else {
@@ -1882,7 +1889,10 @@
         document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
         document.getElementById('totalDisplay').textContent = formatMoney(total);
         document.getElementById('paidDisplay').textContent = formatMoney(paid);
-        document.getElementById('debtDisplay').textContent = formatMoney(debt);
+        const debtDisplay = document.getElementById('debtDisplay');
+        if (debtDisplay) {
+            debtDisplay.textContent = formatMoney(debt);
+        }
         document.getElementById('overpaidWarning').style.display = paid > total ? 'block' : 'none';
 
         updateSubmitState();

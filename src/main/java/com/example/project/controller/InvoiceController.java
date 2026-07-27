@@ -167,7 +167,8 @@ public class InvoiceController {
                              RedirectAttributes redirectAttributes,
                              Model model) {
         try {
-            invoiceService.createSaleInvoice(form, currentUserContext.getCurrentAccountId());
+            invoiceService.createSaleInvoice(
+                    form, currentUserContext.getCurrentAccountId(), !currentUserContext.isPharmacist());
             redirectAttributes.addFlashAttribute("success", "Tạo hóa đơn bán hàng thành công");
             return "redirect:" + invoiceListBasePath(request);
         } catch (IllegalArgumentException exception) {
@@ -181,6 +182,7 @@ public class InvoiceController {
         model.addAttribute("products", invoiceService.listSellableProducts());
         model.addAttribute("customers", invoiceService.listCustomers());
         model.addAttribute("sellerName", currentUserContext.getCurrentAccountName());
+        model.addAttribute("debtAllowed", !currentUserContext.isPharmacist());
         model.addAttribute("basePath", resolveSellingBasePath(request));
         model.addAttribute("invoicesPath", invoiceListBasePath(request));
     }
