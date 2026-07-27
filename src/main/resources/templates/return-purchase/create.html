@@ -88,6 +88,10 @@
                                         <div class="text-secondary small">Ngày nhập</div>
                                         <div id="pickedDate">—</div>
                                     </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="text-secondary small">Còn nợ nhà cung cấp</div>
+                                        <div class="fw-semibold" id="pickedDebt">0đ</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -113,13 +117,14 @@
                                     <th>Tồn hiện tại</th>
                                     <th>SL trả</th>
                                     <th>Đơn giá nhập</th>
-                                    <th class="text-end">Tiền hoàn</th>
+                                    <th class="text-end">Giá trị gốc</th>
+                                    <th class="text-end">NCC hoàn</th>
                                     <th></th>
                                 </tr>
                                 </thead>
                                 <tbody id="lineBody">
                                 <tr id="emptyRow">
-                                    <td colspan="11" class="text-center text-secondary py-4">
+                                    <td colspan="12" class="text-center text-secondary py-4">
                                         Chọn phiếu nhập để hiển thị các dòng hàng có thể trả.
                                     </td>
                                 </tr>
@@ -140,8 +145,9 @@
 
                         <div class="p-4">
                             <div class="form-text mb-3">
-                                Phiếu trả chỉ tính tiền hoàn, không thu tiền. Việc nhận lại tiền từ nhà
-                                cung cấp được thực hiện ở phiếu thu bên Kế toán.
+                                Phiếu trả tính tiền hoàn và cấn trừ vào công nợ đang nợ nhà cung cấp, KHÔNG thu
+                                tiền mặt. Việc nhận lại phần tiền còn lại từ nhà cung cấp thực hiện ở phiếu thu
+                                bên Kế toán.
                             </div>
 
                             <div class="mb-3">
@@ -155,6 +161,22 @@
                                 <textarea class="form-control" name="note" rows="2" th:text="${form.note}"></textarea>
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">Tỷ lệ NCC chấp nhận hoàn <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control" id="refundRate" name="refundRate"
+                                           min="0.01" max="100" step="0.01"
+                                           th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="form-text">
+                                    Mặc định theo thiết lập tài chính
+                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 2, 'COMMA')}">80</span>%).
+                                    Phần NCC không hoàn là khoản lỗ — chỉ được tính vào chi phí hợp lý nếu có
+                                    biên bản trả hàng / xác nhận mức hoàn của NCC (đính kèm ở ghi chú).
+                                </div>
+                            </div>
+
                             <div class="summary-line">
                                 <span class="text-secondary">Số mặt hàng trả</span>
                                 <strong id="summaryItems">0</strong>
@@ -165,8 +187,28 @@
                             </div>
                             <hr>
                             <div class="summary-line">
-                                <span class="text-secondary">Tổng tiền hoàn</span>
+                                <span class="text-secondary">Giá trị hàng trả (100%)</span>
+                                <span id="summaryOriginal">0đ</span>
+                            </div>
+                            <div class="summary-line" id="lossRow" style="display:none">
+                                <span class="text-secondary">Khoản lỗ (NCC không hoàn)</span>
+                                <span class="text-danger" id="summaryLoss">0đ</span>
+                            </div>
+                            <div class="summary-line">
+                                <span class="text-secondary">Tổng NCC phải hoàn</span>
                                 <strong class="text-success" id="summaryRefund">0đ</strong>
+                            </div>
+                            <!-- Bù trừ: giá trị hàng trả trừ thẳng vào khoản nhà thuốc còn nợ chính phiếu nhập
+                                 này (MIN); phần dư mới là tiền thật NCC phải hoàn lại. -->
+                            <div th:if="${autoOffsetDebt}">
+                                <div class="summary-line">
+                                    <span class="text-secondary">Cấn trừ nợ phải trả NCC</span>
+                                    <span class="text-primary" id="summaryOffset">0đ</span>
+                                </div>
+                                <div class="summary-line">
+                                    <span class="text-secondary">NCC còn phải hoàn (tiền thật)</span>
+                                    <strong id="summaryPayout">0đ</strong>
+                                </div>
                             </div>
                             <!-- Giá nhập là giá GỘP → tách net/thuế từ trong tiền hoàn. Thuế đầu vào chỉ có
                                  với Nhóm 3/4; Nhóm 2 chưa từng khấu trừ nên không có gì để đảo. -->
@@ -219,6 +261,7 @@
                         <th>Nhân viên</th>
                         <th>Nhà cung cấp</th>
                         <th>Tổng tiền</th>
+                        <th>Còn nợ NCC</th>
                         <th>Số dòng trả được</th>
                         <th>Trạng thái trả</th>
                         <th></th>
@@ -231,12 +274,20 @@
                                  data-code=${pur.purchaseCode},
                                  data-supplier=${pur.supplierName},
                                  data-date=${pur.dateDisplay},
+                                 data-debt=${pur.outstandingDebt},
                                  data-search=${pur.purchaseCode + ' ' + pur.supplierName}">
                         <td class="fw-semibold text-success" th:text="${pur.purchaseCode}">PN000046</td>
                         <td th:text="${pur.dateDisplay}">06/07/2026 16:32</td>
                         <td th:text="${pur.employeeName}">Nhân viên A</td>
                         <td th:text="${pur.supplierName}">NCC A</td>
                         <td th:text="${#numbers.formatDecimal(pur.totalAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">3.000.000đ</td>
+                        <td>
+                            <span th:if="${pur.outstandingDebt != null and pur.outstandingDebt.signum() > 0}"
+                                  class="text-danger fw-semibold"
+                                  th:text="${#numbers.formatDecimal(pur.outstandingDebt, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>
+                            <span th:unless="${pur.outstandingDebt != null and pur.outstandingDebt.signum() > 0}"
+                                  class="text-secondary">—</span>
+                        </td>
                         <td><span class="badge bg-success-subtle text-success" th:text="${pur.returnableLineCount}">2</span></td>
                         <td><span class="badge bg-secondary-subtle text-secondary" th:text="${pur.returnStatusDisplay}">Chưa trả</span></td>
                         <td class="text-end">
@@ -244,7 +295,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(returnablePurchases)}">
-                        <td colspan="8" class="text-center text-secondary py-4">
+                        <td colspan="9" class="text-center text-secondary py-4">
                             Không có phiếu nhập nào còn hàng để trả.
                         </td>
                     </tr>
@@ -268,6 +319,16 @@
         // Chỉ tồn tại khi Nhóm 3/4 (xem th:if deductionGroup) — recalc phải null-safe.
         const summaryPreTax = document.getElementById('summaryPreTax');
         const summaryVat = document.getElementById('summaryVat');
+        const summaryOriginal = document.getElementById('summaryOriginal');
+        const summaryLoss = document.getElementById('summaryLoss');
+        const lossRow = document.getElementById('lossRow');
+        const summaryOffset = document.getElementById('summaryOffset');
+        const summaryPayout = document.getElementById('summaryPayout');
+        const refundRateInput = document.getElementById('refundRate');
+        // Bù trừ chỉ hiển thị khi nhà thuốc bật autoOffsetDebtOnRefund.
+        const autoOffsetDebt = /*[[${autoOffsetDebt}]]*/ true;
+        // Nhà thuốc còn nợ NCC bao nhiêu trên phiếu nhập đang chọn — mốc tạm tính phần cấn trừ.
+        let pickedDebt = 0;
 
         const modal = document.getElementById('purchaseModal');
 
@@ -306,6 +367,10 @@
             document.getElementById('pickedPurchaseCode').textContent = row.getAttribute('data-code');
             document.getElementById('pickedSupplier').textContent = row.getAttribute('data-supplier');
             document.getElementById('pickedDate').textContent = row.getAttribute('data-date');
+            pickedDebt = parseFloat(row.getAttribute('data-debt')) || 0;
+            const debtEl = document.getElementById('pickedDebt');
+            debtEl.textContent = formatMoney(pickedDebt);
+            debtEl.className = pickedDebt > 0 ? 'fw-semibold text-danger' : 'fw-semibold';
             document.getElementById('noPurchase').classList.add('d-none');
             document.getElementById('purchaseInfo').classList.remove('d-none');
             modal.classList.remove('open');
@@ -313,12 +378,12 @@
         }
 
         function loadLines(purchaseId) {
-            lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Đang tải...</td></tr>';
+            lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Đang tải...</td></tr>';
             fetch(basePath + '/purchases/' + purchaseId + '/lines', { headers: { 'Accept': 'application/json' } })
                 .then(r => r.json())
                 .then(lines => renderLines(lines))
                 .catch(() => {
-                    lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Không tải được dòng phiếu nhập.</td></tr>';
+                    lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-danger py-4">Không tải được dòng phiếu nhập.</td></tr>';
                 });
         }
 
@@ -330,7 +395,7 @@
                 lines = lines.filter(line => postedQty.has(String(line.purchaseDetailId)));
             }
             if (!lines || lines.length === 0) {
-                lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Phiếu nhập này không còn dòng nào có thể trả.</td></tr>';
+                lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Phiếu nhập này không còn dòng nào có thể trả.</td></tr>';
                 postedQty = new Map();
                 recalc();
                 return;
@@ -364,6 +429,7 @@
                         '<div class="text-secondary small">tối đa ' + full + '</div>' +
                     '</td>' +
                     '<td>' + formatMoney(line.importPricePerBase) + '</td>' +
+                    '<td class="text-end line-original text-secondary">0đ</td>' +
                     '<td class="text-end line-refund fw-semibold">0đ</td>' +
                     '<td class="text-end">' +
                         '<button type="button" class="btn btn-sm btn-outline-danger row-delete" title="Bỏ mặt hàng này khỏi phiếu trả">' +
@@ -378,7 +444,7 @@
             lineBody.querySelectorAll('.row-delete').forEach(btn => btn.addEventListener('click', function () {
                 this.closest('tr').remove();
                 if (!lineBody.querySelector('.qty-input')) {
-                    lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Đã bỏ hết mặt hàng. Chọn lại phiếu nhập nếu cần.</td></tr>';
+                    lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Đã bỏ hết mặt hàng. Chọn lại phiếu nhập nếu cần.</td></tr>';
                 }
                 recalc();
             }));
@@ -397,7 +463,16 @@
             recalc();
         }
 
+        /** Tỷ lệ NCC chấp nhận hoàn đang nhập, kẹp về (0;100]. */
+        function currentRate() {
+            const rate = parseFloat(refundRateInput ? refundRateInput.value : '');
+            if (!isFinite(rate) || rate <= 0) return 100;
+            return Math.min(rate, 100);
+        }
+
         function recalc() {
+            const rate = currentRate();
+            let totalOriginal = 0;
             let totalRefund = 0;
             let totalVat = 0;
             let itemCount = 0;
@@ -407,22 +482,44 @@
                 if (qty < 0) qty = 0;
                 if (qty > max) { qty = max; inp.value = max; }
                 const price = parseFloat(inp.getAttribute('data-price')) || 0;
-                const lineRefund = qty * price;
-                inp.closest('tr').querySelector('.line-refund').textContent = formatMoney(lineRefund);
+                // originalLineValue = giá trị nhập gốc 100%; lineRefund = phần NCC chấp nhận hoàn.
+                const originalValue = qty * price;
+                const lineRefund = originalValue * rate / 100;
+                const row = inp.closest('tr');
+                row.querySelector('.line-original').textContent = formatMoney(originalValue);
+                row.querySelector('.line-refund').textContent = formatMoney(lineRefund);
                 if (qty > 0) itemCount++;
+                totalOriginal += originalValue;
                 totalRefund += lineRefund;
-                // Giá nhập đã gồm thuế → thuế đầu vào nằm TRONG tiền hoàn, không cộng thêm.
+                // Giá nhập đã gồm thuế → thuế đầu vào nằm TRONG số NCC thực hoàn, không cộng thêm.
                 const vatRate = parseFloat(inp.getAttribute('data-vat-rate')) || 0;
                 if (vatRate > 0) {
                     totalVat += lineRefund - (lineRefund / (1 + vatRate / 100));
                 }
             });
             summaryItems.textContent = itemCount;
+            summaryOriginal.textContent = formatMoney(totalOriginal);
             summaryRefund.textContent = formatMoney(totalRefund);
+
+            const loss = Math.round(totalOriginal) - Math.round(totalRefund);
+            lossRow.style.display = loss > 0 ? 'flex' : 'none';
+            summaryLoss.textContent = formatMoney(loss);
+
+            // Bù trừ = MIN(tiền NCC hoàn, nợ phải trả NCC); server chốt lại theo dư nợ lúc duyệt.
+            if (autoOffsetDebt && summaryOffset) {
+                const offset = Math.min(Math.round(totalRefund), Math.round(pickedDebt));
+                summaryOffset.textContent = formatMoney(offset);
+                summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offset);
+            }
+
             // Làm tròn thuế trước rồi lấy net = tổng − thuế để 2 dòng luôn cộng đúng bằng tổng.
             const vatRounded = Math.round(totalVat);
-            if (summaryPreTax) summaryPreTax.textContent = formatMoney(totalRefund - vatRounded);
+            if (summaryPreTax) summaryPreTax.textContent = formatMoney(Math.round(totalRefund) - vatRounded);
             if (summaryVat) summaryVat.textContent = formatMoney(vatRounded);
+        }
+
+        if (refundRateInput) {
+            refundRateInput.addEventListener('input', recalc);
         }
 
         function escapeHtml(s) {

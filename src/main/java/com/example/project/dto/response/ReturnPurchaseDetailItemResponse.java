@@ -17,6 +17,9 @@ public class ReturnPurchaseDetailItemResponse {
     private String unitName;
     private Integer returnQty;
     private BigDecimal unitImportPrice;
+    /** Giá trị nhập GỐC 100% của dòng trả, TRƯỚC khi áp tỷ lệ NCC chấp nhận hoàn. */
+    private BigDecimal originalLineValue;
+    /** Số NCC THỰC hoàn của dòng = originalLineValue × appliedRefundRate. */
     private BigDecimal lineRefund;
 
     // Thuế GTGT ĐẦU VÀO phải giảm trừ cho dòng này, tách từ giá nhập gross theo thuế suất trên phiếu
