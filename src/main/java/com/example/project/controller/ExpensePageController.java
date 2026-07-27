@@ -136,6 +136,10 @@ public class ExpensePageController {
         model.addAttribute("purchaseInvoiceAmounts", expenseService.payablePurchaseInvoiceAmounts());
         model.addAttribute("purchaseLinkableTypes", expenseService.purchaseLinkableTypes());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+        // Only the Owner pays out of the drawer; the Accountant settles by transfer and has no shift
+        // to reconcile cash against. Enforced server-side in ExpenseService.resolveSplit — this is
+        // just so the form does not offer a field the server will reject.
+        model.addAttribute("canPayCash", currentUserContext.isOwner());
         model.addAttribute("basePath", basePath);
     }
 
@@ -200,8 +204,7 @@ public class ExpensePageController {
                             RedirectAttributes redirectAttributes) {
         String basePath = resolveBasePath(request);
         try {
-            expenseService.markPaid(expenseId, cashPortion, bankingPortion,
-                    currentUserContext.getCurrentAccountId());
+            expenseService.markPaid(expenseId, cashPortion, bankingPortion);
             redirectAttributes.addFlashAttribute("successMessage", "Đã ghi nhận thanh toán");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());

@@ -214,7 +214,9 @@
                                             <span class="input-group-text">đ</span>
                                         </div>
                                     </div>
-                                    <div class="col-12 col-md-4">
+                                    <!-- Tiền mặt chỉ dành cho Chủ nhà thuốc: kế toán chi qua chuyển
+                                         khoản, không giữ quỹ nên cũng không có báo cáo ca để đối soát. -->
+                                    <div class="col-12 col-md-4" th:if="${canPayCash}">
                                         <label class="form-label">Trong đó tiền mặt</label>
                                         <div class="input-group">
                                             <input type="text" inputmode="numeric" data-money class="form-control"
@@ -233,6 +235,9 @@
                                     <div class="form-text">
                                         <i class="ti ti-info-circle me-1"></i>
                                         Nếu chưa chi hết, phiếu sẽ ở trạng thái "Chờ thanh toán" cho đến khi ghi nhận đủ.
+                                        <span th:if="${!canPayCash}">
+                                            Kế toán chỉ chi qua chuyển khoản.
+                                        </span>
                                     </div>
                                 </div>
                             </div>
