@@ -23,6 +23,12 @@ public class ReturnPurchaseListItemResponse {
     private int itemCount;
     private BigDecimal totalRefund;
 
+    /**
+     * Số NCC CÒN phải hoàn — số dư động, không phải mốc cố định: lúc duyệt phiếu nó bằng
+     * {@code totalRefund}, rồi {@code IncomeService} trừ dần mỗi lần NCC hoàn tiền, về 0 là đã thu đủ.
+     */
+    private BigDecimal offsetDebtAmount;
+
     private String returnType;
     private String returnTypeDisplay;
 
