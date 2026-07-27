@@ -77,7 +77,7 @@ public class Purchaseinvoice {
     private LocalDate vatInvoiceDate;
 
     @NotNull
-    @Column(name = "totalVATInput ", nullable = false, precision = 15, scale = 2)
+    @Column(name = "totalVATInput", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalVATInput ;
 
     @ColumnDefault("1")
