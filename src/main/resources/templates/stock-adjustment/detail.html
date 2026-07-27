@@ -187,13 +187,14 @@
                                 <span class="status-badge"
                                       th:classappend="${' ' + detail.statusCssClass}"
                                       th:text="${detail.statusName}">
-                                    Chờ duyệt
+                                    Hoàn thành
                                 </span>
                             </div>
                         </div>
 
+                        <!-- Không còn bước duyệt: cột approvedBy/approvedAt nay ghi ai thực hiện (hoặc hủy) phiếu. -->
                         <div class="info-row" th:if="${detail.approvedByName != null && detail.approvedByName != 'Chưa có'}">
-                            <div class="info-label">Người duyệt</div>
+                            <div class="info-label">Người thực hiện</div>
                             <div>
                                 <span th:text="${detail.approvedByName}">Chủ nhà thuốc</span>
                                 <span class="text-secondary"
@@ -323,49 +324,47 @@
                             <span class="status-badge"
                                   th:classappend="${' ' + detail.statusCssClass}"
                                   th:text="${detail.statusName}">
-                                Chờ duyệt
+                                Hoàn thành
                             </span>
                         </div>
                     </div>
                 </div>
 
                 <div class="stock-card p-4">
-                    <!-- Draft: the creator sends it forward (Owner → approved, Pharmacist → pending). -->
+                    <!-- Nháp → Hoàn thành: không còn bước duyệt chéo, chỉ Owner lập nên bấm là thực hiện luôn. -->
                     <form th:if="${detail.statusName == 'Nháp'}"
-                          th:action="${basePath + '/' + detail.id + '/submit'}"
+                          th:action="${basePath + '/' + detail.id + '/complete'}"
                           method="post"
                           class="mb-3">
                         <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                         <button type="submit" class="btn btn-stock-primary w-100"
-                                data-confirm="Gửi duyệt phiếu này?">
-                            <i class="ti ti-send me-1"></i>
-                            <span th:text="${#strings.startsWith(basePath, '/owner')} ? 'Duyệt phiếu (từ nháp)' : 'Gửi duyệt'">Gửi duyệt</span>
+                                data-confirm="Thực hiện phiếu này? Tồn kho sẽ được cập nhật ngay.">
+                            <i class="ti ti-circle-check me-1"></i>
+                            Thực hiện phiếu điều chỉnh
                         </button>
                     </form>
 
-                    <th:block th:if="${#strings.startsWith(basePath, '/owner') and detail.statusName == 'Chờ duyệt'}">
-                        <form th:action="${basePath + '/' + detail.id + '/approve'}"
-                              method="post"
-                              class="mb-3">
-                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                            <button type="submit" class="btn btn-stock-primary w-100"
-                                    data-confirm="Bạn có chắc chắn muốn duyệt phiếu này không? Tồn kho sẽ được cập nhật.">
-                                <i class="ti ti-circle-check me-1"></i>
-                                Duyệt phiếu điều chỉnh
-                            </button>
-                        </form>
-
-                        <form th:action="${basePath + '/' + detail.id + '/reject'}"
-                              method="post"
-                              class="mb-3">
-                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                            <button type="submit" class="btn btn-stock-warning w-100"
-                                    data-confirm="Bạn có chắc chắn muốn từ chối phiếu này không?">
-                                <i class="ti ti-x me-1"></i>
-                                Từ chối phiếu điều chỉnh
-                            </button>
-                        </form>
-                    </th:block>
+                    <!-- Hủy: phiếu đã Hoàn thành thì tồn kho được đảo lại đúng phần đã cộng/trừ.
+                         Ô dưới đây là LÝ DO HỦY, không phải sửa lý do điều chỉnh — nó được ghi thêm vào
+                         Ghi chú của phiếu, trường reason gốc giữ nguyên (xem StockadjustmentService.cancel). -->
+                    <form th:unless="${detail.statusName == 'Đã hủy'}"
+                          th:action="${basePath + '/' + detail.id + '/cancel'}"
+                          method="post"
+                          class="mb-3">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <label class="form-label small mb-1" for="cancelReason">
+                            Lý do hủy phiếu điều chỉnh nếu hủy <span class="text-secondary fw-normal">(không bắt buộc)</span>
+                        </label>
+                        <input type="text" name="cancelReason" id="cancelReason" class="form-control mb-3"
+                               placeholder="VD: lập nhầm lô, nhầm số lượng…">
+                        <button type="submit" class="btn btn-stock-warning w-100"
+                                th:data-confirm="${detail.statusName == 'Hoàn thành'}
+                                    ? 'Hủy phiếu này? Phần tồn kho đã cộng/trừ sẽ được đảo lại.'
+                                    : 'Hủy phiếu nháp này?'">
+                            <i class="ti ti-ban me-1"></i>
+                            Hủy phiếu điều chỉnh
+                        </button>
+                    </form>
 
                     <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
                         <i class="ti ti-arrow-left me-1"></i>
