@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Xem trước kỳ thuế | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .tax-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .tax-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 2px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .group-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .group-deduction { background: #d1fae5; color: #059669; }
+        .group-exempt { background: #dbeafe; color: #2563eb; }
+
+        .vat-table td, .vat-table th {
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .vat-table .component td {
+            color: #6b7280;
+            padding-left: 28px;
+        }
+
+        .vat-table .row-subtotal td {
+            font-weight: 600;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .vat-table .row-total td {
+            border-top: 2px solid #e5e7eb;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .amount { text-align: right; white-space: nowrap; }
+
+        .btn-tax-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+            border-radius: 12px;
+        }
+
+        .btn-tax-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #fff;
+        }
+
+        @media (max-width: 991.98px) {
+            .tax-page-content {
+                padding-top: 84px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content tax-page-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">
+                    Xem trước kỳ thuế
+                    <span class="text-success" th:text="${computation.periodLabel}">2026-Q3</span>
+                </h1>
+                <p class="text-secondary mb-0">
+                    <span th:text="${computation.startDateDisplay}">01/07/2026</span>
+                    –
+                    <span th:text="${computation.endDateDisplay}">30/09/2026</span>
+                    · Số liệu tính trực tiếp từ chứng từ phát sinh trong kỳ, chưa lưu vào hệ thống
+                </p>
+            </div>
+            <a th:href="${basePath}" class="btn btn-outline-secondary">
+                <i class="ti ti-arrow-left me-1"></i>
+                Quay lại danh sách
+            </a>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <div class="alert alert-warning small p-3" th:if="${computation.alreadyClosed}">
+            <i class="ti ti-alert-triangle me-1"></i>
+            Kỳ <span th:text="${computation.periodLabel}">2026-Q3</span> đã được chốt. Số liệu dưới đây
+            được tính lại tại thời điểm hiện tại nên có thể khác số đã chốt — đặc biệt khi có hóa đơn
+            nhập quá hạn thanh toán sau ngày chốt, vì khi đó thuế GTGT đầu vào không còn được khấu trừ.
+        </div>
+
+        <div class="alert alert-info small p-3" th:if="${computation.taxExempt}">
+            <i class="ti ti-info-circle me-1"></i>
+            Kỳ này thuộc nhóm miễn thuế — không kê khai thuế GTGT, mọi chỉ tiêu đều bằng 0.
+        </div>
+
+        <div class="tax-card p-4 mb-4">
+            <form th:action="${basePath + '/preview'}" method="get" class="row g-3 align-items-end">
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label for="previewYear" class="form-label">Năm</label>
+                    <select id="previewYear" name="year" class="form-select">
+                        <option th:each="year : ${selectableYears}"
+                                th:value="${year}"
+                                th:text="${year}"
+                                th:selected="${year == selectedYear}">2026</option>
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label for="previewQuarter" class="form-label">Quý</label>
+                    <select id="previewQuarter" name="quarter" class="form-select">
+                        <option th:each="q : ${#numbers.sequence(1, 4)}"
+                                th:value="${q}"
+                                th:text="${'Quý ' + q}"
+                                th:selected="${q == selectedQuarter}">Quý 1</option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <button type="submit" class="btn btn-tax-primary w-100">
+                        <i class="ti ti-calculator me-1"></i>
+                        Tính lại
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-xl-5">
+                <div class="tax-card p-4 h-100">
+                    <h2 class="fs-6 mb-3">Bối cảnh kỳ</h2>
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="info-label">Nhóm doanh thu áp dụng cho kỳ này</div>
+                            <div>
+                                <span class="group-badge"
+                                      th:classappend="${computation.deductionGroup ? ' group-deduction' : (computation.taxExempt ? ' group-exempt' : '')}"
+                                      th:text="${computation.revenueGroupDisplay}">Nhóm 3</span>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="info-label">Kỳ liền trước</div>
+                            <div class="info-value"
+                                 th:text="${computation.previousPeriodLabel == null
+                                           ? 'Không có — đây là kỳ đầu tiên, nhóm lấy từ Thiết lập tài chính'
+                                           : computation.previousPeriodLabel}">
+                                2026-Q2
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="info-label">Chứng từ phát sinh trong kỳ</div>
+                            <ul class="list-unstyled mb-0 small">
+                                <li>
+                                    Hóa đơn bán hàng:
+                                    <strong th:text="${computation.invoiceCount}">0</strong>
+                                </li>
+                                <li>
+                                    Phiếu trả hàng của khách (đã duyệt):
+                                    <strong th:text="${computation.customerReturnCount}">0</strong>
+                                </li>
+                                <li>
+                                    Phiếu nhập được khấu trừ:
+                                    <strong th:text="${computation.purchaseInvoiceCount}">0</strong>
+                                </li>
+                                <li>
+                                    Phiếu trả hàng NCC (đã duyệt):
+                                    <strong th:text="${computation.supplierReturnCount}">0</strong>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="col-12" th:if="${computation.nonDeductiblePurchaseCount > 0}">
+                            <div class="alert alert-warning small p-3 mb-0">
+                                <i class="ti ti-file-alert me-1"></i>
+                                <strong th:text="${computation.nonDeductiblePurchaseCount}">0</strong>
+                                phiếu nhập trong kỳ không đủ điều kiện khấu trừ nên đã bị loại khỏi
+                                thuế GTGT đầu vào (hóa đơn từ 5 triệu đồng đã quá hạn thanh toán mà
+                                chưa trả đủ — Điều 26 Nghị định 181/2025/NĐ-CP).
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-7">
+                <div class="tax-card p-4 h-100">
+                    <h2 class="fs-6 mb-3">Tính toán thuế GTGT của kỳ</h2>
+
+                    <table class="table vat-table mb-0">
+                        <tbody>
+                        <tr class="component">
+                            <td>Thuế GTGT đầu ra của hóa đơn bán hàng</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatOutputFromSales, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr class="component">
+                            <td>Trừ: thuế GTGT của hàng bán bị trả lại trong kỳ</td>
+                            <td class="amount"
+                                th:text="${'−' + #numbers.formatDecimal(computation.vatOutputReturnDeduction, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                        </tr>
+                        <tr class="row-subtotal">
+                            <td>Thuế GTGT đầu ra</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+
+                        <tr class="component">
+                            <td>Thuế GTGT đầu vào của phiếu nhập đủ điều kiện khấu trừ</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatInputFromPurchases, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr class="component">
+                            <td>Trừ: thuế GTGT của hàng trả lại nhà cung cấp trong kỳ</td>
+                            <td class="amount"
+                                th:text="${'−' + #numbers.formatDecimal(computation.vatInputReturnReversal, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                        </tr>
+                        <tr class="row-subtotal">
+                            <td>
+                                Thuế GTGT đầu vào được khấu trừ
+                                <span class="text-secondary small d-block" th:if="${!computation.deductionGroup}">
+                                    Kỳ này thuộc nhóm không áp dụng khấu trừ thuế GTGT đầu vào
+                                </span>
+                            </td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatInput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+
+                        <tr>
+                            <td>Thuế GTGT còn được khấu trừ chuyển từ kỳ trước</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatCarryforwardIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr class="row-total">
+                            <td>Thuế GTGT còn phải nộp của kỳ</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr>
+                            <td>Thuế GTGT còn được khấu trừ chuyển sang kỳ sau</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="alert alert-secondary small p-3 mt-3 mb-0">
+                        <i class="ti ti-device-floppy-off me-1"></i>
+                        Đây chỉ là số liệu xem trước — chưa có gì được lưu. Kỳ thuế chỉ được ghi nhận
+                        khi thực hiện thao tác chốt kỳ.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tax-card p-4 mt-3">
+            <h2 class="fs-6 mb-1">Chốt kỳ thuế</h2>
+            <p class="text-secondary small mb-3">
+                Chốt kỳ sẽ lưu lại các chỉ tiêu thuế GTGT ở trên. Số liệu đã chốt không tính lại nữa —
+                đó là mục đích của việc chốt số.
+            </p>
+
+            <div class="alert alert-secondary small p-3 mb-0" th:if="${closeBlockedReason != null}">
+                <i class="ti ti-lock me-1"></i>
+                <span th:text="${closeBlockedReason}">Không thể chốt kỳ này.</span>
+            </div>
+
+            <form th:if="${closeBlockedReason == null}"
+                  id="closePeriodForm"
+                  th:action="${basePath + '/close'}"
+                  method="post"
+                  class="row g-3 align-items-end">
+                <input type="hidden" name="periodLabel" th:value="${computation.periodLabel}">
+
+                <div class="col-12 col-md-5">
+                    <label for="nextGroupInput" class="form-label">
+                        Nhóm áp dụng cho kỳ sau <span class="text-danger">*</span>
+                    </label>
+                    <select id="nextGroupInput" name="nextPeriodTaxType" class="form-select">
+                        <option th:each="g : ${groupOptions}"
+                                th:value="${g}"
+                                th:text="${groupLabels.get(g)}"
+                                th:selected="${g == defaultNextGroup}">Nhóm 2</option>
+                    </select>
+                    <div class="form-text">
+                        Mặc định giữ nguyên nhóm hiện tại. Chỉ đổi khi doanh thu đã vượt ngưỡng —
+                        chuyển nhóm 1→2 áp dụng ngay từ quý vượt ngưỡng, nhóm 2→3 giữ nhóm cũ đến hết
+                        năm rồi mới đổi.
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label for="cashBalanceInput" class="form-label">Số dư quỹ tiền mặt cuối kỳ</label>
+                    <input id="cashBalanceInput"
+                           type="text"
+                           inputmode="numeric"
+                           data-money
+                           name="cashBalanceAtPeriodEnd"
+                           class="form-control"
+                           placeholder="Có thể bỏ trống">
+                    <div class="form-text">Chỉ mang tính tham chiếu, không dùng để tính thuế.</div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <button type="submit" class="btn btn-tax-primary w-100">
+                        <i class="ti ti-lock-check me-1"></i>
+                        Chốt kỳ
+                    </button>
+                </div>
+
+                <div class="col-12">
+                    <label for="closeNoteInput" class="form-label">Ghi chú</label>
+                    <textarea id="closeNoteInput" name="note" class="form-control" rows="2"
+                              placeholder="Ghi chú cho kỳ thuế này (không bắt buộc)"></textarea>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</main>
+
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+<script>
+    (function () {
+        // Scope by id: the topbar's hidden logout form is rendered before this one.
+        var form = document.getElementById('closePeriodForm');
+        if (!form) {
+            return;
+        }
+        form.addEventListener('submit', function (event) {
+            var label = form.querySelector('input[name="periodLabel"]').value;
+            if (!window.confirm('Chốt kỳ thuế ' + label + '? Số liệu đã chốt sẽ không được tính lại.')) {
+                event.preventDefault();
+            }
+        });
+    })();
+</script>
+</body>
+</html>

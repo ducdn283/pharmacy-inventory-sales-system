@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chi tiết kỳ thuế | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .tax-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .tax-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 2px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .group-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .group-deduction { background: #d1fae5; color: #059669; }
+        .group-exempt { background: #dbeafe; color: #2563eb; }
+
+        .btn-tax-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+            border-radius: 12px;
+        }
+
+        .btn-tax-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #fff;
+        }
+
+        .vat-table td, .vat-table th {
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .vat-table .row-total td {
+            border-top: 2px solid #e5e7eb;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .amount { text-align: right; white-space: nowrap; }
+
+        @media (max-width: 991.98px) {
+            .tax-page-content {
+                padding-top: 84px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content tax-page-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">
+                    Kỳ thuế
+                    <span class="text-success" th:text="${detail.periodLabel}">2026-Q3</span>
+                </h1>
+                <p class="text-secondary mb-0">
+                    <span th:text="${detail.startDateDisplay}">01/07/2026</span>
+                    –
+                    <span th:text="${detail.endDateDisplay}">30/09/2026</span>
+                </p>
+            </div>
+            <a th:href="${basePath}" class="btn btn-outline-secondary">
+                <i class="ti ti-arrow-left me-1"></i>
+                Quay lại danh sách
+            </a>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <div class="alert alert-secondary small p-3" th:if="${!detail.editable}">
+            <i class="ti ti-lock me-1"></i>
+            Kỳ này đã bị khóa. Chỉ kỳ thuế mới nhất mới được điều chỉnh, vì số dư khấu trừ và nhóm
+            thuế của kỳ này là số đầu vào của mọi kỳ sau nó.
+        </div>
+
+        <div class="alert alert-info small p-3" th:if="${detail.taxExempt}">
+            <i class="ti ti-info-circle me-1"></i>
+            Kỳ này thuộc nhóm miễn thuế — không kê khai thuế GTGT. Kỳ vẫn được chốt để giữ chuỗi kỳ
+            thuế liên tục.
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-xl-5">
+                <div class="tax-card p-4 h-100">
+                    <h2 class="fs-6 mb-3">Thông tin kỳ</h2>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="info-label">Nhóm doanh thu áp dụng</div>
+                            <div>
+                                <span class="group-badge"
+                                      th:classappend="${detail.deductionGroup ? ' group-deduction' : (detail.taxExempt ? ' group-exempt' : '')}"
+                                      th:text="${detail.revenueGroupDisplay}">Nhóm 3</span>
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="info-label">Nhóm áp dụng cho kỳ sau</div>
+                            <div class="info-value" th:text="${detail.nextPeriodTaxTypeDisplay}">Nhóm 3</div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="info-label">Kỳ liền trước</div>
+                            <div class="info-value"
+                                 th:text="${detail.previousPeriodLabel == null ? 'Không có (kỳ đầu tiên)' : detail.previousPeriodLabel}">
+                                2026-Q2
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="info-label">Thời điểm chốt số</div>
+                            <div class="info-value" th:text="${detail.recordedAtDisplay}">—</div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="info-label">Số dư quỹ tiền mặt cuối kỳ (tham chiếu)</div>
+                            <div class="info-value"
+                                 th:text="${detail.cashBalanceAtPeriodEnd == null
+                                           ? 'Chưa ghi nhận'
+                                           : #numbers.formatDecimal(detail.cashBalanceAtPeriodEnd, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                Chưa ghi nhận
+                            </div>
+                        </div>
+
+                        <div class="col-12" th:if="${detail.note != null and !detail.note.isBlank()}">
+                            <div class="info-label">Ghi chú</div>
+                            <div class="info-value" th:text="${detail.note}">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-7">
+                <div class="tax-card p-4 h-100">
+                    <h2 class="fs-6 mb-3">Tờ khai thuế GTGT của kỳ</h2>
+
+                    <table class="table vat-table mb-0">
+                        <tbody>
+                        <tr>
+                            <td>Thuế GTGT đầu ra</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(detail.vatOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                Thuế GTGT đầu vào được khấu trừ
+                                <span class="text-secondary small d-block" th:if="${!detail.deductionGroup}">
+                                    Kỳ này thuộc nhóm không áp dụng khấu trừ thuế GTGT đầu vào
+                                </span>
+                            </td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(detail.vatInput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr>
+                            <td>Thuế GTGT còn được khấu trừ chuyển từ kỳ trước</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(detail.vatCarryforwardIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr class="row-total">
+                            <td>Thuế GTGT còn phải nộp của kỳ</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(detail.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr>
+                            <td>Thuế GTGT còn được khấu trừ chuyển sang kỳ sau</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(detail.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="text-secondary small mt-3">
+                        <i class="ti ti-info-circle me-1"></i>
+                        Số phải nộp và số chuyển kỳ sau là hai vế của cùng một phép trừ — chỉ một
+                        trong hai có thể khác 0.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tax-card p-4 mt-3" th:if="${detail.editable}">
+            <h2 class="fs-6 mb-1">Điều chỉnh kỳ mới nhất</h2>
+            <p class="text-secondary small mb-3">
+                Đây là bản khai đã chốt, sửa ở đây là <em>điều chỉnh</em> chứ không phải tính lại —
+                hệ thống giữ nguyên con số bạn nhập. Muốn biết sổ sách hiện đang cho ra số bao nhiêu,
+                dùng màn
+                <a th:href="${basePath + '/preview?year=' + #strings.substringBefore(detail.periodLabel, '-Q')
+                              + '&quarter=' + #strings.substringAfter(detail.periodLabel, '-Q')}">xem trước kỳ này</a>.
+                Chỉ kỳ mới nhất mới sửa được.
+            </p>
+
+            <form id="updatePeriodForm"
+                  th:action="${basePath + '/' + detail.id + '/update'}"
+                  method="post"
+                  class="row g-3 align-items-end">
+
+                <div class="col-12 col-md-4">
+                    <label for="vatOutputInput" class="form-label">Thuế GTGT đầu ra</label>
+                    <input id="vatOutputInput" type="text" inputmode="numeric" data-money
+                           name="vatOutput" class="form-control"
+                           th:value="${detail.vatOutput}">
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label for="vatInputInput" class="form-label">Thuế GTGT đầu vào được khấu trừ</label>
+                    <input id="vatInputInput" type="text" inputmode="numeric" data-money
+                           name="vatInput" class="form-control"
+                           th:value="${detail.vatInput}">
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label for="carryInInput" class="form-label">Khấu trừ chuyển từ kỳ trước</label>
+                    <input id="carryInInput" type="text" inputmode="numeric" data-money
+                           name="vatCarryforwardIn" class="form-control"
+                           th:value="${detail.vatCarryforwardIn}">
+                </div>
+
+                <div class="col-12">
+                    <div class="alert alert-secondary small p-3 mb-0">
+                        <i class="ti ti-calculator me-1"></i>
+                        Số còn phải nộp và số chuyển sang kỳ sau được tính lại từ ba ô trên, không
+                        nhập tay — một kỳ không thể vừa còn phải nộp vừa còn khấu trừ chuyển tiếp.
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-5">
+                    <label for="nextGroupInput" class="form-label">
+                        Nhóm áp dụng cho kỳ sau <span class="text-danger">*</span>
+                    </label>
+                    <select id="nextGroupInput" name="nextPeriodTaxType" class="form-select">
+                        <option th:each="g : ${groupOptions}"
+                                th:value="${g}"
+                                th:text="${groupLabels.get(g)}"
+                                th:selected="${g == detail.nextPeriodTaxType}">Nhóm 2</option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label for="cashBalanceInput" class="form-label">Số dư quỹ tiền mặt cuối kỳ</label>
+                    <input id="cashBalanceInput"
+                           type="text"
+                           inputmode="numeric"
+                           data-money
+                           name="cashBalanceAtPeriodEnd"
+                           class="form-control"
+                           th:value="${detail.cashBalanceAtPeriodEnd}"
+                           placeholder="Có thể bỏ trống">
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <button type="submit" class="btn btn-tax-primary w-100">
+                        <i class="ti ti-device-floppy me-1"></i>
+                        Lưu thay đổi
+                    </button>
+                </div>
+
+                <div class="col-12">
+                    <label for="updateNoteInput" class="form-label">Ghi chú</label>
+                    <textarea id="updateNoteInput" name="note" class="form-control" rows="2"
+                              th:text="${detail.note}"></textarea>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</main>
+
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+</body>
+</html>
