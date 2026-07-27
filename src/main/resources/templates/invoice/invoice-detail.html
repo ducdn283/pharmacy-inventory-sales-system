@@ -307,6 +307,11 @@
                             <div th:text="${detail.invoicePattern}">2K26MAA</div>
                         </div>
 
+                        <div class="info-row" th:if="${detail.taxCode != null}">
+                            <div class="info-label">Mã số thuế</div>
+                            <div th:text="${detail.taxCode}">022176001896</div>
+                        </div>
+
                         <div class="info-row">
                             <div class="info-label">Thời gian lập</div>
                             <div th:text="${detail.dateDisplay}">01/07/2026 14:10</div>
