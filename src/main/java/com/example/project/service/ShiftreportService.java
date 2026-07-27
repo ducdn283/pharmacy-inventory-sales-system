@@ -1,5 +1,6 @@
 package com.example.project.service;
 
+import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
 import com.example.project.dto.response.ShiftReportDetailPageResponse;
@@ -7,12 +8,14 @@ import com.example.project.dto.response.ShiftReportListItemResponse;
 import com.example.project.dto.response.ShiftReportStatsResponse;
 import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.entity.Account;
+import com.example.project.entity.Expense;
 import com.example.project.entity.Financialsetting;
 import com.example.project.entity.Income;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
 import com.example.project.repository.AccountRepository;
+import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.FinancialsettingRepository;
 import com.example.project.repository.IncomeRepository;
 import com.example.project.repository.InvoiceRepository;
@@ -59,19 +62,22 @@ public class ShiftreportService {
     private final ReturnRepository returnRepository;
     private final InvoiceRepository invoiceRepository;
     private final IncomeRepository incomeRepository;
+    private final ExpenseRepository expenseRepository;
 
     public ShiftreportService(ShiftreportRepository shiftreportRepository,
                               AccountRepository accountRepository,
                               FinancialsettingRepository financialsettingRepository,
                               ReturnRepository returnRepository,
                               InvoiceRepository invoiceRepository,
-                              IncomeRepository incomeRepository) {
+                              IncomeRepository incomeRepository,
+                              ExpenseRepository expenseRepository) {
         this.shiftreportRepository = shiftreportRepository;
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.returnRepository = returnRepository;
         this.invoiceRepository = invoiceRepository;
         this.incomeRepository = incomeRepository;
+        this.expenseRepository = expenseRepository;
     }
 
     /**
@@ -342,10 +348,21 @@ public class ShiftreportService {
                 .map(Return::getTotalRefund)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        // Từ 2026-07-26 phiếu trả chỉ TÍNH tiền, không chi tiền — refundCash chỉ khác 0 sau khi phiếu chi
-        // bên Kế toán thực chi và ghi ngược lại cột này, nên tiền chi trong ca chỉ lên khi tiền thật ra khỏi két.
-        BigDecimal totalCashOut = returns.stream()
-                .map(Return::getRefundCash)
+        // Tiền chi trong ca KHÔNG lấy từ phiếu trả: phiếu trả chỉ TÍNH nghĩa vụ phải hoàn (totalRefund),
+        // tiền chỉ thật sự rời két khi Kế toán lập phiếu chi. Đã bỏ hẳn refundCash/
+        // refundBanking/refundCredit khỏi bảng `return`, nên nguồn duy nhất còn lại là Expense.
+        // Cùng nguyên tắc với phiếu thu ở dưới: bỏ phiếu Nháp/Từ chối/Đã hủy, phiếu Chờ duyệt VẪN tính
+        // vì tiền đã ra khỏi két lúc chi, trước khi Owner review.
+        List<Expense> expenses = expenseRepository.findAll()
+                .stream()
+                .filter(exp -> exp.getShiftReportID() != null && shiftId.equals(exp.getShiftReportID().getId()))
+                .filter(exp -> !isStatus(exp.getStatus(), ExpenseStatus.DRAFT)
+                        && !isStatus(exp.getStatus(), ExpenseStatus.REJECTED)
+                        && !isStatus(exp.getStatus(), ExpenseStatus.CANCELLED))
+                .toList();
+
+        BigDecimal totalCashOut = expenses.stream()
+                .map(Expense::getPaidByCash)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 

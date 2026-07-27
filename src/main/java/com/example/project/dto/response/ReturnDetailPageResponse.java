@@ -38,9 +38,6 @@ public class ReturnDetailPageResponse {
     private int totalQuantity;
 
     private BigDecimal totalRefund;
-    private BigDecimal refundCash;
-    private BigDecimal refundBanking;
-    private BigDecimal refundCredit;
     private BigDecimal offsetDebtAmount;
 
     private List<ReturnDetailItemResponse> items;

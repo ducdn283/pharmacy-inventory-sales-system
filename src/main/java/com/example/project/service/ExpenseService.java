@@ -669,7 +669,9 @@ public class ExpenseService {
      * {@code IncomeService.cashRefundAmount}.
      */
     private BigDecimal cashRefundAmount(Return ret) {
-        return nullToZero(ret.getRefundCash()).add(nullToZero(ret.getRefundBanking()));
+        // TẠM: b81e80b bỏ refundCash/refundBanking khỏi bảng `return` → không compile
+        // được. Giữ nguyên ý nghĩa cũ "trừ phần đã cấn trừ nợ". Cần xác nhận lại.
+        return nullToZero(ret.getTotalRefund()).subtract(nullToZero(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO);
     }
 
     /**

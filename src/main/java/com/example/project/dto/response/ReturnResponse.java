@@ -20,9 +20,6 @@ public class ReturnResponse {
     private Integer returnedById;
     private Instant returnDate;
     private String returnType;
-    private BigDecimal refundCash;
-    private BigDecimal refundBanking;
-    private BigDecimal refundCredit;
     private BigDecimal totalRefund;
     private BigDecimal offsetDebtAmount;
     private Integer shiftReportId;
@@ -42,9 +39,6 @@ public class ReturnResponse {
                 returnEntity.getReturnedBy() != null ? returnEntity.getReturnedBy().getId() : null,
                 returnEntity.getReturnDate(),
                 returnEntity.getReturnType(),
-                returnEntity.getRefundCash(),
-                returnEntity.getRefundBanking(),
-                returnEntity.getRefundCredit(),
                 returnEntity.getTotalRefund(),
                 returnEntity.getOffsetDebtAmount(),
                 returnEntity.getShiftReportID() != null ? returnEntity.getShiftReportID().getId() : null,

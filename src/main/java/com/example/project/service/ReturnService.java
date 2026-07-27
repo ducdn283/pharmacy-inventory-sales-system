@@ -320,11 +320,9 @@ public class ReturnService {
         ret.setReturnedBy(creator);
         ret.setReturnDate(nowVn());
         ret.setReturnType(TYPE_CUSTOMER);
-        // Phiếu trả CHỈ TÍNH tiền, không chi tiền: cách chi (tiền mặt / chuyển khoản) do phiếu chi bên
-        // Kế toán quyết định và ghi đè lại 2 cột này sau. Ở đây để 0 (cột nullable, mặc định DB 0.00).
-        ret.setRefundCash(BigDecimal.ZERO);
-        ret.setRefundBanking(BigDecimal.ZERO);
-        ret.setRefundCredit(BigDecimal.ZERO);
+        // Phiếu trả CHỈ TÍNH tiền, không chi tiền: cách chi (tiền mặt / chuyển khoản) là dữ liệu của
+        // phiếu chi bên Kế toán. 3 cột refundCash/refundBanking/refundCredit đã bị bỏ khỏi
+        // bảng `return` — phiếu trả chỉ còn lưu tổng phải hoàn (totalRefund).
         ret.setTotalRefund(totalRefund);
         ret.setTotalVATRefund(totalVATRefund);
         // luôn hoàn 100% (chưa áp returnProductOnInvoiceValueRate). Lưu tỷ lệ thực đã áp
@@ -433,8 +431,8 @@ public class ReturnService {
      *
      * <p><strong>No cash moves here</strong>: re-issuing/adjusting invoices and carrying
      * their debt across is invoice bookkeeping, but the register (quỹ) is never touched — the slip only
-     * computes and stores {@code totalRefund}. Paying the customer back is the Expense module's job, which
-     * owns {@code refundCash}/{@code refundBanking} and rewrites them when the payout actually happens.</p>
+     * computes and stores {@code totalRefund}. Paying the customer back is the Expense module's job — the
+     * Expense slip is what records the actual payout and its cash/banking split.</p>
      *
      * <p>Also lazily opens/reuses the <strong>creator's</strong> (not the approver's) shift report right
      * here — the physical counter transaction with the customer happens when the slip is created, even
@@ -482,18 +480,14 @@ public class ReturnService {
      * does NOT deduct stock (the returned goods were already restocked into a fresh batch in
      * {@link #applyReturnEffect}). Linked both ways via {@code originalInvoiceID} + {@code returnID}.
      *
-     * <p>The adjustment invoice never carries debt of its own; instead whatever part of the refund was
-     * credited against the original ({@code refundCredit}) reduces the original's own {@code debtAmount},
-     * floored at 0. That is invoice bookkeeping, not a cash movement — paying the customer back is still
-     * the Expense module's job. ({@code refundCredit} is 0 while bù trừ công nợ is deferred, so today this
-     * leaves the original untouched.)</p>
+     * <p>Neither invoice's debt moves here. Bù trừ công nợ was replaced by a hard gate — a customer still
+     * owing on an invoice cannot return against it at all ({@link #hasOutstandingDebt}) — so the original's
+     * {@code debtAmount} is already 0 by the time we get here, and the adjustment carries no debt of its
+     * own. Paying the customer back is the Expense module's job.</p>
      */
     private void createAdjustmentInvoice(Return ret, Invoice original, List<Returndetail> details) {
         BigDecimal refund = nz(ret.getTotalRefund());
         BigDecimal vatRefund = nz(ret.getTotalVATRefund());
-
-        original.setDebtAmount(nz(original.getDebtAmount()).subtract(nz(ret.getRefundCredit())).max(BigDecimal.ZERO));
-        invoiceRepository.save(original);
 
         Invoice adj = new Invoice();
         // Cùng ký hiệu (mẫu số / serie) với hóa đơn gốc; số hóa đơn mới, duy nhất.
@@ -577,8 +571,8 @@ public class ReturnService {
         BigDecimal newVatOutput = nz(original.getTotalVATOutput()).subtract(vatRefund).max(BigDecimal.ZERO);
         // Bản thay thế kế thừa TOÀN BỘ trạng thái còn lại của hóa đơn gốc — gồm cả công nợ: nợ chuyển sang
         // hóa đơn mới, hóa đơn gốc bị vô hiệu nên xóa nợ về 0. Đây là nghiệp vụ tạo hóa đơn mới từ hóa đơn
-        // cũ (không phải dòng tiền của phiếu trả). Trừ tiếp refundCredit khi bật lại bù trừ công nợ.
-        BigDecimal newDebt = nz(original.getDebtAmount()).subtract(nz(ret.getRefundCredit())).max(BigDecimal.ZERO);
+        // cũ (không phải dòng tiền của phiếu trả), nên chuyển NGUYÊN nợ, không cấn trừ tiền hoàn.
+        BigDecimal newDebt = nz(original.getDebtAmount());
 
         original.setDebtAmount(BigDecimal.ZERO);
         invoiceRepository.save(original);
@@ -765,9 +759,6 @@ public class ReturnService {
                 details.size(),
                 totalQuantity,
                 ret.getTotalRefund(),
-                ret.getRefundCash(),
-                ret.getRefundBanking(),
-                ret.getRefundCredit(),
                 ret.getOffsetDebtAmount(),
                 items);
     }
