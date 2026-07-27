@@ -18,4 +18,11 @@ public class ReturnPurchaseDetailItemResponse {
     private Integer returnQty;
     private BigDecimal unitImportPrice;
     private BigDecimal lineRefund;
+
+    // Thuế GTGT ĐẦU VÀO phải giảm trừ cho dòng này, tách từ giá nhập gross theo thuế suất trên phiếu
+    // nhập gốc. Chỉ có giá trị với Nhóm 3/4 (khấu trừ) — Nhóm 2 chưa từng khấu trừ nên không có gì đảo
+    // (Huong_dan_tinh_thue sheet 12, mục 5B).
+    private BigDecimal vatRate;
+    private BigDecimal preTaxAmount;
+    private BigDecimal vatAmount;
 }

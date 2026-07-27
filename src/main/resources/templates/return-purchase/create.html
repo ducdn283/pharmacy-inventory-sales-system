@@ -168,6 +168,22 @@
                                 <span class="text-secondary">Tổng tiền hoàn</span>
                                 <strong class="text-success" id="summaryRefund">0đ</strong>
                             </div>
+                            <!-- Giá nhập là giá GỘP → tách net/thuế từ trong tiền hoàn. Thuế đầu vào chỉ có
+                                 với Nhóm 3/4; Nhóm 2 chưa từng khấu trừ nên không có gì để đảo. -->
+                            <th:block th:if="${deductionGroup}">
+                                <div class="summary-line">
+                                    <span class="text-secondary">Giá trị chưa thuế</span>
+                                    <span id="summaryPreTax">0đ</span>
+                                </div>
+                                <div class="summary-line">
+                                    <span class="text-secondary">Thuế GTGT đầu vào giảm trừ</span>
+                                    <strong id="summaryVat">0đ</strong>
+                                </div>
+                            </th:block>
+                            <div class="form-text mb-3" th:unless="${deductionGroup}">
+                                Hộ kinh doanh đang ở Nhóm 2 — chưa khấu trừ thuế GTGT đầu vào nên phiếu trả
+                                NCC không phát sinh điều chỉnh thuế.
+                            </div>
 
                             <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
                                 <i class="ti ti-send me-1"></i>Tạo &amp; duyệt
@@ -249,6 +265,9 @@
         const lineBody = document.getElementById('lineBody');
         const summaryItems = document.getElementById('summaryItems');
         const summaryRefund = document.getElementById('summaryRefund');
+        // Chỉ tồn tại khi Nhóm 3/4 (xem th:if deductionGroup) — recalc phải null-safe.
+        const summaryPreTax = document.getElementById('summaryPreTax');
+        const summaryVat = document.getElementById('summaryVat');
 
         const modal = document.getElementById('purchaseModal');
 
@@ -260,7 +279,8 @@
             .map(it => [String(it.purchaseDetailId), it.returnQty]));
 
         function formatMoney(value) {
-            return (value || 0).toLocaleString('vi-VN') + 'đ';
+            // Làm tròn về đồng TRƯỚC khi format — net/thuế tách từ giá gộp luôn ra số lẻ.
+            return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';
         }
 
         document.getElementById('pickPurchaseBtn').addEventListener('click', () => modal.classList.add('open'));
@@ -336,7 +356,9 @@
                         '<div class="input-group input-group-sm" style="max-width:130px">' +
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
-                                '" value="' + qty + '" data-price="' + line.refundUnitPrice + '" name="items[' + i + '].returnQty">' +
+                                '" value="' + qty + '" data-price="' + line.refundUnitPrice +
+                                '" data-vat-rate="' + (line.vatRate == null ? 0 : line.vatRate) +
+                                '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
                         '<div class="text-secondary small">tối đa ' + full + '</div>' +
@@ -377,6 +399,7 @@
 
         function recalc() {
             let totalRefund = 0;
+            let totalVat = 0;
             let itemCount = 0;
             lineBody.querySelectorAll('.qty-input').forEach(inp => {
                 let qty = parseInt(inp.value, 10) || 0;
@@ -388,9 +411,18 @@
                 inp.closest('tr').querySelector('.line-refund').textContent = formatMoney(lineRefund);
                 if (qty > 0) itemCount++;
                 totalRefund += lineRefund;
+                // Giá nhập đã gồm thuế → thuế đầu vào nằm TRONG tiền hoàn, không cộng thêm.
+                const vatRate = parseFloat(inp.getAttribute('data-vat-rate')) || 0;
+                if (vatRate > 0) {
+                    totalVat += lineRefund - (lineRefund / (1 + vatRate / 100));
+                }
             });
             summaryItems.textContent = itemCount;
             summaryRefund.textContent = formatMoney(totalRefund);
+            // Làm tròn thuế trước rồi lấy net = tổng − thuế để 2 dòng luôn cộng đúng bằng tổng.
+            const vatRounded = Math.round(totalVat);
+            if (summaryPreTax) summaryPreTax.textContent = formatMoney(totalRefund - vatRounded);
+            if (summaryVat) summaryVat.textContent = formatMoney(vatRounded);
         }
 
         function escapeHtml(s) {

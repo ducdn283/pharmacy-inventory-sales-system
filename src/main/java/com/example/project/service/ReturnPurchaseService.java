@@ -94,7 +94,8 @@ public class ReturnPurchaseService {
     }
 
     /** Nhóm 3/4 = deduction method → the reversed input VAT is tracked on the slip; Nhóm 2 has nothing to reverse. */
-    private boolean isDeductionGroup() {
+    @Transactional(readOnly = true)
+    public boolean isDeductionGroup() {
         return revenueGroup() >= 3;
     }
 
@@ -240,7 +241,8 @@ public class ReturnPurchaseService {
                     returnedUnit,                 // Đã trả (theo đơn vị nhập)
                     onHandUnit,                   // Tồn / SL trả tối đa (theo đơn vị nhập)
                     grossPerUnit,                 // Đơn giá nhập (gross / đơn vị nhập)
-                    grossPerUnit));               // Tiền hoàn/đơn vị = 100% gross (NCC hoàn đúng số đã trả)
+                    grossPerUnit,                 // Tiền hoàn/đơn vị = 100% gross (NCC hoàn đúng số đã trả)
+                    line.getVatRate()));          // Thuế suất dòng nhập gốc — để tạm tính thuế đầu vào đảo lại
         }
         return lines;
     }
@@ -526,6 +528,12 @@ public class ReturnPurchaseService {
                 totalQuantity,
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
+                details.stream()
+                        .map(Returndetail::getPreTaxAmount)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add),
+                ret.getTotalVATRefund(),
+                isDeductionGroup(),
                 items);
     }
 
@@ -569,7 +577,10 @@ public class ReturnPurchaseService {
                 unit != null ? unit.getUnitName() : "",
                 qtyUnit,
                 pricePerUnit,
-                detail.getLineRefund());
+                detail.getLineRefund(),
+                detail.getVatRate(),
+                detail.getPreTaxAmount(),
+                detail.getVatAmount());
     }
 
     // ------------------------------------------------------------------ purchase read-only access
@@ -629,6 +640,14 @@ public class ReturnPurchaseService {
      * A purchase the pharmacy has not paid off cannot be returned. Settling first keeps
      * the return screen out of the money entirely — the supplier then simply owes back the full refund
      * ({@code offsetDebtAmount}), which the Income module collects.
+     *
+     * <p><strong>Known conflict with the BA docs, deferred on purpose (2026-07-27)</strong> — the
+     * supplier-side mirror of the customer gate. PISMS_Xu_ly_Cong_no, sheet "Công nợ Nhà cung cấp"
+     * ca 3/4, wants netting instead: raise {@code PurchaseInvoice.paid} by the value returned (no
+     * Income at all when it fully covers the debt), and only create an Income for the remainder.
+     * Note that {@code offsetDebtAmount} currently carries a DIFFERENT meaning here ("NCC còn phải
+     * hoàn", a running balance the Income module decrements) — reconcile that with the teammate
+     * before switching. See phan-tich-tai-lieu/quyet-dinh-va-mau-thuan.md (TREO #1).</p>
      */
     private boolean hasOutstandingDebt(Purchaseinvoice purchase) {
         BigDecimal total = purchase.getTotalAmount() != null ? purchase.getTotalAmount() : BigDecimal.ZERO;
