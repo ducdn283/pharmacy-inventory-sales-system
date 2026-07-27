@@ -21,6 +21,8 @@
       --sup-blue-bg:     #e0f2fe;
       --sup-amber:       #d97706;
       --sup-amber-bg:    #fef3c7;
+      --sup-red:         #dc2626;
+      --sup-red-bg:      #fee2e2;
       --sup-border:      #e5e7eb;
       --sup-bg:          #f6f7f9;
       --sup-muted:       #6b7280;
@@ -79,6 +81,31 @@
       color: var(--sup-amber);
     }
     .kpi-card.kpi-supplier .kpi-sub { color: var(--sup-amber); }
+    .kpi-card.kpi-payable .kpi-icon {
+      background: var(--sup-red-bg);
+      color: var(--sup-red);
+    }
+    .kpi-card.kpi-payable .kpi-number { color: var(--sup-red); }
+    .kpi-card.kpi-payable .kpi-sub { color: var(--sup-red); }
+    .kpi-card.kpi-payable.kpi-customer .kpi-sub { color: var(--sup-blue); }
+    .kpi-card.kpi-payable.kpi-supplier .kpi-sub { color: var(--sup-amber); }
+
+    @media (min-width: 1200px) {
+      .kpi-row .kpi-card {
+        padding: 16px 14px 14px;
+        min-height: 100px;
+      }
+      .kpi-row .kpi-label { font-size: 11.5px; }
+      .kpi-row .kpi-number { font-size: 1.45rem; }
+      .kpi-row .kpi-sub { font-size: 10.5px; }
+      .kpi-row .kpi-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+        top: 14px;
+        right: 14px;
+      }
+    }
 
     .main-card {
       background: #fff;
@@ -217,26 +244,25 @@
 <main id="content" class="content py-8">
   <div class="container-fluid">
 
-    <div class="row g-3 mb-4">
-      <div class="col-12 col-md-6 col-xl-3">
+    <div class="row g-3 mb-4 kpi-row">
+      <div class="col-12 col-sm-6 col-xl-2">
         <div class="kpi-card">
           <span class="kpi-icon"><i class="ti ti-credit-card"></i></span>
           <div class="kpi-label">Tổng cho nợ</div>
           <div class="kpi-number"
                th:text="${#numbers.formatDecimal(summary.totalReceivable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
-          <div class="kpi-sub" th:text="${summary.entityCount + ' đối tượng'}">0 đối tượng</div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
+      <div class="col-12 col-sm-6 col-xl-2">
         <div class="kpi-card kpi-customer">
           <span class="kpi-icon"><i class="ti ti-user"></i></span>
           <div class="kpi-label">Cho nợ khách hàng</div>
           <div class="kpi-number"
                th:text="${#numbers.formatDecimal(summary.customerReceivable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
-          <div class="kpi-sub">Từ hóa đơn còn nợ</div>
+          <div class="kpi-sub">Từ hóa đơn bán hàng còn nợ</div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
+      <div class="col-12 col-sm-6 col-xl-2">
         <div class="kpi-card kpi-supplier">
           <span class="kpi-icon"><i class="ti ti-truck"></i></span>
           <div class="kpi-label">Cho nợ nhà cung cấp</div>
@@ -245,16 +271,30 @@
           <div class="kpi-sub">Từ phiếu trả hàng NCC</div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <div class="kpi-card">
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-payable">
           <span class="kpi-icon"><i class="ti ti-arrow-down-right"></i></span>
           <div class="kpi-label">Tổng nợ</div>
           <div class="kpi-number"
                th:text="${#numbers.formatDecimal(summary.totalPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
-          <div class="kpi-sub"
-               th:text="${'KH: ' + #numbers.formatDecimal(summary.customerPayable, 0, 'POINT', 0, 'COMMA') + 'đ · NCC: ' + #numbers.formatDecimal(summary.supplierPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-            KH: 0đ · NCC: 0đ
-          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-payable kpi-customer">
+          <span class="kpi-icon"><i class="ti ti-user"></i></span>
+          <div class="kpi-label">Nợ khách hàng</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.customerPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+          <div class="kpi-sub">Từ phiếu trả hàng KH</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-payable kpi-supplier">
+          <span class="kpi-icon"><i class="ti ti-truck"></i></span>
+          <div class="kpi-label">Nợ nhà cung cấp</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.supplierPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+          <div class="kpi-sub">Từ phiếu nhập còn nợ</div>
         </div>
       </div>
     </div>
