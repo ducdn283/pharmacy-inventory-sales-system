@@ -150,6 +150,7 @@
                         <th>Người tạo</th>
                         <th>Số mặt hàng</th>
                         <th>Tiền hoàn</th>
+                        <th>NCC còn phải hoàn</th>
                         <th>Đối tượng</th>
                         <th>Trạng thái</th>
                         <th class="text-end">Thao tác</th>
@@ -171,6 +172,19 @@
                         </td>
                         <td class="fw-semibold"
                             th:text="${#numbers.formatDecimal(item.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
+                        <!-- Số dư động: bằng tiền hoàn lúc duyệt, phiếu thu trừ dần, về 0 là NCC đã hoàn đủ.
+                             Phiếu Nháp/Từ chối chưa trả hàng nên chưa phát sinh khoản NCC nợ lại. -->
+                        <td>
+                            <span th:if="${item.status == 'Nháp' or item.status == 'Từ chối'}"
+                                  class="text-secondary">—</span>
+                            <span th:unless="${item.status == 'Nháp' or item.status == 'Từ chối'}">
+                                <strong th:if="${item.offsetDebtAmount != null && item.offsetDebtAmount > 0}"
+                                        class="text-warning"
+                                        th:text="${#numbers.formatDecimal(item.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</strong>
+                                <span th:unless="${item.offsetDebtAmount != null && item.offsetDebtAmount > 0}"
+                                      class="badge bg-success-subtle text-success">Đã hoàn đủ</span>
+                            </span>
+                        </td>
                         <td th:text="${item.returnTypeDisplay}">Nhà cung cấp</td>
                         <td>
                             <span class="status-badge"
@@ -185,7 +199,7 @@
                     </tr>
 
                     <tr th:if="${#lists.isEmpty(returns)}">
-                        <td colspan="10" class="text-center text-secondary py-4">
+                        <td colspan="11" class="text-center text-secondary py-4">
                             Không tìm thấy phiếu trả hàng nào.
                         </td>
                     </tr>

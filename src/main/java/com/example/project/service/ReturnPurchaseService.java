@@ -544,6 +544,7 @@ public class ReturnPurchaseService {
                 ret.getReturnedBy() != null ? ret.getReturnedBy().getName() : "Không rõ",
                 details.size(),
                 ret.getTotalRefund(),
+                ret.getOffsetDebtAmount(),
                 ret.getReturnType(),
                 returnTypeDisplay(ret.getReturnType()),
                 statusName,
