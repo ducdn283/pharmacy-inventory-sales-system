@@ -181,9 +181,18 @@
                             <span class="text-secondary">Tổng mặt hàng</span>
                             <strong th:text="${detail.itemCount}">2</strong>
                         </div>
+                        <!-- Số dư động: bằng tiền hoàn lúc duyệt, mỗi phiếu thu của NCC trừ dần, về 0 là đã hoàn đủ. -->
                         <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">NCC phải hoàn</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                            <span class="text-secondary">NCC còn phải hoàn</span>
+                            <span th:if="${detail.status == 'Nháp' or detail.status == 'Từ chối'}"
+                                  class="text-secondary">—</span>
+                            <th:block th:unless="${detail.status == 'Nháp' or detail.status == 'Từ chối'}">
+                                <strong th:if="${detail.offsetDebtAmount != null && detail.offsetDebtAmount > 0}"
+                                        class="text-warning"
+                                        th:text="${#numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                                <span th:unless="${detail.offsetDebtAmount != null && detail.offsetDebtAmount > 0}"
+                                      class="badge bg-success-subtle text-success">Đã hoàn đủ</span>
+                            </th:block>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between">

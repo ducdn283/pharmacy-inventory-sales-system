@@ -43,6 +43,20 @@ public class ShiftReportDetailPageResponse {
 
     private BigDecimal totalCashOut;
 
+    /**
+     * Tiền chuyển khoản chi ra trong ca (Σ {@code Expense.paidByBanking}). Cố tình KHÔNG tham gia
+     * {@code expectedClosingCash} — đối chiếu cuối ca là đếm tiền trong két, chuyển khoản không qua két.
+     */
+    private BigDecimal totalBankingOut;
+
+    /**
+     * {@code totalBankingIn − totalBankingOut}. Thuần thông tin: chuyển khoản KHÔNG có đối chiếu
+     * kiểu tiền mặt (không có số đầu ca / thực đếm / chênh lệch) vì ngân hàng đã ghi nhận sẵn và
+     * người trực ca không đếm được số dư tài khoản lúc giao ca. Không tham gia
+     * {@code expectedClosingCash}. Không lưu DB — suy ra khi hiển thị.
+     */
+    private BigDecimal totalBankingNet;
+
     private BigDecimal expectedClosingCash;
 
     private BigDecimal actualClosingCash;

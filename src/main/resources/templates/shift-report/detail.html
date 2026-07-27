@@ -273,8 +273,23 @@
                         </div>
 
                         <div class="summary-row">
-                            <span class="text-secondary">Tiền mặt hoàn trả (chi ra)</span>
+                            <span class="text-secondary">Tiền mặt chi ra (phiếu chi)</span>
                             <strong th:text="${#numbers.formatDecimal(detail.totalCashOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <!-- Chỉ nằm ở panel này, KHÔNG vào "Đối chiếu tiền mặt": tiền chuyển khoản
+                             không đi qua két nên không ảnh hưởng số đếm cuối ca. -->
+                        <div class="summary-row">
+                            <span class="text-secondary">Chuyển khoản chi ra (phiếu chi)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalBankingOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <!-- Thu CK − chi CK. Để người chốt ca tự soát với thông báo ngân hàng; KHÔNG
+                             phải đối chiếu (không có số thực đếm) nên không có banner chênh lệch. -->
+                        <div class="summary-row">
+                            <span class="text-secondary fw-semibold">Chuyển khoản ròng trong ca</span>
+                            <strong th:classappend="${detail.totalBankingNet != null and detail.totalBankingNet.signum() &lt; 0 ? ' text-danger' : ' text-success'}"
+                                    th:text="${(detail.totalBankingNet != null and detail.totalBankingNet.signum() > 0 ? '+' : '') + #numbers.formatDecimal(detail.totalBankingNet, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
                         </div>
                     </div>
                 </div>

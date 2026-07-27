@@ -472,7 +472,7 @@ public class ExpenseService {
         // Only the increment: the slip was already approved, so everything before this was pushed
         // onto the invoice at approval time.
         settlePurchaseInvoice(expense, portion);
-        attachOpenShift(expense, currentAccountId);
+        attachOpenShift(expense, applicantIdOf(expense));
 
         expenseRepository.save(expense);
     }
@@ -583,25 +583,30 @@ public class ExpenseService {
                 ? ExpenseStatus.COMPLETED
                 : ExpenseStatus.AWAITING_PAYMENT);
         settlePurchaseInvoice(expense, paid);
-        attachOpenShift(expense, approver.getId());
+        attachOpenShift(expense, applicantIdOf(expense));
+    }
+
+    /** Người LẬP phiếu — xem {@link #attachOpenShift}. */
+    private Integer applicantIdOf(Expense expense) {
+        return expense.getApplicantID() != null ? expense.getApplicantID().getId() : null;
     }
 
     /**
-     * Stamps the slip with the actor's currently open shift, so the cash that just left can be
-     * reconciled against the register. Keeps the existing stamp if there is one — a slip belongs to
-     * the shift that authorised it, not to whichever shift happens to be open when it is topped up
-     * later.
+     * Stamps the slip with the open shift of whoever <strong>raised</strong> it, so the cash that left
+     * can be reconciled against that person's register. Keeps an existing stamp — a slip belongs to
+     * the shift it was raised in, not to whichever shift is open when it is topped up later.
      *
-     * <p><strong>Deliberately {@code findDraftShift}, never {@code ensureOpenShiftFor}.</strong>
-     * Creating a shift from this screen would be actively harmful: Expense is an Owner + Accountant
-     * screen, {@code ensureOpenShiftFor} does not check the role, and an Accountant is never meant
-     * to have a shift. Give one to an Accountant and
-     * {@code ShiftreportController.logoutGuard()} — which also does not check the role — would
-     * redirect every later logout to {@code /accountant/shift-reports/{id}}, a route that does not
-     * exist (shift screens are Owner + Pharmacist only). They would be unable to log out at all.
-     * Attaching only an already-open shift makes the Accountant case fall out as {@code null} with
-     * no role check anywhere, and matches the rule that shifts open on the first counter sale — an
-     * expense is paid out of a drawer that is already open, it does not open one.</p>
+     * <p><strong>Creator, never approver or payer</strong> (BA 2026-07-27): the person who raised the
+     * slip is the one who handled the money; approving it only authorises counting it, and paying it
+     * out later does not move it to the payer's shift. An Owner approving an Accountant's slip must
+     * not drag it onto the Owner's shift.</p>
+     *
+     * <p><strong>{@code findDraftShift}, never {@code ensureOpenShiftFor}.</strong> Only Owner and
+     * Pharmacist run a register, so only they have shifts; an Accountant settles by transfer and
+     * never handles cash. Looking a shift up instead of creating one keeps this method free of any
+     * role check — an Accountant simply has none, so the stamp stays {@code null}.
+     * ({@code ShiftreportService.ensureOpenShiftFor} enforces the same rule at the one place shifts
+     * are actually created, so no caller can hand an Accountant a shift by mistake.)</p>
      */
     private void attachOpenShift(Expense expense, Integer accountId) {
         if (expense.getShiftReportID() != null || accountId == null) {
