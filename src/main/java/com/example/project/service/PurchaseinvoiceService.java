@@ -339,11 +339,12 @@ public class PurchaseinvoiceService {
             throw new IllegalArgumentException("Tổng tiền phiếu nhập không hợp lệ");
         }
 
-        BigDecimal paid = safe(request.getPaid());
-
-        if (paid.compareTo(totalAmount) > 0) {
-            throw new IllegalArgumentException("Số tiền đã trả không được lớn hơn tổng tiền phiếu nhập");
-        }
+        // A new import invoice always starts unpaid, i.e. "Nợ" (BA 2026-07-27). Receiving goods and
+        // paying for them are separate events: the money only moves when an Expense slip is raised
+        // against this invoice, and {@link #applyPayment} is the single door it comes through. That
+        // keeps one path to `paid`/`status` instead of two that could disagree, and it is why the
+        // create form no longer asks for an amount already paid.
+        BigDecimal paid = BigDecimal.ZERO;
 
         Purchaseinvoice invoice = new Purchaseinvoice();
         invoice.setPurchaseInvoiceCode(generatePurchaseInvoiceCode());
@@ -982,6 +983,24 @@ public class PurchaseinvoiceService {
     }
 
     private static final BigDecimal VAT_DEDUCTION_THRESHOLD = BigDecimal.valueOf(5_000_000);
+
+    /**
+     * Whether this invoice's input VAT may be deducted right now — the rule below, applied to a
+     * whole invoice, plus the obvious precondition that a cancelled invoice deducts nothing.
+     *
+     * <p>Exposed for {@code TaxperiodsnapshotService}, which needs exactly this question when it
+     * totals a period's input VAT. It lives here rather than there so the Điều 26 rule stays with
+     * the entity that owns it, the same reasoning that keeps
+     * {@link #applyPayment(Integer, BigDecimal)} on this side. Note the answer is <em>time
+     * dependent</em> (an unpaid invoice stops being deductible once its {@code dueDate} passes),
+     * which is precisely why a tax period is snapshotted rather than recomputed forever.</p>
+     */
+    public boolean isDeductible(Purchaseinvoice invoice) {
+        if (invoice == null || PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
+            return false;
+        }
+        return isValidForDeduction(invoice.getTotalAmount(), invoice.getPaid(), invoice.getDueDate());
+    }
 
     /**
      * Điều 26 Nghị định 181/2025/NĐ-CP: hóa đơn nhập ≥5 triệu đồng chưa thanh toán vẫn được TẠM
