@@ -33,6 +33,9 @@ public class Taxperiodsnapshot {
     @Column(name = "endDate")
     private LocalDate endDate;
 
+    @Column(name = "incomeTax", precision = 15, scale = 2)
+    private BigDecimal incomeTax;
+
     @Column(name = "vatOutput", precision = 15, scale = 2)
     private BigDecimal vatOutput;
 
