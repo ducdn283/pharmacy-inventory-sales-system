@@ -92,7 +92,7 @@ public class ProcurementplanController {
         model.addAttribute("totalItems", procurementPage.getTotalElements()); //tổng số phiếu dự trù
         model.addAttribute("pageTitle", "Danh sách dự trù mua hàng");
         model.addAttribute("basePath", basePath);
-        return "owner/procurement-plan-list";
+        return "procurement-plan/procurement-plan-list";
     }
 
     // api tìm kiếm sản phẩm và trả về dạng json
@@ -130,7 +130,7 @@ public class ProcurementplanController {
 
         addFormPageData(request, model);
         model.addAttribute("pageTitle", "Tạo dự trù mua hàng");
-        return "owner/create-procurementplan";
+        return "procurement-plan/create-procurementplan";
     }
 
     // tạo phiếu dự trù
@@ -145,7 +145,7 @@ public class ProcurementplanController {
         if (bindingResult.hasErrors()) {
             addFormPageData(request, model);
             model.addAttribute("pageTitle", "Tạo dự trù mua hàng");
-            return "owner/create-procurementplan";
+            return "procurement-plan/create-procurementplan";
         }
 
         try {
@@ -156,7 +156,7 @@ public class ProcurementplanController {
             model.addAttribute("errorMessage", exception.getMessage());
             addFormPageData(request, model);
             model.addAttribute("pageTitle", "Tạo dự trù mua hàng");
-            return "owner/create-procurementplan";
+            return "procurement-plan/create-procurementplan";
         }
     }
 
@@ -179,7 +179,7 @@ public class ProcurementplanController {
             model.addAttribute("viewOnly", viewOnly);
             addFormPageData(request, model);
             model.addAttribute("pageTitle", viewOnly ? "Xem chi tiết dự trù mua hàng" : "Cập nhật dự trù mua hàng");
-            return "owner/update-procurementplan";
+            return "procurement-plan/update-procurementplan";
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
             return "redirect:" + basePath;
@@ -203,7 +203,7 @@ public class ProcurementplanController {
             model.addAttribute("pageTitle", procurementplanService.isCompleted(id)
                     ? "Xem chi tiết dự trù mua hàng"
                     : "Cập nhật dự trù mua hàng");
-            return "owner/update-procurementplan";
+            return "procurement-plan/update-procurementplan";
         }
 
         try {
@@ -227,7 +227,7 @@ public class ProcurementplanController {
             model.addAttribute("pageTitle", procurementplanService.isCompleted(id)
                     ? "Xem chi tiết dự trù mua hàng"
                     : "Cập nhật dự trù mua hàng");
-            return "owner/update-procurementplan";
+            return "procurement-plan/update-procurementplan";
         }
     }
 
@@ -239,7 +239,7 @@ public class ProcurementplanController {
         ProcurementPlanPrintPageResponse printData = procurementplanService.getPrintPage(id);
         model.addAttribute("printData", printData);
         model.addAttribute("basePath", resolveBasePath(request));
-        return "owner/procurement-plan-print";
+        return "procurement-plan/procurement-plan-print";
     }
 
     // xóa phiếu dự trù

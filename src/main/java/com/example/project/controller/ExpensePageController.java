@@ -83,8 +83,20 @@ public class ExpensePageController {
     }
 
     @GetMapping({OWNER_BASE + "/create", ACCOUNTANT_BASE + "/create"})
-    public String createPage(HttpServletRequest request, Model model) {
-        model.addAttribute("form", new ExpenseCreateRequest());
+    public String createPage(@RequestParam(name = "expenseType", required = false) String expenseType,
+                             @RequestParam(name = "returnId", required = false) Integer returnId,
+                             @RequestParam(name = "purchaseId", required = false) Integer purchaseId,
+                             HttpServletRequest request,
+                             Model model) {
+        if (!model.containsAttribute("form")) {
+            ExpenseCreateRequest form = new ExpenseCreateRequest();
+            if (expenseType != null && !expenseType.isBlank()) {
+                form.setExpenseType(expenseType.trim());
+            }
+            form.setReturnId(returnId);
+            form.setPurchaseId(purchaseId);
+            model.addAttribute("form", form);
+        }
         addCreateFormOptions(model, resolveBasePath(request));
 
         return "expense/create";

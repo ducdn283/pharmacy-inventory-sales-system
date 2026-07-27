@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+  <meta charset="UTF-8"/>
+  <title>Danh sách công nợ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/images/apple-touch-icon.png" th:href="@{/assets/images/apple-touch-icon.png}">
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/images/favicon-32x32.png" th:href="@{/assets/images/favicon-32x32.png}">
+  <link rel="icon" type="image/png" sizes="16x16" href="./assets/images/favicon-16x16.png" th:href="@{/assets/images/favicon-16x16.png}">
+  <link rel="manifest" href="./assets/site.webmanifest" th:href="@{/assets/site.webmanifest}">
+  <script type="module" crossorigin src="./assets/js/main.js" th:src="@{/assets/js/main.js}"></script>
+  <link rel="stylesheet" crossorigin href="./assets/css/main.css" th:href="@{/assets/css/main.css}">
+
+  <style>
+    :root {
+      --sup-green:       #059669;
+      --sup-green-dark:  #047857;
+      --sup-green-bg:    #e8f7f1;
+      --sup-blue:        #0284c7;
+      --sup-blue-bg:     #e0f2fe;
+      --sup-amber:       #d97706;
+      --sup-amber-bg:    #fef3c7;
+      --sup-red:         #dc2626;
+      --sup-red-bg:      #fee2e2;
+      --sup-border:      #e5e7eb;
+      --sup-bg:          #f6f7f9;
+      --sup-muted:       #6b7280;
+    }
+
+    body { background: var(--sup-bg); }
+
+    .kpi-card {
+      background: #fff;
+      border: 1px solid var(--sup-border);
+      border-radius: 14px;
+      padding: 20px 22px 18px;
+      box-shadow: 0 1px 2px rgba(16,24,40,.04);
+      position: relative;
+      min-height: 110px;
+    }
+    .kpi-label {
+      font-size: 12.5px;
+      color: var(--sup-muted);
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .kpi-number {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #111827;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-sub {
+      font-size: 11.5px;
+      font-weight: 500;
+      margin-top: 5px;
+      color: var(--sup-green);
+    }
+    .kpi-icon {
+      position: absolute;
+      top: 18px; right: 18px;
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      background: var(--sup-green-bg);
+      color: var(--sup-green);
+    }
+    .kpi-card.kpi-customer .kpi-icon {
+      background: var(--sup-blue-bg);
+      color: var(--sup-blue);
+    }
+    .kpi-card.kpi-customer .kpi-sub { color: var(--sup-blue); }
+    .kpi-card.kpi-supplier .kpi-icon {
+      background: var(--sup-amber-bg);
+      color: var(--sup-amber);
+    }
+    .kpi-card.kpi-supplier .kpi-sub { color: var(--sup-amber); }
+    .kpi-card.kpi-payable .kpi-icon {
+      background: var(--sup-red-bg);
+      color: var(--sup-red);
+    }
+    .kpi-card.kpi-payable .kpi-number { color: var(--sup-red); }
+    .kpi-card.kpi-payable .kpi-sub { color: var(--sup-red); }
+    .kpi-card.kpi-payable.kpi-customer .kpi-sub { color: var(--sup-blue); }
+    .kpi-card.kpi-payable.kpi-supplier .kpi-sub { color: var(--sup-amber); }
+
+    @media (min-width: 1200px) {
+      .kpi-row .kpi-card {
+        padding: 16px 14px 14px;
+        min-height: 100px;
+      }
+      .kpi-row .kpi-label { font-size: 11.5px; }
+      .kpi-row .kpi-number { font-size: 1.45rem; }
+      .kpi-row .kpi-sub { font-size: 10.5px; }
+      .kpi-row .kpi-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+        top: 14px;
+        right: 14px;
+      }
+    }
+
+    .main-card {
+      background: #fff;
+      border: 1px solid var(--sup-border);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(16,24,40,.04);
+      padding: 24px;
+    }
+
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .filter-input {
+      flex: 1 1 260px;
+      height: 40px;
+      border: 1px solid var(--sup-border);
+      border-radius: 10px;
+      padding: 0 14px;
+      font-size: 13px;
+      color: #374151;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .filter-input:focus,
+    .filter-select:focus {
+      border-color: #6ee7b7;
+      box-shadow: 0 0 0 3px rgba(5,150,105,.1);
+    }
+    .filter-select {
+      flex: 0 1 200px;
+      height: 40px;
+      border: 1px solid var(--sup-border);
+      border-radius: 10px;
+      padding: 0 14px;
+      font-size: 13px;
+      color: #374151;
+      outline: none;
+      transition: border-color .15s;
+      background: #fff;
+    }
+    .btn-search {
+      height: 40px;
+      padding: 0 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-search.primary { background: var(--sup-green); color: #fff; }
+    .btn-search.primary:hover { background: var(--sup-green-dark); }
+    .btn-search.reset {
+      background: transparent;
+      color: #374151;
+      border: 1px solid var(--sup-border);
+      text-decoration: none;
+    }
+    .btn-search.reset:hover { background: #f9fafb; color: #111827; }
+
+    .sup-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+    .sup-table th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sup-muted);
+      background: #f9fafb;
+      border-bottom: 1px solid var(--sup-border);
+      white-space: nowrap;
+    }
+    .sup-table td {
+      padding: 13px 14px;
+      font-size: 13px;
+      color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .sup-table tr:last-child td { border-bottom: none; }
+    .sup-table tr:hover td { background: #fafafa; }
+    .sup-name { font-weight: 600; color: #111827; }
+    .amount-receivable { color: var(--sup-green); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .amount-payable { color: #dc2626; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .amount-zero { color: #d1d5db; }
+    .payable-cell {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .receivable-cell {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .type-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .type-badge.customer { background: var(--sup-blue-bg); color: var(--sup-blue); }
+    .type-badge.supplier { background: var(--sup-amber-bg); color: var(--sup-amber); }
+
+    .pagination .page-link { color: var(--sup-green); border-color: var(--sup-border); font-size: 13px; }
+    .pagination .page-item.active .page-link { background: var(--sup-green); border-color: var(--sup-green); color: #fff; }
+    .pagination .page-item.disabled .page-link { color: #d1d5db; }
+
+    .empty-row td { color: var(--sup-muted); font-size: 13px; padding: 40px 0; text-align: center; }
+
+    .btn-outline-success:hover,
+    .btn-outline-success:active {
+      color: #fff !important;
+    }
+
+    @media (max-width: 767px) {
+      .filter-row { flex-direction: column; align-items: stretch; }
+      .filter-input, .filter-select { width: 100%; flex-basis: auto; }
+    }
+  </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content py-8">
+  <div class="container-fluid">
+
+    <div class="row g-3 mb-4 kpi-row">
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card">
+          <span class="kpi-icon"><i class="ti ti-credit-card"></i></span>
+          <div class="kpi-label">Tổng cho nợ</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.totalReceivable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-customer">
+          <span class="kpi-icon"><i class="ti ti-user"></i></span>
+          <div class="kpi-label">Cho nợ khách hàng</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.customerReceivable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+          <div class="kpi-sub">Từ hóa đơn bán hàng còn nợ</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-supplier">
+          <span class="kpi-icon"><i class="ti ti-truck"></i></span>
+          <div class="kpi-label">Cho nợ nhà cung cấp</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.supplierReceivable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+          <div class="kpi-sub">Từ phiếu trả hàng NCC</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-payable">
+          <span class="kpi-icon"><i class="ti ti-arrow-down-right"></i></span>
+          <div class="kpi-label">Tổng nợ</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.totalPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-payable kpi-customer">
+          <span class="kpi-icon"><i class="ti ti-user"></i></span>
+          <div class="kpi-label">Nợ khách hàng</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.customerPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+          <div class="kpi-sub">Từ phiếu trả hàng KH</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card kpi-payable kpi-supplier">
+          <span class="kpi-icon"><i class="ti ti-truck"></i></span>
+          <div class="kpi-label">Nợ nhà cung cấp</div>
+          <div class="kpi-number"
+               th:text="${#numbers.formatDecimal(summary.supplierPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+          <div class="kpi-sub">Từ phiếu nhập còn nợ</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-card">
+      <form th:action="${basePath}" method="get">
+        <input type="hidden" name="page" value="0">
+        <input type="hidden" name="size" th:value="${pageSize}">
+        <div class="filter-row">
+          <input type="text"
+                 class="filter-input"
+                 name="search"
+                 th:value="${search}"
+                 placeholder="Tìm theo tên đối tượng">
+          <select class="filter-select" name="partyType">
+            <option value="">Tất cả đối tượng</option>
+            <option th:each="entry : ${partyTypeLabels}"
+                    th:value="${entry.key}"
+                    th:text="${entry.value}"
+                    th:selected="${filterPartyType == entry.key}">
+            </option>
+          </select>
+          <button type="submit" class="btn-search primary">
+            <i class="ti ti-search"></i>Tìm kiếm
+          </button>
+          <a th:href="${basePath}" class="btn-search reset">
+            <i class="ti ti-refresh"></i>Đặt lại
+          </a>
+        </div>
+      </form>
+
+      <div class="table-responsive">
+        <table class="sup-table">
+          <thead>
+            <tr>
+              <th>Tên</th>
+              <th>Đối tượng</th>
+              <th>Nợ</th>
+              <th>Cho nợ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="item : ${debts}">
+              <td class="sup-name" th:text="${item.name}">Nguyễn Văn A</td>
+              <td>
+                <span class="type-badge"
+                      th:classappend="${item.partyType == 'CUSTOMER' ? ' customer' : ' supplier'}"
+                      th:text="${item.partyTypeDisplay}">Khách hàng</span>
+              </td>
+              <td>
+                <div th:if="${item.payableAmount != null && item.payableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                     class="payable-cell">
+                  <span class="amount-payable"
+                        th:text="${#numbers.formatDecimal(item.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>
+                  <a class="btn btn-sm btn-outline-danger"
+                     th:href="${basePath + '/payable/' + item.partyType + '/' + item.entityId}"
+                     title="Chi tiết nợ">
+                    <i class="ti ti-eye"></i>
+                  </a>
+                </div>
+                <span th:unless="${item.payableAmount != null && item.payableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                      class="amount-zero">—</span>
+              </td>
+              <td>
+                <div th:if="${item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                     class="receivable-cell">
+                  <span class="amount-receivable"
+                        th:text="${#numbers.formatDecimal(item.receivableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>
+                  <a class="btn btn-sm btn-outline-success"
+                     th:href="${basePath + '/receivable/' + item.partyType + '/' + item.entityId}"
+                     title="Chi tiết cho nợ">
+                    <i class="ti ti-eye"></i>
+                  </a>
+                </div>
+                <span th:unless="${item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                      class="amount-zero">—</span>
+              </td>
+            </tr>
+
+            <tr th:if="${#lists.isEmpty(debts)}" class="empty-row">
+              <td colspan="4">Không có công nợ nào phù hợp.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
+           th:if="${totalItems > 0}">
+        <div class="text-secondary" style="font-size:13px;">
+          Hiển thị
+          <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + debts.size()}">10</span>
+          trong tổng số <span th:text="${totalItems}" class="fw-semibold">0</span> đối tượng
+        </div>
+        <nav th:if="${totalPages > 1}">
+          <ul class="pagination mb-0">
+            <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
+              <a class="page-link"
+                 th:href="@{${basePath}(search=${search}, partyType=${filterPartyType}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
+            </li>
+            <li class="page-item"
+                th:each="p : ${#numbers.sequence(0, totalPages - 1)}"
+                th:classappend="${p == currentPage} ? ' active'">
+              <a class="page-link"
+                 th:text="${p + 1}"
+                 th:href="@{${basePath}(search=${search}, partyType=${filterPartyType}, page=${p}, size=${pageSize})}">1</a>
+            </li>
+            <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
+              <a class="page-link"
+                 th:href="@{${basePath}(search=${search}, partyType=${filterPartyType}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+
+  </div>
+</main>
+</body>
+</html>

@@ -323,7 +323,7 @@ public class InvoiceService {
     }
 
     @Transactional
-    public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId) {
+    public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId, boolean allowDebt) {
         if (request.getDetails() == null || request.getDetails().isEmpty()) {
             throw new IllegalArgumentException("Hóa đơn phải có ít nhất một sản phẩm");
         }
@@ -394,6 +394,9 @@ public class InvoiceService {
         }
 
         BigDecimal debt = total.subtract(paid);
+        if (debt.compareTo(BigDecimal.ZERO) > 0 && !allowDebt) {
+            throw new IllegalArgumentException("Phải thu đủ tiền, không được ghi nợ");
+        }
         if (debt.compareTo(BigDecimal.ZERO) > 0 && customer == null) {
             throw new IllegalArgumentException("Khách lẻ phải thanh toán đủ; chọn khách hàng để ghi nợ");
         }
@@ -789,17 +792,25 @@ public class InvoiceService {
                         (a, b) -> a,
                         LinkedHashMap::new));
 
+        String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
+        String taxCode = isStatus(statusName, STATUS_SIGNED)
+                ? financialsettingRepository.findFirstByOrderByIdAsc()
+                        .map(setting -> trimToNull(setting.getTaxCode()))
+                        .orElse(null)
+                : null;
+
         return new InvoiceDetailPageResponse(
                 invoice.getId(),
                 invoiceCode(invoice),
                 invoice.getInvoicePattern(),
+                taxCode,
                 invoice.getDate(),
                 formatDate(invoice.getDate()),
                 customer != null ? customer.getName() : "Khách lẻ",
                 customer != null ? customer.getPhoneNumber() : null,
                 invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
                 invoiceTypeDisplay(invoice.getInvoiceType()),
-                invoice.getStatus() != null ? invoice.getStatus() : "Không rõ",
+                statusName,
                 statusCssClass(invoice.getStatus()),
                 Boolean.TRUE.equals(invoice.getPrescriptionRequired()),
                 invoice.getPrescriptionCode(),
