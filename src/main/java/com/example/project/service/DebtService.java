@@ -30,6 +30,7 @@ import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -228,7 +229,7 @@ public class DebtService {
                     return new ReceivableLineResponse(
                             ret.getId(),
                             ret.getReturnCode(),
-                            formatInstant(ret.getReturnDate()),
+                            formatVnWallClockInstant(ret.getReturnDate()),
                             nullToZero(ret.getOffsetDebtAmount()),
                             "Phiếu nhập: " + purchaseCode);
                 })
@@ -270,7 +271,7 @@ public class DebtService {
                 .map(ret -> new PayableLineResponse(
                         ret.getId(),
                         ret.getReturnCode(),
-                        formatInstant(ret.getReturnDate()),
+                        formatVnWallClockInstant(ret.getReturnDate()),
                         cashRefundAmount(ret),
                         customerReturnDetail(ret)))
                 .toList();
@@ -542,9 +543,20 @@ public class DebtService {
         if (dateTime == null) {
             return "";
         }
-        return dateTime.atZone(VN_ZONE).format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        return dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 
+    /** Return dates are stored via nowVn() — VN wall-clock digits on a UTC-labelled Instant. */
+    private String formatVnWallClockInstant(Instant instant) {
+        if (instant == null) {
+            return "";
+        }
+        return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+                .withZone(ZoneOffset.UTC)
+                .format(instant);
+    }
+
+    /** Purchase invoice dates are genuine UTC instants (Instant.now()). */
     private String formatInstant(Instant instant) {
         if (instant == null) {
             return "";
