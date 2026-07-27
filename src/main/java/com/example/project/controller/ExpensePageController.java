@@ -200,7 +200,8 @@ public class ExpensePageController {
                             RedirectAttributes redirectAttributes) {
         String basePath = resolveBasePath(request);
         try {
-            expenseService.markPaid(expenseId, cashPortion, bankingPortion);
+            expenseService.markPaid(expenseId, cashPortion, bankingPortion,
+                    currentUserContext.getCurrentAccountId());
             redirectAttributes.addFlashAttribute("successMessage", "Đã ghi nhận thanh toán");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());

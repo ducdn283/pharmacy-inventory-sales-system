@@ -15,6 +15,7 @@ import com.example.project.entity.Expense;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
+import com.example.project.entity.Shiftreport;
 import com.example.project.entity.Supplier;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.ExpenseRepository;
@@ -48,16 +49,26 @@ import java.util.stream.Collectors;
  * <em>customer</em> return: {@code ReturnStatus}'s own javadoc has always said "the actual cash
  * payout lives on a separate Expense, handled in a later phase" — this is that phase.
  *
- * <p><strong>Customer vs. supplier returns.</strong> {@code Return.returnType} does <em>not</em>
- * say which side a slip belongs to — since 2026-07-26 it is derived from the amounts and holds a
- * payment method ({@code CASH}/{@code BANKING}/{@code MIXED}/{@code DEBT}). The discriminator used
- * consistently across {@code ReturnService}, {@code ApprovalService}, {@code IncomeService} and
+ * <p><strong>Customer vs. supplier returns.</strong> The discriminator used consistently across
+ * {@code ReturnService}, {@code ApprovalService}, {@code IncomeService} and
  * {@code ShiftreportService} is the FK: {@code invoiceID != null} is a customer return,
  * {@code purchaseID != null && invoiceID == null} is a supplier one. Expense only ever touches the
  * former (the pharmacy pays the customer back); the latter is money coming <em>in</em> and belongs
  * to {@code IncomeService.listSupplierReturns()}, the exact mirror of
  * {@link #listCustomerReturns()}. Returning goods to a supplier costs no cash, so it is out of
  * scope here by design.</p>
+ *
+ * <p><em>{@code Return.returnType} changed meaning on 2026-07-27</em> and now also answers this
+ * question — it holds {@code CUSTOMER}/{@code SUPPLIER} again, no longer the payment method
+ * ({@code CASH}/{@code BANKING}/{@code MIXED}/{@code DEBT}) it briefly derived from the amounts.
+ * The FK check above is kept because it is what every other service uses; the two agree.</p>
+ *
+ * <p><strong>A return slip computes, it does not pay.</strong> {@code b81e80b} dropped
+ * {@code refundCash}/{@code refundBanking}/{@code refundCredit} from the table, leaving only
+ * {@code totalRefund}. Deciding how the money physically leaves — and recording that it did — is
+ * now entirely this module's job, which is what makes {@link #listCustomerReturns()} the single
+ * gateway to paying a customer back. {@code ShiftreportService} relies on the same thing: since
+ * those columns went away, an Expense slip is its <em>only</em> source of cash-out for a shift.</p>
  *
  * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#OPERATIONAL} slip can point at a
  * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
@@ -67,6 +78,12 @@ import java.util.stream.Collectors;
  * stores the invoice's status in the same transaction. Cancelling an already-approved slip reverses
  * it. Money is only ever considered disbursed once the slip is approved — see
  * {@link #disbursedAmount}.</p>
+ *
+ * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
+ * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. As of
+ * {@code 451b4d5}, {@code ShiftreportService.computeTransactionTotals()} reads those slips and a
+ * shift's whole {@code totalCashOut} is the sum of their {@code paidByCash}, so this stamp is now
+ * load-bearing: a slip left unstamped is cash the register can never account for.</p>
  *
  * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
  * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
@@ -79,15 +96,18 @@ public class ExpenseService {
     private final AccountRepository accountRepository;
     private final ReturnRepository returnRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final ShiftreportService shiftreportService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
                           ReturnRepository returnRepository,
-                          PurchaseinvoiceService purchaseinvoiceService) {
+                          PurchaseinvoiceService purchaseinvoiceService,
+                          ShiftreportService shiftreportService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.shiftreportService = shiftreportService;
     }
 
     // ------------------------------------------------------------------ generated-REST passthrough
@@ -411,9 +431,13 @@ public class ExpenseService {
      * {@code cashPortion}/{@code bankingPortion} are the amount being paid <em>now</em> (not the
      * cumulative total) — they're added to whatever was already paid. Moves to
      * {@link ExpenseStatus#COMPLETED} once {@code paid >= amount}.
+     *
+     * <p>{@code currentAccountId} exists only so a slip approved while no shift was open can still
+     * pick one up here — this is where the cash physically moves for a part-paid slip.</p>
      */
     @Transactional
-    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion) {
+    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion,
+                          Integer currentAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
 
@@ -448,6 +472,7 @@ public class ExpenseService {
         // Only the increment: the slip was already approved, so everything before this was pushed
         // onto the invoice at approval time.
         settlePurchaseInvoice(expense, portion);
+        attachOpenShift(expense, currentAccountId);
 
         expenseRepository.save(expense);
     }
@@ -508,6 +533,7 @@ public class ExpenseService {
         Customer customer = expense.getCustomerID();
         Purchaseinvoice linkedPurchase = expense.getPurchaseID();
         Supplier supplier = expense.getSupplierID();
+        Shiftreport shift = expense.getShiftReportID();
 
         return new ExpenseDetailResponse(
                 expense.getId(),
@@ -531,7 +557,9 @@ public class ExpenseService {
                 customer != null ? customer.getName() : null,
                 linkedPurchase != null ? linkedPurchase.getId() : null,
                 linkedPurchase != null ? linkedPurchase.getPurchaseInvoiceCode() : null,
-                supplier != null ? supplier.getName() : null
+                supplier != null ? supplier.getName() : null,
+                shift != null ? shift.getId() : null,
+                shift != null ? shift.getShiftReportCode() : null
         );
     }
 
@@ -555,6 +583,31 @@ public class ExpenseService {
                 ? ExpenseStatus.COMPLETED
                 : ExpenseStatus.AWAITING_PAYMENT);
         settlePurchaseInvoice(expense, paid);
+        attachOpenShift(expense, approver.getId());
+    }
+
+    /**
+     * Stamps the slip with the actor's currently open shift, so the cash that just left can be
+     * reconciled against the register. Keeps the existing stamp if there is one — a slip belongs to
+     * the shift that authorised it, not to whichever shift happens to be open when it is topped up
+     * later.
+     *
+     * <p><strong>Deliberately {@code findDraftShift}, never {@code ensureOpenShiftFor}.</strong>
+     * Creating a shift from this screen would be actively harmful: Expense is an Owner + Accountant
+     * screen, {@code ensureOpenShiftFor} does not check the role, and an Accountant is never meant
+     * to have a shift. Give one to an Accountant and
+     * {@code ShiftreportController.logoutGuard()} — which also does not check the role — would
+     * redirect every later logout to {@code /accountant/shift-reports/{id}}, a route that does not
+     * exist (shift screens are Owner + Pharmacist only). They would be unable to log out at all.
+     * Attaching only an already-open shift makes the Accountant case fall out as {@code null} with
+     * no role check anywhere, and matches the rule that shifts open on the first counter sale — an
+     * expense is paid out of a drawer that is already open, it does not open one.</p>
+     */
+    private void attachOpenShift(Expense expense, Integer accountId) {
+        if (expense.getShiftReportID() != null || accountId == null) {
+            return;
+        }
+        shiftreportService.findDraftShift(accountId).ifPresent(expense::setShiftReportID);
     }
 
     private String resolveExpenseType(String rawType) {
@@ -619,16 +672,26 @@ public class ExpenseService {
     }
 
     /**
-     * The part of a return that is real money leaving the register. Deliberately <em>not</em>
-     * {@code totalRefund}: {@code refundCredit}/{@code offsetDebtAmount} was already settled by
-     * reducing the original invoice's debt when the return was approved, so paying it out again
-     * would refund the customer twice. Same helper (and same reasoning) as
-     * {@code IncomeService.cashRefundAmount}.
+     * The part of a return that is real money leaving the register: what the pharmacy owes, less
+     * anything already settled by writing down the original invoice's debt (paying that out again
+     * would refund the customer twice).
+     *
+     * <p>Confirmed 2026-07-27 — this replaces {@code 17e606f}'s "temporary repair". It used to read
+     * {@code refundCash + refundBanking}, but {@code b81e80b} dropped those columns along with
+     * {@code refundCredit}: a return slip now only <em>computes</em> the obligation
+     * ({@code totalRefund}), and how the money physically leaves is this module's business, not the
+     * return's. {@code totalRefund − offsetDebtAmount} is the faithful translation of the old
+     * expression, since the two used to be the two halves of {@code totalRefund}.</p>
+     *
+     * <p>In practice {@code offsetDebtAmount} is always zero on a customer return —
+     * {@code ReturnService.assertReturnable} makes the customer clear the invoice's debt before
+     * returning anything, so there is nothing left to offset. The subtraction is kept because the
+     * column still exists and nothing enforces that zero.</p>
      */
     private BigDecimal cashRefundAmount(Return ret) {
-        // TẠM: b81e80b bỏ refundCash/refundBanking khỏi bảng `return` → không compile
-        // được. Giữ nguyên ý nghĩa cũ "trừ phần đã cấn trừ nợ". Cần xác nhận lại.
-        return nullToZero(ret.getTotalRefund()).subtract(nullToZero(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO);
+        return nullToZero(ret.getTotalRefund())
+                .subtract(nullToZero(ret.getOffsetDebtAmount()))
+                .max(BigDecimal.ZERO);
     }
 
     /**

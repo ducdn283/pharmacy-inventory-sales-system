@@ -162,6 +162,12 @@
                             <div th:text="${detail.reason}">Tiền điện tháng 7</div>
                         </div>
 
+                        <!-- Không có ca là bình thường: kế toán không bao giờ có ca làm việc. -->
+                        <div class="info-row" th:if="${detail.shiftReportId != null}">
+                            <div class="info-label">Ca làm việc</div>
+                            <div th:text="${detail.shiftReportCode}">BC-000001</div>
+                        </div>
+
                         <div class="info-row" th:if="${detail.purchaseId != null}">
                             <div class="info-label">Phiếu nhập</div>
                             <div>
