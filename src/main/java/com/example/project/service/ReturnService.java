@@ -39,8 +39,13 @@ import java.util.stream.Collectors;
 @Service
 public class ReturnService {
 
-    /** A customer return is allowed only within this many days of the original invoice date. */
-    private static final int RETURN_WINDOW_DAYS = 3;
+    /**
+     * "No return window at all" — the meaning the BA gave {@code Financialsetting.returnPolicyMaxDays}
+     * when it is left blank ("int, DEFAULT NULL (không giới hạn nếu để trống)", Logic_Thu_Chi sheet 11,
+     * 2026-07-27). The policy lives entirely in the financial setting, which the Owner edits on the
+     * financial-settings screen — there is no hard-coded fallback here on purpose.
+     */
+    private static final int RETURN_WINDOW_UNLIMITED = -1;
 
     // Invoice.date is stored as VN wall-clock LocalDateTime (see InvoiceService) — the adjustment
     // invoice's own date must use the same convention, not a real UTC Instant.
@@ -96,7 +101,7 @@ public class ReturnService {
     // creates a Batch — without calling into InvoiceService.
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
-    // Read-only: current tax revenue group (Nhóm 2/3) drives how the refund VAT is split.
+    // Read-only: the pharmacy's return policy (returnPolicyMaxDays) — see getReturnWindowDays().
     private final FinancialsettingRepository financialsettingRepository;
     // Lazily opens/reuses the acting account's shift the moment a return is actually approved
     // (becomes Nợ) — mirrors the same hook on the Invoice side (see ShiftreportService).
@@ -188,9 +193,11 @@ public class ReturnService {
     @Transactional(readOnly = true)
     public List<ReturnableInvoiceResponse> listReturnableInvoices(String keyword) {
         String normalizedKeyword = normalize(keyword);
+        // Resolved once, not per invoice — the window is a single setting row, not per-invoice data.
+        int windowDays = getReturnWindowDays();
 
         return invoiceRepository.findAll().stream()
-                .filter(this::isReturnable)
+                .filter(invoice -> isReturnable(invoice, windowDays))
                 .filter(invoice -> matchesInvoiceKeyword(invoice, normalizedKeyword))
                 .sorted(Comparator.comparing(Invoice::getDate, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(invoice -> new ReturnableInvoiceResponse(
@@ -325,8 +332,21 @@ public class ReturnService {
         // bảng `return` — phiếu trả chỉ còn lưu tổng phải hoàn (totalRefund).
         ret.setTotalRefund(totalRefund);
         ret.setTotalVATRefund(totalVATRefund);
-        // luôn hoàn 100% (chưa áp returnProductOnInvoiceValueRate). Lưu tỷ lệ thực đã áp
-        // để báo cáo/kế toán biết chính xác % của từng phiếu — khi bật chính sách <100% chỉ đổi giá trị này.
+        // ⚠️ TODO — luôn hoàn 100%, CHƯA áp Financialsetting.returnProductOnInvoiceValueRate (local 80%).
+        // Rà lại 2026-07-27 với bộ tài liệu BA mới (Huong_dan_tinh_thue sheet 12 §5A + sheet 09 §4,
+        // Logic_Thu_Chi sheet 07/10): phần lớn thắc mắc đã có lời giải, ghi lại để khỏi phân tích lại:
+        //   • Phần khách KHÔNG được hoàn VẪN là doanh thu chịu thuế bình thường ⇒ không cần Income/dòng
+        //     riêng nào cho nó, không có tiền "biến mất khỏi sổ" như từng lo.
+        //   • HĐ thay thế mang giá trị = phần khách thực giữ (ví dụ BA: mua 500k, hoàn 400k ⇒ HĐ 100k)
+        //     — đúng bằng `gốc − refund` mà createReplacementInvoice đang tính, KHÔNG phải sửa.
+        //   • HĐ điều chỉnh ghi âm đúng phần chênh lệch (= số tiền hoàn) — cũng đã đúng.
+        //   • Số tiền hoàn và GIÁ VỐN là 2 luồng độc lập: batch mới luôn theo giá vốn gốc, COGS đảo đủ
+        //     100% theo số lượng vật lý, KHÔNG nhân tỷ lệ hoàn (tài liệu cảnh báo riêng bẫy này).
+        // Còn vướng đúng 2 chỗ nên chưa bật: (1) chưa có ô nhập % theo từng phiếu (tài liệu nói nhà thuốc
+        // tự chỉnh mỗi lần, appliedRefundRate là bắt buộc chứ không phải tùy chọn); (2) trả HẾT hàng mà chỉ
+        // hoàn 80% thì HĐ thay thế phải mang 20% giữ lại, nhưng lúc đó không còn dòng hàng nào —
+        // createReplacementInvoice hiện return sớm, cần BA chốt dòng chi tiết ghi thế nào.
+        // Chi tiết đầy đủ: phan-tich-tai-lieu/quyet-dinh-va-mau-thuan.md (TREO #2).
         ret.setAppliedRefundRate(new BigDecimal("100.00"));
         // Khách phải trả hết nợ hóa đơn mới được trả hàng (assertReturnable) → không còn gì để cấn trừ.
         ret.setOffsetDebtAmount(BigDecimal.ZERO);
@@ -760,6 +780,11 @@ public class ReturnService {
                 totalQuantity,
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
+                details.stream()
+                        .map(Returndetail::getPreTaxAmount)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add),
+                ret.getTotalVATRefund(),
                 items);
     }
 
@@ -801,6 +826,9 @@ public class ReturnService {
                 detail.getReturnQty(),
                 detail.getUnitSellPrice(),
                 detail.getLineRefund(),
+                detail.getVatRate(),
+                detail.getPreTaxAmount(),
+                detail.getVatAmount(),
                 restockable,
                 restockable ? "Nhập lại kho" : "Không nhập lại");
     }
@@ -821,6 +849,7 @@ public class ReturnService {
                 already,
                 line.getQuantity() - already,
                 line.getUnitSellPrice(),
+                line.getVatRate(),
                 isRestockableUnit(line));
     }
 
@@ -936,7 +965,7 @@ public class ReturnService {
                         && invoice.getId().equals(candidate.getOriginalInvoiceID().getId()));
     }
 
-    private boolean isReturnable(Invoice invoice) {
+    private boolean isReturnable(Invoice invoice, int windowDays) {
         if (!isNormalInvoice(invoice)) {
             return false;
         }
@@ -955,13 +984,23 @@ public class ReturnService {
         if (hasOutstandingDebt(invoice)) {
             return false;
         }
-        return withinReturnWindow(effectiveSaleDate(invoice));
+        return withinReturnWindow(effectiveSaleDate(invoice), windowDays);
     }
 
     /**
      * BA 2026-07-26: an invoice the customer has not paid off cannot be returned at all. Settling the
      * debt first keeps the return screen out of the money entirely — there is nothing left to cấn trừ,
      * so the refund is a plain payable handled by the Expense module.
+     *
+     * <p><strong>Known conflict with the BA docs, deferred on purpose (2026-07-27).</strong> The
+     * documents issued that afternoon (PISMS_Xu_ly_Cong_no sheet "Công nợ Khách hàng" ca 3/4/5;
+     * Huong_dan_tinh_thue sheet 04, "netting" section) require the OPPOSITE: a return must be allowed
+     * while the invoice is still unpaid, offsetting {@code MIN(totalRefund, debtAmount)} against the
+     * debt and paying out only the remainder — *"phần mềm KHÔNG cần bắt người dùng thanh toán xong rồi
+     * mới xử lý trả hàng"*. {@code Financialsetting.autoOffsetDebtOnRefund} (default true) exists for
+     * exactly that and is deliberately NOT read here yet. Owner's call: keep the simple gate for now,
+     * do netting in a later phase. Dropping this gate and wiring the setting must happen together —
+     * see phan-tich-tai-lieu/quyet-dinh-va-mau-thuan.md (TREO #1) for the full spec.</p>
      */
     private boolean hasOutstandingDebt(Invoice invoice) {
         return nz(invoice.getDebtAmount()).signum() > 0;
@@ -988,22 +1027,49 @@ public class ReturnService {
             throw new IllegalArgumentException(
                     "Hóa đơn này khách còn nợ — khách phải thanh toán hết mới được trả hàng");
         }
-        if (!withinReturnWindow(effectiveSaleDate(invoice))) {
+        int windowDays = getReturnWindowDays();
+        if (!withinReturnWindow(effectiveSaleDate(invoice), windowDays)) {
             throw new IllegalArgumentException("Quá thời hạn trả hàng (chỉ trong "
-                    + RETURN_WINDOW_DAYS + " ngày kể từ ngày lập hóa đơn gốc)");
+                    + windowDays + " ngày kể từ ngày lập hóa đơn gốc)");
         }
     }
 
-    private boolean withinReturnWindow(LocalDateTime invoiceDate) {
+    /**
+     * The configured return window, from {@code Financialsetting.returnPolicyMaxDays} — the policy the
+     * pharmacy sets on the financial-settings screen, not a constant. Blank (NULL, or no setting row at
+     * all) means NO limit ({@link #RETURN_WINDOW_UNLIMITED}), per the BA's definition of the column; a
+     * negative stored value is read the same way. {@code 0} is a real value and means "same day only".
+     *
+     * <p>Public so the create screen can state the real policy instead of a hard-coded number.</p>
+     */
+    @Transactional(readOnly = true)
+    public int getReturnWindowDays() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getReturnPolicyMaxDays)
+                .filter(days -> days >= 0)
+                .orElse(RETURN_WINDOW_UNLIMITED);
+    }
+
+    /** The window as the create screen phrases it: "trong 3 ngày" / "không giới hạn thời gian". */
+    @Transactional(readOnly = true)
+    public String getReturnWindowLabel() {
+        int days = getReturnWindowDays();
+        return days == RETURN_WINDOW_UNLIMITED ? "không giới hạn thời gian" : "trong " + days + " ngày";
+    }
+
+    private boolean withinReturnWindow(LocalDateTime invoiceDate, int windowDays) {
         if (invoiceDate == null) {
             return false;
         }
-        LocalDate cutoff = LocalDate.now(VN_ZONE).minusDays(RETURN_WINDOW_DAYS);
+        if (windowDays == RETURN_WINDOW_UNLIMITED) {
+            return true;
+        }
+        LocalDate cutoff = LocalDate.now(VN_ZONE).minusDays(windowDays);
         return !toLocalDate(invoiceDate).isBefore(cutoff);
     }
 
     /**
-     * The date the 3-day return window is measured from: the ROOT invoice's date, not this one's own —
+     * The date the return window is measured from: the ROOT invoice's date, not this one's own —
      * a replacement invoice is reissued at approval time, but the customer's actual purchase (and the
      * clock the window runs on) is whenever the root sale happened.
      */

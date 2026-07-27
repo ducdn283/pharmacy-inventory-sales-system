@@ -86,6 +86,8 @@ public class ReturnController {
         model.addAttribute("form", new ReturnCreateRequest());
         model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+        model.addAttribute("returnWindowDays", returnService.getReturnWindowDays());
+        model.addAttribute("returnWindowLabel", returnService.getReturnWindowLabel());
         model.addAttribute("basePath", resolveBasePath(request));
         return "return/create";
     }
@@ -127,6 +129,8 @@ public class ReturnController {
             model.addAttribute("form", form);
             model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
             model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+            model.addAttribute("returnWindowDays", returnService.getReturnWindowDays());
+        model.addAttribute("returnWindowLabel", returnService.getReturnWindowLabel());
             model.addAttribute("basePath", basePath);
             return "return/create";
         }

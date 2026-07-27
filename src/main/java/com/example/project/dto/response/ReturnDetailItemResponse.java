@@ -22,6 +22,13 @@ public class ReturnDetailItemResponse {
     private BigDecimal unitSellPrice;
     private BigDecimal lineRefund;
 
+    // Thuế GTGT giảm trừ của dòng, tách TỪ TRONG tiền hoàn theo đúng thuế suất của dòng hóa đơn gốc
+    // (Huong_dan_tinh_thue sheet 04: net = tiền hoàn ÷ (1+t), thuế = tiền hoàn − net). Phiếu trả không
+    // chi tiền thật, nhưng phải kê đủ 3 số này để phiếu chi/kế toán lấy chi tiết mà giảm trừ đúng kỳ.
+    private BigDecimal vatRate;
+    private BigDecimal preTaxAmount;
+    private BigDecimal vatAmount;
+
     private boolean restockable;
     private String restockableDisplay;
 }

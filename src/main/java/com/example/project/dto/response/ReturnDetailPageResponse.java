@@ -40,5 +40,10 @@ public class ReturnDetailPageResponse {
     private BigDecimal totalRefund;
     private BigDecimal offsetDebtAmount;
 
+    /** Doanh thu (chưa thuế) được giảm trừ = Σ preTaxAmount của các dòng. */
+    private BigDecimal totalPreTaxRefund;
+    /** Thuế GTGT đầu ra được giảm trừ trong kỳ TRẢ HÀNG (không hồi tố kỳ bán gốc) = Return.totalVATRefund. */
+    private BigDecimal totalVATRefund;
+
     private List<ReturnDetailItemResponse> items;
 }
