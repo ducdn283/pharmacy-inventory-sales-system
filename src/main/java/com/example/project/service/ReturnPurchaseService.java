@@ -626,7 +626,7 @@ public class ReturnPurchaseService {
     }
 
     /**
-     * BA 2026-07-26: a purchase the pharmacy has not paid off cannot be returned. Settling first keeps
+     * A purchase the pharmacy has not paid off cannot be returned. Settling first keeps
      * the return screen out of the money entirely — the supplier then simply owes back the full refund
      * ({@code offsetDebtAmount}), which the Income module collects.
      */

@@ -543,7 +543,7 @@ public class ReturnService {
 
     /**
      * Emits a REPLACEMENT invoice for a return against an UNSIGNED original (TH1 — HĐ chưa ký, chưa gửi
-     * thuế). BA 2026-07-25: the original is invalidated outright ("hóa đơn gốc đã vô hiệu hoàn toàn"), so
+     * thuế). The original is invalidated outright ("hóa đơn gốc đã vô hiệu hoàn toàn"), so
      * — unlike the adjustment path — this clones the original's FULL remaining state (every still-
      * unreturned line, not just a negative delta) into a brand-new invoice that becomes the current, live
      * version of the sale. The original's debt is wiped to 0 and the (refund-reduced) remainder moves onto
@@ -826,7 +826,7 @@ public class ReturnService {
 
     /**
      * Restockable only when the sold unit is the manufacturer's default packaging unit
-     * ({@code productunit.isDefault}) — BA 2026-07-12. Loose units (isDefault=false) cannot go back to
+     * ({@code productunit.isDefault}). Loose units (isDefault=false) cannot go back to
      * stock; combo / medical-device "máy" / prescription invoices are already blocked from return
      * upstream. This is hard-coded (no manual checkbox).
      */
