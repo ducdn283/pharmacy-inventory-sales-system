@@ -54,7 +54,13 @@
 
         .party-field.show,
         .reference-field.show {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+
+        .party-search-wrap:focus-within {
+            z-index: 40;
         }
 
         .reference-field {
@@ -77,6 +83,35 @@
         .money-input-wrap .form-control {
             width: 100%;
             padding-right: 22px;
+        }
+
+        .money-input-wrap .form-control.is-invalid {
+            background-image: none;
+            padding-right: 22px;
+        }
+
+        .split-payment-error {
+            display: none;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            padding: 0.625rem 0.75rem;
+            border-radius: 10px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+
+        .split-payment-error.is-visible {
+            display: flex;
+        }
+
+        .split-payment-error i {
+            flex-shrink: 0;
+            margin-top: 1px;
+            font-size: 1rem;
         }
 
         .money-stepper {
@@ -136,6 +171,52 @@
             padding-right: 2.25rem;
         }
 
+        .party-search-input-with-icon {
+            padding-left: 2.25rem;
+        }
+
+        /* Bootstrap is-invalid adds a background icon on the right — hide it here because
+           we already render ti-search (and inline error text below). Keeps icons from stacking. */
+        .party-search-wrap .party-search-input.is-invalid {
+            background-image: none;
+            padding-right: 2.25rem;
+        }
+
+        .party-search-wrap .party-search-input.is-invalid ~ .party-search-leading-icon {
+            color: #dc3545;
+        }
+
+        .party-search-wrap .party-search-input.is-invalid ~ .party-search-icon {
+            color: #dc3545;
+        }
+
+        .party-field .income-inline-error,
+        .reference-field .income-inline-error {
+            margin-top: 0.35rem;
+        }
+
+        #paidAmount.is-invalid {
+            background-image: none;
+        }
+
+        #singlePaidBox .income-inline-error {
+            margin-top: 0.35rem;
+        }
+
+        #reasonInput.is-invalid {
+            background-image: none;
+        }
+
+        .party-search-leading-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #059669;
+            pointer-events: none;
+            font-size: 1.05rem;
+        }
+
         .party-search-icon {
             position: absolute;
             right: 12px;
@@ -156,7 +237,7 @@
             box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
             max-height: 240px;
             overflow-y: auto;
-            z-index: 30;
+            z-index: 50;
             display: none;
         }
 
@@ -165,10 +246,25 @@
         }
 
         .party-search-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             padding: 8px 12px;
             cursor: pointer;
             font-size: 13px;
             border-bottom: 1px solid #f3f4f6;
+        }
+
+        .party-search-item .ti {
+            font-size: 1.05rem;
+            color: #059669;
+            flex-shrink: 0;
+        }
+
+        .party-search-item span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .party-search-item:last-child {
@@ -299,11 +395,15 @@
                             </div>
 
                             <div class="col-12 col-md-6 party-field" id="customerField">
-                                <label class="form-label">Khách hàng <span class="text-danger">*</span></label>
+                                <label class="form-label">
+                                    <i class="ti ti-user text-success me-1"></i>
+                                    Khách hàng <span class="text-danger">*</span>
+                                </label>
                                 <div class="party-search-wrap">
+                                    <i class="ti ti-user party-search-leading-icon" id="customerSearchLeadingIcon"></i>
                                     <input type="text"
                                            id="customerSearchInput"
-                                           class="form-control party-search-input"
+                                           class="form-control party-search-input party-search-input-with-icon"
                                            autocomplete="off"
                                            placeholder="Tìm khách hàng theo tên hoặc SĐT">
                                     <i class="ti ti-search party-search-icon"></i>
@@ -428,14 +528,19 @@
 
                             <div class="col-12 col-md-6 party-field" id="manualAmountField">
                                 <label class="form-label">Số tiền thu <span class="text-danger">*</span></label>
-                                <div class="input-group has-validation">
-                                    <input type="number" min="0" step="1" class="form-control"
+                                <div class="money-input-wrap">
+                                    <input type="text" inputmode="numeric" class="form-control"
                                            id="manualAmountInput" placeholder="0"
                                            oninput="handleManualAmountInput(this)">
-                                    <span class="input-group-text">đ</span>
-                                    <div class="invalid-feedback" id="manualAmountError" style="display:none;">
-                                        Vui lòng nhập số tiền thu lớn hơn 0.
+                                    <div class="money-stepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('manualAmountInput', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('manualAmountInput', -1000)"><i class="ti ti-chevron-down"></i></button>
                                     </div>
+                                </div>
+                                <div class="income-inline-error" id="manualAmountError">
+                                    Vui lòng nhập số tiền thu lớn hơn 0.
                                 </div>
                             </div>
 
@@ -485,12 +590,12 @@
                             <label class="form-label">Số tiền thu</label>
                             <input type="text" inputmode="numeric" class="form-control"
                                    id="paidAmount" readonly tabindex="-1">
+                            <div class="income-inline-error" id="paymentAmountError"></div>
                         </div>
 
-                        <div class="form-text text-secondary mb-2" id="customerDebtHint" style="display:none;">
-                            Có thể thu một phần; tối đa bằng số tiền nợ của hóa đơn.
+                        <div class="form-text text-secondary mb-2" id="partialDebtHint" style="display:none;">
+                            Có thể thu một phần; tối đa bằng số tiền nợ của chứng từ liên kết.
                         </div>
-                        <div class="text-danger small mb-2" id="paymentAmountError" style="display:none;"></div>
 
                         <div id="splitPaidBox" style="display:none;">
                             <div class="mb-3">
@@ -518,6 +623,10 @@
                                                 onclick="stepMoney('bankingAmount', -1000)"><i class="ti ti-chevron-down"></i></button>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="split-payment-error" id="splitPaymentAmountError" role="alert">
+                                <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                                <span id="splitPaymentAmountErrorText"></span>
                             </div>
                         </div>
 
@@ -776,16 +885,22 @@
         return valid;
     }
 
+    function isSimpleManualIncomeType(type) {
+        return type === 'OTHER' || type === 'TAX_REFUND' || type === 'SUPPLIER_COMMISSION';
+    }
+
     function requiresManualAmount(type) {
-        return type === 'OTHER' || type === 'EMPLOYEE';
+        return isSimpleManualIncomeType(type) || type === 'EMPLOYEE';
     }
 
     function allowsEditablePaymentAmount(type) {
-        return type === 'CUSTOMER';
+        return type === 'CUSTOMER' || type === 'SUPPLIER';
     }
 
-    function getSelectedInvoiceDebt() {
-        const select = document.getElementById('invoiceIdInput');
+    function getSelectedReferenceDebt() {
+        const type = document.getElementById('incomeTypeInput').value;
+        const selectId = type === 'SUPPLIER' ? 'returnIdInput' : 'invoiceIdInput';
+        const select = document.getElementById(selectId);
         if (!select || !select.value) {
             return 0;
         }
@@ -796,20 +911,51 @@
     function clearPaymentAmountError() {
         const paidAmount = document.getElementById('paidAmount');
         const paymentError = document.getElementById('paymentAmountError');
+        const cashAmount = document.getElementById('cashAmount');
+        const bankingAmount = document.getElementById('bankingAmount');
+        const splitError = document.getElementById('splitPaymentAmountError');
+        const splitErrorText = document.getElementById('splitPaymentAmountErrorText');
         if (paidAmount) {
             paidAmount.classList.remove('is-invalid');
         }
+        if (cashAmount) {
+            cashAmount.classList.remove('is-invalid');
+        }
+        if (bankingAmount) {
+            bankingAmount.classList.remove('is-invalid');
+        }
         if (paymentError) {
-            paymentError.style.display = 'none';
             paymentError.textContent = '';
+            setErrorVisible(paymentError, false);
+        }
+        if (splitErrorText) {
+            splitErrorText.textContent = '';
+        }
+        if (splitError) {
+            setErrorVisible(splitError, false);
         }
     }
 
-    function showPaymentAmountError(message) {
+    function showPaymentAmountError(message, options) {
+        options = options || {};
         clearPaymentAmountError();
+        const text = message || AMOUNT_REQUIRED_MSG;
+        if (currentPayMethod() === 'both') {
+            const splitError = document.getElementById('splitPaymentAmountError');
+            const splitErrorText = document.getElementById('splitPaymentAmountErrorText');
+            if (splitErrorText) {
+                splitErrorText.textContent = text;
+            }
+            if (splitError) {
+                setErrorVisible(splitError, true);
+                if (options.scroll !== false) {
+                    splitError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+            return;
+        }
         const paidAmount = document.getElementById('paidAmount');
         const paymentError = document.getElementById('paymentAmountError');
-        const text = message || AMOUNT_REQUIRED_MSG;
         if (paidAmount) {
             paidAmount.classList.add('is-invalid');
             paidAmount.focus();
@@ -817,21 +963,66 @@
         }
         if (paymentError) {
             paymentError.textContent = text;
-            paymentError.style.display = 'block';
+            setErrorVisible(paymentError, true);
         }
     }
 
-    function validateCustomerDebtAmount(amount) {
-        const type = document.getElementById('incomeTypeInput').value;
-        if (type !== 'CUSTOMER') {
+    function shouldSkipSplitPaymentBlurValidation(activeElement) {
+        if (!activeElement) {
+            return false;
+        }
+        if (activeElement.id === 'cashAmount' || activeElement.id === 'bankingAmount') {
             return true;
         }
-        const maxDebt = getSelectedInvoiceDebt();
+        return !!activeElement.closest('.party-search-wrap, .party-search-results, .party-search-item');
+    }
+
+    function runSplitPaymentBlurValidation(input) {
+        setTimeout(function () {
+            const active = document.activeElement;
+            if (active === input || shouldSkipSplitPaymentBlurValidation(active)) {
+                return;
+            }
+            const type = document.getElementById('incomeTypeInput').value;
+            if (!allowsEditablePaymentAmount(type) || currentPayMethod() !== 'both') {
+                return;
+            }
+            syncPayment();
+            const total = parsePrice(document.getElementById('cashAmount'))
+                + parsePrice(document.getElementById('bankingAmount'));
+            if (total <= 0) {
+                showPaymentAmountError(AMOUNT_REQUIRED_MSG, { scroll: false });
+                return;
+            }
+            validateLinkedDebtAmount(total);
+        }, 0);
+    }
+
+    function linkedDebtOverLimitMessage(type, maxDebt) {
+        const debtLabel = formatMoney(maxDebt);
+        if (currentPayMethod() === 'both') {
+            if (type === 'SUPPLIER') {
+                return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
+            }
+            return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền nợ (' + debtLabel + ').';
+        }
+        if (type === 'SUPPLIER') {
+            return 'Số tiền thu không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
+        }
+        return 'Số tiền thu không được vượt quá số tiền nợ (' + debtLabel + ').';
+    }
+
+    function validateLinkedDebtAmount(amount) {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!allowsEditablePaymentAmount(type)) {
+            return true;
+        }
+        const maxDebt = getSelectedReferenceDebt();
         if (maxDebt <= 0 || amount <= maxDebt) {
             clearPaymentAmountError();
             return true;
         }
-        showPaymentAmountError('Số tiền thu không được vượt quá số tiền nợ (' + formatMoney(maxDebt) + ').');
+        showPaymentAmountError(linkedDebtOverLimitMessage(type, maxDebt));
         return false;
     }
 
@@ -842,7 +1033,8 @@
             manualInput.classList.remove('is-invalid');
         }
         if (manualError) {
-            manualError.style.display = 'none';
+            manualError.textContent = '';
+            setErrorVisible(manualError, false);
         }
         clearPaymentAmountError();
     }
@@ -868,14 +1060,14 @@
             return;
         }
 
-        if (!message && Number(manualInput.value || 0) > 0) {
+        if (!message && parsePrice(manualInput) > 0) {
             return;
         }
 
         manualInput.classList.add('is-invalid');
         if (manualError) {
             manualError.textContent = text;
-            manualError.style.display = 'block';
+            setErrorVisible(manualError, true);
         }
         manualInput.focus();
         manualInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -926,7 +1118,7 @@
         }
         if (serverErrorMessage.indexOf('nội dung thu') >= 0) {
             showReasonError(serverErrorMessage);
-        } else if (serverErrorMessage.indexOf('vượt quá số tiền nợ') >= 0) {
+        } else if (serverErrorMessage.indexOf('vượt quá số tiền') >= 0) {
             showAmountError(serverErrorMessage);
         } else if (window.pmToast) {
             pmToast(serverErrorMessage, 'error');
@@ -974,7 +1166,7 @@
         document.getElementById('amountField').value = normalized > 0 ? normalized : '';
         const manualInput = document.getElementById('manualAmountInput');
         if (manualInput && document.getElementById('manualAmountField').classList.contains('show')) {
-            manualInput.value = normalized > 0 ? normalized : '';
+            manualInput.value = normalized > 0 ? formatPriceDisplay(normalized) : '';
         }
         if (normalized > 0) {
             clearAmountError();
@@ -985,13 +1177,16 @@
     }
 
     function handleManualAmountInput(input) {
-        const value = Number(input.value || 0);
+        const digits = String(input.value).replace(/[^\d]/g, '');
+        const value = digits ? Number(digits) : 0;
+        input.value = value > 0 ? formatPriceDisplay(value) : '';
         setAmount(value);
         if (value > 0) {
             input.classList.remove('is-invalid');
             const manualError = document.getElementById('manualAmountError');
             if (manualError) {
-                manualError.style.display = 'none';
+                manualError.textContent = '';
+                setErrorVisible(manualError, false);
             }
         }
     }
@@ -1019,7 +1214,7 @@
         }
 
         if (value > 0) {
-            validateCustomerDebtAmount(value);
+            validateLinkedDebtAmount(value);
         }
     }
 
@@ -1031,8 +1226,13 @@
             paidAmount.readOnly = !editable;
             paidAmount.tabIndex = editable ? 0 : -1;
         }
-        const debtHint = document.getElementById('customerDebtHint');
+        const debtHint = document.getElementById('partialDebtHint');
         if (debtHint) {
+            if (type === 'CUSTOMER') {
+                debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền nợ của hóa đơn.';
+            } else if (type === 'SUPPLIER') {
+                debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền NCC còn nợ.';
+            }
             debtHint.style.display = editable ? 'block' : 'none';
         }
         if (!editable) {
@@ -1046,6 +1246,7 @@
         document.getElementById('splitPaidBox').style.display = both ? 'block' : 'none';
         paidTouched = false;
         lastSplitPaidField = null;
+        clearPaymentAmountError();
         syncPaymentEditableState();
         syncPayment();
     }
@@ -1113,7 +1314,7 @@
                 cashField.value = cash;
                 bankingField.value = banking;
                 paid = total;
-                validateCustomerDebtAmount(total);
+                validateLinkedDebtAmount(total);
             } else {
                 const { cash, banking } = balanceSplitPayment(total);
                 cashField.value = cash;
@@ -1154,7 +1355,7 @@
         const manualInput = document.getElementById('manualAmountInput');
         const existingAmount = Number(amountField && amountField.value ? amountField.value : 0);
         if (manualInput && existingAmount > 0) {
-            manualInput.value = amountField.value;
+            manualInput.value = formatPriceDisplay(existingAmount);
         }
 
         const cash = Number(document.getElementById('paidByCashField').value || 0);
@@ -1184,7 +1385,7 @@
         document.getElementById('debtInvoiceField').classList.toggle('show', type === 'CUSTOMER');
         document.getElementById('supplierReturnField').classList.toggle('show', type === 'SUPPLIER');
         document.getElementById('stockAdjustmentField').classList.toggle('show', type === 'EMPLOYEE');
-        document.getElementById('manualAmountField').classList.toggle('show', type === 'OTHER' || type === 'EMPLOYEE');
+        document.getElementById('manualAmountField').classList.toggle('show', requiresManualAmount(type));
         syncPaymentEditableState();
         if (!requiresManualAmount(type)) {
             clearAmountError();
@@ -1317,13 +1518,12 @@
         infoHtml += infoRowHtml('Phiếu nhập gốc', escapeHtml(detail.purchaseCode));
         infoHtml += infoRowHtml('Nhà cung cấp', escapeHtml(detail.supplierName));
         infoHtml += infoRowHtml('Người tạo', escapeHtml(detail.creatorName));
-        infoHtml += infoRowHtml('Hình thức hoàn', escapeHtml(detail.returnTypeDisplay));
         infoHtml += infoRowHtml('Lý do', escapeHtml(detail.reason));
         infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.status, detail.statusCssClass));
         infoHtml += infoRowHtml('Tổng tiền hoàn',
             '<span class="fw-semibold text-success">' + formatMoney(detail.totalRefund) + '</span>');
-        infoHtml += infoRowHtml('Hoàn tiền mặt', formatMoney(detail.refundCash));
-        infoHtml += infoRowHtml('Hoàn chuyển khoản', formatMoney(detail.refundBanking));
+        infoHtml += infoRowHtml('NCC còn nợ',
+            '<span class="fw-semibold text-warning">' + formatMoney(detail.offsetDebtAmount) + '</span>');
         if (detail.note) {
             infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
         }
@@ -1622,6 +1822,18 @@
         return item.phoneNumber ? item.name + ' — ' + item.phoneNumber : item.name;
     }
 
+    function customerIconClass(item) {
+        return item && item.customerType === 'COMPANY' ? 'ti-building' : 'ti-user';
+    }
+
+    function updateCustomerSearchLeadingIcon(item) {
+        const icon = document.getElementById('customerSearchLeadingIcon');
+        if (!icon) {
+            return;
+        }
+        icon.className = 'ti ' + customerIconClass(item) + ' party-search-leading-icon';
+    }
+
     function partyLabel(item) {
         return item.name;
     }
@@ -1643,6 +1855,7 @@
         if (fieldId === 'customerIdInput') {
             clearSelectError('invoiceIdInput');
             populateReferenceSelect('invoiceIdInput', '-- Chọn hóa đơn còn nợ --', [], null, function () { return ''; });
+            updateCustomerSearchLeadingIcon(null);
             setAmount(0);
         } else if (fieldId === 'supplierIdInput') {
             clearSelectError('returnIdInput');
@@ -1654,7 +1867,8 @@
         }
     }
 
-    function wirePartySearch(fieldId, items, buildLabel, onSelected) {
+    function wirePartySearch(fieldId, items, buildLabel, onSelected, options) {
+        options = options || {};
         const config = PARTY_REFERENCE_FIELDS[fieldId];
         const hidden = getPartyHiddenInput(fieldId);
         const search = getPartySearchInput(fieldId);
@@ -1662,6 +1876,22 @@
         const wrap = search ? search.closest('.party-search-wrap') : null;
         if (!hidden || !search || !results) {
             return;
+        }
+
+        function renderItemHtml(item) {
+            if (typeof options.renderItem === 'function') {
+                return options.renderItem(item, buildLabel);
+            }
+            return '<div class="party-search-item" data-id="' + item.id + '">'
+                + escapeHtml(buildLabel(item)) + '</div>';
+        }
+
+        function itemLabelFromElement(itemEl) {
+            const labelEl = itemEl.querySelector('[data-label]');
+            if (labelEl) {
+                return labelEl.textContent.trim();
+            }
+            return itemEl.textContent.trim();
         }
 
         function hideResults() {
@@ -1676,17 +1906,19 @@
                 return;
             }
             results.innerHTML = matches.map(function (item) {
-                return '<div class="party-search-item" data-id="' + item.id + '">'
-                    + escapeHtml(buildLabel(item)) + '</div>';
+                return renderItemHtml(item);
             }).join('');
             results.classList.add('show');
         }
 
-        function selectItem(id, label) {
+        function selectItem(id, label, selectedItem) {
             hidden.value = id;
             search.value = label;
             hideResults();
             clearSelectError(fieldId);
+            if (typeof options.onItemSelected === 'function') {
+                options.onItemSelected(selectedItem);
+            }
             if (onSelected) {
                 onSelected(id);
             }
@@ -1718,6 +1950,9 @@
                 if (exact) {
                     hidden.value = exact.id;
                     clearSelectError(fieldId);
+                    if (typeof options.onItemSelected === 'function') {
+                        options.onItemSelected(exact);
+                    }
                 }
             }
             syncSelectError(fieldId);
@@ -1732,7 +1967,10 @@
             if (!item) {
                 return;
             }
-            selectItem(item.dataset.id, item.textContent.trim());
+            const selected = items.find(function (entry) {
+                return String(entry.id) === String(item.dataset.id);
+            }) || null;
+            selectItem(item.dataset.id, itemLabelFromElement(item), selected);
         });
 
         document.addEventListener('click', function (event) {
@@ -1747,6 +1985,17 @@
             clearSelectError('invoiceIdInput');
             hideReferenceDetailSection();
             loadDebtInvoices(customerId, null);
+        }, {
+            renderItem: function (item, buildLabel) {
+                const icon = customerIconClass(item);
+                return '<div class="party-search-item" data-id="' + item.id + '">'
+                    + '<i class="ti ' + icon + '"></i>'
+                    + '<span data-label="1">' + escapeHtml(buildLabel(item)) + '</span>'
+                    + '</div>';
+            },
+            onItemSelected: function (item) {
+                updateCustomerSearchLeadingIcon(item);
+            }
         });
         wirePartySearch('supplierIdInput', suppliers, partyLabel, function (supplierId) {
             clearSelectError('returnIdInput');
@@ -1774,6 +2023,9 @@
             });
             if (selected) {
                 search.value = entry.buildLabel(selected);
+                if (entry.fieldId === 'customerIdInput') {
+                    updateCustomerSearchLeadingIcon(selected);
+                }
             }
         });
     }
@@ -1840,7 +2092,7 @@
         if (manualAmountInput) {
             manualAmountInput.addEventListener('blur', function () {
                 const type = document.getElementById('incomeTypeInput').value;
-                if (!requiresManualAmount(type) || Number(this.value || 0) > 0) {
+                if (!requiresManualAmount(type) || parsePrice(this) > 0) {
                     return;
                 }
                 if (type === 'EMPLOYEE' && !validatePartyReferenceFields(type)) {
@@ -1865,14 +2117,33 @@
                     showPaymentAmountError(AMOUNT_REQUIRED_MSG);
                     return;
                 }
-                validateCustomerDebtAmount(value);
+                validateLinkedDebtAmount(value);
             });
         }
+
+        ['cashAmount', 'bankingAmount'].forEach(function (inputId) {
+            const splitInput = document.getElementById(inputId);
+            if (!splitInput) {
+                return;
+            }
+            splitInput.addEventListener('blur', function () {
+                runSplitPaymentBlurValidation(this);
+            });
+        });
 
         toggleTypeFields();
         initPaymentFromForm();
         applyServerFieldErrors();
         syncReferenceDetailFromForm();
+
+        const invoiceSelect = document.getElementById('invoiceIdInput');
+        if (invoiceSelect && invoiceSelect.value) {
+            applySuggestedAmount(invoiceSelect);
+        }
+        const returnSelect = document.getElementById('returnIdInput');
+        if (returnSelect && returnSelect.value) {
+            applySuggestedAmount(returnSelect);
+        }
 
         document.getElementById('incomeForm').addEventListener('submit', function (event) {
             syncPayment();
@@ -1895,7 +2166,7 @@
                 return;
             }
 
-            if (!validateCustomerDebtAmount(amount)) {
+            if (!validateLinkedDebtAmount(amount)) {
                 event.preventDefault();
                 return;
             }

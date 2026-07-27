@@ -1,18 +1,23 @@
 package com.example.project.service;
 
+import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ReturnStatus;
+import com.example.project.constant.RoleConstants;
 import com.example.project.constant.ShiftReportStatus;
 import com.example.project.dto.response.ShiftReportDetailPageResponse;
 import com.example.project.dto.response.ShiftReportListItemResponse;
 import com.example.project.dto.response.ShiftReportStatsResponse;
 import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.entity.Account;
+import com.example.project.entity.Expense;
 import com.example.project.entity.Financialsetting;
 import com.example.project.entity.Income;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
 import com.example.project.repository.AccountRepository;
+import com.example.project.repository.AccountpermissionRepository;
+import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.FinancialsettingRepository;
 import com.example.project.repository.IncomeRepository;
 import com.example.project.repository.InvoiceRepository;
@@ -59,24 +64,39 @@ public class ShiftreportService {
     private final ReturnRepository returnRepository;
     private final InvoiceRepository invoiceRepository;
     private final IncomeRepository incomeRepository;
+    private final ExpenseRepository expenseRepository;
+    private final AccountpermissionRepository accountpermissionRepository;
 
     public ShiftreportService(ShiftreportRepository shiftreportRepository,
                               AccountRepository accountRepository,
                               FinancialsettingRepository financialsettingRepository,
                               ReturnRepository returnRepository,
                               InvoiceRepository invoiceRepository,
-                              IncomeRepository incomeRepository) {
+                              IncomeRepository incomeRepository,
+                              ExpenseRepository expenseRepository,
+                              AccountpermissionRepository accountpermissionRepository) {
         this.shiftreportRepository = shiftreportRepository;
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.returnRepository = returnRepository;
         this.invoiceRepository = invoiceRepository;
         this.incomeRepository = incomeRepository;
+        this.expenseRepository = expenseRepository;
+        this.accountpermissionRepository = accountpermissionRepository;
     }
 
     /**
      * Returns the account's currently open (Nháp) shift, creating one if none exists yet.
      * Called at the exact point a transaction (Return, Invoice, ...) is recorded — never from login.
+     *
+     * <p>Returns {@code null} for an account that does not run a register. Only Owner and Pharmacist
+     * do — an Accountant never handles cash (their slips settle by transfer), so they have no shift
+     * and their transactions simply carry no {@code shiftReportID}. This guard lives here because
+     * this is the ONLY place a shift is ever created, so the invariant cannot be bypassed by a caller
+     * that forgets to check the role — and {@code IncomeService.createIncome} was doing exactly that
+     * ever since phiếu thu opened to Accountants, giving them a Nháp shift that
+     * {@link com.example.project.controller.ShiftreportController#logoutGuard} then blocked their
+     * logout on, redirecting to {@code /accountant/shift-reports/...} which does not exist.</p>
      */
     @Transactional
     public Shiftreport ensureOpenShiftFor(Integer accountId) {
@@ -84,6 +104,10 @@ public class ShiftreportService {
                 shiftreportRepository.findFirstByCashierID_IdAndStatusOrderByStartTimeDesc(accountId, ShiftReportStatus.DRAFT);
         if (existingDraft.isPresent()) {
             return existingDraft.get();
+        }
+
+        if (!runsRegister(accountId)) {
+            return null;
         }
 
         Account cashier = accountRepository.findById(accountId)
@@ -104,10 +128,17 @@ public class ShiftreportService {
         shift.setTotalCashIn(BigDecimal.ZERO);
         shift.setTotalBankingIn(BigDecimal.ZERO);
         shift.setTotalCashOut(BigDecimal.ZERO);
+        shift.setTotalBankingOut(BigDecimal.ZERO);
         shift.setStatus(ShiftReportStatus.DRAFT);
         shift.setCreatedAt(nowVn());
 
         return shiftreportRepository.save(shift);
+    }
+
+    /** Chỉ Owner và Dược sĩ trực quầy (có két) mới có báo cáo ca; Kế toán không. */
+    private boolean runsRegister(Integer accountId) {
+        return accountpermissionRepository.existsByAccountIdAndRole(accountId, RoleConstants.OWNER)
+                || accountpermissionRepository.existsByAccountIdAndRole(accountId, RoleConstants.PHARMACIST);
     }
 
     /** The Nháp shift of an account, if any — also used by the logout guard. */
@@ -183,6 +214,12 @@ public class ShiftreportService {
                 ? nz(shift.getOpeningCash()).add(totals.totalCashIn()).subtract(totals.totalCashOut())
                 : shift.getExpectedClosingCash();
 
+        // Chuyển khoản ròng — thuần thông tin để người chốt ca tự soát với thông báo ngân hàng.
+        // KHÔNG có đối chiếu như tiền mặt: không ai "đếm" được số dư tài khoản lúc giao ca.
+        BigDecimal totalBankingIn = live ? totals.totalBankingIn() : shift.getTotalBankingIn();
+        BigDecimal totalBankingOut = live ? totals.totalBankingOut() : shift.getTotalBankingOut();
+        BigDecimal totalBankingNet = nz(totalBankingIn).subtract(nz(totalBankingOut));
+
         return new ShiftReportDetailPageResponse(
                 shift.getId(),
                 shift.getShiftReportCode(),
@@ -199,8 +236,10 @@ public class ShiftreportService {
                 live ? totals.totalReturnAmount() : shift.getTotalReturnAmount(),
                 live ? totals.totalDebtCollected() : shift.getTotalDebtCollected(),
                 live ? totals.totalCashIn() : shift.getTotalCashIn(),
-                live ? totals.totalBankingIn() : shift.getTotalBankingIn(),
+                totalBankingIn,
                 live ? totals.totalCashOut() : shift.getTotalCashOut(),
+                totalBankingOut,
+                totalBankingNet,
                 expectedClosingCash,
                 shift.getActualClosingCash(),
                 shift.getCashDiscrepancy(),
@@ -307,6 +346,7 @@ public class ShiftreportService {
                                      int totalReturns,
                                      BigDecimal totalReturnAmount,
                                      BigDecimal totalCashOut,
+                                     BigDecimal totalBankingOut,
                                      BigDecimal totalDebtCollected) {
     }
 
@@ -342,10 +382,27 @@ public class ShiftreportService {
                 .map(Return::getTotalRefund)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        // Từ 2026-07-26 phiếu trả chỉ TÍNH tiền, không chi tiền — refundCash chỉ khác 0 sau khi phiếu chi
-        // bên Kế toán thực chi và ghi ngược lại cột này, nên tiền chi trong ca chỉ lên khi tiền thật ra khỏi két.
-        BigDecimal totalCashOut = returns.stream()
-                .map(Return::getRefundCash)
+        // Tiền chi trong ca KHÔNG lấy từ phiếu trả: phiếu trả chỉ TÍNH nghĩa vụ phải hoàn (totalRefund),
+        // tiền chỉ thật sự rời két khi Kế toán lập phiếu chi. Đã bỏ hẳn refundCash/
+        // refundBanking/refundCredit khỏi bảng `return`, nên nguồn duy nhất còn lại là Expense.
+        // Cùng nguyên tắc với phiếu thu ở dưới: bỏ phiếu Nháp/Từ chối/Đã hủy, phiếu Chờ duyệt VẪN tính
+        // vì tiền đã ra khỏi két lúc chi, trước khi Owner review.
+        List<Expense> expenses = expenseRepository.findAll()
+                .stream()
+                .filter(exp -> exp.getShiftReportID() != null && shiftId.equals(exp.getShiftReportID().getId()))
+                .filter(exp -> !isStatus(exp.getStatus(), ExpenseStatus.DRAFT)
+                        && !isStatus(exp.getStatus(), ExpenseStatus.REJECTED)
+                        && !isStatus(exp.getStatus(), ExpenseStatus.CANCELLED))
+                .toList();
+
+        BigDecimal totalCashOut = expenses.stream()
+                .map(Expense::getPaidByCash)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Chuyển khoản chi ra — cùng nguồn Expense, nhưng KHÔNG vào panel "Đối chiếu tiền mặt":
+        // panel đó đối chiếu số đếm được trong két, tiền chuyển khoản không đi qua két.
+        BigDecimal totalBankingOut = expenses.stream()
+                .map(Expense::getPaidByBanking)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -373,7 +430,7 @@ public class ShiftreportService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return new TransactionTotals(totalInvoices, totalRevenue, totalCashIn, totalBankingIn,
-                totalReturns, totalReturnAmount, totalCashOut, totalDebtCollected);
+                totalReturns, totalReturnAmount, totalCashOut, totalBankingOut, totalDebtCollected);
     }
 
     /** Recomputes and persists the shift's transaction totals — called right before closing it. */
@@ -387,6 +444,7 @@ public class ShiftreportService {
         shift.setTotalReturns(totals.totalReturns());
         shift.setTotalReturnAmount(totals.totalReturnAmount());
         shift.setTotalCashOut(totals.totalCashOut());
+        shift.setTotalBankingOut(totals.totalBankingOut());
         shift.setTotalDebtCollected(totals.totalDebtCollected());
     }
 

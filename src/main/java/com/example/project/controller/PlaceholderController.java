@@ -31,7 +31,6 @@ public class PlaceholderController {
 
     @GetMapping({
             "/owner/suppliers",
-            "/owner/debts",
             "/owner/vat-invoices",
             "/owner/customers",
             "/owner/notifications",
@@ -54,7 +53,6 @@ public class PlaceholderController {
     // Owner + Pharmacist — để placeholder thay vì mở quyền truy cập màn hình thật cho Kế toán.
     @GetMapping({
             "/accountant/dashboard",
-            "/accountant/debts",
             "/accountant/daily-reports",
             "/accountant/vat-invoices",
             "/accountant/notifications"

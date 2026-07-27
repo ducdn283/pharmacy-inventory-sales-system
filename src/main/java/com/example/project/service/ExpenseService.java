@@ -2,15 +2,26 @@ package com.example.project.service;
 
 import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ExpenseType;
+import com.example.project.constant.ReturnStatus;
+import com.example.project.constant.RoleConstants;
 import com.example.project.dto.request.ExpenseCreateRequest;
 import com.example.project.dto.response.ExpenseDetailResponse;
 import com.example.project.dto.response.ExpenseListItemResponse;
+import com.example.project.dto.response.ExpenseReferenceOptionResponse;
 import com.example.project.dto.response.ExpenseResponse;
 import com.example.project.dto.response.ExpenseStatsResponse;
 import com.example.project.entity.Account;
+import com.example.project.entity.Customer;
 import com.example.project.entity.Expense;
+import com.example.project.entity.Invoice;
+import com.example.project.entity.Purchaseinvoice;
+import com.example.project.entity.Return;
+import com.example.project.entity.Shiftreport;
+import com.example.project.entity.Supplier;
 import com.example.project.repository.AccountRepository;
+import com.example.project.repository.AccountpermissionRepository;
 import com.example.project.repository.ExpenseRepository;
+import com.example.project.repository.ReturnRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -25,17 +36,56 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Expense ("Phiếu chi") — a standalone cash-outflow control screen. V1 scope (agreed with the
- * user 2026-07-23): plain manual entry, no auto-triggering from Return/PurchaseInvoice/
- * StockAdjustment even though those modules have optional FK slots for it — see
- * {@code StockadjustmentService}'s own deferred TODO on this and project memory
- * {@code expense-price-settings-open-questions} for the open cross-module question.
+ * Expense ("Phiếu chi") — the pharmacy's cash-outflow control screen. Most slips are still plain
+ * manual entry, but a {@link ExpenseType#RETURN_REFUND_PAYOUT} slip is now the real payout leg of a
+ * <em>customer</em> return: {@code ReturnStatus}'s own javadoc has always said "the actual cash
+ * payout lives on a separate Expense, handled in a later phase" — this is that phase.
+ *
+ * <p><strong>Customer vs. supplier returns.</strong> The discriminator used consistently across
+ * {@code ReturnService}, {@code ApprovalService}, {@code IncomeService} and
+ * {@code ShiftreportService} is the FK: {@code invoiceID != null} is a customer return,
+ * {@code purchaseID != null && invoiceID == null} is a supplier one. Expense only ever touches the
+ * former (the pharmacy pays the customer back); the latter is money coming <em>in</em> and belongs
+ * to {@code IncomeService.listSupplierReturns()}, the exact mirror of
+ * {@link #listCustomerReturns()}. Returning goods to a supplier costs no cash, so it is out of
+ * scope here by design.</p>
+ *
+ * <p><em>{@code Return.returnType} changed meaning on 2026-07-27</em> and now also answers this
+ * question — it holds {@code CUSTOMER}/{@code SUPPLIER} again, no longer the payment method
+ * ({@code CASH}/{@code BANKING}/{@code MIXED}/{@code DEBT}) it briefly derived from the amounts.
+ * The FK check above is kept because it is what every other service uses; the two agree.</p>
+ *
+ * <p><strong>A return slip computes, it does not pay.</strong> {@code b81e80b} dropped
+ * {@code refundCash}/{@code refundBanking}/{@code refundCredit} from the table, leaving only
+ * {@code totalRefund}. Deciding how the money physically leaves — and recording that it did — is
+ * now entirely this module's job, which is what makes {@link #listCustomerReturns()} the single
+ * gateway to paying a customer back. {@code ShiftreportService} relies on the same thing: since
+ * those columns went away, an Expense slip is its <em>only</em> source of cash-out for a shift.</p>
+ *
+ * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#OPERATIONAL} slip can point at a
+ * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
+ * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE} for the BA's
+ * reasoning). Approving or paying the slip pushes the money onto {@code Purchaseinvoice.paid} via
+ * {@link PurchaseinvoiceService#applyPayment(Integer, java.math.BigDecimal)}, which re-derives and
+ * stores the invoice's status in the same transaction. Cancelling an already-approved slip reverses
+ * it. Money is only ever considered disbursed once the slip is approved — see
+ * {@link #disbursedAmount}.</p>
+ *
+ * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
+ * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. As of
+ * {@code 451b4d5}, {@code ShiftreportService.computeTransactionTotals()} reads those slips and a
+ * shift's whole {@code totalCashOut} is the sum of their {@code paidByCash}, so this stamp is now
+ * load-bearing: a slip left unstamped is cash the register can never account for.</p>
  *
  * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
  * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
@@ -46,10 +96,23 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final AccountRepository accountRepository;
+    private final ReturnRepository returnRepository;
+    private final AccountpermissionRepository accountpermissionRepository;
+    private final PurchaseinvoiceService purchaseinvoiceService;
+    private final ShiftreportService shiftreportService;
 
-    public ExpenseService(ExpenseRepository expenseRepository, AccountRepository accountRepository) {
+    public ExpenseService(ExpenseRepository expenseRepository,
+                          AccountRepository accountRepository,
+                          ReturnRepository returnRepository,
+                          AccountpermissionRepository accountpermissionRepository,
+                          PurchaseinvoiceService purchaseinvoiceService,
+                          ShiftreportService shiftreportService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
+        this.returnRepository = returnRepository;
+        this.accountpermissionRepository = accountpermissionRepository;
+        this.purchaseinvoiceService = purchaseinvoiceService;
+        this.shiftreportService = shiftreportService;
     }
 
     // ------------------------------------------------------------------ generated-REST passthrough
@@ -136,6 +199,98 @@ public class ExpenseService {
         return ExpenseType.vietnameseLabels();
     }
 
+    /** Which types show the purchase-invoice picker — fed to the form so JS can't drift from Java. */
+    public List<String> purchaseLinkableTypes() {
+        return ExpenseType.PURCHASE_LINKABLE;
+    }
+
+    // ------------------------------------------------------------------ reference documents
+
+    /**
+     * Customer returns still waiting for their refund to be paid out, for the create screen's
+     * picker. Unlike Income's equivalent this needs no "pick the party first" step — a customer
+     * return is selectable on its own — so the list is rendered straight into the page instead of
+     * being fetched over AJAX.
+     *
+     * <p>A return qualifies when all four hold:</p>
+     * <ol>
+     *   <li>{@code invoiceID != null} — it is a customer return, not a supplier one;</li>
+     *   <li>status is {@link ReturnStatus#DEBT} — note this is the <em>approved</em> state: per
+     *       {@code ReturnStatus}'s javadoc there is deliberately no "Duyệt" for returns, because
+     *       approving one means the pharmacy now owes the customer money;</li>
+     *   <li>it has a real cash refund — see {@link #cashRefundAmount};</li>
+     *   <li>no live Expense already points at it — see {@link #linkedReturnIds}.</li>
+     * </ol>
+     */
+    @Transactional(readOnly = true)
+    public List<ExpenseReferenceOptionResponse> listCustomerReturns() {
+        Set<Integer> linked = linkedReturnIds();
+
+        return returnRepository.findAllWithRelations().stream()
+                .filter(ret -> ret.getInvoiceID() != null)
+                .filter(ret -> ReturnStatus.DEBT.equals(ret.getStatus()))
+                .filter(ret -> cashRefundAmount(ret).compareTo(BigDecimal.ZERO) > 0)
+                .filter(ret -> !linked.contains(ret.getId()))
+                .sorted(Comparator.comparing(Return::getReturnDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Return::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(ret -> new ExpenseReferenceOptionResponse(
+                        ret.getId(),
+                        ret.getReturnCode(),
+                        formatInstant(ret.getReturnDate()),
+                        cashRefundAmount(ret),
+                        referenceDetail(ret)))
+                .toList();
+    }
+
+    /**
+     * {@code returnId -> refund payable}, for the create screen to auto-fill the (readonly) amount
+     * box the moment a return is picked. A plain scalar map rather than the DTO list because that
+     * is the established shape for a {@code th:inline} lookup in this codebase.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> customerReturnAmounts() {
+        return amountsById(listCustomerReturns());
+    }
+
+    /**
+     * Purchase invoices the pharmacy still owes money on, for the debt-payment picker. The figure
+     * shown is what is still <em>available to commit</em>, not the raw debt — see
+     * {@link #availableToPay}.
+     */
+    @Transactional(readOnly = true)
+    public List<ExpenseReferenceOptionResponse> listPayablePurchaseInvoices() {
+        Map<Integer, BigDecimal> committed = committedByPurchaseId();
+
+        return purchaseinvoiceService.findPayableInvoices().stream()
+                .map(invoice -> Map.entry(invoice, availableToPay(invoice, committed)))
+                .filter(entry -> entry.getValue().compareTo(BigDecimal.ZERO) > 0)
+                .sorted(Comparator.<Map.Entry<Purchaseinvoice, BigDecimal>, Instant>comparing(
+                                entry -> entry.getKey().getDate(),
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(entry -> entry.getKey().getId(),
+                                Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(entry -> new ExpenseReferenceOptionResponse(
+                        entry.getKey().getId(),
+                        entry.getKey().getPurchaseInvoiceCode(),
+                        formatInstant(entry.getKey().getDate()),
+                        entry.getValue(),
+                        purchaseReferenceDetail(entry.getKey())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> payablePurchaseInvoiceAmounts() {
+        return amountsById(listPayablePurchaseInvoices());
+    }
+
+    private Map<Integer, BigDecimal> amountsById(List<ExpenseReferenceOptionResponse> options) {
+        Map<Integer, BigDecimal> amounts = new LinkedHashMap<>();
+        for (ExpenseReferenceOptionResponse option : options) {
+            amounts.put(option.getId(), option.getAmount());
+        }
+        return amounts;
+    }
+
     // ------------------------------------------------------------------ detail
 
     @Transactional(readOnly = true)
@@ -157,27 +312,51 @@ public class ExpenseService {
     @Transactional
     public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
                                   boolean asDraft) {
+        String expenseType = resolveExpenseType(request.getExpenseType());
+
+        // Resolved before validation because a refund payout takes its amount from the return, not
+        // from the form — the posted value is display-only (the box is readonly) and never trusted.
+        Return linkedReturn = resolveCustomerReturn(request, expenseType);
+        BigDecimal amount = linkedReturn != null ? cashRefundAmount(linkedReturn) : request.getAmount();
+
         // Every NOT NULL column (expenseType/reason/amount) must have a real value even for a
         // draft — unlike Stock Adjustment's items, Expense has no field that's genuinely optional
         // at the DB level, so "draft" only means "not yet sent for approval", not "incomplete data".
-        validateRequest(request);
+        validateRequest(request, amount);
 
         Account applicant = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
         Expense expense = new Expense();
         expense.setApplicantID(applicant);
-        expense.setExpenseType(resolveExpenseType(request.getExpenseType()));
+        expense.setExpenseType(expenseType);
         expense.setDate(resolveDate(request.getDate()));
         expense.setReason(request.getReason() != null ? request.getReason().trim() : "");
-        expense.setAmount(request.getAmount());
+        expense.setAmount(amount);
         expense.setNote(trimToNull(request.getNote()));
 
-        BigDecimal paid = resolvePaid(request);
-        BigDecimal[] split = resolveSplit(request, paid);
+        if (linkedReturn != null) {
+            expense.setReturnID(linkedReturn);
+            // Derived, not posted: the payee is whoever the original sale was billed to. Stays null
+            // for a walk-in sale, which has no Customer row.
+            expense.setCustomerID(customerOf(linkedReturn));
+        }
+
+        Purchaseinvoice linkedPurchase = resolvePurchaseInvoice(request, expenseType, amount);
+        if (linkedPurchase != null) {
+            expense.setPurchaseID(linkedPurchase);
+            expense.setSupplierID(linkedPurchase.getSupplierID());
+        }
+
+        BigDecimal paid = resolvePaid(request, amount);
+        BigDecimal[] split = resolveSplit(request, paid, isOwner);
         expense.setPaid(paid);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
+        // NOT NULL-safe and consistent with the two columns above: Expense has no @DynamicInsert, so
+        // leaving this null makes Hibernate write an explicit NULL rather than fall back to the
+        // column's DEFAULT 0. No UI collects a debt-offset portion yet.
+        expense.setPaidByCredit(BigDecimal.ZERO);
 
         if (asDraft) {
             expense.setStatus(ExpenseStatus.DRAFT);
@@ -257,6 +436,9 @@ public class ExpenseService {
      * {@code cashPortion}/{@code bankingPortion} are the amount being paid <em>now</em> (not the
      * cumulative total) — they're added to whatever was already paid. Moves to
      * {@link ExpenseStatus#COMPLETED} once {@code paid >= amount}.
+     *
+     * <p>Takes no actor id: the shift stamped here is the <em>creator's</em>, read off the slip, not
+     * whoever happens to be recording the payment (see {@link #attachOpenShift}).</p>
      */
     @Transactional
     public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion) {
@@ -275,6 +457,10 @@ public class ExpenseService {
             throw new IllegalArgumentException("Số tiền thanh toán phải lớn hơn 0");
         }
 
+        // Keyed on who raised the slip, not on who is paying: otherwise an Accountant's slip could
+        // be topped up in cash here and slip past the rule enforced at create time.
+        assertCashAllowed(cash, raisedByOwner(expense));
+
         BigDecimal previouslyPaid = expense.getPaid() != null ? expense.getPaid() : BigDecimal.ZERO;
         BigDecimal newPaid = previouslyPaid.add(portion);
 
@@ -285,10 +471,16 @@ public class ExpenseService {
         expense.setPaid(newPaid);
         expense.setPaidByCash(nullToZero(expense.getPaidByCash()).add(cash));
         expense.setPaidByBanking(nullToZero(expense.getPaidByBanking()).add(banking));
+        expense.setPaidByCredit(nullToZero(expense.getPaidByCredit()));
 
         if (newPaid.compareTo(expense.getAmount()) >= 0) {
             expense.setStatus(ExpenseStatus.COMPLETED);
         }
+
+        // Only the increment: the slip was already approved, so everything before this was pushed
+        // onto the invoice at approval time.
+        settlePurchaseInvoice(expense, portion);
+        attachOpenShift(expense, applicantIdOf(expense));
 
         expenseRepository.save(expense);
     }
@@ -309,6 +501,11 @@ public class ExpenseService {
         if (ExpenseStatus.CANCELLED.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Phiếu chi này đã bị hủy trước đó");
         }
+
+        // Give the money back to the invoice's outstanding debt before voiding the slip. Computed
+        // while the status is still the pre-cancel one, since that is what decides whether anything
+        // was ever disbursed. A DRAFT/PENDING slip pushed nothing, so this is a no-op for them.
+        settlePurchaseInvoice(expense, disbursedAmount(expense).negate());
 
         expense.setStatus(ExpenseStatus.CANCELLED);
         String trimmedReason = trimToNull(reason);
@@ -340,6 +537,12 @@ public class ExpenseService {
     }
 
     private ExpenseDetailResponse toDetail(Expense expense) {
+        Return linkedReturn = expense.getReturnID();
+        Customer customer = expense.getCustomerID();
+        Purchaseinvoice linkedPurchase = expense.getPurchaseID();
+        Supplier supplier = expense.getSupplierID();
+        Shiftreport shift = expense.getShiftReportID();
+
         return new ExpenseDetailResponse(
                 expense.getId(),
                 formatCode(expense.getId()),
@@ -356,7 +559,15 @@ public class ExpenseService {
                 statusCssClass(expense.getStatus()),
                 approverName(expense),
                 formatInstant(expense.getApprovedAt()),
-                expense.getNote()
+                expense.getNote(),
+                linkedReturn != null ? linkedReturn.getId() : null,
+                linkedReturn != null ? linkedReturn.getReturnCode() : null,
+                customer != null ? customer.getName() : null,
+                linkedPurchase != null ? linkedPurchase.getId() : null,
+                linkedPurchase != null ? linkedPurchase.getPurchaseInvoiceCode() : null,
+                supplier != null ? supplier.getName() : null,
+                shift != null ? shift.getId() : null,
+                shift != null ? shift.getShiftReportCode() : null
         );
     }
 
@@ -367,12 +578,78 @@ public class ExpenseService {
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * The single choke point where a slip becomes authorised — reached from create-as-Owner,
+     * submit-as-Owner and approve. That makes it the right (and only) place to push the money onto
+     * a linked purchase invoice: before this the slip's {@code paid} is just a figure the creator
+     * typed, after it the cash has really left.
+     */
     private void applyApproval(Expense expense, Account approver) {
         expense.setApprovedAt(Instant.now());
         BigDecimal paid = expense.getPaid() != null ? expense.getPaid() : BigDecimal.ZERO;
         expense.setStatus(paid.compareTo(expense.getAmount()) >= 0
                 ? ExpenseStatus.COMPLETED
                 : ExpenseStatus.AWAITING_PAYMENT);
+        settlePurchaseInvoice(expense, paid);
+        attachOpenShift(expense, applicantIdOf(expense));
+    }
+
+    /** Người LẬP phiếu — xem {@link #attachOpenShift}. */
+    private Integer applicantIdOf(Expense expense) {
+        return expense.getApplicantID() != null ? expense.getApplicantID().getId() : null;
+    }
+
+    /**
+     * Stamps the slip with the open shift of whoever <strong>raised</strong> it, so the cash that left
+     * can be reconciled against that person's register. Keeps an existing stamp — a slip belongs to
+     * the shift it was raised in, not to whichever shift is open when it is topped up later.
+     *
+     * <p><strong>Creator, never approver or payer</strong> (BA 2026-07-27): the person who raised the
+     * slip is the one who handled the money; approving it only authorises counting it, and paying it
+     * out later does not move it to the payer's shift. An Owner approving an Accountant's slip must
+     * not drag it onto the Owner's shift.</p>
+     *
+     * <p><strong>Cash always belongs to a shift; a transfer never opens one.</strong> Paying out of
+     * the drawer is exactly the moment a register session exists, so a cash slip
+     * {@code ensureOpenShiftFor} — opening one if the Owner has not sold anything yet — while a
+     * banking-only slip merely looks up an already-open shift. Without this, an Owner who paid cash
+     * before the day's first sale produced a slip with no {@code shiftReportID}: money out of the
+     * drawer that no shift could ever reconcile, since {@code ShiftreportService.totalCashOut} is the
+     * sum of {@code paidByCash} over the slips carrying that shift.</p>
+     *
+     * <p><em>Calling {@code ensureOpenShiftFor} here used to be forbidden</em>, because it created a
+     * shift for whoever asked and an Accountant holding one could never log out again
+     * ({@code ShiftreportController.logoutGuard} redirects to {@code /accountant/shift-reports/…},
+     * which does not exist). That hazard is gone: the method now checks the role at the single place
+     * shifts are created and returns {@code null} for anyone who does not run a register. Combined
+     * with {@link #resolveSplit} refusing cash from a non-Owner, the cash branch below is only ever
+     * reached by someone who is allowed a shift.</p>
+     */
+    private void attachOpenShift(Expense expense, Integer accountId) {
+        if (expense.getShiftReportID() != null || accountId == null) {
+            return;
+        }
+        Shiftreport shift = touchesCashDrawer(expense)
+                ? shiftreportService.ensureOpenShiftFor(accountId)
+                : shiftreportService.findDraftShift(accountId).orElse(null);
+        if (shift != null) {
+            expense.setShiftReportID(shift);
+        }
+    }
+
+    /** Whether any of this slip's money left as physical cash. */
+    private boolean touchesCashDrawer(Expense expense) {
+        return nullToZero(expense.getPaidByCash()).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    /**
+     * Whether the slip was raised by an Owner — the only role allowed to pay cash, so the rule
+     * survives a later top-up through {@link #markPaid} as well as the original create.
+     */
+    private boolean raisedByOwner(Expense expense) {
+        Integer applicantId = applicantIdOf(expense);
+        return applicantId != null
+                && accountpermissionRepository.existsByAccountIdAndRole(applicantId, RoleConstants.OWNER);
     }
 
     private String resolveExpenseType(String rawType) {
@@ -392,29 +669,224 @@ public class ExpenseService {
         return resolved.atStartOfDay(ZoneId.systemDefault()).toInstant();
     }
 
-    private BigDecimal resolvePaid(ExpenseCreateRequest request) {
+    private BigDecimal resolvePaid(ExpenseCreateRequest request, BigDecimal amount) {
         if (request.isFullyPaid()) {
-            return request.getAmount();
+            return amount;
         }
         BigDecimal paid = request.getPaid() != null ? request.getPaid() : BigDecimal.ZERO;
-        if (paid.compareTo(BigDecimal.ZERO) < 0 || paid.compareTo(request.getAmount()) > 0) {
+        if (paid.compareTo(BigDecimal.ZERO) < 0 || paid.compareTo(amount) > 0) {
             throw new IllegalArgumentException("Số tiền đã chi phải nằm trong khoảng 0 đến tổng số tiền cần chi");
         }
         return paid;
     }
 
-    /** Returns {@code [paidByCash, paidByBanking]}, defaulting an unsplit amount entirely to cash. */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal paid) {
+    /**
+     * Resolves and fully validates the customer return a {@link ExpenseType#RETURN_REFUND_PAYOUT}
+     * slip pays out, or {@code null} for every other type (a {@code returnId} left over in the form
+     * from a type the user switched away from is ignored rather than silently linked).
+     */
+    private Return resolveCustomerReturn(ExpenseCreateRequest request, String expenseType) {
+        if (!ExpenseType.RETURN_REFUND_PAYOUT.equals(expenseType)) {
+            return null;
+        }
+        if (request.getReturnId() == null) {
+            throw new IllegalArgumentException("Vui lòng chọn phiếu trả hàng của khách cần hoàn tiền");
+        }
+
+        Return ret = returnRepository.findById(request.getReturnId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng"));
+
+        if (ret.getInvoiceID() == null) {
+            throw new IllegalArgumentException(
+                    "Phiếu chi hoàn tiền chỉ áp dụng cho phiếu trả hàng của khách, không áp dụng cho trả hàng nhà cung cấp");
+        }
+        if (!ReturnStatus.DEBT.equals(ret.getStatus())) {
+            throw new IllegalArgumentException("Chỉ có thể hoàn tiền cho phiếu trả hàng đã duyệt");
+        }
+        if (cashRefundAmount(ret).compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Phiếu trả hàng này không phát sinh tiền hoàn (toàn bộ đã cấn trừ vào công nợ)");
+        }
+        if (linkedReturnIds().contains(ret.getId())) {
+            throw new IllegalArgumentException("Phiếu trả hàng này đã có phiếu chi hoàn tiền");
+        }
+        return ret;
+    }
+
+    /**
+     * The part of a return that is real money leaving the register: what the pharmacy owes, less
+     * anything already settled by writing down the original invoice's debt (paying that out again
+     * would refund the customer twice).
+     *
+     * <p>Confirmed 2026-07-27 — this replaces {@code 17e606f}'s "temporary repair". It used to read
+     * {@code refundCash + refundBanking}, but {@code b81e80b} dropped those columns along with
+     * {@code refundCredit}: a return slip now only <em>computes</em> the obligation
+     * ({@code totalRefund}), and how the money physically leaves is this module's business, not the
+     * return's. {@code totalRefund − offsetDebtAmount} is the faithful translation of the old
+     * expression, since the two used to be the two halves of {@code totalRefund}.</p>
+     *
+     * <p>In practice {@code offsetDebtAmount} is always zero on a customer return —
+     * {@code ReturnService.assertReturnable} makes the customer clear the invoice's debt before
+     * returning anything, so there is nothing left to offset. The subtraction is kept because the
+     * column still exists and nothing enforces that zero.</p>
+     */
+    private BigDecimal cashRefundAmount(Return ret) {
+        return nullToZero(ret.getTotalRefund())
+                .subtract(nullToZero(ret.getOffsetDebtAmount()))
+                .max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Returns already claimed by a live Expense. Rejected and cancelled slips are excluded so a
+     * voided payout releases its return back into the picker — a deliberate difference from
+     * {@code IncomeService.linkedReturnIds()}, whose looser guard would strand the return forever.
+     * Since {@code 38515f8} dropped {@code Return.expenseID} this is the only link direction left,
+     * so this set is the sole duplicate guard.
+     */
+    private Set<Integer> linkedReturnIds() {
+        return liveExpenses().stream()
+                .map(Expense::getReturnID)
+                .filter(Objects::nonNull)
+                .map(Return::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private Customer customerOf(Return ret) {
+        Invoice invoice = ret.getInvoiceID();
+        return invoice != null ? invoice.getCustomerID() : null;
+    }
+
+    /**
+     * Resolves and validates the purchase invoice this slip settles. Allowed for every type in
+     * {@link ExpenseType#PURCHASE_LINKABLE} and always optional — paying a supplier without
+     * pointing at one specific invoice is legitimate — so a missing id is not an error, unlike a
+     * refund payout.
+     */
+    private Purchaseinvoice resolvePurchaseInvoice(ExpenseCreateRequest request, String expenseType,
+                                                    BigDecimal amount) {
+        if (!ExpenseType.supportsPurchaseInvoiceLink(expenseType) || request.getPurchaseId() == null) {
+            return null;
+        }
+
+        Purchaseinvoice invoice = purchaseinvoiceService.findPayableInvoices().stream()
+                .filter(candidate -> request.getPurchaseId().equals(candidate.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Phiếu nhập không tồn tại, đã hủy hoặc đã trả đủ tiền"));
+
+        BigDecimal available = availableToPay(invoice, committedByPurchaseId());
+        if (amount != null && amount.compareTo(available) > 0) {
+            throw new IllegalArgumentException(String.format(Locale.forLanguageTag("vi-VN"),
+                    "Số tiền chi vượt quá số còn phải trả cho phiếu nhập này (%,.0fđ)", available));
+        }
+        return invoice;
+    }
+
+    /**
+     * How much of an invoice's debt is not yet spoken for: the raw debt minus what slips still in
+     * flight have promised. Without this, two drafts each for the full debt would both be accepted
+     * and the invoice would end up overpaid the moment both are approved.
+     */
+    private BigDecimal availableToPay(Purchaseinvoice invoice, Map<Integer, BigDecimal> committed) {
+        BigDecimal debt = purchaseinvoiceService.remainingDebt(invoice);
+        return debt.subtract(committed.getOrDefault(invoice.getId(), BigDecimal.ZERO)).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * {@code purchaseId -> money promised but not yet disbursed}, summed over every live slip. A
+     * slip's promise is {@code amount - disbursed}: the disbursed part is already sitting in
+     * {@code Purchaseinvoice.paid}, so counting it here would deduct it twice.
+     */
+    private Map<Integer, BigDecimal> committedByPurchaseId() {
+        Map<Integer, BigDecimal> committed = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            Purchaseinvoice invoice = expense.getPurchaseID();
+            if (invoice == null || invoice.getId() == null) {
+                continue;
+            }
+            BigDecimal outstanding = nullToZero(expense.getAmount())
+                    .subtract(disbursedAmount(expense))
+                    .max(BigDecimal.ZERO);
+            committed.merge(invoice.getId(), outstanding, BigDecimal::add);
+        }
+        return committed;
+    }
+
+    /**
+     * Money this slip has actually pushed onto its purchase invoice. Only an <em>approved</em> slip
+     * has disbursed anything: a draft or a pending one records a {@code paid} figure the creator
+     * typed, but nobody has authorised it leaving the register yet.
+     */
+    private BigDecimal disbursedAmount(Expense expense) {
+        boolean approved = ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
+                || ExpenseStatus.COMPLETED.equals(expense.getStatus());
+        return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+    }
+
+    private List<Expense> liveExpenses() {
+        return expenseRepository.findAll().stream()
+                .filter(expense -> !ExpenseStatus.REJECTED.equals(expense.getStatus()))
+                .filter(expense -> !ExpenseStatus.CANCELLED.equals(expense.getStatus()))
+                .toList();
+    }
+
+    /** Pushes {@code delta} onto the slip's purchase invoice, if it has one. */
+    private void settlePurchaseInvoice(Expense expense, BigDecimal delta) {
+        Purchaseinvoice invoice = expense.getPurchaseID();
+        if (invoice == null || delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        purchaseinvoiceService.applyPayment(invoice.getId(), delta);
+    }
+
+    /** Secondary line in the debt-payment picker: which supplier, and the invoice's own total. */
+    private String purchaseReferenceDetail(Purchaseinvoice invoice) {
+        Supplier supplier = invoice.getSupplierID();
+        String supplierName = supplier != null && supplier.getName() != null && !supplier.getName().isBlank()
+                ? supplier.getName()
+                : "Không rõ NCC";
+        return supplierName + " · Tổng "
+                + String.format(Locale.forLanguageTag("vi-VN"), "%,.0fđ", nullToZero(invoice.getTotalAmount()));
+    }
+
+    /** Secondary line in the picker: who is being paid, and which sale it came from. */
+    private String referenceDetail(Return ret) {
+        Invoice invoice = ret.getInvoiceID();
+        Customer customer = customerOf(ret);
+        String customerName = customer != null && customer.getName() != null && !customer.getName().isBlank()
+                ? customer.getName()
+                : "Khách lẻ";
+        String invoiceNumber = invoice != null && invoice.getInvoiceNumber() != null
+                ? invoice.getInvoiceNumber()
+                : "—";
+        return customerName + " · HĐ " + invoiceNumber;
+    }
+
+    /**
+     * Returns {@code [paidByCash, paidByBanking]}.
+     *
+     * <p><strong>Only the Owner may pay in cash</strong> (BA 2026-07-27): an Accountant settles by
+     * transfer and never opens the drawer — which is also why they have no shift. Enforcing it here
+     * is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe: an Accountant's
+     * slip has no shift, so any cash on it would be money no register could ever account for. The
+     * default therefore flips with the role — an unsplit amount is all cash for the Owner and all
+     * banking for anyone else, rather than silently landing in the drawer.</p>
+     */
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal paid, boolean isOwner) {
         if (paid.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
         BigDecimal cash = request.getPaidByCash();
         BigDecimal banking = request.getPaidByBanking();
         if (cash == null && banking == null) {
-            return new BigDecimal[]{paid, BigDecimal.ZERO};
+            return isOwner
+                    ? new BigDecimal[]{paid, BigDecimal.ZERO}
+                    : new BigDecimal[]{BigDecimal.ZERO, paid};
         }
         cash = nullToZero(cash);
         banking = nullToZero(banking);
+        assertCashAllowed(cash, isOwner);
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
                 .compareTo(paid.setScale(2, RoundingMode.HALF_UP)) != 0) {
             throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền đã chi");
@@ -422,14 +894,26 @@ public class ExpenseService {
         return new BigDecimal[]{cash, banking};
     }
 
-    private void validateRequest(ExpenseCreateRequest request) {
+    /** @see #resolveSplit */
+    private void assertCashAllowed(BigDecimal cash, boolean isOwner) {
+        if (!isOwner && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException(
+                    "Kế toán chỉ được chi qua chuyển khoản; phần tiền mặt phải do Chủ nhà thuốc chi");
+        }
+    }
+
+    /**
+     * {@code amount} is passed in rather than read off the request because a refund payout takes it
+     * from the linked return instead of the form.
+     */
+    private void validateRequest(ExpenseCreateRequest request, BigDecimal amount) {
         if (request.getExpenseType() == null || request.getExpenseType().isBlank()) {
             throw new IllegalArgumentException("Vui lòng chọn loại phiếu chi");
         }
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Vui lòng nhập lý do chi");
         }
-        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Số tiền cần chi phải lớn hơn 0");
         }
     }

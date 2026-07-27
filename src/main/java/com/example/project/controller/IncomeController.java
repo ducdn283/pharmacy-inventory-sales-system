@@ -5,6 +5,7 @@ import com.example.project.dto.request.IncomeCreateRequest;
 import com.example.project.dto.response.IncomeDetailResponse;
 import com.example.project.dto.response.IncomeListItemResponse;
 import com.example.project.dto.response.IncomeReferenceOptionResponse;
+import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.ReturnPurchaseDetailPageResponse;
 import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
@@ -111,7 +112,7 @@ public class IncomeController {
         model.addAttribute("totalItems", incomePage.getTotalElements());
         model.addAttribute("pageTitle", "Danh sách khoản thu");
         model.addAttribute("basePath", basePath);
-        return "income-list";
+        return "income/income-list";
     }
 
     @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}", ACCOUNTANT_BASE + "/{incomeId}"})
@@ -125,7 +126,7 @@ public class IncomeController {
         model.addAttribute("returnBasePath", "/owner/return-purchases");
         model.addAttribute("stockAdjustmentBasePath", resolveStockAdjustmentBasePath(basePath));
         model.addAttribute("pageTitle", "Chi tiết phiếu thu");
-        return "income-detail";
+        return "income/income-detail";
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/debt-invoices", PHARMACIST_BASE + "/references/debt-invoices",
@@ -180,12 +181,26 @@ public class IncomeController {
     }
 
     @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
-    public String createPage(HttpServletRequest request, Model model) {
+    public String createPage(@RequestParam(name = "incomeType", required = false) String incomeType,
+                             @RequestParam(name = "customerId", required = false) Integer customerId,
+                             @RequestParam(name = "invoiceId", required = false) Integer invoiceId,
+                             @RequestParam(name = "supplierId", required = false) Integer supplierId,
+                             @RequestParam(name = "returnId", required = false) Integer returnId,
+                             HttpServletRequest request,
+                             Model model) {
         if (!model.containsAttribute("form")) {
-            model.addAttribute("form", new IncomeCreateRequest());
+            IncomeCreateRequest form = new IncomeCreateRequest();
+            if (incomeType != null && !incomeType.isBlank()) {
+                form.setIncomeType(IncomeTypeOptionResponse.codeOf(incomeType));
+            }
+            form.setCustomerId(customerId);
+            form.setInvoiceId(invoiceId);
+            form.setSupplierId(supplierId);
+            form.setReturnId(returnId);
+            model.addAttribute("form", form);
         }
         addCreatePageData(request, model);
-        return "create-income";
+        return "income/create-income";
     }
 
     @PostMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
@@ -217,7 +232,7 @@ public class IncomeController {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
             addCreatePageData(request, model);
-            return "create-income";
+            return "income/create-income";
         }
     }
 

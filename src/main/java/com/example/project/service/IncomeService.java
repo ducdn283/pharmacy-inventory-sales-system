@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Comparator;
@@ -63,6 +64,7 @@ public class IncomeService {
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_BANKING = "BANKING";
     private static final String PAYMENT_MIXED = "MIXED";
+    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final IncomeRepository incomeRepository;
     private final AccountRepository accountRepository;
@@ -218,13 +220,11 @@ public class IncomeService {
         }
         Map<Integer, Purchaseinvoice> purchasesById = purchaseinvoiceRepository.findAllWithRelations().stream()
                 .collect(Collectors.toMap(Purchaseinvoice::getId, purchase -> purchase, (a, b) -> a));
-        Set<Integer> linkedReturnIds = linkedReturnIds();
 
         return returnRepository.findAll().stream()
                 .filter(ret -> ret.getPurchaseID() != null && ret.getInvoiceID() == null)
                 .filter(ret -> SUPPLIER_RETURN_STATUS_APPROVED.equals(ret.getStatus()))
-                .filter(ret -> !linkedReturnIds.contains(ret.getId()))
-                .filter(this::hasCashRefund)
+                .filter(this::hasCollectibleOffsetDebt)
                 .filter(ret -> {
                     Purchaseinvoice purchase = purchasesById.get(ret.getPurchaseID().getId());
                     return purchase != null && purchase.getSupplierID() != null
@@ -239,7 +239,7 @@ public class IncomeService {
                             ret.getId(),
                             ret.getReturnCode(),
                             formatInstant(ret.getReturnDate()),
-                            cashRefundAmount(ret),
+                            collectibleOffsetDebt(ret),
                             "Phiếu nhập: " + purchaseCode);
                 })
                 .toList();
@@ -293,11 +293,14 @@ public class IncomeService {
         Income income = new Income();
         income.setApplicantID(applicant);
         income.setIncomeType(IncomeTypeOptionResponse.storageLabelOf(incomeTypeCode));
-        income.setDate(Instant.now());
+        income.setDate(nowVn());
         income.setReason(request.getReason() != null ? request.getReason().trim() : "");
         income.setAmount(request.getAmount());
         income.setPaidByCash(split[0]);
         income.setPaidByBanking(split[1]);
+        // NOT NULL on income.paidByCredit — Hibernate writes explicit NULL without @DynamicInsert,
+        // so default the unused debt-offset portion to zero (same as ExpenseService.create).
+        income.setPaidByCredit(BigDecimal.ZERO);
         income.setNote(trimToNull(request.getNote()));
         applyPartyLinks(income, incomeTypeCode, request);
         applyReferenceLinks(income, incomeTypeCode, request);
@@ -324,6 +327,9 @@ public class IncomeService {
         if (!asDraft && IncomeTypeOptionResponse.CUSTOMER.equals(incomeTypeCode)) {
             applyCustomerDebtPayment(saved, split[0], split[1]);
         }
+        if (!asDraft && IncomeTypeOptionResponse.SUPPLIER.equals(incomeTypeCode)) {
+            applySupplierOffsetDebtPayment(saved);
+        }
         return saved.getId();
     }
 
@@ -334,7 +340,7 @@ public class IncomeService {
 
     @Transactional(readOnly = true)
     public long countToday() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(VN_ZONE);
         return incomeRepository.findAll().stream()
                 .filter(income -> income.getDate() != null && toLocalDate(income.getDate()).equals(today))
                 .count();
@@ -342,7 +348,7 @@ public class IncomeService {
 
     @Transactional(readOnly = true)
     public BigDecimal sumTodayAmount() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(VN_ZONE);
         return incomeRepository.findAll().stream()
                 .filter(income -> income.getDate() != null && toLocalDate(income.getDate()).equals(today))
                 .map(Income::getAmount)
@@ -621,13 +627,19 @@ public class IncomeService {
         if (instant == null) {
             return "";
         }
+        // Stored via nowVn() — read back as UTC (same convention as ReturnService).
         return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
-                .withZone(ZoneId.systemDefault())
+                .withZone(ZoneOffset.UTC)
                 .format(instant);
     }
 
     private LocalDate toLocalDate(Instant instant) {
-        return instant.atZone(ZoneId.systemDefault()).toLocalDate();
+        return instant.atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    /** VN wall-clock time stored on a UTC-labelled Instant (matches ReturnService/ShiftreportService). */
+    private Instant nowVn() {
+        return LocalDateTime.now(VN_ZONE).toInstant(ZoneOffset.UTC);
     }
 
     private LocalDate parseDate(String value) {
@@ -708,17 +720,15 @@ public class IncomeService {
             if (!SUPPLIER_RETURN_STATUS_APPROVED.equals(ret.getStatus())) {
                 throw new IllegalArgumentException("Chỉ có thể thu tiền từ phiếu trả NCC đã duyệt");
             }
-            if (linkedReturnIds().contains(ret.getId())) {
-                throw new IllegalArgumentException("Phiếu trả hàng này đã được ghi nhận thu tiền");
+            if (!hasCollectibleOffsetDebt(ret)) {
+                throw new IllegalArgumentException("Phiếu trả hàng không còn khoản NCC cần hoàn");
             }
             Purchaseinvoice purchase = purchaseinvoiceRepository.findById(ret.getPurchaseID().getId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập liên quan"));
             if (purchase.getSupplierID() == null || !request.getSupplierId().equals(purchase.getSupplierID().getId())) {
                 throw new IllegalArgumentException("Phiếu trả hàng không thuộc nhà cung cấp đã chọn");
             }
-            if (!hasCashRefund(ret)) {
-                throw new IllegalArgumentException("Phiếu trả hàng không có khoản tiền NCC hoàn lại");
-            }
+            validateSupplierPaymentAmount(ret, request.getAmount());
         }
         if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType)) {
             Stockadjustment adjustment = stockadjustmentRepository.findById(request.getStockAdjustmentId())
@@ -838,20 +848,44 @@ public class IncomeService {
         return isPositive(invoice.getDebtAmount());
     }
 
-    private boolean hasCashRefund(Return ret) {
-        return cashRefundAmount(ret).compareTo(BigDecimal.ZERO) > 0;
+    private boolean hasCollectibleOffsetDebt(Return ret) {
+        return isPositive(collectibleOffsetDebt(ret));
     }
 
-    private BigDecimal cashRefundAmount(Return ret) {
-        return nullToZero(ret.getRefundCash()).add(nullToZero(ret.getRefundBanking()));
+    /** Remaining supplier debt to collect on an approved supplier-return slip. */
+    private BigDecimal collectibleOffsetDebt(Return ret) {
+        return nullToZero(ret != null ? ret.getOffsetDebtAmount() : null);
     }
 
-    private Set<Integer> linkedReturnIds() {
-        return incomeRepository.findAllWithRelations().stream()
-                .map(Income::getReturnID)
-                .filter(Objects::nonNull)
-                .map(Return::getId)
-                .collect(Collectors.toSet());
+    private void validateSupplierPaymentAmount(Return ret, BigDecimal paymentAmount) {
+        if (paymentAmount == null) {
+            return;
+        }
+        BigDecimal debt = collectibleOffsetDebt(ret);
+        if (paymentAmount.setScale(2, RoundingMode.HALF_UP).compareTo(debt.setScale(2, RoundingMode.HALF_UP)) > 0) {
+            throw new IllegalArgumentException(
+                    "Số tiền thu không được vượt quá số tiền NCC còn nợ (" + formatMoney(debt) + ")");
+        }
+    }
+
+    /** Reduces offsetDebtAmount when supplier debt-collection income is submitted. */
+    private void applySupplierOffsetDebtPayment(Income income) {
+        if (income.getReturnID() == null || income.getAmount() == null) {
+            return;
+        }
+        Return ret = returnRepository.findById(income.getReturnID().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng nhà cung cấp"));
+        validateSupplierPaymentAmount(ret, income.getAmount());
+
+        BigDecimal payment = income.getAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal currentDebt = collectibleOffsetDebt(ret);
+        BigDecimal newDebt = currentDebt.subtract(payment);
+        if (newDebt.compareTo(BigDecimal.ZERO) < 0) {
+            newDebt = BigDecimal.ZERO;
+        }
+
+        ret.setOffsetDebtAmount(newDebt);
+        returnRepository.save(ret);
     }
 
     private Set<Integer> linkedStockAdjustmentIds() {
