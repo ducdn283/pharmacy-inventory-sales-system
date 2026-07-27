@@ -20,6 +20,9 @@ public class ReturnDetailItemResponse {
 
     private Integer returnQty;
     private BigDecimal unitSellPrice;
+    /** Giá trị GỐC 100% của dòng trả, TRƯỚC khi áp tỷ lệ hoàn (Returndetail.originalLineValue). */
+    private BigDecimal originalLineValue;
+    /** Tiền THỰC hoàn của dòng = originalLineValue × appliedRefundRate. */
     private BigDecimal lineRefund;
 
     // Thuế GTGT giảm trừ của dòng, tách TỪ TRONG tiền hoàn theo đúng thuế suất của dòng hóa đơn gốc

@@ -20,6 +20,12 @@ public class ReturnableInvoiceResponse {
 
     private BigDecimal total;
 
+    /**
+     * Công nợ còn lại của hóa đơn. Hóa đơn còn nợ VẪN trả hàng được (bỏ gate 28/07): tiền hoàn sẽ được
+     * cấn trừ vào đúng khoản nợ này trước, phần dư mới thực sự phải chi ra cho khách.
+     */
+    private BigDecimal debtAmount;
+
     /** Current return status of the invoice (NONE / PARTIAL) — FULL invoices are excluded from the list. */
     private String returnStatusDisplay;
 }

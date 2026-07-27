@@ -47,6 +47,12 @@ public class ReturnService {
      */
     private static final int RETURN_WINDOW_UNLIMITED = -1;
 
+    /**
+     * Tỷ lệ hoàn đầy đủ. Dùng khi {@code Financialsetting.returnProductOnInvoiceValueRate} chưa được
+     * đặt (NULL / 0) — không có cấu hình thì hoàn nguyên giá trị, không tự ý giữ lại của khách.
+     */
+    private static final BigDecimal FULL_REFUND_RATE = new BigDecimal("100.00");
+
     // Invoice.date is stored as VN wall-clock LocalDateTime (see InvoiceService) — the adjustment
     // invoice's own date must use the same convention, not a real UTC Instant.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -208,6 +214,9 @@ public class ReturnService {
                         invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
                         invoice.getCustomerID() != null ? invoice.getCustomerID().getName() : "Khách lẻ",
                         invoice.getTotal(),
+                        // Công nợ còn lại của chính hóa đơn — số sẽ bị cấn trừ vào tiền hoàn khi duyệt
+                        // phiếu trả (netting). Hiển thị ngay ở bảng chọn để người lập biết trước.
+                        nz(invoice.getDebtAmount()),
                         returnStatusDisplay(invoiceReturnCode(invoice))))
                 .toList();
     }
@@ -273,6 +282,10 @@ public class ReturnService {
         Account creator = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
+        // Tỷ lệ hoàn của PHIẾU NÀY (mục 1.1 đặc tả bổ sung 27/07): mặc định lấy từ thiết lập tài chính,
+        // người lập được chỉnh tay từng phiếu. Áp đồng loạt cho mọi dòng trong phiếu.
+        BigDecimal refundRate = resolveRefundRate(request.getRefundRate());
+
         Map<Integer, Invoicedetail> lineById = invoiceLinesOf(invoice.getId()).stream()
                 .collect(Collectors.toMap(Invoicedetail::getId, line -> line, (a, b) -> a));
 
@@ -303,7 +316,7 @@ public class ReturnService {
             // checkbox — the client value is ignored. (Combo / medical-device "máy" / prescription
             // invoices are already blocked from return upstream.)
             boolean restockable = isRestockableUnit(line);
-            prepared.put(line.getId(), preparedLineOf(line, qty, restockable));
+            prepared.put(line.getId(), preparedLineOf(line, qty, restockable, refundRate));
         }
 
         if (prepared.isEmpty()) {
@@ -332,24 +345,10 @@ public class ReturnService {
         // bảng `return` — phiếu trả chỉ còn lưu tổng phải hoàn (totalRefund).
         ret.setTotalRefund(totalRefund);
         ret.setTotalVATRefund(totalVATRefund);
-        // ⚠️ TODO — luôn hoàn 100%, CHƯA áp Financialsetting.returnProductOnInvoiceValueRate (local 80%).
-        // Rà lại 2026-07-27 với bộ tài liệu BA mới (Huong_dan_tinh_thue sheet 12 §5A + sheet 09 §4,
-        // Logic_Thu_Chi sheet 07/10): phần lớn thắc mắc đã có lời giải, ghi lại để khỏi phân tích lại:
-        //   • Phần khách KHÔNG được hoàn VẪN là doanh thu chịu thuế bình thường ⇒ không cần Income/dòng
-        //     riêng nào cho nó, không có tiền "biến mất khỏi sổ" như từng lo.
-        //   • HĐ thay thế mang giá trị = phần khách thực giữ (ví dụ BA: mua 500k, hoàn 400k ⇒ HĐ 100k)
-        //     — đúng bằng `gốc − refund` mà createReplacementInvoice đang tính, KHÔNG phải sửa.
-        //   • HĐ điều chỉnh ghi âm đúng phần chênh lệch (= số tiền hoàn) — cũng đã đúng.
-        //   • Số tiền hoàn và GIÁ VỐN là 2 luồng độc lập: batch mới luôn theo giá vốn gốc, COGS đảo đủ
-        //     100% theo số lượng vật lý, KHÔNG nhân tỷ lệ hoàn (tài liệu cảnh báo riêng bẫy này).
-        // Còn vướng đúng 2 chỗ nên chưa bật: (1) chưa có ô nhập % theo từng phiếu (tài liệu nói nhà thuốc
-        // tự chỉnh mỗi lần, appliedRefundRate là bắt buộc chứ không phải tùy chọn); (2) trả HẾT hàng mà chỉ
-        // hoàn 80% thì HĐ thay thế phải mang 20% giữ lại, nhưng lúc đó không còn dòng hàng nào —
-        // createReplacementInvoice hiện return sớm, cần BA chốt dòng chi tiết ghi thế nào.
-        // Chi tiết đầy đủ: phan-tich-tai-lieu/quyet-dinh-va-mau-thuan.md (TREO #2).
-        ret.setAppliedRefundRate(new BigDecimal("100.00"));
-        // Khách phải trả hết nợ hóa đơn mới được trả hàng (assertReturnable) → không còn gì để cấn trừ.
-        ret.setOffsetDebtAmount(BigDecimal.ZERO);
+        ret.setAppliedRefundRate(refundRate);
+        // Số dự kiến cấn trừ vào công nợ hóa đơn gốc. Chốt lại theo dư nợ tại thời điểm DUYỆT
+        // (xem applyDebtOffset) — phiếu nháp chỉ giữ số ước tính để màn chi tiết có gì hiển thị.
+        ret.setOffsetDebtAmount(computeDebtOffset(invoice, totalRefund));
         ret.setReason(request.getReason().trim());
         ret.setNote(trimToNull(request.getNote()));
         ret.setStatus(status);
@@ -372,10 +371,11 @@ public class ReturnService {
             detail.setBaseQtyRestored(line.baseQtyRestored());
             detail.setUnitSellPrice(line.unitSellPrice());
             detail.setLineRefund(line.lineRefund());
-            // originalLineValue = giá trị GỐC 100% của dòng trả (trước khi áp tỷ lệ hoàn).
-            // hoàn 100% nên = lineRefund; khi bật returnProductOnInvoiceValueRate (<100%)
-            // thì lineRefund = originalLineValue × rate còn field này giữ mốc gốc để đối chiếu.
-            detail.setOriginalLineValue(line.lineRefund());
+            // originalLineValue = giá trị GỐC 100% của dòng trả (TRƯỚC khi áp tỷ lệ hoàn), lineRefund là
+            // số thực hoàn = originalLineValue × appliedRefundRate. Chênh lệch giữa 2 cột chính là phần
+            // nhà thuốc giữ lại — vẫn là doanh thu chịu thuế bình thường, không sinh bút toán riêng
+            // (đặc tả bổ sung 27/07 mục 1.2).
+            detail.setOriginalLineValue(line.originalLineValue());
             detail.setVatRate(line.vatRate());
             detail.setPreTaxAmount(line.preTaxAmount());
             detail.setVatAmount(line.vatAmount());
@@ -449,9 +449,14 @@ public class ReturnService {
      *       {@code subtotal/total/paidBy*} are left untouched (already pushed to the tax authority).</li>
      * </ul>
      *
-     * <p><strong>No cash moves here</strong>: re-issuing/adjusting invoices and carrying
-     * their debt across is invoice bookkeeping, but the register (quỹ) is never touched — the slip only
-     * computes and stores {@code totalRefund}. Paying the customer back is the Expense module's job — the
+     * <p><strong>Bù trừ công nợ (netting)</strong> runs first, before either invoice is emitted: the refund
+     * is offset against whatever the customer still owes on the original invoice and that debt is reduced
+     * on the spot, in this same transaction (see {@link #applyDebtOffset}). Only the remainder
+     * ({@code totalRefund − offsetDebtAmount}) is real money still owed back to the customer.</p>
+     *
+     * <p><strong>No cash moves here</strong>: re-issuing/adjusting invoices, carrying their debt across and
+     * netting it are all invoice bookkeeping, but the register (quỹ) is never touched — the slip only
+     * computes and stores the amounts. Paying the customer back is the Expense module's job — the
      * Expense slip is what records the actual payout and its cash/banking split.</p>
      *
      * <p>Also lazily opens/reuses the <strong>creator's</strong> (not the approver's) shift report right
@@ -481,6 +486,10 @@ public class ReturnService {
             }
         }
 
+        // Bù trừ TRƯỚC khi phát hành hóa đơn điều chỉnh/thay thế: hóa đơn thay thế kế thừa phần nợ CÒN LẠI
+        // sau khi đã cấn trừ, nếu chạy sau thì nó sẽ ôm nguyên số nợ chưa trừ.
+        applyDebtOffset(ret, original);
+
         if (signed) {
             createAdjustmentInvoice(ret, original, details);
         } else {
@@ -500,10 +509,11 @@ public class ReturnService {
      * does NOT deduct stock (the returned goods were already restocked into a fresh batch in
      * {@link #applyReturnEffect}). Linked both ways via {@code originalInvoiceID} + {@code returnID}.
      *
-     * <p>Neither invoice's debt moves here. Bù trừ công nợ was replaced by a hard gate — a customer still
-     * owing on an invoice cannot return against it at all ({@link #hasOutstandingDebt}) — so the original's
-     * {@code debtAmount} is already 0 by the time we get here, and the adjustment carries no debt of its
-     * own. Paying the customer back is the Expense module's job.</p>
+     * <p>The adjustment slip itself carries no debt of its own: any netting against the customer's unpaid
+     * balance was already applied to the ORIGINAL invoice by {@link #applyDebtOffset} before this runs
+     * (the signed original's debt is the one live figure that may still move — its
+     * {@code subtotal/total/paidBy*} stay frozen). Paying out whatever is left is the Expense module's
+     * job.</p>
      */
     private void createAdjustmentInvoice(Return ret, Invoice original, List<Returndetail> details) {
         BigDecimal refund = nz(ret.getTotalRefund());
@@ -570,14 +580,22 @@ public class ReturnService {
      * the replacement's own {@code debtAmount}; later corrections must target the replacement, never the
      * original (enforced by {@link #isInvalidatedByReplacement}, which every return-eligibility check
      * consults).
+     *
+     * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ (ví dụ của BA ở
+     * mục 1.2: mua 500.000, hoàn 400.000 ⇒ hóa đơn thay thế 100.000) — nên một dòng đã trả HẾT số lượng
+     * vẫn được giữ lại với {@code quantity = 0} và {@code subtotal} = phần giữ lại, thay vì biến mất. Nhờ
+     * vậy tổng hóa đơn luôn bằng tổng các dòng của chính nó, và phần doanh thu giữ lại không bốc hơi khỏi
+     * sổ. Chỉ khi KHÔNG còn gì (trả hết + hoàn 100%) thì mới không phát hành hóa đơn nào.</p>
      */
     private void createReplacementInvoice(Return ret, Invoice original, List<Returndetail> details) {
-        // Khách trả HẾT phần còn lại → không còn gì để phát hành lại. Phát hành một hóa đơn "Thay thế"
-        // rỗng (0đ, không dòng nào) chỉ tạo rác trong danh sách hóa đơn và lọt vào danh sách chọn để trả
-        // tiếp (không dòng nào ⇒ không bị coi là đã trả hết). Bỏ hẳn — hóa đơn gốc sẽ được
-        // updateInvoiceReturnStatus đánh dấu "Đã trả hàng toàn bộ" là đủ.
+        Map<Integer, Returndetail> returnedByLine = details.stream()
+                .collect(Collectors.toMap(d -> d.getInvoiceDetailID().getId(), d -> d, (a, b) -> a));
+
+        // Giữ lại dòng còn hàng, HOẶC dòng đã trả hết nhưng còn phần tiền nhà thuốc giữ lại (hoàn < 100%).
+        // Trả hết + hoàn đủ 100% ⇒ không còn dòng nào ⇒ không phát hành hóa đơn "Thay thế" rỗng (0đ, không
+        // dòng nào): vừa rác danh sách hóa đơn, vừa lọt lại vào danh sách chọn để trả tiếp.
         List<Invoicedetail> remainingLines = invoiceLinesOf(original.getId()).stream()
-                .filter(line -> line.getQuantity() - (line.getReturnedQty() != null ? line.getReturnedQty() : 0) > 0)
+                .filter(line -> remainingQtyOf(line) > 0 || retainedValueOf(line, returnedByLine).signum() > 0)
                 .toList();
         if (remainingLines.isEmpty()) {
             return;
@@ -591,7 +609,8 @@ public class ReturnService {
         BigDecimal newVatOutput = nz(original.getTotalVATOutput()).subtract(vatRefund).max(BigDecimal.ZERO);
         // Bản thay thế kế thừa TOÀN BỘ trạng thái còn lại của hóa đơn gốc — gồm cả công nợ: nợ chuyển sang
         // hóa đơn mới, hóa đơn gốc bị vô hiệu nên xóa nợ về 0. Đây là nghiệp vụ tạo hóa đơn mới từ hóa đơn
-        // cũ (không phải dòng tiền của phiếu trả), nên chuyển NGUYÊN nợ, không cấn trừ tiền hoàn.
+        // cũ (không phải dòng tiền của phiếu trả) nên chuyển NGUYÊN số nợ CÒN LẠI — phần đã cấn trừ vào
+        // tiền hoàn thì applyDebtOffset đã trừ khỏi hóa đơn gốc TRƯỚC khi vào đây, không trừ hai lần.
         BigDecimal newDebt = nz(original.getDebtAmount());
 
         original.setDebtAmount(BigDecimal.ZERO);
@@ -623,12 +642,8 @@ public class ReturnService {
 
         Invoice savedRepl = invoiceRepository.save(repl);
 
-        Map<Integer, Returndetail> returnedByLine = details.stream()
-                .collect(Collectors.toMap(d -> d.getInvoiceDetailID().getId(), d -> d, (a, b) -> a));
-
         for (Invoicedetail line : remainingLines) {
-            int returned = line.getReturnedQty() != null ? line.getReturnedQty() : 0;
-            int remainingQty = line.getQuantity() - returned;
+            int remainingQty = remainingQtyOf(line);
             Returndetail matched = returnedByLine.get(line.getId());
 
             Invoicedetail clone = new Invoicedetail();
@@ -636,10 +651,12 @@ public class ReturnService {
             clone.setProductID(line.getProductID());
             clone.setProductUnitID(line.getProductUnitID());
             clone.setBatchID(line.getBatchID());
+            // remainingQty = 0 nghĩa là dòng đã trả hết, chỉ còn phần tiền giữ lại (hoàn < 100%) — dòng
+            // "0 số lượng, còn tiền" này là cách duy nhất giữ phần doanh thu đó trên hóa đơn thay thế.
             clone.setQuantity(remainingQty);
             clone.setUnitName(line.getUnitName());
-            clone.setBaseQtyDeducted(line.getBaseQtyDeducted()
-                    - (matched != null && matched.getBaseQtyRestored() != null ? matched.getBaseQtyRestored() : 0));
+            clone.setBaseQtyDeducted(Math.max(0, line.getBaseQtyDeducted()
+                    - (matched != null && matched.getBaseQtyRestored() != null ? matched.getBaseQtyRestored() : 0)));
             clone.setUnitSellPrice(line.getUnitSellPrice());
             clone.setSubtotal(nz(line.getSubtotal())
                     .subtract(matched != null ? nz(matched.getLineRefund()) : BigDecimal.ZERO)
@@ -654,6 +671,64 @@ public class ReturnService {
                     .max(BigDecimal.ZERO));
             invoicedetailRepository.save(clone);
         }
+    }
+
+    // ------------------------------------------------------------------ bù trừ công nợ (netting)
+
+    /**
+     * Số tiền hoàn được cấn trừ vào công nợ của chính hóa đơn gốc:
+     * {@code offsetDebtAmount = MIN(totalRefund, dư nợ hiện tại)} — đặc tả bổ sung 27/07 mục 1.2 bước 5 và
+     * mục 3.6 bước 1. Trả 0 khi nhà thuốc tắt {@code Financialsetting.autoOffsetDebtOnRefund} (lúc đó tiền
+     * hoàn và công nợ được xử lý tách rời qua phiếu thu/phiếu chi).
+     */
+    private BigDecimal computeDebtOffset(Invoice invoice, BigDecimal totalRefund) {
+        if (!isAutoOffsetDebt()) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal debt = nz(invoice != null ? invoice.getDebtAmount() : null);
+        return debt.min(nz(totalRefund)).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Thực hiện bù trừ khi phiếu được duyệt: chốt lại {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM
+     * DUYỆT (khách có thể đã trả bớt nợ giữa lúc lập phiếu và lúc Owner duyệt) rồi trừ thẳng vào
+     * {@code Invoice.debtAmount} ngay trong cùng transaction — đặc tả bổ sung 27/07 mục 3.4: cập nhật trực
+     * tiếp, không suy ra bằng cách SUM lại; lỗi ở bất kỳ bước nào thì rollback cả cụm.
+     *
+     * <p>Phần còn lại ({@code totalRefund − offsetDebtAmount}) là tiền thật nhà thuốc còn phải hoàn cho
+     * khách — phiếu chi bên Kế toán chi ra. <strong>CHƯA sinh cặp Income/Expense</strong> mà mục 3.2 yêu
+     * cầu (Income "thu bù trừ" + Expense "chi hoàn trả", cả hai {@code paidByCredit = offsetDebtAmount}):
+     * hai bảng đó thuộc module Thu/Chi của thành viên khác, phải chốt mã phiếu / trạng thái / gắn ca với
+     * chủ module trước khi tự insert. Công nợ đã được trừ đúng ở đây nên số liệu không sai, chỉ thiếu 2
+     * chứng từ đối ứng.</p>
+     */
+    private void applyDebtOffset(Return ret, Invoice invoice) {
+        BigDecimal offset = computeDebtOffset(invoice, ret.getTotalRefund());
+        ret.setOffsetDebtAmount(offset);
+        if (offset.signum() <= 0 || invoice == null) {
+            return;
+        }
+        invoice.setDebtAmount(nz(invoice.getDebtAmount()).subtract(offset).max(BigDecimal.ZERO));
+        invoiceRepository.save(invoice);
+    }
+
+    /** Số lượng của dòng hóa đơn còn CHƯA trả (đã trừ mọi lần trả trước đó). */
+    private int remainingQtyOf(Invoicedetail line) {
+        int quantity = line.getQuantity() != null ? line.getQuantity() : 0;
+        int returned = line.getReturnedQty() != null ? line.getReturnedQty() : 0;
+        return Math.max(0, quantity - returned);
+    }
+
+    /**
+     * Phần tiền của dòng nhà thuốc GIỮ LẠI ở lần trả này = giá trị gốc dòng trả − số thực hoàn (tức phần
+     * {@code 100% − appliedRefundRate}). Bằng 0 khi hoàn đủ 100%.
+     */
+    private BigDecimal retainedValueOf(Invoicedetail line, Map<Integer, Returndetail> returnedByLine) {
+        Returndetail matched = returnedByLine.get(line.getId());
+        if (matched == null) {
+            return BigDecimal.ZERO;
+        }
+        return nz(matched.getOriginalLineValue()).subtract(nz(matched.getLineRefund())).max(BigDecimal.ZERO);
     }
 
     /** Walks to the very first invoice in a replace/adjust chain — itself if it has no root of its own. */
@@ -756,6 +831,11 @@ public class ReturnService {
                 .mapToInt(Integer::intValue)
                 .sum();
 
+        BigDecimal totalOriginalValue = details.stream()
+                .map(Returndetail::getOriginalLineValue)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         String statusName = getStatusName(ret);
         Invoice invoice = ret.getInvoiceID();
         Customer customer = invoice != null ? invoice.getCustomerID() : null;
@@ -780,6 +860,12 @@ public class ReturnService {
                 totalQuantity,
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
+                // Tiền thật còn phải hoàn cho khách sau khi đã cấn trừ công nợ — phần phiếu chi bên Kế toán chi ra.
+                nz(ret.getTotalRefund()).subtract(nz(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
+                ret.getAppliedRefundRate(),
+                // Tổng giá trị gốc 100% của hàng trả, và phần nhà thuốc giữ lại (chênh do tỷ lệ hoàn < 100%).
+                totalOriginalValue,
+                totalOriginalValue.subtract(nz(ret.getTotalRefund())).max(BigDecimal.ZERO),
                 details.stream()
                         .map(Returndetail::getPreTaxAmount)
                         .filter(Objects::nonNull)
@@ -825,6 +911,7 @@ public class ReturnService {
                 unit != null ? unit.getUnitName() : "",
                 detail.getReturnQty(),
                 detail.getUnitSellPrice(),
+                detail.getOriginalLineValue(),
                 detail.getLineRefund(),
                 detail.getVatRate(),
                 detail.getPreTaxAmount(),
@@ -865,8 +952,13 @@ public class ReturnService {
     }
 
     /**
-     * Builds a priced return line. The refund money ({@code lineRefund}) is the gross (VAT-inclusive)
-     * value of the returned quantity, prorated from the original sale line.
+     * Builds a priced return line.
+     *
+     * <p><b>Tỷ lệ hoàn</b> (đặc tả bổ sung 27/07 mục 1.2): {@code originalLineValue} là giá trị GỐC 100%
+     * (gross, prorate từ dòng hóa đơn bán), {@code lineRefund = originalLineValue × refundRate}. Thuế được
+     * tách TỪ TRONG {@code lineRefund} — tức chỉ giảm trừ đúng phần thực hoàn, phần giữ lại vẫn là doanh
+     * thu chịu thuế bình thường (ví dụ của BA: bán 1.000.000 hoàn 80% ⇒ VAT giảm trừ tính trên 800.000,
+     * KHÔNG phải 1.000.000).</p>
      *
      * <p><b>VAT mirrors the original invoice line</b>: the return/adjustment invoice is the
      * negative counterpart of the original, so it must reverse the exact VAT that was snapshotted onto the sale
@@ -875,9 +967,10 @@ public class ReturnService {
      * whole refund is a revenue reduction (vatRate/vatAmount = 0). Gating again on the household's current
      * revenue group would desync the credit from the invoice it reverses.</p>
      */
-    private PreparedLine preparedLineOf(Invoicedetail line, int qty, boolean restockable) {
+    private PreparedLine preparedLineOf(Invoicedetail line, int qty, boolean restockable, BigDecimal refundRate) {
         BigDecimal saleRate = line.getVatRate() != null ? line.getVatRate() : BigDecimal.ZERO;
-        BigDecimal gross = grossRefundOf(line, qty);
+        BigDecimal originalLineValue = grossRefundOf(line, qty);
+        BigDecimal gross = applyRefundRate(originalLineValue, refundRate);
 
         BigDecimal rate;
         BigDecimal preTax;
@@ -892,7 +985,16 @@ public class ReturnService {
             preTax = gross;
             vat = BigDecimal.ZERO;
         }
-        return new PreparedLine(line, qty, restockable, rate, preTax, vat, gross);
+        return new PreparedLine(line, qty, restockable, rate, preTax, vat, gross, originalLineValue);
+    }
+
+    /** {@code lineRefund = originalLineValue × rate%}, làm tròn về đồng. */
+    private BigDecimal applyRefundRate(BigDecimal originalLineValue, BigDecimal refundRate) {
+        if (refundRate == null || refundRate.compareTo(FULL_REFUND_RATE) >= 0) {
+            return originalLineValue;
+        }
+        return originalLineValue.multiply(refundRate)
+                .divide(FULL_REFUND_RATE, 2, RoundingMode.HALF_UP);
     }
 
     /** Gross (VAT-inclusive) refund of {@code qty} units, prorated from the sale line's gross subtotal. */
@@ -981,29 +1083,11 @@ public class ReturnService {
         if (isInvalidatedByReplacement(invoice)) {
             return false;
         }
-        if (hasOutstandingDebt(invoice)) {
-            return false;
-        }
+        // KHÔNG chặn hóa đơn còn nợ: khách còn nợ vẫn được trả hàng, tiền hoàn cấn trừ thẳng vào khoản nợ
+        // đó (netting — xem applyDebtOffset). Đặc tả bổ sung 27/07 mục 3, và PISMS_Xu_ly_Cong_no sheet
+        // "Công nợ Khách hàng" ca 3/4/5: "phần mềm KHÔNG cần bắt người dùng thanh toán xong rồi mới xử lý
+        // trả hàng". Gate cũ (bắt trả hết nợ) đã được gỡ ngày 28/07 theo đúng tài liệu này.
         return withinReturnWindow(effectiveSaleDate(invoice), windowDays);
-    }
-
-    /**
-     * BA 2026-07-26: an invoice the customer has not paid off cannot be returned at all. Settling the
-     * debt first keeps the return screen out of the money entirely — there is nothing left to cấn trừ,
-     * so the refund is a plain payable handled by the Expense module.
-     *
-     * <p><strong>Known conflict with the BA docs, deferred on purpose (2026-07-27).</strong> The
-     * documents issued that afternoon (PISMS_Xu_ly_Cong_no sheet "Công nợ Khách hàng" ca 3/4/5;
-     * Huong_dan_tinh_thue sheet 04, "netting" section) require the OPPOSITE: a return must be allowed
-     * while the invoice is still unpaid, offsetting {@code MIN(totalRefund, debtAmount)} against the
-     * debt and paying out only the remainder — *"phần mềm KHÔNG cần bắt người dùng thanh toán xong rồi
-     * mới xử lý trả hàng"*. {@code Financialsetting.autoOffsetDebtOnRefund} (default true) exists for
-     * exactly that and is deliberately NOT read here yet. Owner's call: keep the simple gate for now,
-     * do netting in a later phase. Dropping this gate and wiring the setting must happen together —
-     * see phan-tich-tai-lieu/quyet-dinh-va-mau-thuan.md (TREO #1) for the full spec.</p>
-     */
-    private boolean hasOutstandingDebt(Invoice invoice) {
-        return nz(invoice.getDebtAmount()).signum() > 0;
     }
 
     private void assertReturnable(Invoice invoice) {
@@ -1022,10 +1106,6 @@ public class ReturnService {
         if (isInvalidatedByReplacement(invoice)) {
             throw new IllegalArgumentException(
                     "Hóa đơn này đã được thay thế bởi hóa đơn khác — vui lòng chọn hóa đơn thay thế mới nhất");
-        }
-        if (hasOutstandingDebt(invoice)) {
-            throw new IllegalArgumentException(
-                    "Hóa đơn này khách còn nợ — khách phải thanh toán hết mới được trả hàng");
         }
         int windowDays = getReturnWindowDays();
         if (!withinReturnWindow(effectiveSaleDate(invoice), windowDays)) {
@@ -1048,6 +1128,49 @@ public class ReturnService {
                 .map(Financialsetting::getReturnPolicyMaxDays)
                 .filter(days -> days >= 0)
                 .orElse(RETURN_WINDOW_UNLIMITED);
+    }
+
+    /**
+     * Tỷ lệ hoàn MẶC ĐỊNH toàn hệ thống, từ {@code Financialsetting.returnProductOnInvoiceValueRate}
+     * (đặc tả bổ sung 27/07 mục 1.1). Chưa cấu hình (NULL) hoặc ≤ 0 ⇒ hoàn 100%: không có chính sách giữ
+     * lại thì không được tự ý giữ tiền của khách. Giá trị &gt; 100 bị kẹp về 100.
+     *
+     * <p>Public để màn tạo điền sẵn ô "% hoàn" đúng theo thiết lập tài chính.</p>
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal getDefaultRefundRate() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getReturnProductOnInvoiceValueRate)
+                .filter(rate -> rate.signum() > 0)
+                .map(rate -> rate.min(FULL_REFUND_RATE))
+                .orElse(FULL_REFUND_RATE)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Có tự động cấn trừ tiền hoàn vào công nợ hóa đơn hay không —
+     * {@code Financialsetting.autoOffsetDebtOnRefund}, mặc định BẬT (cột {@code DEFAULT 1}).
+     */
+    @Transactional(readOnly = true)
+    public boolean isAutoOffsetDebt() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getAutoOffsetDebtOnRefund)
+                .orElse(Boolean.TRUE);
+    }
+
+    /**
+     * Tỷ lệ hoàn thực áp cho phiếu đang lập: người dùng nhập gì thì dùng nấy (0 &lt; rate ≤ 100), bỏ trống
+     * thì lấy mặc định của hệ thống. Tỷ lệ nằm ở HEADER phiếu nên áp đồng loạt mọi dòng — muốn mỗi sản
+     * phẩm một tỷ lệ khác nhau thì phải lập nhiều phiếu (giới hạn đã ghi rõ ở mục 1.4 của đặc tả).
+     */
+    private BigDecimal resolveRefundRate(BigDecimal requested) {
+        if (requested == null) {
+            return getDefaultRefundRate();
+        }
+        if (requested.signum() <= 0 || requested.compareTo(FULL_REFUND_RATE) > 0) {
+            throw new IllegalArgumentException("Tỷ lệ hoàn phải lớn hơn 0 và không vượt quá 100%");
+        }
+        return requested.setScale(2, RoundingMode.HALF_UP);
     }
 
     /** The window as the create screen phrases it: "trong 3 ngày" / "không giới hạn thời gian". */
@@ -1316,7 +1439,7 @@ public class ReturnService {
     /** A validated, priced return line (with its VAT split) ready to be persisted. */
     private record PreparedLine(Invoicedetail invoiceLine, int qty, boolean restockable,
                                 BigDecimal vatRate, BigDecimal preTaxAmount, BigDecimal vatAmount,
-                                BigDecimal lineRefund) {
+                                BigDecimal lineRefund, BigDecimal originalLineValue) {
         BigDecimal unitSellPrice() {
             return invoiceLine.getUnitSellPrice() != null ? invoiceLine.getUnitSellPrice() : BigDecimal.ZERO;
         }
