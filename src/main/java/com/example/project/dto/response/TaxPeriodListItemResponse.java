@@ -33,6 +33,9 @@ public class TaxPeriodListItemResponse {
      */
     private BigDecimal vatPayable;
 
+    /** Thuế TNCN của kỳ — the other half of what the household actually owes. */
+    private BigDecimal incomeTax;
+
     private String recordedAtDisplay;
 
     /** Only the newest period may still be edited — the chain below it is frozen. */

@@ -45,10 +45,24 @@ public final class TaxRevenueGroup {
      * sector would use a different rate (services are 5%), so this constant is only correct because
      * the whole system models one pharmacy.</p>
      *
-     * <p>The matching <em>personal income tax</em> of 0.5% is deliberately not modelled:
-     * {@code taxperiodsnapshot} has VAT columns only, and adding PIT would need a schema change.</p>
+     * <p>Its personal-income-tax twin is {@link #DIRECT_PIT_RATE}.</p>
      */
     public static final BigDecimal DIRECT_VAT_RATE = new BigDecimal("0.01");
+
+    /**
+     * Personal income tax under the {@link #DIRECT} method: <strong>0.5%</strong> of revenue for
+     * retail and wholesale of goods — the twin of {@link #DIRECT_VAT_RATE}, declared in the same
+     * quarterly filing.
+     */
+    public static final BigDecimal DIRECT_PIT_RATE = new BigDecimal("0.005");
+
+    /**
+     * Personal income tax under the {@link #DEDUCTION} method: <strong>15%</strong> of taxable
+     * income, i.e. revenue less legitimate costs, rather than a flat slice of revenue. That is the
+     * whole reason group 3 is described as "tính theo lợi nhuận" — a loss-making quarter owes
+     * nothing, which a percentage of revenue could never express.
+     */
+    public static final BigDecimal DEDUCTION_PIT_RATE = new BigDecimal("0.15");
 
     private static final Map<Integer, String> LABELS = Map.of(
             EXEMPT, "Nhóm 1 — dưới ngưỡng 1 (miễn thuế)",

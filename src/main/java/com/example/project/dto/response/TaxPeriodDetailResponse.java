@@ -31,6 +31,9 @@ public class TaxPeriodDetailResponse {
     private BigDecimal vatCarryforwardOut;
     private BigDecimal vatPayable;
 
+    /** Thuế TNCN của kỳ. Stored, not re-derived — see {@code TaxPeriodUpdateRequest}. */
+    private BigDecimal incomeTax;
+
     private BigDecimal cashBalanceAtPeriodEnd;
 
     /** Group to apply from the day after {@code endDate}; defaults to this period's own group. */

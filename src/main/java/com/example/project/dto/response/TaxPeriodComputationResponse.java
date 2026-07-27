@@ -54,6 +54,16 @@ public class TaxPeriodComputationResponse {
     private BigDecimal vatCarryforwardOut;
     private BigDecimal vatPayable;
 
+    // --- personal income tax. Group 2 pays a slice of revenue, group 3 a slice of profit, so the
+    //     three cost lines below are only populated (and only meaningful) for group 3.
+    private BigDecimal costOfGoodsSold;
+    private BigDecimal operatingCost;
+    private BigDecimal taxableIncome;
+    private BigDecimal incomeTax;
+
+    /** PIT rate as a human number: {@code 0.50} for group 2, {@code 15.00} for group 3. */
+    private BigDecimal incomeTaxRatePercent;
+
     /** How many source documents fell in the period — a sanity check for an empty-looking result. */
     private int invoiceCount;
     private int customerReturnCount;

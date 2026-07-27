@@ -29,6 +29,9 @@ public class TaxPeriodUpdateRequest {
 
     private BigDecimal vatCarryforwardIn;
 
+    /** Thuế TNCN của kỳ — typed as-is, like the VAT lines above. */
+    private BigDecimal incomeTax;
+
     /** Revenue group to apply from the day after this period's {@code endDate}. */
     private Integer nextPeriodTaxType;
 

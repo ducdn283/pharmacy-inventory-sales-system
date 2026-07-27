@@ -129,7 +129,8 @@
 
         <div class="alert alert-info small p-3" th:if="${computation.taxExempt}">
             <i class="ti ti-info-circle me-1"></i>
-            Kỳ này thuộc nhóm miễn thuế — không kê khai thuế GTGT, mọi chỉ tiêu đều bằng 0.
+            Kỳ này thuộc <strong>Nhóm 1 — miễn thuế</strong>. Hộ kinh doanh dưới ngưỡng 1 chỉ phải
+            báo cáo doanh thu thực tế theo năm, không kê khai thuế theo quý.
         </div>
 
         <div class="tax-card p-4 mb-4">
@@ -226,9 +227,28 @@
 
             <div class="col-12 col-xl-7">
                 <div class="tax-card p-4 h-100">
-                    <h2 class="fs-6 mb-3">Tính toán thuế GTGT của kỳ</h2>
+                    <!-- Nhóm 1 không có bảng tính nào: dưới ngưỡng 1 thì không phát sinh cả thuế
+                         GTGT lẫn thuế TNCN, nên hiện một câu thay vì một loạt dòng 0đ. -->
+                    <div th:if="${computation.taxExempt}">
+                        <h2 class="fs-6 mb-3">Nghĩa vụ thuế của kỳ</h2>
+                        <p class="mb-2">
+                            <strong>Không phát sinh thuế.</strong>
+                        </p>
+                        <p class="text-secondary small mb-0">
+                            Doanh thu của hộ kinh doanh đang dưới ngưỡng 1 nên kỳ này không nộp thuế
+                            GTGT lẫn thuế TNCN. Kỳ vẫn được chốt để giữ chuỗi kỳ thuế liên tục và ghi
+                            nhận nhóm áp dụng cho kỳ sau.
+                        </p>
+                        <p class="text-secondary small mb-0 mt-2">
+                            Doanh thu của kỳ:
+                            <strong th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                            — theo dõi để biết khi nào vượt ngưỡng.
+                        </p>
+                    </div>
 
-                    <table class="table vat-table mb-0">
+                    <h2 class="fs-6 mb-3" th:unless="${computation.taxExempt}">Tính toán thuế GTGT của kỳ</h2>
+
+                    <table class="table vat-table mb-0" th:unless="${computation.taxExempt}">
                         <tbody>
                         <!-- Nhóm 3 — phương pháp khấu trừ -->
                         <th:block th:if="${computation.deductionGroup}">
@@ -281,7 +301,7 @@
                             <tr class="component">
                                 <td>Tỷ lệ thuế GTGT trên doanh thu (bán lẻ hàng hóa)</td>
                                 <td class="amount"
-                                    th:text="${#numbers.formatDecimal(computation.directVatRatePercent, 0, 'POINT', 2, 'COMMA') + '%'}">1,00%</td>
+                                    th:text="${#numbers.formatDecimal(computation.directVatRatePercent, 1, 'POINT', 2, 'COMMA') + '%'}">1,00%</td>
                             </tr>
                         </th:block>
 
@@ -299,6 +319,56 @@
                         </tbody>
                     </table>
 
+                    <h2 class="fs-6 mt-4 mb-3" th:unless="${computation.taxExempt}">Thuế TNCN của kỳ</h2>
+
+                    <table class="table vat-table mb-0" th:unless="${computation.taxExempt}">
+                        <tbody>
+                        <!-- Nhóm 3 đánh thuế trên lợi nhuận nên phải bóc chi phí ra; nhóm 2 chỉ lấy
+                             một tỷ lệ trên doanh thu đã hiện ở bảng trên. -->
+                        <th:block th:if="${computation.deductionGroup}">
+                            <tr class="component">
+                                <td>Doanh thu của kỳ (đã trừ hàng bán bị trả lại)</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr class="component">
+                                <td>Trừ: giá vốn hàng bán (đã trừ hàng nhập lại kho)</td>
+                                <td class="amount"
+                                    th:text="${'−' + #numbers.formatDecimal(computation.costOfGoodsSold, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                            </tr>
+                            <tr class="component">
+                                <td>Trừ: chi phí vận hành đã duyệt (không gắn phiếu nhập)</td>
+                                <td class="amount"
+                                    th:text="${'−' + #numbers.formatDecimal(computation.operatingCost, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                            </tr>
+                            <tr class="row-subtotal">
+                                <td>Thu nhập chịu thuế</td>
+                                <td class="amount"
+                                    th:text="${#numbers.formatDecimal(computation.taxableIncome, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                        </th:block>
+
+                        <tr class="component" th:if="${computation.percentageMethod}">
+                            <td>Doanh thu của kỳ (đã trừ hàng bán bị trả lại)</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+
+                        <tr class="component">
+                            <td th:text="${computation.deductionGroup
+                                          ? 'Thuế suất TNCN trên thu nhập chịu thuế'
+                                          : 'Tỷ lệ thuế TNCN trên doanh thu (bán lẻ hàng hóa)'}">Thuế suất TNCN</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.incomeTaxRatePercent, 1, 'POINT', 2, 'COMMA') + '%'}">0,50%</td>
+                        </tr>
+                        <tr class="row-total">
+                            <td>Thuế TNCN phải nộp của kỳ</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.incomeTax, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        </tbody>
+                    </table>
+
                     <div class="alert alert-secondary small p-3 mt-3 mb-0">
                         <i class="ti ti-device-floppy-off me-1"></i>
                         Đây chỉ là số liệu xem trước — chưa có gì được lưu. Kỳ thuế chỉ được ghi nhận
@@ -310,9 +380,11 @@
 
         <div class="tax-card p-4 mt-3">
             <h2 class="fs-6 mb-1">Chốt kỳ thuế</h2>
-            <p class="text-secondary small mb-3">
-                Chốt kỳ sẽ lưu lại các chỉ tiêu thuế GTGT ở trên. Số liệu đã chốt không tính lại nữa —
-                đó là mục đích của việc chốt số.
+            <p class="text-secondary small mb-3"
+               th:text="${computation.taxExempt
+                         ? 'Kỳ miễn thuế vẫn cần chốt để giữ chuỗi kỳ liên tục và ghi nhận nhóm áp dụng cho kỳ sau. Mọi chỉ tiêu thuế được lưu bằng 0.'
+                         : 'Chốt kỳ sẽ lưu lại các chỉ tiêu thuế ở trên. Số liệu đã chốt không tính lại nữa — đó là mục đích của việc chốt số.'}">
+                Chốt kỳ sẽ lưu lại các chỉ tiêu thuế ở trên.
             </p>
 
             <div class="alert alert-secondary small p-3 mb-0" th:if="${closeBlockedReason != null}">

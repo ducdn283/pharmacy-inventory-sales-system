@@ -1,5 +1,7 @@
 package com.example.project.service;
 
+import com.example.project.constant.ExpenseStatus;
+import com.example.project.constant.ExpenseType;
 import com.example.project.constant.ReturnPurchaseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.RoleConstants;
@@ -15,10 +17,13 @@ import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Taxperiodsnapshot;
 import com.example.project.repository.AccountpermissionRepository;
+import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.FinancialsettingRepository;
 import com.example.project.repository.InvoiceRepository;
+import com.example.project.repository.InvoicedetailRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
+import com.example.project.repository.ReturndetailRepository;
 import com.example.project.repository.TaxperiodsnapshotRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,12 +86,27 @@ public class TaxperiodsnapshotService {
     private static final int MIN_YEAR = 2000;
     private static final int MAX_YEAR = 2100;
 
+    /**
+     * Expense types that reduce taxable income. Only running costs qualify: a refund payout has
+     * already been taken off revenue, a debt payment settles a cost recognised earlier, and an
+     * employee advance is not a cost at all. Purchase-linked slips are excluded separately, by the
+     * repository query, because their money is already counted as cost of goods sold.
+     */
+    private static final List<String> DEDUCTIBLE_EXPENSE_TYPES = List.of(ExpenseType.OPERATIONAL);
+
+    /** Statuses at which an expense's money has genuinely left — mirrors {@code ExpenseService}. */
+    private static final List<String> DISBURSED_EXPENSE_STATUSES =
+            List.of(ExpenseStatus.AWAITING_PAYMENT, ExpenseStatus.COMPLETED);
+
     private final TaxperiodsnapshotRepository taxperiodsnapshotRepository;
     private final InvoiceRepository invoiceRepository;
     private final ReturnRepository returnRepository;
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final FinancialsettingRepository financialsettingRepository;
     private final AccountpermissionRepository accountpermissionRepository;
+    private final InvoicedetailRepository invoicedetailRepository;
+    private final ReturndetailRepository returndetailRepository;
+    private final ExpenseRepository expenseRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
 
     public TaxperiodsnapshotService(TaxperiodsnapshotRepository taxperiodsnapshotRepository,
@@ -95,6 +115,9 @@ public class TaxperiodsnapshotService {
                                     PurchaseinvoiceRepository purchaseinvoiceRepository,
                                     FinancialsettingRepository financialsettingRepository,
                                     AccountpermissionRepository accountpermissionRepository,
+                                    InvoicedetailRepository invoicedetailRepository,
+                                    ReturndetailRepository returndetailRepository,
+                                    ExpenseRepository expenseRepository,
                                     PurchaseinvoiceService purchaseinvoiceService) {
         this.taxperiodsnapshotRepository = taxperiodsnapshotRepository;
         this.invoiceRepository = invoiceRepository;
@@ -102,6 +125,9 @@ public class TaxperiodsnapshotService {
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.accountpermissionRepository = accountpermissionRepository;
+        this.invoicedetailRepository = invoicedetailRepository;
+        this.returndetailRepository = returndetailRepository;
+        this.expenseRepository = expenseRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
@@ -331,6 +357,29 @@ public class TaxperiodsnapshotService {
         BigDecimal vatPayable = vatPayable(vatOutput, vatInput, carryIn);
         BigDecimal carryOut = carryForwardOut(vatOutput, vatInput, carryIn);
 
+        // --- personal income tax. Group 2 pays a slice of revenue; group 3 pays a slice of profit,
+        //     so only group 3 needs the cost side worked out at all.
+        BigDecimal costOfGoodsSold = BigDecimal.ZERO;
+        BigDecimal operatingCost = BigDecimal.ZERO;
+        BigDecimal taxableIncome = BigDecimal.ZERO;
+        BigDecimal incomeTax = BigDecimal.ZERO;
+
+        if (deduction) {
+            costOfGoodsSold = safe(invoicedetailRepository
+                    .sumCostOfGoodsSoldInPeriod(localStart(period), localEndExclusive(period)))
+                    .subtract(safe(returndetailRepository.sumRestockedCostInPeriod(
+                            instantStart(period), instantEndExclusive(period), ReturnStatus.DEBT)))
+                    .max(BigDecimal.ZERO);
+            operatingCost = safe(expenseRepository.sumOperatingCostInPeriod(
+                    instantStart(period), instantEndExclusive(period),
+                    DEDUCTIBLE_EXPENSE_TYPES, DISBURSED_EXPENSE_STATUSES));
+            // A loss-making quarter owes nothing; it does not create a negative tax.
+            taxableIncome = revenue.subtract(costOfGoodsSold).subtract(operatingCost).max(BigDecimal.ZERO);
+            incomeTax = taxableIncome.multiply(TaxRevenueGroup.DEDUCTION_PIT_RATE);
+        } else if (!exempt) {
+            incomeTax = revenue.multiply(TaxRevenueGroup.DIRECT_PIT_RATE);
+        }
+
         return new TaxPeriodComputationResponse(
                 period.label(),
                 DATE.format(period.startDate()),
@@ -341,8 +390,7 @@ public class TaxperiodsnapshotService {
                 exempt,
                 !deduction && !exempt,
                 scaled(revenue),
-                TaxRevenueGroup.DIRECT_VAT_RATE.multiply(BigDecimal.valueOf(100))
-                        .setScale(2, RoundingMode.HALF_UP),
+                percent(TaxRevenueGroup.DIRECT_VAT_RATE),
                 scaled(vatOutputFromSales),
                 scaled(vatOutputReturnDeduction),
                 scaled(vatOutput),
@@ -352,6 +400,13 @@ public class TaxperiodsnapshotService {
                 scaled(carryIn),
                 scaled(carryOut),
                 scaled(vatPayable),
+                scaled(costOfGoodsSold),
+                scaled(operatingCost),
+                scaled(taxableIncome),
+                scaled(incomeTax),
+                percent(deduction
+                        ? TaxRevenueGroup.DEDUCTION_PIT_RATE
+                        : (exempt ? BigDecimal.ZERO : TaxRevenueGroup.DIRECT_PIT_RATE)),
                 invoices.size(),
                 customerReturns.size(),
                 deductiblePurchases.size(),
@@ -473,6 +528,7 @@ public class TaxperiodsnapshotService {
         snapshot.setVatInput(computed.getVatInput());
         snapshot.setVatCarryforwardIn(computed.getVatCarryforwardIn());
         snapshot.setVatCarryforwardOut(computed.getVatCarryforwardOut());
+        snapshot.setIncomeTax(computed.getIncomeTax());
         snapshot.setNextPeriodTaxType(nextGroup);
         snapshot.setCashBalanceAtPeriodEnd(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
@@ -512,6 +568,17 @@ public class TaxperiodsnapshotService {
         BigDecimal vatInput = requireNonNegative(request.getVatInput(), "Thuế GTGT đầu vào");
         BigDecimal carryIn = requireNonNegative(request.getVatCarryforwardIn(),
                 "Thuế GTGT khấu trừ chuyển từ kỳ trước");
+        BigDecimal incomeTax = requireNonNegative(request.getIncomeTax(), "Thuế TNCN");
+
+        // A period below threshold 1 owes nothing at all — no VAT, no PIT. The form does not offer
+        // the fields, but an amendment must not be able to invent an obligation for it either, so
+        // anything posted is dropped rather than validated. Only the group and the notes survive.
+        if (TaxRevenueGroup.isTaxExempt(storedGroup(snapshot))) {
+            vatOutput = BigDecimal.ZERO;
+            vatInput = BigDecimal.ZERO;
+            carryIn = BigDecimal.ZERO;
+            incomeTax = BigDecimal.ZERO;
+        }
 
         BigDecimal cashBalance = request.getCashBalanceAtPeriodEnd();
         if (cashBalance != null && cashBalance.compareTo(BigDecimal.ZERO) < 0) {
@@ -522,6 +589,7 @@ public class TaxperiodsnapshotService {
         snapshot.setVatInput(vatInput);
         snapshot.setVatCarryforwardIn(carryIn);
         snapshot.setVatCarryforwardOut(carryForwardOut(vatOutput, vatInput, carryIn));
+        snapshot.setIncomeTax(incomeTax);
         snapshot.setNextPeriodTaxType(nextGroup);
         snapshot.setCashBalanceAtPeriodEnd(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
@@ -568,6 +636,7 @@ public class TaxperiodsnapshotService {
                 group,
                 TaxRevenueGroup.shortLabel(group),
                 scaled(vatPayable(vatOutput, vatInput, carryIn)),
+                scaled(snapshot.getIncomeTax()),
                 formatDateTime(snapshot.getRecordedAt()),
                 snapshot.getId() != null && snapshot.getId().equals(newestId));
     }
@@ -607,6 +676,7 @@ public class TaxperiodsnapshotService {
                 scaled(carryIn),
                 scaled(safe(snapshot.getVatCarryforwardOut())),
                 scaled(vatPayable(vatOutput, vatInput, carryIn)),
+                scaled(snapshot.getIncomeTax()),
                 snapshot.getCashBalanceAtPeriodEnd() == null
                         ? null
                         : scaled(snapshot.getCashBalanceAtPeriodEnd()),
@@ -668,6 +738,11 @@ public class TaxperiodsnapshotService {
     /** Money elsewhere in the app (Price Settings aside) carries 2 decimals; match it. */
     private static BigDecimal scaled(BigDecimal value) {
         return safe(value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** A stored rate ({@code 0.005}) as the number a screen shows ({@code 0.50}). */
+    private static BigDecimal percent(BigDecimal rate) {
+        return safe(rate).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP);
     }
 
     private static String trimToNull(String value) {

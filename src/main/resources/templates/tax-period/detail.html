@@ -210,7 +210,19 @@
                                 th:text="${#numbers.formatDecimal(detail.vatOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
 
-                        <tr class="row-total">
+                        <!-- Nhóm 1: dưới ngưỡng 1, không phát sinh nghĩa vụ thuế nào cả. -->
+                        <tr class="row-total" th:if="${detail.taxExempt}">
+                            <td>
+                                Không phát sinh thuế trong kỳ
+                                <span class="text-secondary small d-block">
+                                    Doanh thu dưới ngưỡng 1 — không nộp thuế GTGT lẫn thuế TNCN, chỉ
+                                    cần báo cáo doanh thu thực tế theo năm
+                                </span>
+                            </td>
+                            <td class="amount">—</td>
+                        </tr>
+
+                        <tr class="row-total" th:unless="${detail.taxExempt}">
                             <td>Thuế GTGT còn phải nộp của kỳ</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(detail.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
@@ -220,6 +232,18 @@
                             <td>Thuế GTGT còn được khấu trừ chuyển sang kỳ sau</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(detail.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+
+                        <tr class="row-total" th:unless="${detail.taxExempt}">
+                            <td>
+                                Thuế TNCN của kỳ
+                                <span class="text-secondary small d-block"
+                                      th:text="${detail.deductionGroup
+                                                ? '15% trên thu nhập chịu thuế (doanh thu − chi phí)'
+                                                : '0,5% trên doanh thu'}">—</span>
+                            </td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(detail.incomeTax, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
                         </tbody>
                     </table>
@@ -249,7 +273,9 @@
                   method="post"
                   class="row g-3 align-items-end">
 
-                <div class="col-12 col-md-4">
+                <!-- Nhóm 1 không có ô thuế nào: kỳ miễn thuế thì mọi chỉ tiêu luôn bằng 0, và
+                     TaxperiodsnapshotService.updateLatest cũng bỏ qua mọi giá trị gửi lên. -->
+                <div class="col-12 col-md-4" th:unless="${detail.taxExempt}">
                     <label for="vatOutputInput" class="form-label"
                            th:text="${detail.deductionGroup ? 'Thuế GTGT đầu ra' : 'Thuế GTGT phải nộp'}">
                         Thuế GTGT đầu ra
@@ -257,6 +283,14 @@
                     <input id="vatOutputInput" type="text" inputmode="numeric" data-money
                            name="vatOutput" class="form-control"
                            th:value="${detail.vatOutput}">
+                </div>
+
+                <div class="col-12" th:if="${detail.taxExempt}">
+                    <div class="alert alert-info small p-3 mb-0">
+                        <i class="ti ti-info-circle me-1"></i>
+                        Kỳ miễn thuế nên không có chỉ tiêu thuế nào để điều chỉnh. Chỉ sửa được nhóm
+                        áp dụng cho kỳ sau, số dư quỹ tham chiếu và ghi chú.
+                    </div>
                 </div>
 
                 <!-- Đầu vào và khấu trừ chuyển tiếp chỉ tồn tại ở nhóm khấu trừ; ô không hiện thì
@@ -273,6 +307,13 @@
                     <input id="carryInInput" type="text" inputmode="numeric" data-money
                            name="vatCarryforwardIn" class="form-control"
                            th:value="${detail.vatCarryforwardIn}">
+                </div>
+
+                <div class="col-12 col-md-4" th:unless="${detail.taxExempt}">
+                    <label for="incomeTaxInput" class="form-label">Thuế TNCN của kỳ</label>
+                    <input id="incomeTaxInput" type="text" inputmode="numeric" data-money
+                           name="incomeTax" class="form-control"
+                           th:value="${detail.incomeTax}">
                 </div>
 
                 <div class="col-12" th:if="${detail.deductionGroup}">
