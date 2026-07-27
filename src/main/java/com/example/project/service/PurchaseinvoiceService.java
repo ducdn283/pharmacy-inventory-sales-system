@@ -339,11 +339,12 @@ public class PurchaseinvoiceService {
             throw new IllegalArgumentException("Tổng tiền phiếu nhập không hợp lệ");
         }
 
-        BigDecimal paid = safe(request.getPaid());
-
-        if (paid.compareTo(totalAmount) > 0) {
-            throw new IllegalArgumentException("Số tiền đã trả không được lớn hơn tổng tiền phiếu nhập");
-        }
+        // A new import invoice always starts unpaid, i.e. "Nợ" (BA 2026-07-27). Receiving goods and
+        // paying for them are separate events: the money only moves when an Expense slip is raised
+        // against this invoice, and {@link #applyPayment} is the single door it comes through. That
+        // keeps one path to `paid`/`status` instead of two that could disagree, and it is why the
+        // create form no longer asks for an amount already paid.
+        BigDecimal paid = BigDecimal.ZERO;
 
         Purchaseinvoice invoice = new Purchaseinvoice();
         invoice.setPurchaseInvoiceCode(generatePurchaseInvoiceCode());
