@@ -83,10 +83,11 @@ public class ReturnController {
 
     @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create"})
     public String createPage(HttpServletRequest request, Model model) {
-        model.addAttribute("form", new ReturnCreateRequest());
-        model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
-        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        model.addAttribute("basePath", resolveBasePath(request));
+        ReturnCreateRequest form = new ReturnCreateRequest();
+        // Điền sẵn tỷ lệ hoàn mặc định của nhà thuốc; người lập vẫn chỉnh được cho từng phiếu.
+        form.setRefundRate(returnService.getDefaultRefundRate());
+        model.addAttribute("form", form);
+        addCreateFormOptions(model, request);
         return "return/create";
     }
 
@@ -125,11 +126,20 @@ public class ReturnController {
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
-            model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
-            model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-            model.addAttribute("basePath", basePath);
+            addCreateFormOptions(model, request);
             return "return/create";
         }
+    }
+
+    /** Dữ liệu dùng chung cho màn tạo (lần đầu và khi render lại sau lỗi validate). */
+    private void addCreateFormOptions(Model model, HttpServletRequest request) {
+        model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
+        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+        model.addAttribute("returnWindowDays", returnService.getReturnWindowDays());
+        model.addAttribute("returnWindowLabel", returnService.getReturnWindowLabel());
+        model.addAttribute("defaultRefundRate", returnService.getDefaultRefundRate());
+        model.addAttribute("autoOffsetDebt", returnService.isAutoOffsetDebt());
+        model.addAttribute("basePath", resolveBasePath(request));
     }
 
     @PostMapping({OWNER_BASE + "/{returnId}/submit", PHARMACIST_BASE + "/{returnId}/submit"})

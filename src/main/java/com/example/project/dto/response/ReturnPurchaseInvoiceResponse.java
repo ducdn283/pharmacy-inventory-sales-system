@@ -20,6 +20,12 @@ public class ReturnPurchaseInvoiceResponse {
     private String employeeName;
     private BigDecimal totalAmount;
 
+    /**
+     * Số nhà thuốc còn nợ NCC trên phiếu nhập này ({@code totalAmount − paid}). Phiếu còn nợ VẪN trả hàng
+     * được (bỏ gate 28/07): giá trị hàng trả cấn trừ vào đúng khoản nợ này trước.
+     */
+    private BigDecimal outstandingDebt;
+
     /** Number of lines that still have on-hand stock to return. */
     private int returnableLineCount;
     private String returnStatusDisplay;

@@ -150,6 +150,7 @@
                         <th>Người tạo</th>
                         <th>Số mặt hàng</th>
                         <th>Tiền hoàn</th>
+                        <th>Đã cấn trừ nợ</th>
                         <th>NCC còn phải hoàn</th>
                         <th>Đối tượng</th>
                         <th>Trạng thái</th>
@@ -172,17 +173,25 @@
                         </td>
                         <td class="fw-semibold"
                             th:text="${#numbers.formatDecimal(item.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
-                        <!-- Số dư động: bằng tiền hoàn lúc duyệt, phiếu thu trừ dần, về 0 là NCC đã hoàn đủ.
-                             Phiếu Nháp/Từ chối chưa trả hàng nên chưa phát sinh khoản NCC nợ lại. -->
+                        <!-- Phần giá trị hàng trả đã cấn trừ vào nợ phải trả NCC (số cố định, chốt lúc duyệt).
+                             Phiếu Nháp/Từ chối chưa trả hàng nên chưa phát sinh bù trừ. -->
+                        <td>
+                            <span th:if="${item.status == 'Nháp' or item.status == 'Từ chối'}"
+                                  class="text-secondary">—</span>
+                            <span th:unless="${item.status == 'Nháp' or item.status == 'Từ chối'}"
+                                  th:text="${item.offsetDebtAmount == null} ? '0đ'
+                                          : ${#numbers.formatDecimal(item.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">50.000đ</span>
+                        </td>
+                        <!-- Tiền thật NCC còn phải hoàn sau bù trừ — đây mới là số phiếu thu đi thu. -->
                         <td>
                             <span th:if="${item.status == 'Nháp' or item.status == 'Từ chối'}"
                                   class="text-secondary">—</span>
                             <span th:unless="${item.status == 'Nháp' or item.status == 'Từ chối'}">
-                                <strong th:if="${item.offsetDebtAmount != null && item.offsetDebtAmount > 0}"
+                                <strong th:if="${item.cashRefundDue != null && item.cashRefundDue.signum() > 0}"
                                         class="text-warning"
-                                        th:text="${#numbers.formatDecimal(item.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</strong>
-                                <span th:unless="${item.offsetDebtAmount != null && item.offsetDebtAmount > 0}"
-                                      class="badge bg-success-subtle text-success">Đã hoàn đủ</span>
+                                        th:text="${#numbers.formatDecimal(item.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
+                                <span th:unless="${item.cashRefundDue != null && item.cashRefundDue.signum() > 0}"
+                                      class="badge bg-success-subtle text-success">Đã bù trừ hết</span>
                             </span>
                         </td>
                         <td th:text="${item.returnTypeDisplay}">Nhà cung cấp</td>
@@ -199,7 +208,7 @@
                     </tr>
 
                     <tr th:if="${#lists.isEmpty(returns)}">
-                        <td colspan="11" class="text-center text-secondary py-4">
+                        <td colspan="12" class="text-center text-secondary py-4">
                             Không tìm thấy phiếu trả hàng nào.
                         </td>
                     </tr>

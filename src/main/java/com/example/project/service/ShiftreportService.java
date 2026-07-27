@@ -100,6 +100,19 @@ public class ShiftreportService {
      */
     @Transactional
     public Shiftreport ensureOpenShiftFor(Integer accountId) {
+        // Chặn ở tầng dữ liệu, song song với PendingShiftInterceptor: còn ca ngày trước chưa chốt thì
+        // KHÔNG được phát sinh giao dịch mới. Nếu thiếu chốt chặn này, ca cũ sẽ bị dùng lại và giao
+        // dịch hôm nay rơi vào ca hôm qua — sai shiftDate lẫn số liệu ca. Interceptor lẽ ra đã chặn từ
+        // tầng web nên bình thường không ai chạm tới đây; đây là lớp phòng thủ cho các đường không đi
+        // qua điều hướng trang. Ca chạy qua nửa đêm không phải lo: nhà thuốc tắt máy trước 0h, không có
+        // báo cáo ngày nhưng chốt ca thì chốt theo ngày.
+        Optional<Shiftreport> stale = findStaleDraftShift(accountId);
+        if (stale.isPresent()) {
+            throw new IllegalArgumentException("Bạn còn báo cáo ca ngày "
+                    + formatLocalDate(stale.get().getShiftDate())
+                    + " chưa chốt — vui lòng chốt ca đó trước khi phát sinh giao dịch mới");
+        }
+
         Optional<Shiftreport> existingDraft =
                 shiftreportRepository.findFirstByCashierID_IdAndStatusOrderByStartTimeDesc(accountId, ShiftReportStatus.DRAFT);
         if (existingDraft.isPresent()) {
@@ -119,7 +132,7 @@ public class ShiftreportService {
         shift.setShiftDate(LocalDate.now(VN_ZONE));
         shift.setShiftType(resolveShiftType());
         shift.setStartTime(nowVn());
-        shift.setOpeningCash(resolveOpeningCash(accountId));
+        shift.setOpeningCash(resolveOpeningCash());
         shift.setTotalInvoices(0);
         shift.setTotalRevenue(BigDecimal.ZERO);
         shift.setTotalReturns(0);
@@ -139,6 +152,32 @@ public class ShiftreportService {
     private boolean runsRegister(Integer accountId) {
         return accountpermissionRepository.existsByAccountIdAndRole(accountId, RoleConstants.OWNER)
                 || accountpermissionRepository.existsByAccountIdAndRole(accountId, RoleConstants.PHARMACIST);
+    }
+
+    /**
+     * Ca Nháp của tài khoản còn tồn từ NGÀY TRƯỚC, nếu có.
+     *
+     * <p>Ca dở dang qua đêm (mất điện, quên chốt, về đột xuất) là ca phải chốt trước khi làm gì tiếp:
+     * nếu cứ để đó thì {@link #ensureOpenShiftFor} dùng lại đúng ca cũ và mọi giao dịch hôm nay bị dồn
+     * vào ca hôm qua — sai cả {@code shiftDate} lẫn số liệu báo cáo ngày. {@code PendingShiftInterceptor}
+     * dùng hàm này để chặn thao tác sau khi đăng nhập.</p>
+     *
+     * <p>So sánh theo NGÀY chứ không theo ca: ca mở sáng nay chưa chốt là bình thường (đang trực),
+     * chỉ ca từ hôm trước trở về trước mới là tồn đọng.</p>
+     *
+     * <p>Lấy ca Nháp CŨ NHẤT chứ không phải mới nhất như {@link #findDraftShift}: bình thường mỗi tài
+     * khoản chỉ có đúng một ca Nháp, nhưng nếu lỡ tồn song song thì ca cũ mới là ca phải chốt trước,
+     * và nhìn ca mới nhất sẽ bỏ sót nó.</p>
+     */
+    @Transactional(readOnly = true)
+    public Optional<Shiftreport> findStaleDraftShift(Integer accountId) {
+        if (accountId == null) {
+            return Optional.empty();
+        }
+        return shiftreportRepository
+                .findFirstByCashierID_IdAndStatusOrderByStartTimeAsc(accountId, ShiftReportStatus.DRAFT)
+                .filter(shift -> shift.getShiftDate() != null
+                        && shift.getShiftDate().isBefore(LocalDate.now(VN_ZONE)));
     }
 
     /** The Nháp shift of an account, if any — also used by the logout guard. */
@@ -448,13 +487,18 @@ public class ShiftreportService {
         shift.setTotalDebtCollected(totals.totalDebtCollected());
     }
 
-    private BigDecimal resolveOpeningCash(Integer accountId) {
-        Optional<Shiftreport> lastApproved =
-                shiftreportRepository.findFirstByCashierID_IdAndStatusOrderByApprovedAtDesc(accountId, ShiftReportStatus.APPROVED);
-        if (lastApproved.isPresent() && lastApproved.get().getActualClosingCash() != null) {
-            return lastApproved.get().getActualClosingCash();
-        }
-
+    /**
+     * Tiền đầu ca = khoản quỹ CỐ ĐỊNH cấp cho mỗi ca, lấy từ {@code Financialsetting.openingCashDefault}.
+     *
+     * <p>Mỗi ca có phần quỹ riêng và luôn được cấp cùng một khoản (vd 1 triệu), nên ca
+     * sau KHÔNG kế thừa số cuối ca của ca trước. Trước đây hàm này lấy {@code actualClosingCash} của ca
+     * đã duyệt gần nhất *cùng tài khoản* và chỉ rơi về số mặc định khi không có — sai mô hình, và làm
+     * số đầu ca phụ thuộc vào việc Owner đã duyệt ca cũ hay chưa.</p>
+     *
+     * <p>Người trực ca vẫn sửa được số này lúc chốt ({@code openingCashOverride}) nếu thực tế nhận
+     * khác với mức cấp.</p>
+     */
+    private BigDecimal resolveOpeningCash() {
         return financialsettingRepository.findFirstByOrderByIdAsc()
                 .map(Financialsetting::getOpeningCashDefault)
                 .orElse(BigDecimal.ZERO);

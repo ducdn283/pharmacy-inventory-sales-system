@@ -24,10 +24,13 @@ public class ReturnPurchaseListItemResponse {
     private BigDecimal totalRefund;
 
     /**
-     * Số NCC CÒN phải hoàn — số dư động, không phải mốc cố định: lúc duyệt phiếu nó bằng
-     * {@code totalRefund}, rồi {@code IncomeService} trừ dần mỗi lần NCC hoàn tiền, về 0 là đã thu đủ.
+     * Phần giá trị hàng trả đã CẤN TRỪ vào công nợ nhà thuốc nợ NCC = {@code MIN(totalRefund, dư nợ phiếu
+     * nhập lúc duyệt)}. Đây là số CỐ ĐỊNH (đặc tả bổ sung 27/07) — khác nghĩa cũ "NCC còn phải hoàn".
      */
     private BigDecimal offsetDebtAmount;
+
+    /** Tiền thật NCC còn phải hoàn = {@code totalRefund − offsetDebtAmount}. */
+    private BigDecimal cashRefundDue;
 
     private String returnType;
     private String returnTypeDisplay;

@@ -3,6 +3,7 @@ package com.example.project.dto.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +27,14 @@ public class ReturnCreateRequest {
 
     /** Optional free-text note. */
     private String note;
+
+    /**
+     * Tỷ lệ % giá trị hàng trả được hoàn cho khách ({@code 0 < rate ≤ 100}), áp cho MỌI dòng của phiếu.
+     * Bỏ trống ⇒ lấy mặc định {@code Financialsetting.returnProductOnInvoiceValueRate}. Người lập được
+     * chỉnh tay từng phiếu (đặc tả bổ sung 27/07 mục 1.1); muốn mỗi mặt hàng một tỷ lệ khác nhau thì
+     * phải lập nhiều phiếu (giới hạn ghi ở mục 1.4).
+     */
+    private BigDecimal refundRate;
 
     /** One entry per candidate invoice line; blank/zero rows are dropped server-side. */
     private List<ReturnLineRequest> items = new ArrayList<>();

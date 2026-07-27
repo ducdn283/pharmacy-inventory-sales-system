@@ -142,7 +142,9 @@
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
             <div>
                 <h1 class="fs-4 mb-1">Trả hàng</h1>
-                <p class="text-secondary mb-0">Chọn hóa đơn đã hoàn thành (trong 3 ngày) rồi nhập số lượng trả cho từng dòng</p>
+                <p class="text-secondary mb-0"
+                   th:text="|Chọn hóa đơn đã hoàn thành (${returnWindowLabel}) rồi nhập số lượng trả cho từng dòng|">
+                    Chọn hóa đơn đã hoàn thành rồi nhập số lượng trả cho từng dòng</p>
             </div>
             <a th:href="${basePath}" class="btn btn-outline-secondary">
                 <i class="ti ti-arrow-left me-1"></i>
@@ -190,6 +192,10 @@
                                         <div class="text-secondary small">Ngày bán</div>
                                         <div id="pickedDate">—</div>
                                     </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="text-secondary small">Công nợ hóa đơn</div>
+                                        <div class="fw-semibold" id="pickedDebt">0đ</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -211,7 +217,13 @@
                                     <li>Hàng bán lẻ (không phải đơn vị đóng gói mặc định, vd viên):
                                         <strong>vẫn trả được để hoàn tiền</strong> nhưng <strong>không nhập lại kho</strong>
                                     </li>
-                                    <li>Chỉ trả trong <strong>3 ngày</strong> kể từ ngày lập hóa đơn, hóa đơn phải ở trạng thái đã hoàn thành.</li>
+                                    <li><strong>Hóa đơn còn nợ vẫn trả được</strong>: tiền hoàn được cấn trừ
+                                        vào chính khoản nợ của hóa đơn đó trước, phần dư mới phải chi ra.</li>
+                                    <li th:if="${returnWindowDays >= 0}">Chỉ trả trong
+                                        <strong th:text="|${returnWindowDays} ngày|">3 ngày</strong>
+                                        kể từ ngày lập hóa đơn, hóa đơn phải ở trạng thái đã hoàn thành.</li>
+                                    <li th:if="${returnWindowDays < 0}"><strong>Không giới hạn thời gian trả</strong>
+                                        (theo thiết lập tài chính), hóa đơn phải ở trạng thái đã hoàn thành.</li>
                                 </ul>
                             </div>
                         </div>
@@ -229,13 +241,14 @@
                                     <th>SL trả</th>
                                     <th>Đơn giá</th>
                                     <th>Nhập lại kho</th>
+                                    <th class="text-end">Giá trị gốc</th>
                                     <th class="text-end">Tiền hoàn</th>
                                     <th></th>
                                 </tr>
                                 </thead>
                                 <tbody id="lineBody">
                                 <tr id="emptyRow">
-                                    <td colspan="11" class="text-center text-secondary py-4">
+                                    <td colspan="12" class="text-center text-secondary py-4">
                                         Chọn hóa đơn để hiển thị các dòng hàng có thể trả.
                                     </td>
                                 </tr>
@@ -267,6 +280,22 @@
                                 <textarea class="form-control" name="note" rows="2" th:text="${form.note}"></textarea>
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">Tỷ lệ hoàn cho khách <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control" id="refundRate" name="refundRate"
+                                           min="0.01" max="100" step="0.01"
+                                           th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="form-text">
+                                    Mặc định theo thiết lập tài chính
+                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 2, 'COMMA')}">80</span>%),
+                                    sửa được cho từng phiếu. Phần không hoàn nhà thuốc giữ lại và vẫn tính là
+                                    doanh thu chịu thuế.
+                                </div>
+                            </div>
+
                             <div class="summary-line">
                                 <span class="text-secondary">Số mặt hàng trả</span>
                                 <strong id="summaryItems">0</strong>
@@ -277,12 +306,45 @@
                             </div>
                             <hr>
                             <div class="summary-line">
+                                <span class="text-secondary">Giá trị hàng trả (100%)</span>
+                                <span id="summaryOriginal">0đ</span>
+                            </div>
+                            <div class="summary-line" id="retainedRow" style="display:none">
+                                <span class="text-secondary">Nhà thuốc giữ lại</span>
+                                <span class="text-warning-emphasis" id="summaryRetained">0đ</span>
+                            </div>
+                            <div class="summary-line">
                                 <span class="text-secondary">Tổng tiền hoàn</span>
                                 <strong class="text-success" id="summaryRefund">0đ</strong>
                             </div>
+                            <!-- Bù trừ công nợ: tiền hoàn trừ vào khoản khách còn nợ chính hóa đơn này trước
+                                 (MIN(tiền hoàn, công nợ)); phần dư mới là tiền thật phải chi ra. Server chốt
+                                 lại theo dư nợ tại thời điểm duyệt. -->
+                            <div th:if="${autoOffsetDebt}">
+                                <div class="summary-line">
+                                    <span class="text-secondary">Cấn trừ công nợ hóa đơn</span>
+                                    <span class="text-primary" id="summaryOffset">0đ</span>
+                                </div>
+                                <div class="summary-line">
+                                    <span class="text-secondary">Còn phải hoàn khách (tiền thật)</span>
+                                    <strong id="summaryPayout">0đ</strong>
+                                </div>
+                            </div>
+                            <hr>
+                            <!-- Tách net/thuế NGAY TỪ tiền hoàn theo thuế suất của dòng hóa đơn gốc
+                                 (net = hoàn ÷ (1+t), thuế = hoàn − net). Số chốt do server tính lại khi lưu. -->
+                            <div class="summary-line">
+                                <span class="text-secondary">Doanh thu giảm trừ (chưa thuế)</span>
+                                <span id="summaryPreTax">0đ</span>
+                            </div>
+                            <div class="summary-line">
+                                <span class="text-secondary">Thuế GTGT đầu ra giảm trừ</span>
+                                <strong id="summaryVat">0đ</strong>
+                            </div>
                             <div class="form-text mb-3">
-                                Phiếu trả chỉ tính tiền hoàn, không chi tiền. Việc hoàn tiền cho khách được
-                                thực hiện ở phiếu chi bên Kế toán.
+                                Phiếu trả chỉ tính tiền và cấn trừ công nợ, KHÔNG chi tiền mặt — việc chi trả phần
+                                còn lại cho khách thực hiện ở phiếu chi bên Kế toán. Phần thuế trên đây được ghi
+                                giảm vào kỳ tính thuế của ngày trả hàng, không sửa lại kỳ bán gốc.
                             </div>
 
                             <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
@@ -321,6 +383,7 @@
                         <th>Nhân viên</th>
                         <th>Khách hàng</th>
                         <th>Tổng cộng</th>
+                        <th>Còn nợ</th>
                         <th>Trạng thái trả</th>
                         <th></th>
                     </tr>
@@ -332,12 +395,20 @@
                                  data-code=${inv.invoiceCode},
                                  data-customer=${inv.customerName},
                                  data-date=${inv.dateDisplay},
+                                 data-debt=${inv.debtAmount},
                                  data-search=${inv.invoiceCode + ' ' + inv.customerName}">
                         <td class="fw-semibold text-success" th:text="${inv.invoiceCode}">HD000046</td>
                         <td th:text="${inv.dateDisplay}">06/07/2026 16:32</td>
                         <td th:text="${inv.employeeName}">Dược sĩ A</td>
                         <td th:text="${inv.customerName}">Anh Hoàng</td>
                         <td th:text="${#numbers.formatDecimal(inv.total, 0, 'POINT', 0, 'COMMA') + 'đ'}">300.000đ</td>
+                        <td>
+                            <span th:if="${inv.debtAmount != null and inv.debtAmount.signum() > 0}"
+                                  class="text-danger fw-semibold"
+                                  th:text="${#numbers.formatDecimal(inv.debtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">19.500đ</span>
+                            <span th:unless="${inv.debtAmount != null and inv.debtAmount.signum() > 0}"
+                                  class="text-secondary">—</span>
+                        </td>
                         <td>
                             <span class="badge bg-secondary-subtle text-secondary"
                                   th:text="${inv.returnStatusDisplay}">Chưa trả</span>
@@ -347,8 +418,9 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(returnableInvoices)}">
-                        <td colspan="7" class="text-center text-secondary py-4">
-                            Không có hóa đơn nào đủ điều kiện trả (đã hoàn thành &amp; trong 3 ngày).
+                        <td colspan="8" class="text-center text-secondary py-4"
+                            th:text="|Không có hóa đơn nào đủ điều kiện trả (đã hoàn thành, ${returnWindowLabel}).|">
+                            Không có hóa đơn nào đủ điều kiện trả.
                         </td>
                     </tr>
                     </tbody>
@@ -369,6 +441,18 @@
         const emptyRow = document.getElementById('emptyRow');
         const summaryItems = document.getElementById('summaryItems');
         const summaryRefund = document.getElementById('summaryRefund');
+        const summaryPreTax = document.getElementById('summaryPreTax');
+        const summaryVat = document.getElementById('summaryVat');
+        const summaryOriginal = document.getElementById('summaryOriginal');
+        const summaryRetained = document.getElementById('summaryRetained');
+        const retainedRow = document.getElementById('retainedRow');
+        const summaryOffset = document.getElementById('summaryOffset');
+        const summaryPayout = document.getElementById('summaryPayout');
+        const refundRateInput = document.getElementById('refundRate');
+        // Bù trừ chỉ hiển thị khi nhà thuốc bật autoOffsetDebtOnRefund (2 dòng kia không render nếu tắt).
+        const autoOffsetDebt = /*[[${autoOffsetDebt}]]*/ true;
+        // Công nợ của hóa đơn đang chọn — mốc để tạm tính phần cấn trừ ngay trên màn tạo.
+        let pickedDebt = 0;
 
         const modal = document.getElementById('invoiceModal');
 
@@ -380,7 +464,9 @@
             .map(it => [String(it.invoiceDetailId), it.returnQty]));
 
         function formatMoney(value) {
-            return (value || 0).toLocaleString('vi-VN') + 'đ';
+            // Làm tròn về đồng TRƯỚC khi format: phần net/thuế tách ra từ tiền hoàn là số lẻ
+            // (199.000 ÷ 1,08 = 184.259,259…), để nguyên thì toLocaleString in ra cả 3 số thập phân.
+            return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';
         }
 
         // ---- Modal open/close ----
@@ -416,18 +502,22 @@
             document.getElementById('pickedInvoiceCode').textContent = row.getAttribute('data-code');
             document.getElementById('pickedCustomer').textContent = row.getAttribute('data-customer');
             document.getElementById('pickedDate').textContent = row.getAttribute('data-date');
+            pickedDebt = parseFloat(row.getAttribute('data-debt')) || 0;
+            const debtEl = document.getElementById('pickedDebt');
+            debtEl.textContent = formatMoney(pickedDebt);
+            debtEl.className = pickedDebt > 0 ? 'fw-semibold text-danger' : 'fw-semibold';
             document.getElementById('noInvoice').classList.add('d-none');
             document.getElementById('invoiceInfo').classList.remove('d-none');
         }
 
         // ---- Load returnable lines for the chosen invoice ----
         function loadLines(invoiceId) {
-            lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Đang tải...</td></tr>';
+            lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Đang tải...</td></tr>';
             fetch(basePath + '/invoices/' + invoiceId + '/lines', { headers: { 'Accept': 'application/json' } })
                 .then(r => r.json())
                 .then(lines => renderLines(lines))
                 .catch(() => {
-                    lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Không tải được dòng hóa đơn.</td></tr>';
+                    lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-danger py-4">Không tải được dòng hóa đơn.</td></tr>';
                 });
         }
 
@@ -439,7 +529,7 @@
                 lines = lines.filter(line => postedQty.has(String(line.invoiceDetailId)));
             }
             if (!lines || lines.length === 0) {
-                lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Hóa đơn này không còn dòng nào có thể trả.</td></tr>';
+                lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Hóa đơn này không còn dòng nào có thể trả.</td></tr>';
                 postedQty = new Map();
                 recalc();
                 return;
@@ -466,7 +556,9 @@
                         '<div class="input-group input-group-sm" style="max-width:130px">' +
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
-                                '" value="' + qty + '" data-price="' + line.unitSellPrice + '" name="items[' + i + '].returnQty">' +
+                                '" value="' + qty + '" data-price="' + line.unitSellPrice +
+                                '" data-vat-rate="' + (line.vatRate == null ? 0 : line.vatRate) +
+                                '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
                         '<div class="text-secondary small">tối đa ' + full + '</div>' +
@@ -477,6 +569,7 @@
                             ? '<span class="badge bg-success-subtle text-success">Tự nhập lại kho</span>'
                             : '<span class="badge bg-secondary-subtle text-secondary">Không nhập lại</span>') +
                     '</td>' +
+                    '<td class="text-end line-original text-secondary">0đ</td>' +
                     '<td class="text-end line-refund fw-semibold">0đ</td>' +
                     '<td class="text-end">' +
                         '<button type="button" class="btn btn-sm btn-outline-danger row-delete" title="Bỏ mặt hàng này khỏi phiếu trả">' +
@@ -491,7 +584,7 @@
             lineBody.querySelectorAll('.row-delete').forEach(btn => btn.addEventListener('click', function () {
                 this.closest('tr').remove();
                 if (!lineBody.querySelector('.qty-input')) {
-                    lineBody.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Đã bỏ hết mặt hàng. Chọn lại hóa đơn nếu cần.</td></tr>';
+                    lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Đã bỏ hết mặt hàng. Chọn lại hóa đơn nếu cần.</td></tr>';
                 }
                 recalc();
             }));
@@ -510,8 +603,18 @@
             recalc();
         }
 
+        /** Tỷ lệ hoàn đang nhập, kẹp về (0;100]. Bỏ trống/không hợp lệ thì tạm tính như hoàn 100%. */
+        function currentRate() {
+            const rate = parseFloat(refundRateInput ? refundRateInput.value : '');
+            if (!isFinite(rate) || rate <= 0) return 100;
+            return Math.min(rate, 100);
+        }
+
         function recalc() {
+            const rate = currentRate();
+            let totalOriginal = 0;
             let totalRefund = 0;
+            let totalVat = 0;
             let itemCount = 0;
             lineBody.querySelectorAll('.qty-input').forEach(inp => {
                 let qty = parseInt(inp.value, 10) || 0;
@@ -519,13 +622,46 @@
                 if (qty < 0) qty = 0;
                 if (qty > max) { qty = max; inp.value = max; }
                 const price = parseFloat(inp.getAttribute('data-price')) || 0;
-                const lineRefund = qty * price;
-                inp.closest('tr').querySelector('.line-refund').textContent = formatMoney(lineRefund);
+                // originalLineValue = giá trị gốc 100%; lineRefund = giá trị gốc × tỷ lệ hoàn.
+                const originalValue = qty * price;
+                const lineRefund = originalValue * rate / 100;
+                const row = inp.closest('tr');
+                row.querySelector('.line-original').textContent = formatMoney(originalValue);
+                row.querySelector('.line-refund').textContent = formatMoney(lineRefund);
                 if (qty > 0) itemCount++;
+                totalOriginal += originalValue;
                 totalRefund += lineRefund;
+                // Đơn giá bán là giá GỘP → tách thuế từ trong TIỀN HOÀN (không phải giá trị gốc), không
+                // cộng thêm lên trên: hoàn 80% thì chỉ giảm trừ thuế trên đúng 80% đó.
+                const vatRate = parseFloat(inp.getAttribute('data-vat-rate')) || 0;
+                if (vatRate > 0) {
+                    totalVat += lineRefund - (lineRefund / (1 + vatRate / 100));
+                }
             });
             summaryItems.textContent = itemCount;
+            summaryOriginal.textContent = formatMoney(totalOriginal);
             summaryRefund.textContent = formatMoney(totalRefund);
+
+            const retained = Math.round(totalOriginal) - Math.round(totalRefund);
+            retainedRow.style.display = retained > 0 ? 'flex' : 'none';
+            summaryRetained.textContent = formatMoney(retained);
+
+            // Bù trừ = MIN(tiền hoàn, công nợ hóa đơn); server chốt lại theo dư nợ lúc duyệt.
+            if (autoOffsetDebt && summaryOffset) {
+                const offset = Math.min(Math.round(totalRefund), Math.round(pickedDebt));
+                summaryOffset.textContent = formatMoney(offset);
+                summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offset);
+            }
+
+            // Làm tròn thuế trước rồi lấy net = tổng − thuế, để 2 dòng luôn cộng đúng bằng tổng tiền hoàn
+            // (làm tròn độc lập 2 số có thể lệch 1đ).
+            const vatRounded = Math.round(totalVat);
+            summaryPreTax.textContent = formatMoney(Math.round(totalRefund) - vatRounded);
+            summaryVat.textContent = formatMoney(vatRounded);
+        }
+
+        if (refundRateInput) {
+            refundRateInput.addEventListener('input', recalc);
         }
 
         function escapeHtml(s) {
