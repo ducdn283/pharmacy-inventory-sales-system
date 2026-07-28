@@ -44,6 +44,23 @@ public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, In
     List<Object[]> sumQuantitiesGroupedByInvoice();
 
     /**
+     * Số hóa đơn bán ra khỏi lô {@code batchId} SAU mốc {@code after}. Dùng để chặn việc hủy (đảo
+     * ngược) một phiếu điều chỉnh kho khi lô đã bị giao dịch khác động vào kể từ lúc phiếu đó được
+     * áp dụng — {@code Dac_ta_Income_StockAdjustment.xlsx} sheet 05.
+     *
+     * <p>{@code Invoice.date} là giờ tường VN dạng {@code LocalDateTime}, nên bên gọi phải quy mốc
+     * so sánh về cùng múi giờ trước khi truyền vào.</p>
+     */
+    @Query("""
+       select count(d)
+       from Invoicedetail d
+       where d.batchID.id = :batchId
+         and d.invoiceID.date > :after
+       """)
+    long countSalesFromBatchAfter(@Param("batchId") Integer batchId,
+                                  @Param("after") LocalDateTime after);
+
+    /**
      * Cost of the goods sold in {@code [from, to)}, valued at what each batch actually cost to buy:
      * {@code baseQtyDeducted × Batch.importPricePerBase}. Feeds the group-3 personal income tax,
      * which taxes profit rather than revenue.
