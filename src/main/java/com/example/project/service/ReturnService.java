@@ -64,8 +64,10 @@ public class ReturnService {
     // A signed invoice ("Đã ký") has been pushed to the tax authority — it must NOT be edited, so a
     // return against it emits an adjustment invoice (TH2) instead of touching the original.
     private static final String INVOICE_STATUS_SIGNED = "Đã ký";
-    // The sale invoice no longer has a separate returnStatus column (removed by DB) — the return
-    // state is written back into invoice.status using these values, per the DB owner (2026-07-14).
+    // ⚠️ CHỈ CÒN DÙNG ĐỂ ĐỌC DỮ LIỆU CŨ. Từ 14/07 đến 27/07 bảng invoice không có cột returnStatus nên
+    // trạng thái trả hàng bị ghi đè vào invoice.status bằng 2 giá trị này. Cột riêng đã có lại từ 28/07
+    // (xem updateInvoiceReturnStatus) nên code KHÔNG còn ghi ra 2 giá trị này nữa — chỉ nhận diện những
+    // hóa đơn đã lỡ mang chúng, để chúng vẫn trả hàng tiếp được.
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String INVOICE_STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
 
@@ -494,10 +496,11 @@ public class ReturnService {
             createAdjustmentInvoice(ret, original, details);
         } else {
             createReplacementInvoice(ret, original, details);
-            // HĐ chưa ký (chưa gửi thuế) → cập nhật trạng thái trả của chính HĐ gốc ("Đã trả hàng 1
-            // phần/toàn bộ"). HĐ đã ký giữ nguyên "Đã ký" (theo dõi phần đã trả qua returnedQty từng dòng).
-            updateInvoiceReturnStatus(original);
         }
+
+        // Trạng thái trả hàng nay nằm ở CỘT RIÊNG invoice.returnStatus (cột mới 28/07) nên ghi được cho
+        // CẢ hóa đơn đã ký lẫn chưa ký — trước đây phải mượn invoice.status nên hóa đơn đã ký đành bỏ qua.
+        updateInvoiceReturnStatus(original);
 
         returnRepository.save(ret);
     }
@@ -533,6 +536,8 @@ public class ReturnService {
         adj.setPrescriptionRequired(false);
         // Phát hành ở trạng thái "Hoàn thành" (chờ ký) — Kế toán/Owner review rồi ký đẩy thuế như hóa đơn thường.
         adj.setStatus(INVOICE_STATUS_COMPLETED);
+        // Bản thân hóa đơn điều chỉnh chưa bị trả gì (nó chỉ là bút toán âm, không có hàng để trả tiếp).
+        adj.setReturnStatus(INVOICE_RETURN_NONE);
         adj.setDiscount(BigDecimal.ZERO);
         adj.setSubtotal(refund.negate());
         adj.setTotal(refund.negate());
@@ -638,6 +643,8 @@ public class ReturnService {
         repl.setPaidByBanking(nz(original.getPaidByBanking()));
         repl.setDebtAmount(newDebt);
         repl.setStatus(newDebt.compareTo(BigDecimal.ZERO) > 0 ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
+        // Bản thay thế là hóa đơn MỚI của phần hàng khách còn giữ — chưa trả lần nào.
+        repl.setReturnStatus(INVOICE_RETURN_NONE);
         repl.setNote(buildAdjustmentNote(ret, original, false));
 
         Invoice savedRepl = invoiceRepository.save(repl);
@@ -737,22 +744,35 @@ public class ReturnService {
     }
 
     /**
-     * Writes the return state into the sale invoice's {@code status} — the dedicated {@code returnStatus}
-     * column was removed by the DB owner (2026-07-14), who asked to reuse {@code invoice.status}
-     * ("Đã trả hàng 1 phần" / "Đã trả hàng toàn bộ"). Left untouched when nothing has been returned.
+     * Caches the invoice's return state into the dedicated {@code invoice.returnStatus} column
+     * (NONE / PARTIAL / FULL — cột MỚI do chủ DB thêm 28/07, đối xứng với
+     * {@code PurchaseInvoice.returnStatus}), and refreshes {@code status} so it once again means only
+     * "nợ / vòng đời".
+     *
+     * <p>Đây là mục 2 của đặc tả bổ sung 27/07. Trước đó cột này không tồn tại (bị gỡ ở merge 14/07) nên
+     * trạng thái trả hàng phải mượn chính {@code invoice.status} — mà một hóa đơn hoàn toàn có thể VỪA
+     * còn nợ VỪA đã trả hàng 1 phần, một cột không chứa nổi 2 nghĩa. Nay tách hẳn:</p>
+     * <ul>
+     *   <li>{@code returnStatus} — NONE / PARTIAL / FULL, suy từ {@code Σ InvoiceDetail.returnedQty} so
+     *       với {@code Σ quantity} (mục 2.3). Cột chỉ là bản CACHE: {@link #invoiceReturnCode} vẫn tính
+     *       động và là nguồn đúng, nên dữ liệu cũ chưa backfill cũng không sai.</li>
+     *   <li>{@code status} — quay về thuần nợ/vòng đời: còn nợ thì "Còn nợ", hết nợ thì "Hoàn thành".
+     *       KHÔNG còn ghi "Đã trả hàng 1 phần / toàn bộ" vào đây nữa.</li>
+     * </ul>
+     *
+     * <p>Hóa đơn ĐÃ KÝ giữ nguyên {@code status = "Đã ký"} — đã đẩy lên cơ quan thuế, không được đổi;
+     * nhưng {@code returnStatus} của nó thì vẫn ghi được, vì đó là cột riêng.</p>
      */
     private void updateInvoiceReturnStatus(Invoice invoice) {
         if (invoice == null) {
             return;
         }
-        String code = invoiceReturnCode(invoice);
-        if (INVOICE_RETURN_FULL.equals(code)) {
-            invoice.setStatus(INVOICE_STATUS_RETURNED_FULL);
-            invoiceRepository.save(invoice);
-        } else if (INVOICE_RETURN_PARTIAL.equals(code)) {
-            invoice.setStatus(INVOICE_STATUS_RETURNED_PARTIAL);
-            invoiceRepository.save(invoice);
+        invoice.setReturnStatus(invoiceReturnCode(invoice));
+        if (!isSigned(invoice)) {
+            invoice.setStatus(nz(invoice.getDebtAmount()).signum() > 0
+                    ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
         }
+        invoiceRepository.save(invoice);
     }
 
     private Batch cloneReturnBatch(Batch original, int quantity, Return ret) {
@@ -785,8 +805,12 @@ public class ReturnService {
     }
 
     /**
-     * NONE / PARTIAL / FULL derived from how much of the invoice's lines have been returned. Replaces
-     * the removed {@code invoice.returnStatus} column (the sale {@code status} is left untouched).
+     * NONE / PARTIAL / FULL derived from how much of the invoice's lines have been returned —
+     * {@code Σ returnedQty} vs {@code Σ quantity}, đúng công thức mục 2.3 của đặc tả bổ sung.
+     *
+     * <p>Đây là NGUỒN ĐÚNG, tính động mỗi lần đọc; cột {@code invoice.returnStatus} chỉ là bản cache
+     * ghi lại kết quả này lúc duyệt phiếu (xem {@link #updateInvoiceReturnStatus}) để báo cáo/lọc cho
+     * nhanh. Nhờ vậy hóa đơn cũ chưa backfill cột vẫn được đánh giá đúng.</p>
      */
     private String invoiceReturnCode(Invoice invoice) {
         List<Invoicedetail> lines = invoiceLinesOf(invoice.getId());
@@ -1028,7 +1052,10 @@ public class ReturnService {
         return isStatus(invoice.getStatus(), INVOICE_STATUS_COMPLETED)
                 || isStatus(invoice.getStatus(), INVOICE_STATUS_DEBT)
                 || isStatus(invoice.getStatus(), INVOICE_STATUS_SIGNED)
-                || isStatus(invoice.getStatus(), INVOICE_STATUS_RETURNED_PARTIAL);
+                // Dữ liệu cũ (trước khi có cột returnStatus) còn mang trạng thái trả trong status —
+                // vẫn cho trả tiếp phần còn lại; hóa đơn đã trả HẾT bị chặn riêng bởi isFullyReturned.
+                || isStatus(invoice.getStatus(), INVOICE_STATUS_RETURNED_PARTIAL)
+                || isStatus(invoice.getStatus(), INVOICE_STATUS_RETURNED_FULL);
     }
 
     /** Signed ("Đã ký") = pushed to tax → return must emit an adjustment invoice (TH2), not edit the original. */
