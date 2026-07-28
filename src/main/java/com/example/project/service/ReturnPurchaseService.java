@@ -389,7 +389,10 @@ public class ReturnPurchaseService {
                 .map(Chunk::lineRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         // Nhóm 3 (khấu trừ): ghi giảm thuế GTGT đầu vào đã khấu trừ; Nhóm 2 chưa từng khấu trừ → 0.
-        BigDecimal totalVATRefund = isDeductionGroup()
+        // Cờ này quyết định CẢ dòng chi tiết lẫn tổng phiếu — nếu chỉ zero ở tổng mà dòng vẫn tách thuế
+        // thì màn chi tiết tự mâu thuẫn (dòng ghi thuế, tổng ghi 0) và báo cáo trừ nhầm số.
+        boolean deductionGroup = isDeductionGroup();
+        BigDecimal totalVATRefund = deductionGroup
                 ? chunks.stream().map(Chunk::vatAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
                 : BigDecimal.ZERO;
 
@@ -435,10 +438,14 @@ public class ReturnPurchaseService {
             // Chênh lệch giữa 2 cột = khoản LỖ khi NCC không hoàn đủ — tính động vào chi phí hợp lý TNCN
             // của kỳ (đặc tả bổ sung 27/07 mục 1.3 + 4.5), KHÔNG tạo Expense riêng.
             detail.setOriginalLineValue(chunk.grossRefund());
-            // importPricePerBase là GROSS (chốt nhóm) → tách net/VAT TỪ TRONG gross: preTax = net, vatAmount = thuế đầu vào.
-            detail.setVatRate(chunk.vatRate() != null ? chunk.vatRate() : BigDecimal.ZERO);
-            detail.setPreTaxAmount(chunk.preTaxAmount());
-            detail.setVatAmount(chunk.vatAmount());
+            // importPricePerBase là GROSS (chốt nhóm) → Nhóm 3 tách net/VAT TỪ TRONG gross: preTax = net,
+            // vatAmount = phần thuế đầu vào phải đảo lại.
+            // Nhóm 1/2 KHÔNG khấu trừ đầu vào ⇒ không có gì để đảo: ghi vatRate/vatAmount = 0 và
+            // preTaxAmount = trọn số hoàn (giá vốn của các nhóm này là giá GỘP). Nhờ vậy
+            // Σ preTaxAmount = totalRefund và Σ vatAmount = totalVATRefund = 0 — dòng và tổng luôn khớp.
+            detail.setVatRate(deductionGroup && chunk.vatRate() != null ? chunk.vatRate() : BigDecimal.ZERO);
+            detail.setPreTaxAmount(deductionGroup ? chunk.preTaxAmount() : chunk.lineRefund());
+            detail.setVatAmount(deductionGroup ? chunk.vatAmount() : BigDecimal.ZERO);
             detail.setRestockable(false);
             returndetailRepository.save(detail);
         }
