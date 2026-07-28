@@ -135,9 +135,11 @@
                                 <th>Đơn giá nhập</th>
                                 <th class="text-end">Giá trị gốc</th>
                                 <th class="text-end">NCC hoàn</th>
-                                <th class="text-end">Chưa thuế</th>
-                                <th>Thuế suất</th>
-                                <th class="text-end">Thuế GTGT</th>
+                                <!-- Nhóm 1/2 không khấu trừ thuế đầu vào ⇒ không có gì để đảo, 3 cột thuế
+                                     luôn 0/trùng số hoàn nên ẩn hẳn cho đỡ nhiễu (xem detail.deductionGroup). -->
+                                <th class="text-end" th:if="${detail.deductionGroup}">Chưa thuế</th>
+                                <th th:if="${detail.deductionGroup}">Thuế suất</th>
+                                <th class="text-end" th:if="${detail.deductionGroup}">Thuế GTGT</th>
                             </tr>
                             </thead>
 
@@ -157,10 +159,11 @@
                                     th:text="${item.originalLineValue == null} ? '—' : ${#numbers.formatDecimal(item.originalLineValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="text-end fw-semibold"
                                     th:text="${#numbers.formatDecimal(item.lineRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
-                                <td class="text-end text-secondary"
+                                <td class="text-end text-secondary" th:if="${detail.deductionGroup}"
                                     th:text="${item.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(item.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
-                                <td th:text="${item.vatRate == null} ? '—' : ${#numbers.formatDecimal(item.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
-                                <td class="text-end"
+                                <td th:if="${detail.deductionGroup}"
+                                    th:text="${item.vatRate == null} ? '—' : ${#numbers.formatDecimal(item.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
+                                <td class="text-end" th:if="${detail.deductionGroup}"
                                     th:text="${item.vatAmount == null} ? '—' : ${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                             </tr>
 
@@ -172,10 +175,10 @@
                                     th:text="${#numbers.formatDecimal(detail.totalOriginalValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="text-end text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
-                                <td class="text-end"
+                                <td class="text-end" th:if="${detail.deductionGroup}"
                                     th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
-                                <td></td>
-                                <td class="text-end"
+                                <td th:if="${detail.deductionGroup}"></td>
+                                <td class="text-end" th:if="${detail.deductionGroup}"
                                     th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                             </tr>
                             </tbody>
@@ -245,16 +248,19 @@
                         </th:block>
 
                         <!-- Trả hàng NCC đảo chiều thuế ĐẦU VÀO đã khấu trừ, ghi giảm vào kỳ trả hàng.
-                             Nhóm 2 chưa từng khấu trừ nên không có gì để đảo (totalVATRefund = 0). -->
-                        <div class="d-flex justify-content-between mt-3">
-                            <span class="text-secondary">Giá trị chưa thuế</span>
-                            <span th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</span>
-                        </div>
+                             Nhóm 1/2 chưa từng khấu trừ nên không có gì để đảo — ẩn cả 2 dòng, vì lúc đó
+                             giá vốn là giá GỘP, tách "chưa thuế" ra chỉ gây hiểu nhầm là còn thuế để đòi. -->
+                        <th:block th:if="${detail.deductionGroup}">
+                            <div class="d-flex justify-content-between mt-3">
+                                <span class="text-secondary">Giá trị chưa thuế</span>
+                                <span th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</span>
+                            </div>
 
-                        <div class="d-flex justify-content-between mt-2">
-                            <span class="text-secondary">Thuế GTGT đầu vào giảm trừ</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</strong>
-                        </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span class="text-secondary">Thuế GTGT đầu vào giảm trừ</span>
+                                <strong th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</strong>
+                            </div>
+                        </th:block>
 
                         <p class="text-secondary small mb-0 mt-2" th:if="${detail.deductionGroup}">
                             Ghi giảm thuế đầu vào đã khấu trừ vào kỳ tính thuế của ngày trả hàng.
