@@ -468,6 +468,9 @@ public class ShiftreportService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Tiền nhân viên đền bù thất thoát kho KHÔNG tách thành dòng riêng (BA chốt 28/07): nó là một
+        // phiếu thu như mọi phiếu thu khác, đã được cộng vào totalCashIn/totalBankingIn ở vòng lặp
+        // trên. Ca không cần biết khoản thu đó đến từ chênh lệch kho hay từ đâu — chỉ cần đúng số.
         return new TransactionTotals(totalInvoices, totalRevenue, totalCashIn, totalBankingIn,
                 totalReturns, totalReturnAmount, totalCashOut, totalBankingOut, totalDebtCollected);
     }
