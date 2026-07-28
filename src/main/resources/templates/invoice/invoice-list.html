@@ -415,6 +415,7 @@
               <th>Người bán</th>
               <th>Tổng tiền</th>
               <th>Thanh toán</th>
+              <th>Trạng thái trả hàng</th>
               <th>Trạng thái</th>
               <th style="text-align:center;">Thao tác</th>
             </tr>
@@ -451,6 +452,11 @@
               </td>
               <td>
                 <span class="status-badge"
+                      th:classappend="${' ' + item.returnStatusCssClass}"
+                      th:text="${item.returnStatusDisplay}">Không</span>
+              </td>
+              <td>
+                <span class="status-badge"
                       th:classappend="${' ' + item.statusCssClass}"
                       th:text="${item.statusName}">Hoàn thành</span>
               </td>
@@ -464,7 +470,7 @@
             </tr>
 
             <tr th:if="${#lists.isEmpty(invoices)}" class="empty-row">
-              <td th:colspan="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT' ? 10 : 9}" style="text-align:center;">
+              <td th:colspan="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT' ? 11 : 10}" style="text-align:center;">
                 Không tìm thấy hóa đơn nào.
               </td>
             </tr>
