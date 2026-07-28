@@ -35,4 +35,10 @@ public class ReturnPurchaseLineResponse {
 
     /** Đơn giá hoàn / đơn vị = 100% gross = đúng {@link #importPricePerBase} (NCC hoàn đúng số đã trả). */
     private BigDecimal refundUnitPrice;
+
+    /**
+     * Thuế suất GTGT trên dòng phiếu nhập gốc — dùng để tạm tính phần thuế ĐẦU VÀO phải đảo lại. Chỉ có ý
+     * nghĩa với Nhóm 3/4; màn tạo nhận thêm cờ {@code deductionGroup} để biết có hiển thị hay không.
+     */
+    private BigDecimal vatRate;
 }

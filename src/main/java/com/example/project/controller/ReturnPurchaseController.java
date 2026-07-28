@@ -77,10 +77,11 @@ public class ReturnPurchaseController {
 
     @GetMapping("/create")
     public String createPage(Model model) {
-        model.addAttribute("form", new ReturnPurchaseCreateRequest());
-        model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
-        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        model.addAttribute("basePath", BASE);
+        ReturnPurchaseCreateRequest form = new ReturnPurchaseCreateRequest();
+        // Điền sẵn tỷ lệ NCC chấp nhận hoàn theo thiết lập tài chính; Owner chỉnh được cho từng phiếu.
+        form.setRefundRate(returnPurchaseService.getDefaultRefundRate());
+        model.addAttribute("form", form);
+        addCreateFormOptions(model);
         return "return-purchase/create";
     }
 
@@ -107,11 +108,20 @@ public class ReturnPurchaseController {
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
-            model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
-                model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-            model.addAttribute("basePath", BASE);
+            addCreateFormOptions(model);
             return "return-purchase/create";
         }
+    }
+
+    /** Dữ liệu dùng chung cho màn tạo (lần đầu và khi render lại sau lỗi validate). */
+    private void addCreateFormOptions(Model model) {
+        model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
+        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+        // Chỉ Nhóm 3/4 mới có thuế GTGT đầu vào đã khấu trừ để đảo lại khi trả hàng.
+        model.addAttribute("deductionGroup", returnPurchaseService.isDeductionGroup());
+        model.addAttribute("defaultRefundRate", returnPurchaseService.getDefaultRefundRate());
+        model.addAttribute("autoOffsetDebt", returnPurchaseService.isAutoOffsetDebt());
+        model.addAttribute("basePath", BASE);
     }
 
     @GetMapping("/{returnId}")

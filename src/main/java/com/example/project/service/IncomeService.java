@@ -1,5 +1,6 @@
 package com.example.project.service;
 
+import com.example.project.constant.ReturnPurchaseStatus;
 import com.example.project.dto.request.IncomeCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
 import com.example.project.dto.response.IncomeDetailResponse;
@@ -58,7 +59,6 @@ public class IncomeService {
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
-    private static final String SUPPLIER_RETURN_STATUS_APPROVED = "Đã duyệt";
     private static final String STOCK_ADJUSTMENT_STATUS_APPROVED = "Duyệt";
 
     private static final String PAYMENT_CASH = "CASH";
@@ -220,26 +220,31 @@ public class IncomeService {
         }
         Map<Integer, Purchaseinvoice> purchasesById = purchaseinvoiceRepository.findAllWithRelations().stream()
                 .collect(Collectors.toMap(Purchaseinvoice::getId, purchase -> purchase, (a, b) -> a));
+        Map<Integer, BigDecimal> accounted = accountedByReturnId();
 
-        return returnRepository.findAll().stream()
-                .filter(ret -> ret.getPurchaseID() != null && ret.getInvoiceID() == null)
-                .filter(ret -> SUPPLIER_RETURN_STATUS_APPROVED.equals(ret.getStatus()))
-                .filter(this::hasCollectibleOffsetDebt)
+        return returnRepository.findAllWithRelations().stream()
+                .filter(this::isApprovedSupplierReturn)
                 .filter(ret -> {
-                    Purchaseinvoice purchase = purchasesById.get(ret.getPurchaseID().getId());
+                    Purchaseinvoice purchase = purchasesById.get(
+                            ret.getPurchaseID() != null ? ret.getPurchaseID().getId() : null);
                     return purchase != null && purchase.getSupplierID() != null
                             && supplierId.equals(purchase.getSupplierID().getId());
                 })
-                .sorted(Comparator.comparing(Return::getReturnDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Return::getId, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(ret -> {
+                .map(ret -> Map.entry(ret, remainingCollectibleFromSupplier(ret, accounted)))
+                .filter(entry -> isPositive(entry.getValue()))
+                .sorted(Comparator.comparing((Map.Entry<Return, BigDecimal> entry) -> entry.getKey().getReturnDate(),
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(entry -> entry.getKey().getId(),
+                                Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(entry -> {
+                    Return ret = entry.getKey();
                     Purchaseinvoice purchase = purchasesById.get(ret.getPurchaseID().getId());
                     String purchaseCode = purchase != null ? purchase.getPurchaseInvoiceCode() : "—";
                     return new IncomeReferenceOptionResponse(
                             ret.getId(),
                             ret.getReturnCode(),
                             formatInstant(ret.getReturnDate()),
-                            collectibleOffsetDebt(ret),
+                            entry.getValue(),
                             "Phiếu nhập: " + purchaseCode);
                 })
                 .toList();
@@ -714,13 +719,10 @@ public class IncomeService {
         if (IncomeTypeOptionResponse.SUPPLIER.equals(incomeType)) {
             Return ret = returnRepository.findById(request.getReturnId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng nhà cung cấp"));
-            if (ret.getPurchaseID() == null || ret.getInvoiceID() != null) {
-                throw new IllegalArgumentException("Phiếu trả hàng không hợp lệ");
-            }
-            if (!SUPPLIER_RETURN_STATUS_APPROVED.equals(ret.getStatus())) {
+            if (!isApprovedSupplierReturn(ret)) {
                 throw new IllegalArgumentException("Chỉ có thể thu tiền từ phiếu trả NCC đã duyệt");
             }
-            if (!hasCollectibleOffsetDebt(ret)) {
+            if (!hasCollectibleCashFromSupplier(ret)) {
                 throw new IllegalArgumentException("Phiếu trả hàng không còn khoản NCC cần hoàn");
             }
             Purchaseinvoice purchase = purchaseinvoiceRepository.findById(ret.getPurchaseID().getId())
@@ -848,27 +850,72 @@ public class IncomeService {
         return isPositive(invoice.getDebtAmount());
     }
 
-    private boolean hasCollectibleOffsetDebt(Return ret) {
-        return isPositive(collectibleOffsetDebt(ret));
+    private boolean hasCollectibleCashFromSupplier(Return ret) {
+        return isPositive(remainingCollectibleFromSupplier(ret, accountedByReturnId()));
     }
 
-    /** Remaining supplier debt to collect on an approved supplier-return slip. */
-    private BigDecimal collectibleOffsetDebt(Return ret) {
-        return nullToZero(ret != null ? ret.getOffsetDebtAmount() : null);
+    /**
+     * Cash the supplier still owes back after netting against purchase-invoice debt at approval time.
+     * {@code offsetDebtAmount} is the fixed portion already offset — not a running balance (see
+     * {@code ReturnPurchaseService#applyDebtOffset} javadoc 28/07).
+     */
+    private BigDecimal collectibleCashFromSupplier(Return ret) {
+        return nullToZero(ret != null ? ret.getTotalRefund() : null)
+                .subtract(nullToZero(ret != null ? ret.getOffsetDebtAmount() : null))
+                .max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal remainingCollectibleFromSupplier(Return ret, Map<Integer, BigDecimal> accounted) {
+        return collectibleCashFromSupplier(ret)
+                .subtract(accounted.getOrDefault(ret.getId(), BigDecimal.ZERO))
+                .max(BigDecimal.ZERO);
+    }
+
+    /** Live supplier-income slips already pointing at a return — each amount counts against the collectible. */
+    private Map<Integer, BigDecimal> accountedByReturnId() {
+        Map<Integer, BigDecimal> accounted = new LinkedHashMap<>();
+        for (Income income : liveIncomes()) {
+            if (!IncomeTypeOptionResponse.SUPPLIER.equals(resolveIncomeType(income))) {
+                continue;
+            }
+            Return ret = income.getReturnID();
+            if (ret == null || ret.getId() == null) {
+                continue;
+            }
+            accounted.merge(ret.getId(), nullToZero(income.getAmount()), BigDecimal::add);
+        }
+        return accounted;
+    }
+
+    private List<Income> liveIncomes() {
+        return incomeRepository.findAllWithRelations().stream()
+                .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED))
+                .toList();
+    }
+
+    private boolean isApprovedSupplierReturn(Return ret) {
+        return ret != null
+                && ret.getPurchaseID() != null
+                && ret.getInvoiceID() == null
+                && isStatus(ret.getStatus(), ReturnPurchaseStatus.APPROVED);
     }
 
     private void validateSupplierPaymentAmount(Return ret, BigDecimal paymentAmount) {
         if (paymentAmount == null) {
             return;
         }
-        BigDecimal debt = collectibleOffsetDebt(ret);
-        if (paymentAmount.setScale(2, RoundingMode.HALF_UP).compareTo(debt.setScale(2, RoundingMode.HALF_UP)) > 0) {
+        BigDecimal remaining = remainingCollectibleFromSupplier(ret, accountedByReturnId());
+        if (paymentAmount.setScale(2, RoundingMode.HALF_UP).compareTo(remaining.setScale(2, RoundingMode.HALF_UP)) > 0) {
             throw new IllegalArgumentException(
-                    "Số tiền thu không được vượt quá số tiền NCC còn nợ (" + formatMoney(debt) + ")");
+                    "Số tiền thu không được vượt quá số tiền NCC còn phải hoàn ("
+                            + formatMoney(remaining) + ")");
         }
     }
 
-    /** Reduces offsetDebtAmount when supplier debt-collection income is submitted. */
+    /**
+     * Supplier-return collection is tracked via linked income slips ({@link #accountedByReturnId});
+     * {@code Return.offsetDebtAmount} is a fixed netting figure and must not be decremented here.
+     */
     private void applySupplierOffsetDebtPayment(Income income) {
         if (income.getReturnID() == null || income.getAmount() == null) {
             return;
@@ -876,16 +923,6 @@ public class IncomeService {
         Return ret = returnRepository.findById(income.getReturnID().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng nhà cung cấp"));
         validateSupplierPaymentAmount(ret, income.getAmount());
-
-        BigDecimal payment = income.getAmount().setScale(2, RoundingMode.HALF_UP);
-        BigDecimal currentDebt = collectibleOffsetDebt(ret);
-        BigDecimal newDebt = currentDebt.subtract(payment);
-        if (newDebt.compareTo(BigDecimal.ZERO) < 0) {
-            newDebt = BigDecimal.ZERO;
-        }
-
-        ret.setOffsetDebtAmount(newDebt);
-        returnRepository.save(ret);
     }
 
     private Set<Integer> linkedStockAdjustmentIds() {

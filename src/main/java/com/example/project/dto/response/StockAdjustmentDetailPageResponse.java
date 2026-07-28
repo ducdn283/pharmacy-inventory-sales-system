@@ -43,4 +43,21 @@ public class StockAdjustmentDetailPageResponse {
 
     /** Tổng thuế GTGT đầu ra của phiếu (0 nếu loại không phát sinh). */
     private BigDecimal totalOutputVat;
+
+    /**
+     * True khi loại phiếu là {@code DESTROY_EMPLOYEE_FAULT} / {@code COUNT_DECREASE} — hai loại thất
+     * thoát mà nhân viên có thể phải đền bù, và là hai loại duy nhất được liên kết phiếu thu
+     * (Dac_ta_Income_StockAdjustment sheet 03, cột "Liên kết Income?").
+     */
+    private boolean employeeLiable;
+
+    /**
+     * Tổng giá trị đền bù đề xuất, tính theo <strong>GIÁ BÁN</strong> (sheet 01: "tính THEO GIÁ BÁN
+     * (giá niêm yết), KHÔNG phải giá vốn"). Bằng 0 với các loại phiếu khác.
+     */
+    private BigDecimal totalReimbursementValue;
+
+    /** Phiếu thu đền bù đã lập cho phiếu này (null nếu chưa có) — để màn chi tiết trỏ qua. */
+    private Integer linkedIncomeId;
+    private String linkedIncomeCode;
 }

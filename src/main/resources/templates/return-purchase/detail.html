@@ -133,7 +133,13 @@
                                 <th>Đơn vị</th>
                                 <th>SL trả</th>
                                 <th>Đơn giá nhập</th>
-                                <th class="text-end">Tiền hoàn</th>
+                                <th class="text-end">Giá trị gốc</th>
+                                <th class="text-end">NCC hoàn</th>
+                                <!-- Nhóm 1/2 không khấu trừ thuế đầu vào ⇒ không có gì để đảo, 3 cột thuế
+                                     luôn 0/trùng số hoàn nên ẩn hẳn cho đỡ nhiễu (xem detail.deductionGroup). -->
+                                <th class="text-end" th:if="${detail.deductionGroup}">Chưa thuế</th>
+                                <th th:if="${detail.deductionGroup}">Thuế suất</th>
+                                <th class="text-end" th:if="${detail.deductionGroup}">Thuế GTGT</th>
                             </tr>
                             </thead>
 
@@ -149,16 +155,31 @@
                                 <td th:text="${item.unitName}">Hộp</td>
                                 <td th:text="${item.returnQty}">2</td>
                                 <td th:text="${#numbers.formatDecimal(item.unitImportPrice, 0, 'POINT', 0, 'COMMA') + 'đ'}">60.000đ</td>
+                                <td class="text-end text-secondary"
+                                    th:text="${item.originalLineValue == null} ? '—' : ${#numbers.formatDecimal(item.originalLineValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="text-end fw-semibold"
                                     th:text="${#numbers.formatDecimal(item.lineRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
+                                <td class="text-end text-secondary" th:if="${detail.deductionGroup}"
+                                    th:text="${item.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(item.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
+                                <td th:if="${detail.deductionGroup}"
+                                    th:text="${item.vatRate == null} ? '—' : ${#numbers.formatDecimal(item.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
+                                <td class="text-end" th:if="${detail.deductionGroup}"
+                                    th:text="${item.vatAmount == null} ? '—' : ${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                             </tr>
 
                             <tr class="fw-semibold">
                                 <td colspan="5">Tổng cộng</td>
                                 <td th:text="${detail.totalQuantity}">2</td>
                                 <td></td>
+                                <td class="text-end"
+                                    th:text="${#numbers.formatDecimal(detail.totalOriginalValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="text-end text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
+                                <td class="text-end" th:if="${detail.deductionGroup}"
+                                    th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
+                                <td th:if="${detail.deductionGroup}"></td>
+                                <td class="text-end" th:if="${detail.deductionGroup}"
+                                    th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                             </tr>
                             </tbody>
                         </table>
@@ -181,25 +202,73 @@
                             <span class="text-secondary">Tổng mặt hàng</span>
                             <strong th:text="${detail.itemCount}">2</strong>
                         </div>
-                        <!-- Số dư động: bằng tiền hoàn lúc duyệt, mỗi phiếu thu của NCC trừ dần, về 0 là đã hoàn đủ. -->
                         <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">NCC còn phải hoàn</span>
-                            <span th:if="${detail.status == 'Nháp' or detail.status == 'Từ chối'}"
-                                  class="text-secondary">—</span>
-                            <th:block th:unless="${detail.status == 'Nháp' or detail.status == 'Từ chối'}">
-                                <strong th:if="${detail.offsetDebtAmount != null && detail.offsetDebtAmount > 0}"
-                                        class="text-warning"
-                                        th:text="${#numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
-                                <span th:unless="${detail.offsetDebtAmount != null && detail.offsetDebtAmount > 0}"
-                                      class="badge bg-success-subtle text-success">Đã hoàn đủ</span>
-                            </th:block>
+                            <span class="text-secondary">Tỷ lệ NCC hoàn</span>
+                            <strong th:text="${detail.appliedRefundRate == null} ? '100%'
+                                    : ${#numbers.formatDecimal(detail.appliedRefundRate, 0, 'POINT', 2, 'COMMA') + '%'}">80,00%</strong>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between">
-                            <span class="text-secondary">Tổng tiền hoàn</span>
+                            <span class="text-secondary">Giá trị hàng trả (100%)</span>
+                            <span th:text="${#numbers.formatDecimal(detail.totalOriginalValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</span>
+                        </div>
+
+                        <!-- Phần NCC KHÔNG hoàn = khoản lỗ, tính động vào chi phí hợp lý TNCN của kỳ nếu có
+                             chứng từ (biên bản trả hàng / xác nhận mức hoàn) — không sinh phiếu chi riêng. -->
+                        <div class="d-flex justify-content-between mt-2"
+                             th:if="${detail.lossAmount != null and detail.lossAmount.signum() > 0}">
+                            <span class="text-secondary">Khoản lỗ (NCC không hoàn)</span>
+                            <span class="text-danger"
+                                  th:text="${#numbers.formatDecimal(detail.lossAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">30.000đ</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-2">
+                            <span class="text-secondary">Tổng NCC phải hoàn</span>
                             <strong class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</strong>
                         </div>
+
+                        <!-- Bù trừ: phần giá trị hàng trả đã trừ thẳng vào khoản nhà thuốc còn nợ phiếu nhập
+                             gốc ngay khi duyệt (PurchaseInvoice.paid tăng đúng số này). -->
+                        <th:block th:unless="${detail.status == 'Nháp' or detail.status == 'Từ chối'}">
+                            <div class="d-flex justify-content-between mt-2"
+                                 th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
+                                <span class="text-secondary">Đã cấn trừ nợ phải trả NCC</span>
+                                <span class="text-primary"
+                                      th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span class="text-secondary">NCC còn phải hoàn (tiền thật)</span>
+                                <strong th:if="${detail.cashRefundDue != null and detail.cashRefundDue.signum() > 0}"
+                                        class="text-warning"
+                                        th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
+                                <span th:unless="${detail.cashRefundDue != null and detail.cashRefundDue.signum() > 0}"
+                                      class="badge bg-success-subtle text-success">Đã bù trừ hết</span>
+                            </div>
+                        </th:block>
+
+                        <!-- Trả hàng NCC đảo chiều thuế ĐẦU VÀO đã khấu trừ, ghi giảm vào kỳ trả hàng.
+                             Nhóm 1/2 chưa từng khấu trừ nên không có gì để đảo — ẩn cả 2 dòng, vì lúc đó
+                             giá vốn là giá GỘP, tách "chưa thuế" ra chỉ gây hiểu nhầm là còn thuế để đòi. -->
+                        <th:block th:if="${detail.deductionGroup}">
+                            <div class="d-flex justify-content-between mt-3">
+                                <span class="text-secondary">Giá trị chưa thuế</span>
+                                <span th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</span>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-2">
+                                <span class="text-secondary">Thuế GTGT đầu vào giảm trừ</span>
+                                <strong th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</strong>
+                            </div>
+                        </th:block>
+
+                        <p class="text-secondary small mb-0 mt-2" th:if="${detail.deductionGroup}">
+                            Ghi giảm thuế đầu vào đã khấu trừ vào kỳ tính thuế của ngày trả hàng.
+                        </p>
+                        <p class="text-secondary small mb-0 mt-2" th:unless="${detail.deductionGroup}">
+                            Hộ kinh doanh đang ở Nhóm 2 (tính trực tiếp trên doanh thu) — chưa từng khấu trừ
+                            thuế đầu vào nên không có gì phải điều chỉnh.
+                        </p>
                     </div>
                 </div>
 

@@ -218,7 +218,11 @@
                                 <th>Đơn vị</th>
                                 <th>SL trả</th>
                                 <th>Đơn giá</th>
+                                <th>Giá trị gốc</th>
                                 <th>Tiền hoàn</th>
+                                <th>Chưa thuế</th>
+                                <th>Thuế suất</th>
+                                <th>Thuế GTGT</th>
                                 <th>Nhập lại kho</th>
                             </tr>
                             </thead>
@@ -235,8 +239,14 @@
                                 <td th:text="${item.unitName}">Hộp</td>
                                 <td th:text="${item.returnQty}">2</td>
                                 <td th:text="${#numbers.formatDecimal(item.unitSellPrice, 0, 'POINT', 0, 'COMMA') + 'đ'}">60.000đ</td>
+                                <td class="text-secondary"
+                                    th:text="${item.originalLineValue == null} ? '—' : ${#numbers.formatDecimal(item.originalLineValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="fw-semibold"
                                     th:text="${#numbers.formatDecimal(item.lineRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
+                                <td class="text-secondary"
+                                    th:text="${item.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(item.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
+                                <td th:text="${item.vatRate == null} ? '—' : ${#numbers.formatDecimal(item.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
+                                <td th:text="${item.vatAmount == null} ? '—' : ${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                                 <td>
                                     <span class="badge"
                                           th:classappend="${item.restockable} ? ' bg-success-subtle text-success' : ' bg-secondary-subtle text-secondary'"
@@ -248,8 +258,12 @@
                                 <td colspan="5">Tổng cộng</td>
                                 <td th:text="${detail.totalQuantity}">2</td>
                                 <td></td>
+                                <td th:text="${#numbers.formatDecimal(detail.totalOriginalValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
+                                <td th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
+                                <td></td>
+                                <td th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                                 <td></td>
                             </tr>
                             </tbody>
@@ -275,13 +289,65 @@
                             <strong th:text="${detail.totalItems}">2</strong>
                         </div>
 
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-secondary">Tỷ lệ hoàn</span>
+                            <strong th:text="${detail.appliedRefundRate == null} ? '100%'
+                                    : ${#numbers.formatDecimal(detail.appliedRefundRate, 0, 'POINT', 2, 'COMMA') + '%'}">80,00%</strong>
+                        </div>
+
                         <hr>
 
                         <div class="d-flex justify-content-between">
+                            <span class="text-secondary">Giá trị hàng trả (100%)</span>
+                            <span th:text="${#numbers.formatDecimal(detail.totalOriginalValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</span>
+                        </div>
+
+                        <!-- Phần chênh do hoàn < 100%: nhà thuốc giữ lại, VẪN là doanh thu chịu thuế bình
+                             thường nên không sinh bút toán riêng (đặc tả bổ sung 27/07 mục 1.2). -->
+                        <div class="d-flex justify-content-between mt-2"
+                             th:if="${detail.retainedAmount != null and detail.retainedAmount.signum() > 0}">
+                            <span class="text-secondary">Nhà thuốc giữ lại</span>
+                            <span class="text-warning-emphasis"
+                                  th:text="${#numbers.formatDecimal(detail.retainedAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">30.000đ</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-2">
                             <span class="text-secondary">Tổng tiền hoàn</span>
                             <strong class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</strong>
                         </div>
+
+                        <!-- Bù trừ công nợ: phần tiền hoàn đã trừ thẳng vào công nợ của hóa đơn gốc ngay khi
+                             duyệt phiếu; chỉ phần còn lại mới là tiền thật phiếu chi phải chi ra. -->
+                        <div class="d-flex justify-content-between mt-2"
+                             th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
+                            <span class="text-secondary">Đã cấn trừ công nợ hóa đơn</span>
+                            <span class="text-primary"
+                                  th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-2">
+                            <span class="text-secondary">Còn phải hoàn khách (tiền thật)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
+                        </div>
+
+                        <!-- Phiếu trả không chi tiền, nhưng vẫn phải kê thuế: doanh thu và thuế GTGT đầu ra
+                             được giảm trừ vào KỲ TRẢ HÀNG (không hồi tố kỳ bán gốc). Số này là căn cứ cho
+                             phiếu chi / báo cáo thuế lấy chi tiết. -->
+                        <div class="d-flex justify-content-between mt-3">
+                            <span class="text-secondary">Doanh thu giảm trừ (chưa thuế)</span>
+                            <span th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-2">
+                            <span class="text-secondary">Thuế GTGT đầu ra giảm trừ</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</strong>
+                        </div>
+
+                        <p class="text-secondary small mb-0 mt-2">
+                            Ghi giảm vào kỳ tính thuế của ngày trả hàng, không sửa lại kỳ bán gốc.
+                            Thuế chỉ tính trên phần THỰC hoàn, phần giữ lại vẫn chịu thuế như doanh thu bán hàng.
+                        </p>
                     </div>
                 </div>
 

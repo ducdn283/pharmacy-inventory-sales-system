@@ -205,8 +205,11 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Mã phiếu</label>
-                                <input type="text" class="form-control auto-field" value="PDC-…"
+                                <!-- Mã dự kiến: hiện sẵn cho dễ đối chiếu, nhưng chỉ thực sự được cấp khi bấm lưu. -->
+                                <input type="text" class="form-control auto-field"
+                                       th:value="${nextCode}" value="PDC-000001"
                                        readonly tabindex="-1">
+                                <div class="form-text">Mã dự kiến — chỉ được cấp khi bấm tạo hoặc lưu nháp.</div>
                             </div>
 
                             <div class="col-12 col-md-4">
@@ -258,8 +261,12 @@
                             </div>
 
                             <div class="col-12 col-md-6">
-                                <label class="form-label">Lý do <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" th:field="*{reason}"
+                                <!-- Bắt buộc nhập tay với phiếu thủ công; chỉ nguồn "theo phiếu kiểm kê" mới
+                                     được để trống (server tự điền theo mã phiếu kiểm kê). JS bật/tắt theo nguồn. -->
+                                <label class="form-label">Lý do
+                                    <span class="text-danger" id="reasonRequiredMark">*</span></label>
+                                <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
+                                       required
                                        placeholder="VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…">
                             </div>
 
@@ -368,7 +375,10 @@
                                     <span class="badge bg-success-subtle text-success ms-2" id="countLineCountBadge">0</span>
                                 </div>
                                 <p class="text-secondary small mb-0 mt-1">
-                                    Danh sách chỉ để xem — hệ thống tự dựng số lượng theo chênh lệch và tách phiếu Tăng/Giảm khi tạo.
+                                    Cột <strong>Nguồn gốc hàng thừa</strong> là lựa chọn của người lập: tick khi
+                                    <strong>không xác định được</strong> hàng thừa từ đâu ra, hệ thống sẽ lập một
+                                    <strong>lô mới</strong> (không gắn hóa đơn mua, giá vốn ước tính) thay vì cộng vào lô đang đếm.
+                                    Dòng <strong>thiếu</strong> hàng nếu do lỗi nhân viên thì lập phiếu thu đền bù ở màn Phiếu thu.
                                 </p>
                             </div>
 
@@ -385,11 +395,12 @@
                                         <th>Chênh lệch</th>
                                         <th>Loại</th>
                                         <th>Giá trị</th>
+                                        <th>Nguồn gốc hàng thừa</th>
                                     </tr>
                                     </thead>
                                     <tbody id="countPreviewBody">
                                     <tr id="countEmptyRow">
-                                        <td colspan="9" class="text-center text-secondary py-4">
+                                        <td colspan="10" class="text-center text-secondary py-4">
                                             Chọn phiếu kiểm kê để xem các dòng điều chỉnh.
                                         </td>
                                     </tr>
@@ -421,28 +432,19 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-warning">
+                    <!-- Nội dung do applyExpiryHint() ghi lại theo loại phiếu đang chọn. -->
+                    <div class="alert alert-warning" id="expiryHint">
                         <i class="ti ti-alert-triangle me-1"></i>
-                        Cần kiểm tra số lô và hạn sử dụng trước khi tạo phiếu điều chỉnh.
+                        Đối chiếu số lô và hạn dùng với lô đã chọn trước khi tạo phiếu.
                     </div>
 
                     <div class="destroy-card p-4">
-                        <!-- Owner: submit auto-approves the slip and applies the stock movement. -->
-                        <button th:if="${#strings.startsWith(basePath, '/owner')}"
-                                type="submit" name="action" value="submit"
+                        <!-- Owner-only: lập xong là thực hiện luôn, không còn bước gửi duyệt. -->
+                        <button type="submit" name="action" value="submit"
                                 class="btn btn-destroy-primary w-100 mb-3"
-                                data-confirm="Tạo và duyệt phiếu điều chỉnh này? Tồn kho sẽ được cập nhật.">
+                                data-confirm="Tạo và thực hiện phiếu điều chỉnh này? Tồn kho sẽ được cập nhật.">
                             <i class="ti ti-circle-check me-1"></i>
-                            Tạo &amp; duyệt
-                        </button>
-
-                        <!-- Pharmacist: submit sends the slip to the Owner for approval. -->
-                        <button th:unless="${#strings.startsWith(basePath, '/owner')}"
-                                type="submit" name="action" value="submit"
-                                class="btn btn-destroy-primary w-100 mb-3"
-                                data-confirm="Gửi phiếu này cho chủ nhà thuốc duyệt?">
-                            <i class="ti ti-send me-1"></i>
-                            Gửi duyệt
+                            Tạo &amp; thực hiện
                         </button>
 
                         <button type="submit" name="action" value="draft"
@@ -566,7 +568,11 @@
     }
 
     function candidateLabel(candidate) {
-        return `${candidate.productName} - ${candidate.lotNumber || 'Không có số lô'} - Tồn: ${candidate.storageQuantity}`;
+        const base = `${candidate.productName} - ${candidate.lotNumber || 'Không có số lô'} - Tồn: ${candidate.storageQuantity}`;
+        // Cho thấy tình trạng hạn dùng ngay trong dropdown, khỏi phải thêm rồi mới biết lô đã quá hạn.
+        if (candidate.expired) return `${base} — ĐÃ HẾT HẠN ${candidate.expirationDateDisplay || ''}`.trim();
+        if (candidate.nearExpiry) return `${base} — cận hạn ${candidate.expirationDateDisplay || ''}`.trim();
+        return base;
     }
 
     function filterCandidateOptions() {
@@ -615,6 +621,13 @@
             return;
         }
 
+        // Báo sớm ngay lúc chọn; server vẫn chặn lần nữa khi lưu (validateSelectedBatches).
+        if (blocksExpiredGoods() && candidate.expired) {
+            notify('Lô "' + candidate.lotNumber + '" đã hết hạn ' + (candidate.expirationDateDisplay || '')
+                + ' — không dùng nội bộ / làm mẫu / biếu tặng được. Lô này chỉ lập được phiếu Hủy hàng.');
+            return;
+        }
+
         addBatchRow(candidate, 1, '');
 
         refreshIndexes();
@@ -660,9 +673,10 @@
             </td>
 
             <td>
-                <span class="badge bg-warning-subtle text-warning">
+                <span class="badge ${expiryBadgeClass(candidate)}">
                     ${candidate.expirationDateDisplay || 'Không có'}
                 </span>
+                ${expiryNote(candidate)}
             </td>
 
             <td>${candidate.storageQuantity}</td>
@@ -822,6 +836,8 @@
         if (currentMode() === 'STOCK_COUNT') {
             loadCountLines();
         }
+        // Đổi loại có thể biến những lô đang chọn thành không hợp lệ (vd đang Hủy hàng, đổi sang Quà tặng).
+        refreshExpiryWarnings();
         saveDraftLocal();
     }
 
@@ -830,6 +846,7 @@
         const isCount = currentMode() === 'STOCK_COUNT';
 
         document.getElementById('countPickerField').style.display = isCount ? '' : 'none';
+        applyReasonRequirement(isCount);
 
         if (isCount) {
             document.getElementById('itemsSection').style.display = 'none';
@@ -840,6 +857,24 @@
             toggleItemsSection();
             calculateSummary();
         }
+    }
+
+    /**
+     * Lý do: CHỈ nguồn "theo phiếu kiểm kê" mới được để trống (server tự điền theo mã phiếu kiểm kê).
+     * Mọi loại thủ công (hủy hàng / nội bộ / hàng mẫu / quà tặng) vẫn bắt buộc người lập tự nhập —
+     * server chặn bằng validateRequest, đây chỉ là để form báo sớm và không hiện dấu * sai chỗ.
+     */
+    function applyReasonRequirement(isCount) {
+        const input = document.getElementById('reasonInput');
+        const mark = document.getElementById('reasonRequiredMark');
+        const hint = document.getElementById('reasonHint');
+        if (!input) return;
+        input.required = !isCount;
+        if (mark) mark.style.display = isCount ? 'none' : '';
+        if (hint) hint.style.display = isCount ? '' : 'none';
+        input.placeholder = isCount
+            ? 'Có thể để trống để hệ thống tự điền theo phiếu kiểm kê'
+            : 'VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…';
     }
 
     /** Manual mode: item selection makes sense only after a real (non-STOCK_COUNT) type is chosen. */
@@ -858,6 +893,77 @@
     function isVatOutputType() {
         const type = document.getElementById('adjustmentTypeSelect').value;
         return type === 'INTERNAL_USE' || type === 'GIFT' || type === 'SAMPLE';
+    }
+
+    /**
+     * 3 loại đưa hàng ra dùng/tặng thật → cấm hàng đã hết hạn (khớp NO_EXPIRED_GOODS_TYPES phía server;
+     * server mới là nơi chặn thật, đây chỉ để báo sớm cho người lập).
+     */
+    function blocksExpiredGoods() {
+        const type = document.getElementById('adjustmentTypeSelect').value;
+        return type === 'INTERNAL_USE' || type === 'GIFT' || type === 'SAMPLE';
+    }
+
+    function expiryBadgeClass(candidate) {
+        if (candidate.expired) return 'bg-danger-subtle text-danger';
+        if (candidate.nearExpiry) return 'bg-warning-subtle text-warning';
+        return 'bg-secondary-subtle text-secondary';
+    }
+
+    function expiryNote(candidate) {
+        if (candidate.expired) return '<div class="small text-danger fw-semibold">Đã hết hạn</div>';
+        if (candidate.nearExpiry) return '<div class="small text-warning">Cận hạn</div>';
+        return '';
+    }
+
+    /** Tô đỏ những dòng hết hạn khi loại phiếu hiện tại không cho phép — gọi lại mỗi lần đổi loại. */
+    function refreshExpiryWarnings() {
+        const blocking = blocksExpiredGoods();
+        let blocked = 0;
+        document.querySelectorAll('#selectedItemsBody tr[data-batch-id]').forEach(row => {
+            const candidate = candidates.find(c => c.batchId === Number(row.getAttribute('data-batch-id')));
+            const bad = blocking && candidate && candidate.expired;
+            row.classList.toggle('table-danger', !!bad);
+            if (bad) blocked++;
+        });
+        if (blocked > 0) {
+            notify('Có ' + blocked + ' lô đã hết hạn trong danh sách — loại phiếu này không dùng được hàng hết hạn. '
+                + 'Hãy bỏ các dòng đó hoặc chuyển sang phiếu Hủy hàng.');
+        }
+        applyExpiryHint();
+    }
+
+    /** Câu nhắc đổi theo loại phiếu: hủy hàng thì đối chiếu lô, còn dùng/tặng thì cấm hàng hết hạn. */
+    function applyExpiryHint() {
+        const box = document.getElementById('expiryHint');
+        if (!box) return;
+        const type = document.getElementById('adjustmentTypeSelect').value;
+        if (type === 'DESTROY_EMPLOYEE_FAULT') {
+            // Loại này khác DESTROY ở chỗ xử lý thuế: giá trị hàng hủy KHÔNG được tính chi phí hợp lý,
+            // và nhân viên có thể phải đền bù (theo giá bán) qua một phiếu thu riêng.
+            box.className = 'alert alert-danger';
+            box.innerHTML = '<i class="ti ti-user-exclamation me-1"></i>'
+                + '<strong>Hủy hàng do lỗi nhân viên.</strong> Giá trị hàng hủy <strong>không</strong> được tính vào '
+                + 'chi phí hợp lý và phải cộng vào doanh thu chịu thuế. Cần <strong>Biên bản xác định lỗi nhân viên</strong> '
+                + 'kèm Biên bản tiêu hủy. Nếu nhân viên đền bù thì lập <strong>phiếu thu</strong> theo '
+                + '<strong>giá bán</strong> hàng mất — không phải giá vốn.';
+        } else if (type === 'DESTROY') {
+            box.className = 'alert alert-warning';
+            box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
+                + 'Đối chiếu <strong>số lô và hạn dùng in trên vỏ hộp</strong> với lô đã chọn trước khi tiêu hủy — '
+                + 'thao tác này không hoàn tác được bằng cách nào khác ngoài hủy phiếu. '
+                + 'Hủy do nguyên nhân khách quan cần Biên bản kiểm kê, QĐ Hội đồng tiêu hủy, Biên bản tiêu hủy '
+                + 'và báo cơ quan thuế trong 10 ngày.';
+        } else if (blocksExpiredGoods()) {
+            box.className = 'alert alert-danger';
+            box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
+                + '<strong>Không được dùng nội bộ / làm mẫu / biếu tặng hàng đã hết hạn.</strong> '
+                + 'Lô quá hạn chỉ được lập phiếu Hủy hàng. Lô cận hạn (dưới 90 ngày) vẫn dùng được nhưng nên cân nhắc.';
+        } else {
+            box.className = 'alert alert-warning';
+            box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
+                + 'Đối chiếu số lô và hạn dùng với lô đã chọn trước khi tạo phiếu.';
+        }
     }
 
     /** Hiện/ẩn cột "Thuế GTGT đầu ra" theo loại phiếu (chỉ INTERNAL_USE/GIFT/SAMPLE). */
@@ -935,7 +1041,7 @@
         const body = document.getElementById('countPreviewBody');
 
         if (!countLines.length) {
-            body.innerHTML = '<tr id="countEmptyRow"><td colspan="9" class="text-center text-secondary py-4">'
+            body.innerHTML = '<tr id="countEmptyRow"><td colspan="10" class="text-center text-secondary py-4">'
                 + 'Phiếu kiểm kê chưa có dòng chênh lệch để điều chỉnh.</td></tr>';
             updateCountSummary();
             return;
@@ -957,10 +1063,33 @@
                     <td class="fw-semibold">${sign}${discrepancy}</td>
                     <td><span class="badge ${badgeClass}">${countTypeLabel(line.adjustmentType)}</span></td>
                     <td class="fw-semibold">${formatMoney(line.lineCost || 0)}</td>
+                    <td>${originCell(line)}</td>
                 </tr>`;
         }).join('');
 
         updateCountSummary();
+    }
+
+    /**
+     * Chỉ dòng THỪA mới phải chọn nguồn gốc (sheet 06 mục 1):
+     *   • không tick = lỗi ghi sổ của một lô đã biết → cộng thẳng vào lô đó, không ảnh hưởng thuế;
+     *   • tick       = không rõ vì sao thừa → hệ thống lập LÔ MỚI, không gắn hóa đơn mua,
+     *                  giá vốn lấy ước tính từ lô nhập gần nhất của cùng sản phẩm.
+     * Dòng THIẾU không có lựa chọn nào — hàng đã mất, chỉ trừ khỏi lô đang đếm.
+     */
+    function originCell(line) {
+        if (line.adjustmentType !== 'COUNT_INCREASE') {
+            return '<span class="text-secondary">—</span>';
+        }
+        return `
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox"
+                       name="unknownOriginBatchIds" value="${line.batchId}"
+                       id="unknownOrigin${line.batchId}">
+                <label class="form-check-label small" for="unknownOrigin${line.batchId}">
+                    Không rõ nguồn gốc — lập lô mới
+                </label>
+            </div>`;
     }
 
     function updateCountSummary() {
@@ -1102,6 +1231,8 @@
         if (currentMode() === 'STOCK_COUNT') {
             loadCountLines();
         }
+        // Nháp khôi phục từ localStorage có thể chứa lô nay đã hết hạn → soát lại ngay khi mở màn.
+        refreshExpiryWarnings();
         saveDraftLocal();
 
         const form = document.getElementById('adjustmentForm');
@@ -1130,6 +1261,11 @@
         });
     });
 </script>
+
+<!-- Ô "Số lượng" (min=1) và ô "Thuế suất GTGT đầu ra" (min=0, step=0.01) đều không bao giờ nhận số
+     âm hay ký hiệu khoa học. Dòng hàng được thêm bằng JS nên fragment phải bind ở mức document —
+     đúng như nó đang làm; không cần gọi lại sau mỗi lần addBatchRow(). -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
 </html>

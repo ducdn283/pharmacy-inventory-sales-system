@@ -32,12 +32,21 @@
     }
 
     .summary-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px 32px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
       margin-bottom: 24px;
       padding-bottom: 20px;
       border-bottom: 1px solid #f3f4f6;
+    }
+    @media (max-width: 767px) {
+      .summary-row { grid-template-columns: 1fr; }
+    }
+    .summary-item {
+      padding: 14px 16px;
+      background: #f9fafb;
+      border: 1px solid #f3f4f6;
+      border-radius: 12px;
     }
     .summary-item .label {
       font-size: 12px;
@@ -85,7 +94,9 @@
     .sup-table tr:last-child td { border-bottom: none; }
     .sup-table tr:hover td { background: #fafafa; }
     .sup-code { font-weight: 600; color: #111827; }
-    .amount-payable { color: var(--sup-red); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .sup-table th.col-amount,
+    .sup-table td.col-amount { text-align: right; }
+    .amount-payable { color: var(--sup-red); font-weight: 700; font-variant-numeric: tabular-nums; }
     .detail-sub { font-size: 12px; color: var(--sup-muted); margin-top: 2px; }
 
     .btn-back {
@@ -167,7 +178,7 @@
             <tr>
               <th th:text="${detail.partyType == 'CUSTOMER' ? 'Mã phiếu trả' : 'Mã phiếu nhập'}">Mã phiếu trả</th>
               <th>Ngày</th>
-              <th>Nợ</th>
+              <th class="col-amount">Nợ</th>
               <th style="width:120px;text-align:center;"
                   th:text="${detail.partyType == 'CUSTOMER' ? 'Hoàn tiền' : 'Chi trả'}">Hoàn tiền</th>
             </tr>
@@ -179,7 +190,7 @@
                 <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}">HĐ HD-001</div>
               </td>
               <td th:text="${line.dateDisplay}">01/07/2026 14:10</td>
-              <td class="amount-payable"
+              <td class="col-amount amount-payable"
                   th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">100.000đ</td>
               <td style="text-align:center;">
                 <a class="btn btn-sm btn-pay"

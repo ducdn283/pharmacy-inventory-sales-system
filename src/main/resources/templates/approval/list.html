@@ -257,9 +257,9 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Điều chỉnh / Kiểm kê</div>
-                            <div class="fs-3 fw-bold"
-                                 th:text="${stats.stockAdjustmentCount + stats.stockCountCount}">0</div>
+                            <!-- Chỉ còn Kiểm kê: phiếu điều chỉnh kho bỏ bước duyệt từ 27/07/2026. -->
+                            <div class="text-secondary small mb-2">Kiểm kê</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.stockCountCount}">0</div>
                             <div class="text-secondary small">Phiếu kho chờ duyệt</div>
                         </div>
                         <div class="stat-icon">

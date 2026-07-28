@@ -128,7 +128,10 @@
                 <input id="cusPhone" type="tel" class="form-control"
                        th:field="*{phoneNumber}"
                        th:classappend="${#fields.hasErrors('phoneNumber')} ? ' is-invalid'"
-                       inputmode="numeric" maxlength="10"
+                       inputmode="numeric" maxlength="10" data-digits
+                       data-unique-url="/customer/check-duplicate"
+                       data-unique-field="phoneNumber"
+                       data-unique-message="Số điện thoại đã tồn tại trong hệ thống"
                        pattern="0(2|3|5|7|8|9)[0-9]{8}"
                        title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                        placeholder="0900000000">
@@ -136,9 +139,15 @@
               </div>
               <div class="col-12 col-md-6">
                 <label id="cusTaxLabel" for="cusTax" class="form-label">Mã số thuế</label>
+                <!-- Cá nhân = CCCD/CMND (9 hoặc 12 số), doanh nghiệp = MST (10 số, có thể kèm "-3 số")
+                     nên phải cho gõ dấu gạch ngang ngoài chữ số. -->
                 <input id="cusTax" type="text" class="form-control"
                        th:field="*{taxCode}"
                        th:classappend="${#fields.hasErrors('taxCode')} ? ' is-invalid'"
+                       inputmode="numeric" data-digits="-"
+                       data-unique-url="/customer/check-duplicate"
+                       data-unique-field="taxCode"
+                       data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
                        maxlength="100" placeholder="Nhập mã số thuế">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
               </div>
@@ -159,6 +168,7 @@
                 <input id="cusBankAcc" type="text" class="form-control"
                        th:field="*{bankAccountNumber}"
                        th:classappend="${#fields.hasErrors('bankAccountNumber')} ? ' is-invalid'"
+                       inputmode="numeric" data-digits
                        maxlength="100" placeholder="Nhập số tài khoản">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('bankAccountNumber')}" th:errors="*{bankAccountNumber}"></div>
               </div>
@@ -235,5 +245,13 @@
     apply();
   })();
 </script>
+
+<!-- Chặn ngay lúc gõ cho 3 ô data-digits: số điện thoại, mã số thuế/CCCD, số tài khoản. Thuộc tính
+     pattern="..." sẵn có chỉ báo lỗi lúc submit — người dùng vẫn gõ được chữ cái vào rồi mới biết sai. -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- Báo trùng SĐT / MST-CCCD ngay lúc rời ô. Bảng customer không có UNIQUE nào ở DB nên chặn thật
+     vẫn là CustomerService.validate — đây chỉ là lớp báo sớm. -->
+<div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
 </body>
 </html>

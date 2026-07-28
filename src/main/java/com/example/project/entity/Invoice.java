@@ -88,6 +88,10 @@ public class Invoice {
     @Column(name = "status", nullable = false, length = 50)
     private String status;
 
+    @Size(max = 50)
+    @Column(name = "returnStatus", length = 50)
+    private String returnStatus;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shiftReportID")
     private Shiftreport shiftReportID;

@@ -34,4 +34,12 @@ public class StockAdjustmentDetailItemResponse {
     private BigDecimal vatRate;
     private BigDecimal preTaxAmount;
     private BigDecimal vatAmount;
+
+    /**
+     * Giá trị đền bù của dòng, tính theo <strong>GIÁ BÁN</strong> niêm yết (không phải giá vốn) —
+     * chỉ có ý nghĩa với phiếu {@code DESTROY_EMPLOYEE_FAULT} / {@code COUNT_DECREASE}, là số tiền
+     * đề xuất cho phiếu thu "nhân viên đền bù". Tính LIVE lúc đọc, không lưu cột riêng.
+     */
+    private BigDecimal reimbursementUnitPrice;
+    private BigDecimal reimbursementValue;
 }

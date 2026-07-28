@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Kiểm trùng LIVE cho những ô phải là duy nhất (số điện thoại, mã số thuế, CCCD, email…).
+
+  Vì sao cần: các bảng như `customer`, `supplier` KHÔNG có ràng buộc UNIQUE nào ngoài khoá chính, nên
+  DB nhận bừa hai bản ghi trùng nhau. Tầng service là chỗ chặn thật; fragment này chỉ báo SỚM để
+  người dùng biết ngay lúc rời ô, thay vì điền xong cả form mới bị đá về.
+
+  ⚠ Đây KHÔNG thay thế kiểm tra ở backend. Màn hình luôn có thể bị bỏ qua — gọi thẳng POST, JS lỗi,
+  hoặc hai người nhập cùng lúc rồi bấm lưu cách nhau vài mili giây. Mọi ô gắn ở đây BẮT BUỘC phải có
+  một lượt kiểm tương ứng trong service.
+
+  Cách dùng — đánh dấu ngay trên ô nhập:
+
+      <input id="cusPhone" type="tel"
+             data-unique-url="/customer/check-duplicate"
+             data-unique-field="phoneNumber"
+             data-unique-message="Số điện thoại đã tồn tại trong hệ thống">
+
+  Màn SỬA truyền thêm id bản ghi để nó không tự báo trùng với chính mình:
+
+      data-unique-id="${customer.id}"
+
+  Rồi đặt cuối <body>:
+
+      <div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
+
+  Endpoint trả về JSON {"duplicate": true|false} và phải nhận 3 tham số: field, value, id (tuỳ chọn).
+-->
+<th:block th:fragment="uniqueChecks">
+    <script>
+        (function () {
+            var DEBOUNCE_MS = 400;
+
+            function guardedInputs() {
+                return document.querySelectorAll('input[data-unique-url][data-unique-field]');
+            }
+
+            /**
+             * Ô trống thì bỏ qua (bắt buộc hay không là việc của required/@NotBlank), và ô sai định
+             * dạng cũng bỏ qua — báo "số điện thoại đã tồn tại" cho một chuỗi vốn không phải số điện
+             * thoại chỉ làm người dùng rối. Để pattern/required báo trước, trùng lặp tính sau.
+             */
+            function shouldCheck(input) {
+                if (!input.value || !input.value.trim()) return false;
+                if (input.validity && (input.validity.patternMismatch || input.validity.typeMismatch)) return false;
+                return true;
+            }
+
+            function feedbackFor(input) {
+                var next = input.nextElementSibling;
+                while (next) {
+                    if (next.hasAttribute && next.hasAttribute('data-unique-feedback')) return next;
+                    next = next.nextElementSibling;
+                }
+                var box = document.createElement('div');
+                box.className = 'invalid-feedback';
+                box.setAttribute('data-unique-feedback', '');
+                // Ô nào nằm trong .input-group thì thông báo phải ra ngoài group mới hiện được.
+                var group = input.closest('.input-group');
+                var anchor = group || input;
+                anchor.parentNode.insertBefore(box, anchor.nextSibling);
+                return box;
+            }
+
+            function markDuplicate(input, duplicate) {
+                var box = feedbackFor(input);
+                if (duplicate) {
+                    input.setAttribute('data-unique-duplicate', 'true');
+                    input.classList.add('is-invalid');
+                    box.textContent = input.getAttribute('data-unique-message') || 'Giá trị này đã tồn tại';
+                    box.style.display = 'block';
+                } else {
+                    input.removeAttribute('data-unique-duplicate');
+                    // Chỉ gỡ is-invalid khi CHÍNH fragment này đặt nó — lỗi do server render (sai định
+                    // dạng, bỏ trống) phải giữ nguyên, không được xoá hộ.
+                    if (box.textContent) input.classList.remove('is-invalid');
+                    box.textContent = '';
+                    box.style.display = 'none';
+                }
+            }
+
+            function runCheck(input) {
+                if (!shouldCheck(input)) {
+                    markDuplicate(input, false);
+                    return;
+                }
+                var params = new URLSearchParams({
+                    field: input.getAttribute('data-unique-field'),
+                    value: input.value.trim()
+                });
+                var recordId = input.getAttribute('data-unique-id');
+                if (recordId) params.set('id', recordId);
+
+                var url = input.getAttribute('data-unique-url') + '?' + params.toString();
+                // Đánh dấu lượt gọi để kết quả về muộn của lần gõ trước không ghi đè lần gõ sau.
+                var token = String(Date.now()) + Math.random();
+                input.setAttribute('data-unique-token', token);
+
+                fetch(url, {headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}})
+                    .then(function (response) {
+                        if (!response.ok) throw new Error('check failed');
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        if (input.getAttribute('data-unique-token') !== token) return;
+                        markDuplicate(input, !!(data && data.duplicate));
+                    })
+                    .catch(function () {
+                        // Mạng lỗi / hết phiên: im lặng bỏ qua. Không được chặn người dùng lưu chỉ vì
+                        // lớp báo sớm không gọi được — backend vẫn kiểm khi bấm lưu.
+                        if (input.getAttribute('data-unique-token') !== token) return;
+                        markDuplicate(input, false);
+                    });
+            }
+
+            guardedInputs().forEach(function (input) {
+                var timer = null;
+
+                input.addEventListener('blur', function () {
+                    if (timer) clearTimeout(timer);
+                    runCheck(input);
+                });
+
+                // Kiểm cả trong lúc gõ để cờ trùng thường đã sẵn sàng trước khi người dùng bấm Lưu —
+                // bấm Lưu không phải lúc nào cũng sinh sự kiện blur cho ô đang nhập.
+                input.addEventListener('input', function () {
+                    markDuplicate(input, false);
+                    if (timer) clearTimeout(timer);
+                    timer = setTimeout(function () {
+                        runCheck(input);
+                    }, DEBOUNCE_MS);
+                });
+            });
+
+            // Chặn submit khi còn ô đang bị đánh dấu trùng. Capture phase để chạy trước các listener
+            // submit khác của trang.
+            document.addEventListener('submit', function (event) {
+                var form = event.target;
+                if (!(form instanceof HTMLFormElement)) return;
+
+                var duplicate = form.querySelector('input[data-unique-duplicate="true"]');
+                if (!duplicate) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+                duplicate.focus();
+                duplicate.scrollIntoView({block: 'center', behavior: 'smooth'});
+            }, true);
+        })();
+    </script>
+</th:block>
+</body>
+</html>

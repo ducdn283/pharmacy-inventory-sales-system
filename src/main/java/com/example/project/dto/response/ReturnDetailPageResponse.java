@@ -37,8 +37,24 @@ public class ReturnDetailPageResponse {
     private long totalItems;
     private int totalQuantity;
 
+    /** Số tiền THỰC hoàn = Σ lineRefund (đã áp tỷ lệ hoàn). */
     private BigDecimal totalRefund;
+    /** Phần tiền hoàn được cấn trừ vào công nợ hóa đơn gốc = MIN(totalRefund, dư nợ lúc duyệt). */
     private BigDecimal offsetDebtAmount;
+    /** Tiền thật còn phải hoàn cho khách sau bù trừ = totalRefund − offsetDebtAmount (phiếu chi chi ra). */
+    private BigDecimal cashRefundDue;
+
+    /** Tỷ lệ % hoàn áp cho phiếu này (Return.appliedRefundRate). */
+    private BigDecimal appliedRefundRate;
+    /** Tổng giá trị GỐC 100% của hàng trả, trước khi áp tỷ lệ hoàn = Σ originalLineValue. */
+    private BigDecimal totalOriginalValue;
+    /** Phần nhà thuốc GIỮ LẠI = totalOriginalValue − totalRefund; vẫn là doanh thu chịu thuế bình thường. */
+    private BigDecimal retainedAmount;
+
+    /** Doanh thu (chưa thuế) được giảm trừ = Σ preTaxAmount của các dòng. */
+    private BigDecimal totalPreTaxRefund;
+    /** Thuế GTGT đầu ra được giảm trừ trong kỳ TRẢ HÀNG (không hồi tố kỳ bán gốc) = Return.totalVATRefund. */
+    private BigDecimal totalVATRefund;
 
     private List<ReturnDetailItemResponse> items;
 }

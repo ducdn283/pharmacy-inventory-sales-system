@@ -3,6 +3,7 @@ package com.example.project.dto.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +27,13 @@ public class ReturnPurchaseCreateRequest {
 
     /** Optional free-text note. */
     private String note;
+
+    /**
+     * Tỷ lệ % giá trị hàng trả mà NHÀ CUNG CẤP CHẤP NHẬN HOÀN ({@code 0 < rate ≤ 100}), áp cho mọi dòng
+     * của phiếu. Bỏ trống ⇒ lấy mặc định {@code Financialsetting.returnProductOnInvoiceValueRate}. Phần
+     * NCC không hoàn là khoản lỗ, tính động vào chi phí hợp lý TNCN nếu có chứng từ (mục 1.3 + 4.5).
+     */
+    private BigDecimal refundRate;
 
     /** One entry per candidate purchase line; blank/zero rows are dropped server-side. */
     private List<ReturnPurchaseLineRequest> items = new ArrayList<>();

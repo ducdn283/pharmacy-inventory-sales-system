@@ -32,9 +32,10 @@ import java.util.stream.Collectors;
  * <p><strong>Approval deducts stock</strong> (goods physically leave for the supplier): each line's
  * quantity is removed from the batches that were imported on the original purchase line
  * ({@code batch.purchaseDetailID}), FIFO by expiry, blocking negative stock. The purchase invoice's
- * {@code returnStatus} / {@code returnQty} are recomputed in the same transaction. The money coming
- * back (an Income voucher) and any supplier-payable offset are a later phase; this service only
- * deducts stock and records the refund amounts on the slip.</p>
+ * {@code returnStatus} / {@code returnQty} are recomputed in the same transaction, and the value returned
+ * is netted against whatever the pharmacy still owes on that purchase ({@code PurchaseInvoice.paid} goes
+ * up by {@code offsetDebtAmount} — see {@code applyDebtOffset}). Only the remainder is real money the
+ * supplier still has to hand back, which the Income module collects.</p>
  *
  * <p>Per-line "already returned" is derived on the fly from {@code returndetail} (there is no
  * {@code returnedQty} column on {@code purchasedetail}); see
@@ -45,6 +46,12 @@ public class ReturnPurchaseService {
 
     /** Only received purchases can be returned; a Nháp (draft) purchase has no stock yet. */
     private static final String PURCHASE_STATUS_DRAFT = "Nháp";
+
+    /**
+     * Tỷ lệ hoàn đầy đủ. Dùng khi {@code Financialsetting.returnProductOnInvoiceValueRate} chưa đặt —
+     * mặc định coi như NCC hoàn 100% giá trị nhập.
+     */
+    private static final BigDecimal FULL_REFUND_RATE = new BigDecimal("100.00");
 
     private static final String PURCHASE_RETURN_NONE = "NONE";
     private static final String PURCHASE_RETURN_PARTIAL = "PARTIAL";
@@ -94,8 +101,44 @@ public class ReturnPurchaseService {
     }
 
     /** Nhóm 3/4 = deduction method → the reversed input VAT is tracked on the slip; Nhóm 2 has nothing to reverse. */
-    private boolean isDeductionGroup() {
+    @Transactional(readOnly = true)
+    public boolean isDeductionGroup() {
         return revenueGroup() >= 3;
+    }
+
+    /**
+     * Tỷ lệ hoàn MẶC ĐỊNH, từ {@code Financialsetting.returnProductOnInvoiceValueRate}. Ở chiều NCC đây là
+     * tỷ lệ NCC CHẤP NHẬN hoàn (đặc tả bổ sung 27/07 mục 1.3 bước 2) — phần NCC không hoàn
+     * ({@code originalLineValue − lineRefund}) là khoản LỖ, được tính động vào chi phí hợp lý TNCN của kỳ
+     * đó nếu có chứng từ, KHÔNG sinh Expense riêng.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal getDefaultRefundRate() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getReturnProductOnInvoiceValueRate)
+                .filter(rate -> rate.signum() > 0)
+                .map(rate -> rate.min(FULL_REFUND_RATE))
+                .orElse(FULL_REFUND_RATE)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Có tự động cấn trừ tiền NCC hoàn vào công nợ đang nợ NCC hay không ({@code autoOffsetDebtOnRefund}). */
+    @Transactional(readOnly = true)
+    public boolean isAutoOffsetDebt() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getAutoOffsetDebtOnRefund)
+                .orElse(Boolean.TRUE);
+    }
+
+    /** Tỷ lệ hoàn thực áp cho phiếu đang lập; bỏ trống thì lấy mặc định của hệ thống. */
+    private BigDecimal resolveRefundRate(BigDecimal requested) {
+        if (requested == null) {
+            return getDefaultRefundRate();
+        }
+        if (requested.signum() <= 0 || requested.compareTo(FULL_REFUND_RATE) > 0) {
+            throw new IllegalArgumentException("Tỷ lệ NCC hoàn phải lớn hơn 0 và không vượt quá 100%");
+        }
+        return requested.setScale(2, RoundingMode.HALF_UP);
     }
 
     // ------------------------------------------------------------------ list / search
@@ -175,7 +218,9 @@ public class ReturnPurchaseService {
 
         List<ReturnPurchaseInvoiceResponse> result = new ArrayList<>();
         for (Purchaseinvoice purchase : purchaseinvoiceRepository.findAllWithRelations()) {
-            if (!isReceived(purchase) || isFullyReturned(purchase) || hasOutstandingDebt(purchase)) {
+            // Phiếu nhập nhà thuốc CÒN NỢ NCC vẫn trả hàng được (bỏ gate 28/07): giá trị hàng trả được cấn
+            // trừ thẳng vào khoản nợ đó (netting — xem applyDebtOffset).
+            if (!isReceived(purchase) || isFullyReturned(purchase)) {
                 continue;
             }
             if (!matchesPurchaseKeyword(purchase, normalizedKeyword)) {
@@ -194,6 +239,8 @@ public class ReturnPurchaseService {
                     purchase.getSupplierID() != null ? purchase.getSupplierID().getName() : "Không rõ",
                     purchase.getEmployeeID() != null ? purchase.getEmployeeID().getName() : "Không rõ",
                     purchase.getTotalAmount(),
+                    // Nhà thuốc còn nợ NCC bao nhiêu trên chính phiếu nhập này — số sẽ được cấn trừ.
+                    outstandingDebt(purchase),
                     (int) returnableLines,
                     returnStatusDisplay(purchase.getReturnStatus())));
         }
@@ -240,7 +287,8 @@ public class ReturnPurchaseService {
                     returnedUnit,                 // Đã trả (theo đơn vị nhập)
                     onHandUnit,                   // Tồn / SL trả tối đa (theo đơn vị nhập)
                     grossPerUnit,                 // Đơn giá nhập (gross / đơn vị nhập)
-                    grossPerUnit));               // Tiền hoàn/đơn vị = 100% gross (NCC hoàn đúng số đã trả)
+                    grossPerUnit,                 // Tiền hoàn/đơn vị = 100% gross (NCC hoàn đúng số đã trả)
+                    line.getVatRate()));          // Thuế suất dòng nhập gốc — để tạm tính thuế đầu vào đảo lại
         }
         return lines;
     }
@@ -290,6 +338,9 @@ public class ReturnPurchaseService {
         Account creator = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
+        // Tỷ lệ NCC chấp nhận hoàn cho phiếu này (mục 1.3) — mặc định theo thiết lập tài chính, chỉnh được.
+        BigDecimal refundRate = resolveRefundRate(request.getRefundRate());
+
         Map<Integer, Purchasedetail> lineById = purchasedetailRepository.findByPurchaseIdWithProduct(purchase.getId())
                 .stream().collect(Collectors.toMap(Purchasedetail::getId, line -> line, (a, b) -> a));
         Map<Integer, List<Batch>> batchesByDetail = batchesByPurchaseDetail();
@@ -324,7 +375,7 @@ public class ReturnPurchaseService {
                 if (take <= 0) {
                     continue;
                 }
-                chunks.add(new Chunk(line, batch, take, importPricePerBase(batch), line.getVatRate()));
+                chunks.add(new Chunk(line, batch, take, importPricePerBase(batch), line.getVatRate(), refundRate));
                 remaining -= take;
             }
         }
@@ -333,12 +384,15 @@ public class ReturnPurchaseService {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một dòng hàng cần trả");
         }
 
-        // NCC hoàn 100% = gross (chưa thuế + thuế) cho cả Nhóm 2 và 3.
+        // Tiền NCC hoàn = gross (chưa thuế + thuế) × tỷ lệ NCC chấp nhận hoàn, cho cả Nhóm 2 và 3.
         BigDecimal totalRefund = chunks.stream()
-                .map(Chunk::grossRefund)
+                .map(Chunk::lineRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         // Nhóm 3 (khấu trừ): ghi giảm thuế GTGT đầu vào đã khấu trừ; Nhóm 2 chưa từng khấu trừ → 0.
-        BigDecimal totalVATRefund = isDeductionGroup()
+        // Cờ này quyết định CẢ dòng chi tiết lẫn tổng phiếu — nếu chỉ zero ở tổng mà dòng vẫn tách thuế
+        // thì màn chi tiết tự mâu thuẫn (dòng ghi thuế, tổng ghi 0) và báo cáo trừ nhầm số.
+        boolean deductionGroup = isDeductionGroup();
+        BigDecimal totalVATRefund = deductionGroup
                 ? chunks.stream().map(Chunk::vatAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
                 : BigDecimal.ZERO;
 
@@ -356,11 +410,9 @@ public class ReturnPurchaseService {
         // bảng `return` — phiếu trả chỉ còn lưu tổng NCC phải hoàn (totalRefund/offsetDebtAmount).
         ret.setTotalRefund(totalRefund);
         ret.setTotalVATRefund(totalVATRefund);
-        // NCC hoàn 100% giá trị nhập gốc.
-        ret.setAppliedRefundRate(new BigDecimal("100.00"));
-        // Số tiền NCC nợ nhà thuốc sau khi trả hàng = toàn bộ tiền hoàn (phiếu nhập đã thanh toán hết
-        // mới được trả — xem assertReturnable), là mốc để màn phiếu thu đối chiếu khi NCC hoàn tiền.
-        ret.setOffsetDebtAmount(totalRefund);
+        ret.setAppliedRefundRate(refundRate);
+        // Số dự kiến cấn trừ vào công nợ đang nợ NCC; chốt lại theo dư nợ tại thời điểm DUYỆT.
+        ret.setOffsetDebtAmount(computeDebtOffset(purchase, totalRefund));
         ret.setReason(request.getReason().trim());
         ret.setNote(trimToNull(request.getNote()));
         ret.setStatus(status);
@@ -381,13 +433,19 @@ public class ReturnPurchaseService {
             detail.setReturnQty(chunk.qty());
             detail.setBaseQtyRestored(chunk.qty());
             detail.setUnitSellPrice(chunk.grossUnitPrice());
-            detail.setLineRefund(chunk.grossRefund());
-            // NCC hoàn 100% (gross) nên originalLineValue = lineRefund (không áp tỷ lệ như trả khách).
+            detail.setLineRefund(chunk.lineRefund());
+            // originalLineValue = giá trị nhập GỐC 100% của phần trả; lineRefund = số NCC thực hoàn.
+            // Chênh lệch giữa 2 cột = khoản LỖ khi NCC không hoàn đủ — tính động vào chi phí hợp lý TNCN
+            // của kỳ (đặc tả bổ sung 27/07 mục 1.3 + 4.5), KHÔNG tạo Expense riêng.
             detail.setOriginalLineValue(chunk.grossRefund());
-            // importPricePerBase là GROSS (chốt nhóm) → tách net/VAT TỪ TRONG gross: preTax = net, vatAmount = thuế đầu vào.
-            detail.setVatRate(chunk.vatRate() != null ? chunk.vatRate() : BigDecimal.ZERO);
-            detail.setPreTaxAmount(chunk.preTaxAmount());
-            detail.setVatAmount(chunk.vatAmount());
+            // importPricePerBase là GROSS (chốt nhóm) → Nhóm 3 tách net/VAT TỪ TRONG gross: preTax = net,
+            // vatAmount = phần thuế đầu vào phải đảo lại.
+            // Nhóm 1/2 KHÔNG khấu trừ đầu vào ⇒ không có gì để đảo: ghi vatRate/vatAmount = 0 và
+            // preTaxAmount = trọn số hoàn (giá vốn của các nhóm này là giá GỘP). Nhờ vậy
+            // Σ preTaxAmount = totalRefund và Σ vatAmount = totalVATRefund = 0 — dòng và tổng luôn khớp.
+            detail.setVatRate(deductionGroup && chunk.vatRate() != null ? chunk.vatRate() : BigDecimal.ZERO);
+            detail.setPreTaxAmount(deductionGroup ? chunk.preTaxAmount() : chunk.lineRefund());
+            detail.setVatAmount(deductionGroup ? chunk.vatAmount() : BigDecimal.ZERO);
             detail.setRestockable(false);
             returndetailRepository.save(detail);
         }
@@ -428,9 +486,15 @@ public class ReturnPurchaseService {
 
     /**
      * Deducts stock for an approved supplier return: each line's quantity is removed from its batch
-     * (blocking negative), then the purchase invoice's {@code returnStatus} / {@code returnQty} are
-     * recomputed. TODO(finance): create the Income voucher + offset the supplier payable here once
-     * that module's contract is agreed; for now only the refund amounts on the slip are recorded.
+     * (blocking negative), the value returned is netted against what the pharmacy still owes the supplier
+     * on that same purchase (see {@link #applyDebtOffset}), then the purchase invoice's
+     * {@code returnStatus} / {@code returnQty} are recomputed.
+     *
+     * <p>TODO(finance): mục 3.3 của đặc tả bổ sung còn yêu cầu sinh cặp chứng từ đối ứng cho phần bù trừ
+     * (Income {@code SUPPLIER} + Expense trỏ {@code purchaseID}, cả hai {@code paidByCredit =
+     * offsetDebtAmount}). Chưa làm ở đây vì 2 bảng đó thuộc module Thu/Chi của thành viên khác — công nợ
+     * đã trừ đúng, chỉ thiếu 2 chứng từ. Phần NCC hoàn bằng TIỀN THẬT ({@code totalRefund −
+     * offsetDebtAmount}) vẫn do màn phiếu thu ghi nhận.</p>
      */
     private void applyReturnEffect(Return ret) {
         for (Returndetail detail : returndetailRepository.findByReturnIdWithRelations(ret.getId())) {
@@ -444,7 +508,48 @@ public class ReturnPurchaseService {
             batch.setStorageQuantity(available - qty);
             batchRepository.save(batch);
         }
+        applyDebtOffset(ret, ret.getPurchaseID());
         recomputeReturnPurchaseStatus(ret.getPurchaseID());
+    }
+
+    // ------------------------------------------------------------------ bù trừ công nợ (netting)
+
+    /**
+     * Số tiền NCC hoàn được cấn trừ vào công nợ nhà thuốc đang nợ chính phiếu nhập đó:
+     * {@code MIN(totalRefund, totalAmount − paid)} — đặc tả bổ sung 27/07 mục 1.3 bước 5 + mục 3.3.
+     * Trả 0 khi {@code Financialsetting.autoOffsetDebtOnRefund} tắt.
+     */
+    private BigDecimal computeDebtOffset(Purchaseinvoice purchase, BigDecimal totalRefund) {
+        if (!isAutoOffsetDebt()) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal refund = totalRefund != null ? totalRefund : BigDecimal.ZERO;
+        return outstandingDebt(purchase).min(refund).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Thực hiện bù trừ khi duyệt phiếu: chốt {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM DUYỆT rồi
+     * ghi tăng {@code PurchaseInvoice.paid} đúng số đó — nợ NCC giảm ngay trong cùng transaction (mục 3.3
+     * bước 1, mục 3.4 "cập nhật trực tiếp").
+     *
+     * <p><strong>⚠️ ĐỔI NGHĨA CỘT {@code offsetDebtAmount} (28/07) — cần báo chủ module Thu/Chi.</strong>
+     * Trước đây cột này mang nghĩa "NCC CÒN phải hoàn": lúc duyệt = {@code totalRefund}, rồi
+     * {@code IncomeService.applySupplierOffsetDebtPayment} trừ dần mỗi lần NCC hoàn tiền. Theo đặc tả mới
+     * nó là SỐ ĐÃ BÙ TRỪ (cố định, không phải số dư động). Vì vậy phần NCC còn phải hoàn bằng tiền thật
+     * nay là {@code totalRefund − offsetDebtAmount} — {@code IncomeService.collectibleOffsetDebt} phải
+     * đổi theo (và trừ dần theo tổng Income đã lập, không trừ vào cột này nữa), nếu không màn thu tiền
+     * NCC sẽ hiểu sai số còn thu được.</p>
+     */
+    private void applyDebtOffset(Return ret, Purchaseinvoice purchase) {
+        BigDecimal offset = computeDebtOffset(purchase, ret.getTotalRefund());
+        ret.setOffsetDebtAmount(offset);
+        returnRepository.save(ret);
+        if (offset.signum() <= 0 || purchase == null) {
+            return;
+        }
+        BigDecimal paid = purchase.getPaid() != null ? purchase.getPaid() : BigDecimal.ZERO;
+        purchase.setPaid(paid.add(offset));
+        purchaseinvoiceRepository.save(purchase);
     }
 
     private void recomputeReturnPurchaseStatus(Purchaseinvoice purchase) {
@@ -503,6 +608,11 @@ public class ReturnPurchaseService {
                 .mapToInt(d -> d.getReturnQty() / importRatio(d.getBatchID()))
                 .sum();
 
+        BigDecimal totalOriginalValue = details.stream()
+                .map(Returndetail::getOriginalLineValue)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         Purchaseinvoice purchase = ret.getPurchaseID();
         String statusName = getStatusName(ret);
 
@@ -526,6 +636,16 @@ public class ReturnPurchaseService {
                 totalQuantity,
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
+                nzMoney(ret.getTotalRefund()).subtract(nzMoney(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
+                ret.getAppliedRefundRate(),
+                totalOriginalValue,
+                totalOriginalValue.subtract(nzMoney(ret.getTotalRefund())).max(BigDecimal.ZERO),
+                details.stream()
+                        .map(Returndetail::getPreTaxAmount)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add),
+                ret.getTotalVATRefund(),
+                isDeductionGroup(),
                 items);
     }
 
@@ -545,6 +665,7 @@ public class ReturnPurchaseService {
                 details.size(),
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
+                nzMoney(ret.getTotalRefund()).subtract(nzMoney(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
                 ret.getReturnType(),
                 returnTypeDisplay(ret.getReturnType()),
                 statusName,
@@ -569,7 +690,11 @@ public class ReturnPurchaseService {
                 unit != null ? unit.getUnitName() : "",
                 qtyUnit,
                 pricePerUnit,
-                detail.getLineRefund());
+                detail.getOriginalLineValue(),
+                detail.getLineRefund(),
+                detail.getVatRate(),
+                detail.getPreTaxAmount(),
+                detail.getVatAmount());
     }
 
     // ------------------------------------------------------------------ purchase read-only access
@@ -619,21 +744,18 @@ public class ReturnPurchaseService {
         if (isFullyReturned(purchase)) {
             throw new IllegalArgumentException("Phiếu nhập này đã được trả toàn bộ");
         }
-        if (hasOutstandingDebt(purchase)) {
-            throw new IllegalArgumentException(
-                    "Phiếu nhập này nhà thuốc còn nợ nhà cung cấp — phải thanh toán hết mới được trả hàng");
-        }
+        // KHÔNG chặn phiếu nhập còn nợ NCC: giá trị hàng trả được cấn trừ vào chính khoản nợ đó
+        // (PISMS_Xu_ly_Cong_no sheet "Công nợ Nhà cung cấp" ca 3/4 + đặc tả bổ sung 27/07 mục 3.3).
     }
 
-    /**
-     * BA 2026-07-26: a purchase the pharmacy has not paid off cannot be returned. Settling first keeps
-     * the return screen out of the money entirely — the supplier then simply owes back the full refund
-     * ({@code offsetDebtAmount}), which the Income module collects.
-     */
-    private boolean hasOutstandingDebt(Purchaseinvoice purchase) {
+    /** Số nhà thuốc CÒN NỢ nhà cung cấp trên phiếu nhập = totalAmount − paid (sàn 0). */
+    private BigDecimal outstandingDebt(Purchaseinvoice purchase) {
+        if (purchase == null) {
+            return BigDecimal.ZERO;
+        }
         BigDecimal total = purchase.getTotalAmount() != null ? purchase.getTotalAmount() : BigDecimal.ZERO;
         BigDecimal paid = purchase.getPaid() != null ? purchase.getPaid() : BigDecimal.ZERO;
-        return total.subtract(paid).signum() > 0;
+        return total.subtract(paid).max(BigDecimal.ZERO);
     }
 
     // ------------------------------------------------------------------ unit / price helpers
@@ -791,6 +913,10 @@ public class ReturnPurchaseService {
         return value != null ? value : 0;
     }
 
+    private BigDecimal nzMoney(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
     /** Giờ VN "hiện tại" gán lên UTC — cùng quy ước lưu với InvoiceService/purchase. */
     private Instant nowVn() {
         return LocalDateTime.now(VN_ZONE).toInstant(ZoneOffset.UTC);
@@ -841,32 +967,41 @@ public class ReturnPurchaseService {
 
     /**
      * A validated, priced return chunk (one batch worth of a returned purchase line). The supplier refunds
-     * 100% of the import value.
+     * {@code refundRate}% of the import value; the rest is the pharmacy's loss (chi phí hợp lý, tính động).
      *
      * <p>"Giá nhập" bên phiếu nhập là
      * GIÁ CUỐI ĐÃ GỒM THUẾ (gross) → {@code batch.importPricePerBase} lưu gross/đơn vị cơ sở → {@code
      * unitImportPrice} là GROSS. Vì vậy tiền hoàn NCC = gross = ĐÚNG số nhà thuốc đã trả (không cộng thêm
      * VAT lên trên); net/VAT được TÁCH RA từ trong gross để ghi sổ thuế (giảm GTGT đầu vào Nhóm 3).</p>
      */
-    private record Chunk(Purchasedetail line, Batch batch, int qty, BigDecimal unitImportPrice, BigDecimal vatRate) {
-        /** Gross (VAT-inclusive) value of this chunk = importPricePerBase × qty — số NCC hoàn 100%. */
+    private record Chunk(Purchasedetail line, Batch batch, int qty, BigDecimal unitImportPrice,
+                         BigDecimal vatRate, BigDecimal refundRate) {
+        /** Giá trị nhập GỐC 100% của chunk = importPricePerBase × qty (originalLineValue). */
         BigDecimal grossRefund() {
             return unitImportPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
         }
 
-        /** Net (pre-tax) portion tách từ gross = gross ÷ (1 + vatRate%). */
+        /** Số NCC THỰC hoàn = giá trị gốc × tỷ lệ NCC chấp nhận hoàn. */
+        BigDecimal lineRefund() {
+            if (refundRate == null || refundRate.compareTo(FULL_REFUND_RATE) >= 0) {
+                return grossRefund();
+            }
+            return grossRefund().multiply(refundRate).divide(FULL_REFUND_RATE, 2, RoundingMode.HALF_UP);
+        }
+
+        /** Net (pre-tax) portion tách từ SỐ THỰC HOÀN = lineRefund ÷ (1 + vatRate%). */
         BigDecimal preTaxAmount() {
             BigDecimal rate = vatRate != null ? vatRate : BigDecimal.ZERO;
             if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-                return grossRefund();
+                return lineRefund();
             }
             BigDecimal divisor = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
-            return grossRefund().divide(divisor, 2, RoundingMode.HALF_UP);
+            return lineRefund().divide(divisor, 2, RoundingMode.HALF_UP);
         }
 
-        /** Input VAT tách từ gross = gross − net (đầu vào đã khấu trừ, dùng cho Nhóm 3). */
+        /** Input VAT tách từ số thực hoàn = lineRefund − net (đầu vào đã khấu trừ, dùng cho Nhóm 3). */
         BigDecimal vatAmount() {
-            return grossRefund().subtract(preTaxAmount());
+            return lineRefund().subtract(preTaxAmount());
         }
 
         /** Gross unit import price (per base) — đã gồm thuế, dùng làm đơn giá dòng chi tiết. */

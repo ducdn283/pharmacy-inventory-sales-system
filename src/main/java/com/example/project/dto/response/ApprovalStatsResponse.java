@@ -11,7 +11,7 @@ public class ApprovalStatsResponse {
 
     private long returnCount;
 
-    private long stockAdjustmentCount;
+    // Không còn stockAdjustmentCount: phiếu điều chỉnh kho bỏ bước duyệt từ 2026-07-27.
 
     private long stockCountCount;
 
