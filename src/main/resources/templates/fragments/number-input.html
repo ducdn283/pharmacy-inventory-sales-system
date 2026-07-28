@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Reusable hardening cho <input type="number">.
+
+  Trình duyệt vẫn cho gõ 'e', 'E', '+', '-' vào ô type=number kể cả khi ô đó không bao giờ nhận số
+  âm hay ký hiệu khoa học: value trở thành chuỗi rỗng (validity.badInput) nhưng ký tự vẫn nằm trong
+  ô, và mọi hàm cộng tổng đọc ra NaN. Fragment này chặn ngay lúc gõ.
+
+  Quy tắc suy ra từ chính thuộc tính của ô, không hardcode danh sách id:
+      - cho gõ '-' khi ô không có min hoặc min < 0;
+      - cho gõ '.' khi step là số thập phân (step="0.01") hoặc step="any";
+      - 'e' / 'E' / '+' / ',' luôn bị chặn — type=number chỉ hiểu dấu chấm thập phân.
+
+  Bind ở mức document nên dòng thêm bằng JS (dòng hàng của phiếu nhập, dòng đơn vị tính của hàng
+  hóa) tự động được bảo vệ, không phải gọi lại sau mỗi lần render.
+
+  Cách dùng: đặt cuối <body>
+      <div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+  Ô nào thật sự cần số âm thì đánh dấu data-allow-sign để bỏ qua.
+
+  Tiền tệ dùng fragments/money-input (ô text + data-money) chứ không dùng fragment này — ô đó đã
+  lọc sạch mọi ký tự không phải chữ số ở mỗi sự kiện input.
+-->
+<th:block th:fragment="numberInputs">
+    <script>
+        (function () {
+            function isGuarded(target) {
+                return target instanceof HTMLInputElement
+                    && target.type === 'number'
+                    && !target.readOnly
+                    && !target.disabled
+                    && !target.hasAttribute('data-allow-sign');
+            }
+
+            /** Chỉ ô có step thập phân (hoặc step="any") mới được gõ dấu chấm; step trống = 1 = số nguyên. */
+            function allowsDecimal(input) {
+                var step = (input.getAttribute('step') || '').trim().toLowerCase();
+                if (step === 'any') return true;
+                if (!step) return false;
+                var value = Number(step);
+                return Number.isFinite(value) && !Number.isInteger(value);
+            }
+
+            /** min="0" / min="1" nghĩa là số âm không bao giờ hợp lệ — chặn luôn dấu trừ. */
+            function allowsNegative(input) {
+                var min = (input.getAttribute('min') || '').trim();
+                if (!min) return true;
+                var value = Number(min);
+                return !Number.isFinite(value) || value < 0;
+            }
+
+            document.addEventListener('keydown', function (event) {
+                var input = event.target;
+                if (!isGuarded(input)) return;
+                // Ctrl+C / Ctrl+V / Ctrl+A… và phím điều hướng (event.key dài hơn 1 ký tự) giữ nguyên.
+                if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+                var key = event.key;
+                if (!key || key.length !== 1) return;
+                if (key >= '0' && key <= '9') return;
+                if (key === '.' && allowsDecimal(input)) return;
+                if (key === '-' && allowsNegative(input)) return;
+
+                event.preventDefault();
+            }, true);
+
+            /**
+             * Dán và kéo-thả không đi qua keydown. type=number không cho đọc lại phần text sai định
+             * dạng (value là chuỗi rỗng), nên chỉ còn cách dọn ô khi trình duyệt báo badInput —
+             * đằng nào nội dung đó cũng không phải một con số.
+             */
+            function clearBadInput(input) {
+                if (isGuarded(input) && input.validity && input.validity.badInput) {
+                    input.value = '';
+                    // Để oninput="calculateSummary()" / recomputeUnits() tính lại theo ô vừa dọn.
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+            }
+
+            ['paste', 'drop'].forEach(function (type) {
+                document.addEventListener(type, function (event) {
+                    var input = event.target;
+                    if (!isGuarded(input)) return;
+                    setTimeout(function () {
+                        clearBadInput(input);
+                    }, 0);
+                }, true);
+            });
+
+            document.addEventListener('blur', function (event) {
+                clearBadInput(event.target);
+            }, true);
+        })();
+    </script>
+</th:block>
+</body>
+</html>
