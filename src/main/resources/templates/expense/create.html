@@ -96,20 +96,17 @@
                         </div>
 
                         <div class="row g-3">
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Mã phiếu</label>
-                                <input type="text" class="form-control auto-field" value="PC-…"
-                                       readonly tabindex="-1">
-                            </div>
+                            <!-- Mã phiếu do server sinh lúc lưu; không hiện ô "PC-…" rỗng trên màn tạo
+                                 vì nó chẳng cho người dùng thêm thông tin gì. Xem mã ở màn chi tiết. -->
 
-                            <div class="col-12 col-md-4">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label">Người lập</label>
                                 <input type="text" class="form-control auto-field"
                                        th:value="${creatorName != null ? creatorName : 'Tài khoản hiện tại'}"
                                        value="Tài khoản hiện tại" readonly tabindex="-1">
                             </div>
 
-                            <div class="col-12 col-md-4">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label">Ngày chi</label>
                                 <input type="date" class="form-control" th:field="*{date}" id="dateInput">
                             </div>
