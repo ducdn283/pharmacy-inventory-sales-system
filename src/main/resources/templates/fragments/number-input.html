@@ -21,6 +21,21 @@
 
   Ô nào thật sự cần số âm thì đánh dấu data-allow-sign để bỏ qua.
 
+  ------------------------------------------------------------------------------------------------
+  data-digits — cho ô CHỮ chỉ được chứa chữ số
+
+  Số điện thoại, mã số thuế, CCCD, số tài khoản đều là "trường nhập số" nhưng KHÔNG được dùng
+  type=number: số 0 đứng đầu bị mất, nút tăng/giảm vô nghĩa, và cuộn chuột làm đổi giá trị. Chúng
+  vẫn là ô text/tel, nên thuộc tính pattern="..." của HTML chỉ báo lỗi LÚC SUBMIT — người dùng vẫn
+  gõ được chữ cái vào ô rồi mới biết sai.
+
+      <input type="tel" data-digits maxlength="10">          chỉ 0-9
+      <input type="text" data-digits="-" maxlength="20">     0-9 và dấu gạch ngang (MST 10 số-3 số)
+
+  Giá trị của thuộc tính là danh sách ký tự ĐƯỢC PHÉP THÊM ngoài chữ số. Ô text đọc lại được value
+  (khác type=number) nên fragment lọc thẳng ở mỗi sự kiện input — dán, kéo-thả, tự động điền đều
+  được dọn, và con trỏ giữ nguyên vị trí thay vì nhảy về cuối.
+
   Tiền tệ dùng fragments/money-input (ô text + data-money) chứ không dùng fragment này — ô đó đã
   lọc sạch mọi ký tự không phải chữ số ở mỗi sự kiện input.
 -->
@@ -92,6 +107,63 @@
 
             document.addEventListener('blur', function (event) {
                 clearBadInput(event.target);
+            }, true);
+
+            // ---------------------------------------------------------------- data-digits (ô text/tel)
+
+            function digitsGuard(target) {
+                if (!(target instanceof HTMLInputElement)) return null;
+                if (target.readOnly || target.disabled) return null;
+                if (!target.hasAttribute('data-digits')) return null;
+                // Ký tự được phép thêm ngoài 0-9, khai ngay trong giá trị thuộc tính (vd data-digits="-").
+                return target.getAttribute('data-digits') || '';
+            }
+
+            function isAllowedDigitChar(character, extraChars) {
+                if (character >= '0' && character <= '9') return true;
+                return extraChars.indexOf(character) !== -1;
+            }
+
+            document.addEventListener('keydown', function (event) {
+                var extraChars = digitsGuard(event.target);
+                if (extraChars === null) return;
+                if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+                var key = event.key;
+                if (!key || key.length !== 1) return;   // Backspace, Tab, mũi tên… giữ nguyên
+                if (isAllowedDigitChar(key, extraChars)) return;
+
+                event.preventDefault();
+            }, true);
+
+            /**
+             * Lọc lại toàn bộ value sau mỗi lần nội dung đổi — bắt được cả dán, kéo-thả và tự động
+             * điền, những đường không đi qua keydown. Đếm số ký tự hợp lệ nằm TRƯỚC con trỏ để đặt
+             * lại đúng chỗ; nếu không thì xoá một ký tự giữa chuỗi sẽ đẩy con trỏ về cuối ô.
+             */
+            document.addEventListener('input', function (event) {
+                var extraChars = digitsGuard(event.target);
+                if (extraChars === null) return;
+
+                var input = event.target;
+                var original = input.value;
+                var caret = input.selectionStart;
+
+                var cleaned = '';
+                var newCaret = caret;
+                for (var i = 0; i < original.length; i++) {
+                    if (isAllowedDigitChar(original.charAt(i), extraChars)) {
+                        cleaned += original.charAt(i);
+                    } else if (i < caret) {
+                        newCaret--;
+                    }
+                }
+
+                if (cleaned === original) return;
+                input.value = cleaned;
+                if (typeof newCaret === 'number' && input.setSelectionRange) {
+                    input.setSelectionRange(newCaret, newCaret);
+                }
             }, true);
         })();
     </script>

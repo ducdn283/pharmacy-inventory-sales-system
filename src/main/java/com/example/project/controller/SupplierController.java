@@ -16,6 +16,8 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.Map;
+
 /**
  * Shared Supplier module: only the Owner may create/edit suppliers and their supplied products;
  * Pharmacist and Accountant are view-only (per the PHÂN QUYỀN MÀN HÌNH matrix — Supplier/
@@ -111,6 +113,31 @@ public class SupplierController {
             return "redirect:/supplier/" + newId;
         }
         return "redirect:/supplier";
+    }
+
+    // ------------------------------------------------------------------ kiểm trùng (AJAX)
+
+    /**
+     * Kiểm trùng cho màn tạo/sửa, gọi lúc rời ô nhập. Chỉ là lớp báo SỚM — chặn thật vẫn nằm ở
+     * {@code SupplierService.validateUnique}, vì màn hình có thể bị bỏ qua (gọi thẳng POST, JS lỗi,
+     * hai người nhập cùng lúc) và bảng {@code supplier} không có ràng buộc UNIQUE nào ở DB.
+     *
+     * @param field {@code phone}, {@code email} hoặc {@code taxCode}
+     * @param id    id bản ghi đang sửa — bỏ qua chính nó (null khi tạo mới)
+     */
+    @GetMapping("/check-duplicate")
+    @ResponseBody
+    public Map<String, Boolean> checkDuplicate(@RequestParam("field") String field,
+                                               @RequestParam("value") String value,
+                                               @RequestParam(name = "id", required = false) Integer id) {
+        requireOwner();
+        boolean duplicate = switch (field) {
+            case "phone" -> supplierService.isPhoneTaken(value, id);
+            case "email" -> supplierService.isEmailTaken(value, id);
+            case "taxCode" -> supplierService.isTaxCodeTaken(value, id);
+            default -> throw new IllegalArgumentException("Trường kiểm trùng không hợp lệ: " + field);
+        };
+        return Map.of("duplicate", duplicate);
     }
 
     // ------------------------------------------------------------------ detail / update

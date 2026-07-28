@@ -12,4 +12,13 @@ public interface SupplierRepository extends JpaRepository<Supplier, Integer> {
     boolean existsByEmailIgnoreCase(String email);
 
     boolean existsByEmailIgnoreCaseAndIdNot(String email, Integer id);
+
+    /**
+     * Mã số thuế phải là DUY NHẤT — nó là căn cứ đối chiếu hóa đơn GTGT đầu vào với cơ quan thuế,
+     * hai nhà cung cấp cùng MST thì không phân định được hóa đơn thuộc về ai. Bảng {@code supplier}
+     * không có ràng buộc UNIQUE nào ngoài khoá chính nên phải chặn ở tầng service.
+     */
+    boolean existsByTaxCode(String taxCode);
+
+    boolean existsByTaxCodeAndIdNot(String taxCode, Integer id);
 }

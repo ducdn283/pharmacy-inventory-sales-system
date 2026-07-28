@@ -160,8 +160,7 @@ public class SupplierService {
 
     @Transactional
     public Integer create(SupplierRequest request) {
-        validatePhone(request.getPhone(), null);
-        validateEmail(request.getEmail(), null);
+        validateUnique(request, null);
 
         Supplier supplier = new Supplier();
         supplier.setName(request.getName().trim());
@@ -180,8 +179,7 @@ public class SupplierService {
         Supplier supplier = supplierRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhà cung cấp"));
 
-        validatePhone(request.getPhone(), id);
-        validateEmail(request.getEmail(), id);
+        validateUnique(request, id);
 
         supplier.setName(request.getName().trim());
         supplier.setPhone(request.getPhone().trim());
@@ -215,21 +213,51 @@ public class SupplierService {
         return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
     }
 
-    private void validatePhone(String phone, Integer excludeId) {
-        boolean duplicate = excludeId == null
-                ? supplierRepository.existsByPhone(phone.trim())
-                : supplierRepository.existsByPhoneAndIdNot(phone.trim(), excludeId);
-        if (duplicate) {
+    /**
+     * Ba trường định danh một nhà cung cấp phải là DUY NHẤT. Bảng {@code supplier} không có ràng buộc
+     * UNIQUE nào ngoài khoá chính nên tầng service là chỗ chặn duy nhất — thiếu một trường ở đây là
+     * dữ liệu trùng lọt thẳng vào DB.
+     *
+     * <p>MST quan trọng nhất: nó là căn cứ đối chiếu hóa đơn GTGT đầu vào với cơ quan thuế, hai NCC
+     * cùng MST thì không phân định được hóa đơn thuộc về ai.</p>
+     */
+    private void validateUnique(SupplierRequest request, Integer excludeId) {
+        if (isPhoneTaken(request.getPhone(), excludeId)) {
             throw new IllegalArgumentException("Số điện thoại đã được sử dụng bởi nhà cung cấp khác");
+        }
+        if (isEmailTaken(request.getEmail(), excludeId)) {
+            throw new IllegalArgumentException("Email đã được sử dụng bởi nhà cung cấp khác");
+        }
+        if (isTaxCodeTaken(request.getTaxCode(), excludeId)) {
+            throw new IllegalArgumentException("Mã số thuế đã được sử dụng bởi nhà cung cấp khác");
         }
     }
 
-    private void validateEmail(String email, Integer excludeId) {
-        boolean duplicate = excludeId == null
-                ? supplierRepository.existsByEmailIgnoreCase(email.trim())
-                : supplierRepository.existsByEmailIgnoreCaseAndIdNot(email.trim(), excludeId);
-        if (duplicate) {
-            throw new IllegalArgumentException("Email đã được sử dụng bởi nhà cung cấp khác");
-        }
+    /** Dùng chung cho cả kiểm tra lúc lưu và endpoint kiểm trùng của màn tạo/sửa. */
+    @Transactional(readOnly = true)
+    public boolean isPhoneTaken(String phone, Integer excludeId) {
+        if (phone == null || phone.isBlank()) return false;
+        String value = phone.trim();
+        return excludeId == null
+                ? supplierRepository.existsByPhone(value)
+                : supplierRepository.existsByPhoneAndIdNot(value, excludeId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isEmailTaken(String email, Integer excludeId) {
+        if (email == null || email.isBlank()) return false;
+        String value = email.trim();
+        return excludeId == null
+                ? supplierRepository.existsByEmailIgnoreCase(value)
+                : supplierRepository.existsByEmailIgnoreCaseAndIdNot(value, excludeId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isTaxCodeTaken(String taxCode, Integer excludeId) {
+        if (taxCode == null || taxCode.isBlank()) return false;
+        String value = taxCode.trim();
+        return excludeId == null
+                ? supplierRepository.existsByTaxCode(value)
+                : supplierRepository.existsByTaxCodeAndIdNot(value, excludeId);
     }
 }
