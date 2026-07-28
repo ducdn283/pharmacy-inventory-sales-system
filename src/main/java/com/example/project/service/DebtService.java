@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,6 +48,8 @@ public class DebtService {
     private static final String SUPPLIER_RETURN_STATUS_APPROVED = "Đã duyệt";
     private static final String PARTY_CUSTOMER = "CUSTOMER";
     private static final String PARTY_SUPPLIER = "SUPPLIER";
+    /** Synthetic key for walk-in sales whose invoice has no {@code customerID}. */
+    private static final Integer WALK_IN_CUSTOMER_KEY = 0;
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final InvoiceRepository invoiceRepository;
@@ -250,30 +251,30 @@ public class DebtService {
     }
 
     private PayableDetailResponse getCustomerPayableDetail(Integer customerId) {
-        String name = customerRepository.findById(customerId)
-                .map(customer -> customer.getName())
-                .orElse("—");
+        String name = WALK_IN_CUSTOMER_KEY.equals(customerId)
+                ? "Khách lẻ"
+                : customerRepository.findById(customerId)
+                        .map(Customer::getName)
+                        .orElse("—");
 
-        Set<Integer> linkedReturns = linkedReturnIds();
+        Map<Integer, BigDecimal> disbursed = disbursedByReturnId();
 
         List<PayableLineResponse> lines = returnRepository.findAllWithRelations().stream()
-                .filter(ret -> ret.getInvoiceID() != null)
-                .filter(ret -> ReturnStatus.DEBT.equals(ret.getStatus()))
-                .filter(ret -> isPositive(cashRefundAmount(ret)))
-                .filter(ret -> !linkedReturns.contains(ret.getId()))
-                .filter(ret -> {
-                    Invoice invoice = ret.getInvoiceID();
-                    return invoice != null && invoice.getCustomerID() != null
-                            && customerId.equals(invoice.getCustomerID().getId());
-                })
-                .sorted(Comparator.comparing(Return::getReturnDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Return::getId, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(ret -> new PayableLineResponse(
-                        ret.getId(),
-                        ret.getReturnCode(),
-                        formatVnWallClockInstant(ret.getReturnDate()),
-                        cashRefundAmount(ret),
-                        customerReturnDetail(ret)))
+                .filter(this::isApprovedCustomerReturn)
+                .filter(ret -> customerId.equals(customerKeyOf(ret.getInvoiceID())))
+                .map(ret -> Map.entry(ret, remainingCustomerReturnPayable(ret, disbursed)))
+                .filter(entry -> isPositive(entry.getValue()))
+                .sorted(Comparator.<Map.Entry<Return, BigDecimal>, Instant>comparing(
+                                entry -> entry.getKey().getReturnDate(),
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(entry -> entry.getKey().getId(),
+                                Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(entry -> new PayableLineResponse(
+                        entry.getKey().getId(),
+                        entry.getKey().getReturnCode(),
+                        formatVnWallClockInstant(entry.getKey().getReturnDate()),
+                        entry.getValue(),
+                        customerReturnDetail(entry.getKey())))
                 .toList();
 
         BigDecimal total = lines.stream()
@@ -352,24 +353,18 @@ public class DebtService {
                     .addReceivable(name, nullToZero(invoice.getDebtAmount()));
         }
 
-        Set<Integer> linkedReturns = linkedReturnIds();
+        Map<Integer, BigDecimal> disbursed = disbursedByReturnId();
         for (Return ret : returnRepository.findAllWithRelations()) {
-            if (ret.getInvoiceID() == null) {
+            if (!isApprovedCustomerReturn(ret)) {
                 continue;
             }
-            if (!ReturnStatus.DEBT.equals(ret.getStatus())) {
-                continue;
-            }
-            BigDecimal payable = cashRefundAmount(ret);
-            if (!isPositive(payable) || linkedReturns.contains(ret.getId())) {
+            BigDecimal payable = remainingCustomerReturnPayable(ret, disbursed);
+            if (!isPositive(payable)) {
                 continue;
             }
             Invoice invoice = ret.getInvoiceID();
-            if (invoice.getCustomerID() == null || invoice.getCustomerID().getId() == null) {
-                continue;
-            }
-            Integer customerId = invoice.getCustomerID().getId();
-            String name = invoice.getCustomerID().getName();
+            Integer customerId = customerKeyOf(invoice);
+            String name = customerNameOf(invoice);
             byCustomerId.computeIfAbsent(customerId, id -> new PartyBalance())
                     .addPayable(name, payable);
         }
@@ -460,8 +455,8 @@ public class DebtService {
     }
 
     private BigDecimal disbursedAmount(Expense expense) {
-        boolean approved = ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
-                || ExpenseStatus.COMPLETED.equals(expense.getStatus());
+        boolean approved = isStatus(expense.getStatus(), ExpenseStatus.AWAITING_PAYMENT)
+                || isStatus(expense.getStatus(), ExpenseStatus.COMPLETED);
         return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
     }
 
@@ -472,13 +467,56 @@ public class DebtService {
                 .toList();
     }
 
-    private Set<Integer> linkedReturnIds() {
-        return liveExpenses().stream()
-                .map(Expense::getReturnID)
-                .filter(Objects::nonNull)
-                .map(Return::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+    private Map<Integer, BigDecimal> disbursedByReturnId() {
+        Map<Integer, BigDecimal> disbursed = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            Return ret = expense.getReturnID();
+            if (ret == null || ret.getId() == null) {
+                continue;
+            }
+            BigDecimal paid = disbursedAmount(expense);
+            if (isPositive(paid)) {
+                disbursed.merge(ret.getId(), paid, BigDecimal::add);
+            }
+        }
+        return disbursed;
+    }
+
+    /**
+     * Cash still owed back to the customer: the return's refund obligation minus what live expense
+     * slips have already paid out. Unlike purchase-invoice debt, the return entity itself never
+     * shrinks — only disbursements reduce what the debt screen should show.
+     */
+    private BigDecimal remainingCustomerReturnPayable(Return ret, Map<Integer, BigDecimal> disbursed) {
+        return cashRefundAmount(ret)
+                .subtract(disbursed.getOrDefault(ret.getId(), BigDecimal.ZERO))
+                .max(BigDecimal.ZERO);
+    }
+
+    private boolean isApprovedCustomerReturn(Return ret) {
+        return ret != null
+                && ret.getInvoiceID() != null
+                && ret.getPurchaseID() == null
+                && isStatus(ret.getStatus(), ReturnStatus.DEBT);
+    }
+
+    private Integer customerKeyOf(Invoice invoice) {
+        if (invoice == null || invoice.getCustomerID() == null || invoice.getCustomerID().getId() == null) {
+            return WALK_IN_CUSTOMER_KEY;
+        }
+        return invoice.getCustomerID().getId();
+    }
+
+    private String customerNameOf(Invoice invoice) {
+        if (invoice == null || invoice.getCustomerID() == null || invoice.getCustomerID().getName() == null
+                || invoice.getCustomerID().getName().isBlank()) {
+            return "Khách lẻ";
+        }
+        return invoice.getCustomerID().getName();
+    }
+
+    private boolean isStatus(String actual, String expected) {
+        return normalize(actual).equals(normalize(expected));
     }
 
     private BigDecimal cashRefundAmount(Return ret) {
