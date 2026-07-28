@@ -314,10 +314,11 @@ public class ExpenseService {
                                   boolean asDraft) {
         String expenseType = resolveExpenseType(request.getExpenseType());
 
-        // Resolved before validation because a refund payout takes its amount from the return, not
-        // from the form — the posted value is display-only (the box is readonly) and never trusted.
+        // Both links are resolved before validation because whenever a slip points at a document,
+        // that document decides the amount — the posted value is display-only and never trusted.
         Return linkedReturn = resolveCustomerReturn(request, expenseType);
-        BigDecimal amount = linkedReturn != null ? cashRefundAmount(linkedReturn) : request.getAmount();
+        Purchaseinvoice linkedPurchase = resolvePurchaseInvoice(request, expenseType);
+        BigDecimal amount = resolveAmount(request, linkedReturn, linkedPurchase);
 
         // Every NOT NULL column (expenseType/reason/amount) must have a real value even for a
         // draft — unlike Stock Adjustment's items, Expense has no field that's genuinely optional
@@ -342,7 +343,6 @@ public class ExpenseService {
             expense.setCustomerID(customerOf(linkedReturn));
         }
 
-        Purchaseinvoice linkedPurchase = resolvePurchaseInvoice(request, expenseType, amount);
         if (linkedPurchase != null) {
             expense.setPurchaseID(linkedPurchase);
             expense.setSupplierID(linkedPurchase.getSupplierID());
@@ -763,8 +763,7 @@ public class ExpenseService {
      * pointing at one specific invoice is legitimate — so a missing id is not an error, unlike a
      * refund payout.
      */
-    private Purchaseinvoice resolvePurchaseInvoice(ExpenseCreateRequest request, String expenseType,
-                                                    BigDecimal amount) {
+    private Purchaseinvoice resolvePurchaseInvoice(ExpenseCreateRequest request, String expenseType) {
         if (!ExpenseType.supportsPurchaseInvoiceLink(expenseType) || request.getPurchaseId() == null) {
             return null;
         }
@@ -775,12 +774,36 @@ public class ExpenseService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Phiếu nhập không tồn tại, đã hủy hoặc đã trả đủ tiền"));
 
-        BigDecimal available = availableToPay(invoice, committedByPurchaseId());
-        if (amount != null && amount.compareTo(available) > 0) {
-            throw new IllegalArgumentException(String.format(Locale.forLanguageTag("vi-VN"),
-                    "Số tiền chi vượt quá số còn phải trả cho phiếu nhập này (%,.0fđ)", available));
+        if (availableToPay(invoice, committedByPurchaseId()).compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Phiếu nhập này đã có phiếu chi khác nhận trả toàn bộ phần còn nợ");
         }
         return invoice;
+    }
+
+    /**
+     * "Số tiền cần chi" is the <em>obligation</em>, so a slip that points at a document takes the
+     * figure from that document and ignores whatever was posted: a refund owes what the return
+     * computed, a supplier payment owes what is still outstanding on the invoice. Only a slip with
+     * nothing to point at — điện, nước, lương, trả nợ, chi khác — is a number somebody types.
+     *
+     * <p>Paying less than the obligation is <strong>not</strong> expressed by shrinking this figure.
+     * That is what the "Đã chi đủ số tiền trên" checkbox and {@link #resolvePaid} are for: the slip
+     * keeps owing the full amount and sits in {@link ExpenseStatus#AWAITING_PAYMENT} until
+     * {@link #markPaid} finishes it. Shrinking the amount instead would lose the fact that the rest
+     * is still owed, and would let two slips each claim part of the same invoice with nothing
+     * recording the whole.</p>
+     */
+    private BigDecimal resolveAmount(ExpenseCreateRequest request,
+                                     Return linkedReturn,
+                                     Purchaseinvoice linkedPurchase) {
+        if (linkedReturn != null) {
+            return cashRefundAmount(linkedReturn);
+        }
+        if (linkedPurchase != null) {
+            return availableToPay(linkedPurchase, committedByPurchaseId());
+        }
+        return request.getAmount();
     }
 
     /**

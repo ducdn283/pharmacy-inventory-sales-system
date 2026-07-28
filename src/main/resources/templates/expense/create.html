@@ -190,7 +190,10 @@
                                 </div>
                                 <div class="form-text" id="amountLockedHint" style="display: none;">
                                     <i class="ti ti-lock me-1"></i>
-                                    Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.
+                                    <span id="amountLockedText">
+                                        Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.
+                                    </span>
+                                    Chi ít hơn thì bỏ chọn "Đã chi đủ" bên cạnh, đừng sửa số này.
                                 </div>
                             </div>
 
@@ -329,26 +332,39 @@
         setAmount(returnId ? RETURN_REFUND_AMOUNTS[returnId] : '');
     }
 
-    /** Phiếu nhập chỉ GỢI Ý số tiền — trả một phần là bình thường nên không khoá ô. */
+    /**
+     * Chọn phiếu nhập thì số tiền cần chi = phần còn phải trả của phiếu đó. Trả một phần KHÔNG phải
+     * là sửa số này nhỏ đi — bỏ chọn "Đã chi đủ" rồi nhập số thực chi bên dưới, phiếu vẫn giữ đúng
+     * nghĩa vụ và nằm ở "Chờ thanh toán" cho tới khi trả hết. Server cũng ghi đè y hệt.
+     */
     function syncPurchaseAmount() {
         const purchaseId = document.getElementById('purchaseIdInput').value;
-        if (purchaseId) {
-            setAmount(PURCHASE_PAYABLE_AMOUNTS[purchaseId]);
-        }
+        setAmount(purchaseId ? PURCHASE_PAYABLE_AMOUNTS[purchaseId] : '');
+        applyAmountLock();
+    }
+
+    /** Ô tiền bị khoá bất cứ khi nào nó được suy ra từ một chứng từ đã chọn. */
+    function applyAmountLock() {
+        const amountInput = document.getElementById('amountInput');
+        const refundPayout = isRefundPayout();
+        const purchasePicked = supportsPurchaseLink()
+            && !!document.getElementById('purchaseIdInput').value;
+        const locked = refundPayout || purchasePicked;
+
+        amountInput.readOnly = locked;
+        amountInput.classList.toggle('auto-field', locked);
+        document.getElementById('amountLockedHint').style.display = locked ? '' : 'none';
+        document.getElementById('amountLockedText').textContent = refundPayout
+            ? 'Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.'
+            : 'Số tiền lấy theo phần còn phải trả của phiếu nhập đã chọn.';
     }
 
     function toggleReferenceFields() {
         const refundPayout = isRefundPayout();
         const purchaseLink = supportsPurchaseLink();
-        const amountInput = document.getElementById('amountInput');
 
         document.getElementById('returnRefundFields').style.display = refundPayout ? '' : 'none';
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
-        document.getElementById('amountLockedHint').style.display = refundPayout ? '' : 'none';
-
-        // Chỉ hoàn tiền mới khoá ô tiền; trả nợ vẫn cho sửa.
-        amountInput.readOnly = refundPayout;
-        amountInput.classList.toggle('auto-field', refundPayout);
 
         // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
         if (!refundPayout) {
@@ -361,6 +377,7 @@
         if (refundPayout) {
             syncRefundAmount();
         }
+        applyAmountLock();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
