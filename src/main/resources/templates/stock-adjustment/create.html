@@ -268,9 +268,6 @@
                                 <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
                                        required
                                        placeholder="VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…">
-                                <div class="form-text" id="reasonHint" style="display: none;">
-                                    Để trống sẽ tự điền &laquo;Điều chỉnh tồn kho theo chênh lệch kiểm kê + mã phiếu&raquo;.
-                                </div>
                             </div>
 
                             <div class="col-12">
@@ -378,7 +375,10 @@
                                     <span class="badge bg-success-subtle text-success ms-2" id="countLineCountBadge">0</span>
                                 </div>
                                 <p class="text-secondary small mb-0 mt-1">
-                                    Danh sách chỉ để xem — hệ thống tự dựng số lượng theo chênh lệch và tách phiếu Tăng/Giảm khi tạo.
+                                    Cột <strong>Nguồn gốc hàng thừa</strong> là lựa chọn của người lập: tick khi
+                                    <strong>không xác định được</strong> hàng thừa từ đâu ra, hệ thống sẽ lập một
+                                    <strong>lô mới</strong> (không gắn hóa đơn mua, giá vốn ước tính) thay vì cộng vào lô đang đếm.
+                                    Dòng <strong>thiếu</strong> hàng nếu do lỗi nhân viên thì lập phiếu thu đền bù ở màn Phiếu thu.
                                 </p>
                             </div>
 
@@ -395,11 +395,12 @@
                                         <th>Chênh lệch</th>
                                         <th>Loại</th>
                                         <th>Giá trị</th>
+                                        <th>Nguồn gốc hàng thừa</th>
                                     </tr>
                                     </thead>
                                     <tbody id="countPreviewBody">
                                     <tr id="countEmptyRow">
-                                        <td colspan="9" class="text-center text-secondary py-4">
+                                        <td colspan="10" class="text-center text-secondary py-4">
                                             Chọn phiếu kiểm kê để xem các dòng điều chỉnh.
                                         </td>
                                     </tr>
@@ -937,11 +938,22 @@
         const box = document.getElementById('expiryHint');
         if (!box) return;
         const type = document.getElementById('adjustmentTypeSelect').value;
-        if (type === 'DESTROY') {
+        if (type === 'DESTROY_EMPLOYEE_FAULT') {
+            // Loại này khác DESTROY ở chỗ xử lý thuế: giá trị hàng hủy KHÔNG được tính chi phí hợp lý,
+            // và nhân viên có thể phải đền bù (theo giá bán) qua một phiếu thu riêng.
+            box.className = 'alert alert-danger';
+            box.innerHTML = '<i class="ti ti-user-exclamation me-1"></i>'
+                + '<strong>Hủy hàng do lỗi nhân viên.</strong> Giá trị hàng hủy <strong>không</strong> được tính vào '
+                + 'chi phí hợp lý và phải cộng vào doanh thu chịu thuế. Cần <strong>Biên bản xác định lỗi nhân viên</strong> '
+                + 'kèm Biên bản tiêu hủy. Nếu nhân viên đền bù thì lập <strong>phiếu thu</strong> theo '
+                + '<strong>giá bán</strong> hàng mất — không phải giá vốn.';
+        } else if (type === 'DESTROY') {
             box.className = 'alert alert-warning';
             box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
                 + 'Đối chiếu <strong>số lô và hạn dùng in trên vỏ hộp</strong> với lô đã chọn trước khi tiêu hủy — '
-                + 'thao tác này không hoàn tác được bằng cách nào khác ngoài hủy phiếu.';
+                + 'thao tác này không hoàn tác được bằng cách nào khác ngoài hủy phiếu. '
+                + 'Hủy do nguyên nhân khách quan cần Biên bản kiểm kê, QĐ Hội đồng tiêu hủy, Biên bản tiêu hủy '
+                + 'và báo cơ quan thuế trong 10 ngày.';
         } else if (blocksExpiredGoods()) {
             box.className = 'alert alert-danger';
             box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
@@ -1029,7 +1041,7 @@
         const body = document.getElementById('countPreviewBody');
 
         if (!countLines.length) {
-            body.innerHTML = '<tr id="countEmptyRow"><td colspan="9" class="text-center text-secondary py-4">'
+            body.innerHTML = '<tr id="countEmptyRow"><td colspan="10" class="text-center text-secondary py-4">'
                 + 'Phiếu kiểm kê chưa có dòng chênh lệch để điều chỉnh.</td></tr>';
             updateCountSummary();
             return;
@@ -1051,10 +1063,33 @@
                     <td class="fw-semibold">${sign}${discrepancy}</td>
                     <td><span class="badge ${badgeClass}">${countTypeLabel(line.adjustmentType)}</span></td>
                     <td class="fw-semibold">${formatMoney(line.lineCost || 0)}</td>
+                    <td>${originCell(line)}</td>
                 </tr>`;
         }).join('');
 
         updateCountSummary();
+    }
+
+    /**
+     * Chỉ dòng THỪA mới phải chọn nguồn gốc (sheet 06 mục 1):
+     *   • không tick = lỗi ghi sổ của một lô đã biết → cộng thẳng vào lô đó, không ảnh hưởng thuế;
+     *   • tick       = không rõ vì sao thừa → hệ thống lập LÔ MỚI, không gắn hóa đơn mua,
+     *                  giá vốn lấy ước tính từ lô nhập gần nhất của cùng sản phẩm.
+     * Dòng THIẾU không có lựa chọn nào — hàng đã mất, chỉ trừ khỏi lô đang đếm.
+     */
+    function originCell(line) {
+        if (line.adjustmentType !== 'COUNT_INCREASE') {
+            return '<span class="text-secondary">—</span>';
+        }
+        return `
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox"
+                       name="unknownOriginBatchIds" value="${line.batchId}"
+                       id="unknownOrigin${line.batchId}">
+                <label class="form-check-label small" for="unknownOrigin${line.batchId}">
+                    Không rõ nguồn gốc — lập lô mới
+                </label>
+            </div>`;
     }
 
     function updateCountSummary() {
@@ -1226,6 +1261,11 @@
         });
     });
 </script>
+
+<!-- Ô "Số lượng" (min=1) và ô "Thuế suất GTGT đầu ra" (min=0, step=0.01) đều không bao giờ nhận số
+     âm hay ký hiệu khoa học. Dòng hàng được thêm bằng JS nên fragment phải bind ở mức document —
+     đúng như nó đang làm; không cần gọi lại sau mỗi lần addBatchRow(). -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
 </html>

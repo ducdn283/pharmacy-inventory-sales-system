@@ -16,6 +16,8 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.Map;
+
 /**
  * Shared Customer module: Owner and Pharmacist get full create/edit rights, Accountant is
  * view-only (per the PHÂN QUYỀN MÀN HÌNH matrix). Since all 3 roles share this one
@@ -111,6 +113,30 @@ public class CustomerController {
             return "redirect:/customer/" + newId;
         }
         return "redirect:/customer";
+    }
+
+    // ------------------------------------------------------------------ kiểm trùng (AJAX)
+
+    /**
+     * Kiểm trùng cho màn tạo/sửa, gọi lúc rời ô nhập. Chỉ là lớp báo SỚM cho người dùng — chặn thật
+     * vẫn nằm ở {@code CustomerService.validate}, vì màn hình có thể bị bỏ qua (gọi thẳng POST, JS
+     * lỗi, hai người nhập cùng lúc) và bảng {@code customer} không có ràng buộc UNIQUE nào ở DB.
+     *
+     * @param field    {@code phoneNumber} hoặc {@code taxCode}
+     * @param id       id bản ghi đang sửa — bỏ qua chính nó (null khi tạo mới)
+     */
+    @GetMapping("/check-duplicate")
+    @ResponseBody
+    public Map<String, Boolean> checkDuplicate(@RequestParam("field") String field,
+                                               @RequestParam("value") String value,
+                                               @RequestParam(name = "id", required = false) Integer id) {
+        requireCanManage();
+        boolean duplicate = switch (field) {
+            case "phoneNumber" -> customerService.isPhoneTaken(value, id);
+            case "taxCode" -> customerService.isTaxCodeTaken(value, id);
+            default -> throw new IllegalArgumentException("Trường kiểm trùng không hợp lệ: " + field);
+        };
+        return Map.of("duplicate", duplicate);
     }
 
     // ------------------------------------------------------------------ detail / update

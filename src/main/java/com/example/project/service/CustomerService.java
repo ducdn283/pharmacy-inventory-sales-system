@@ -105,7 +105,7 @@ public class CustomerService {
 
     @Transactional
     public Integer create(CustomerRequest req) {
-        validatePhoneUnique(req.getPhoneNumber(), null);
+        validate(req, null);
         Customer c = new Customer();
         apply(c, req);
         return customerRepository.save(c).getId();
@@ -116,7 +116,7 @@ public class CustomerService {
     @Transactional
     public void update(Integer id, CustomerRequest req) {
         Customer c = findOrThrow(id);
-        validatePhoneUnique(req.getPhoneNumber(), id);
+        validate(req, id);
         apply(c, req);
         customerRepository.save(c);
     }
@@ -138,6 +138,27 @@ public class CustomerService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khách hàng"));
     }
 
+    /**
+     * Toàn bộ kiểm tra chạy TRƯỚC khi ghi bất cứ thứ gì vào entity — định dạng rồi mới tới trùng lặp,
+     * để người dùng thấy lỗi định dạng ("CCCD phải 12 số") thay vì lỗi trùng của một giá trị vốn đã sai.
+     *
+     * <p><strong>Vì sao phải tự kiểm ở đây:</strong> bảng {@code customer} KHÔNG có ràng buộc UNIQUE
+     * nào ngoài khoá chính, nên không có lưới an toàn ở tầng DB. Thiếu một dòng ở đây là dữ liệu bẩn
+     * lọt thẳng vào hệ thống — đúng như ca đã gặp: số điện thoại được chặn nhưng CCCD thì không, nên
+     * cứ đổi số điện thoại là tạo được khách trùng CCCD.</p>
+     *
+     * @param excludeId id của bản ghi đang sửa (null khi tạo mới) — bản ghi luôn "trùng với chính nó"
+     */
+    private void validate(CustomerRequest req, Integer excludeId) {
+        boolean company = "COMPANY".equals(req.getCustomerType());
+        String phone = trimToNull(req.getPhoneNumber());
+        String taxCode = trimToNull(req.getTaxCode());
+
+        validateTaxCode(company, taxCode);
+        validatePhoneUnique(phone, excludeId);
+        validateTaxCodeUnique(company, taxCode, excludeId);
+    }
+
     private void apply(Customer c, CustomerRequest req) {
         boolean company = "COMPANY".equals(req.getCustomerType());
         c.setCustomerType(company ? "COMPANY" : "INDIVIDUAL");
@@ -148,7 +169,6 @@ public class CustomerService {
         // taxCode dùng cho CẢ 2 loại doanh nghiệp = Mã số thuế (MST),
         // cá nhân = số CCCD/CMND — cần để xuất hóa đơn/hóa đơn điều chỉnh cho khách.
         String taxCode = trimToNull(req.getTaxCode());
-        validateTaxCode(company, taxCode);
         c.setTaxCode(taxCode);
         // Thông tin ngân hàng chỉ áp dụng cho khách doanh nghiệp.
         c.setBankAccountNumber(company ? trimToNull(req.getBankAccountNumber()) : null);
@@ -176,13 +196,42 @@ public class CustomerService {
 
     private void validatePhoneUnique(String phone, Integer excludeId) {
         if (phone == null || phone.isBlank()) return;
-        String p = phone.trim();
-        boolean duplicate = customerRepository.findAll().stream()
-                .filter(c -> excludeId == null || !excludeId.equals(c.getId()))
-                .anyMatch(c -> p.equals(c.getPhoneNumber()));
-        if (duplicate) {
+        if (isPhoneTaken(phone.trim(), excludeId)) {
             throw new IllegalArgumentException("Số điện thoại đã tồn tại trong hệ thống (MSG-44)");
         }
+    }
+
+    /**
+     * CCCD/CMND (khách cá nhân) và MST (khách doanh nghiệp) đều định danh duy nhất một pháp nhân —
+     * hai khách hàng không thể dùng chung. Bỏ qua khi để trống: trường này KHÔNG bắt buộc, khách lẻ
+     * mua thuốc thường không cần xuất hóa đơn nên không phải khai.
+     */
+    private void validateTaxCodeUnique(boolean company, String taxCode, Integer excludeId) {
+        if (taxCode == null || taxCode.isBlank()) return;
+        if (isTaxCodeTaken(taxCode.trim(), excludeId)) {
+            throw new IllegalArgumentException(company
+                    ? "Mã số thuế đã tồn tại trong hệ thống"
+                    : "Số CCCD/CMND đã tồn tại trong hệ thống");
+        }
+    }
+
+    /** Dùng chung cho cả kiểm tra lúc lưu và endpoint kiểm trùng của màn tạo/sửa. */
+    @Transactional(readOnly = true)
+    public boolean isPhoneTaken(String phone, Integer excludeId) {
+        if (phone == null || phone.isBlank()) return false;
+        String value = phone.trim();
+        return excludeId == null
+                ? customerRepository.existsByPhoneNumber(value)
+                : customerRepository.existsByPhoneNumberAndIdNot(value, excludeId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isTaxCodeTaken(String taxCode, Integer excludeId) {
+        if (taxCode == null || taxCode.isBlank()) return false;
+        String value = taxCode.trim();
+        return excludeId == null
+                ? customerRepository.existsByTaxCode(value)
+                : customerRepository.existsByTaxCodeAndIdNot(value, excludeId);
     }
 
     private boolean matchesKeyword(Customer c, String kw) {

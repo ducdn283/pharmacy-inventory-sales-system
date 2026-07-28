@@ -231,6 +231,7 @@
                                 <th>Chênh lệch</th>
                                 <th>Giá trị ước tính</th>
                                 <th th:if="${detail.showOutputVat}">Thuế GTGT đầu ra</th>
+                                <th th:if="${detail.employeeLiable}">Ước tính đền bù (giá bán)</th>
                                 <th>Ghi chú</th>
                             </tr>
                             </thead>
@@ -267,6 +268,16 @@
                                     </span>
                                     <span th:unless="${item.vatAmount != null}" class="text-secondary">—</span>
                                 </td>
+                                <td th:if="${detail.employeeLiable}">
+                                    <span class="fw-semibold text-warning"
+                                          th:text="${#numbers.formatDecimal(item.reimbursementValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                        150.000đ
+                                    </span>
+                                    <div class="small text-secondary"
+                                         th:text="${#numbers.formatDecimal(item.reimbursementUnitPrice, 0, 'POINT', 0, 'COMMA') + 'đ/' + item.unitName}">
+                                        15.000đ/Hộp
+                                    </div>
+                                </td>
                                 <td th:text="${item.note}">Hết hạn sử dụng</td>
                             </tr>
 
@@ -279,6 +290,10 @@
                                 </td>
                                 <td th:if="${detail.showOutputVat}" class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalOutputVat, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                    0đ
+                                </td>
+                                <td th:if="${detail.employeeLiable}" class="text-warning"
+                                    th:text="${#numbers.formatDecimal(detail.totalReimbursementValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                     0đ
                                 </td>
                                 <td></td>
@@ -327,6 +342,52 @@
                                 Hoàn thành
                             </span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Thất thoát có thể quy trách nhiệm nhân viên: chỉ 2 loại phiếu
+                     (Hủy hàng do lỗi nhân viên / Giảm theo kiểm kê) mới được liên kết phiếu thu đền bù.
+                     Đền bù tính theo GIÁ BÁN niêm yết, không phải giá vốn — Dac_ta_Income_StockAdjustment
+                     sheet 01. Phiếu thu do Kế toán/Chủ nhà thuốc lập bên màn Phiếu thu. -->
+                <div class="stock-card mb-4" th:if="${detail.employeeLiable}">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-user-dollar text-warning me-1"></i>
+                            Đền bù thất thoát
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-secondary">Giá vốn hàng mất</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.estimatedValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                650.000đ
+                            </strong>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-secondary">Giá trị đền bù (giá bán)</span>
+                            <strong class="text-warning"
+                                    th:text="${#numbers.formatDecimal(detail.totalReimbursementValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                900.000đ
+                            </strong>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-secondary">Phiếu thu đền bù</span>
+                            <span th:if="${detail.linkedIncomeCode != null}"
+                                  class="badge bg-success-subtle text-success"
+                                  th:text="${detail.linkedIncomeCode}">PT-000001</span>
+                            <span th:unless="${detail.linkedIncomeCode != null}"
+                                  class="badge bg-warning-subtle text-warning">Chưa lập</span>
+                        </div>
+
+                        <p class="small text-secondary mb-0">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Số tiền đền bù tính theo <strong>giá bán niêm yết</strong> của đơn vị đã xuất, không phải
+                            giá vốn. Bồi thường bằng tiền <strong>không phải xuất hóa đơn GTGT</strong> — chính phiếu
+                            thu là chứng từ. Phiếu thu lập ở màn <em>Phiếu thu</em> (loại <em>Thu tiền nhân viên đền bù</em>).
+                        </p>
                     </div>
                 </div>
 

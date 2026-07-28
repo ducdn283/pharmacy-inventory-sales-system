@@ -688,5 +688,10 @@
         }
     })();
 </script>
+
+<!-- Chặn 'e', 'E', '+', '-' ở ô số lượng trả và ô tỷ lệ hoàn: cả hai đều min ≥ 0, gõ trúng một
+     trong các ký tự đó thì value về rỗng nhưng chữ vẫn nằm trong ô, và mọi phép cộng tiền hoàn
+     đọc ra NaN. Ô tỷ lệ có step="0.01" nên fragment vẫn cho gõ dấu chấm thập phân. -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
 </body>
 </html>
