@@ -85,7 +85,6 @@ public class StockadjustmentService {
 
     private final StockadjustmentRepository stockadjustmentRepository;
     private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
-    private final AccountRepository accountRepository;
     private final BatchRepository batchRepository;
     private final ProductunitRepository productunitRepository;
     // Stock Count is owned by another module — we consume it read-only via these bare repositories
@@ -98,7 +97,6 @@ public class StockadjustmentService {
 
     public StockadjustmentService(StockadjustmentRepository stockadjustmentRepository,
                                   StockadjustmentdetailRepository stockadjustmentdetailRepository,
-                                  AccountRepository accountRepository,
                                   BatchRepository batchRepository,
                                   ProductunitRepository productunitRepository,
                                   StockcountRepository stockcountRepository,
@@ -107,7 +105,6 @@ public class StockadjustmentService {
                                   InvoicedetailRepository invoicedetailRepository) {
         this.stockadjustmentRepository = stockadjustmentRepository;
         this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
-        this.accountRepository = accountRepository;
         this.batchRepository = batchRepository;
         this.productunitRepository = productunitRepository;
         this.stockcountRepository = stockcountRepository;
@@ -256,9 +253,6 @@ public class StockadjustmentService {
                 formatInstant(adjustment.getDate()),
                 adjustment.getAdjustmentType(),
                 formatAdjustmentType(adjustment.getAdjustmentType()),
-                adjustment.getCreatedBy() != null ? adjustment.getCreatedBy().getName() : "Không rõ",
-                adjustment.getApprovedBy() != null ? adjustment.getApprovedBy().getName() : "Chưa có",
-                formatInstant(adjustment.getApprovedAt()),
                 adjustment.getReason(),
                 adjustment.getNote(),
                 statusName,
@@ -337,7 +331,7 @@ public class StockadjustmentService {
      * hủy phiếu cũ. Lý do hủy ghi vào {@code note} (DB không có cột riêng cho lý do hủy).</p>
      */
     @Transactional
-    public void cancel(Integer adjustmentId, Integer currentAccountId, String reason) {
+    public void cancel(Integer adjustmentId, String reason) {
         Stockadjustment adjustment = stockadjustmentRepository.findByIdWithRelations(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu điều chỉnh kho"));
 
@@ -345,9 +339,6 @@ public class StockadjustmentService {
         if (isStatus(statusName, StockAdjustmentStatus.CANCELLED)) {
             throw new IllegalArgumentException("Phiếu điều chỉnh kho này đã bị hủy trước đó");
         }
-
-        Account actor = accountRepository.findById(currentAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
         if (isStatus(statusName, StockAdjustmentStatus.COMPLETED)) {
             List<Stockadjustmentdetail> details =
@@ -359,8 +350,6 @@ public class StockadjustmentService {
         }
 
         adjustment.setStatus(StockAdjustmentStatus.CANCELLED);
-        adjustment.setApprovedBy(actor);
-        adjustment.setApprovedAt(Instant.now());
         adjustment.setNote(appendNote(adjustment.getNote(),
                 "Đã hủy" + (trimToNull(reason) != null ? ": " + reason.trim() : "")));
 
@@ -580,21 +569,21 @@ public class StockadjustmentService {
      * ai để duyệt chéo.</p>
      *
      * <p>Returns the id of the (first) created slip so the caller can redirect to it.</p>
+     *
+     * <p><strong>Không ghi lại người thao tác.</strong> DB đã bỏ 3 cột {@code createdBy} /
+     * {@code approvedBy} / {@code approvedAt} (28/07/2026) vì chỉ Owner mới đụng được màn này, nên
+     * phiếu không còn mang dấu vết ai lập, ai thực hiện, lúc nào. Mốc thời gian duy nhất còn lại là
+     * {@code date} — thời điểm lập phiếu.</p>
      */
     @Transactional
-    public Integer createAdjustment(StockAdjustmentCreateRequest request,
-                                    Integer currentAccountId,
-                                    boolean asDraft) {
+    public Integer createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
         if (isStockCountSource(request)) {
-            return createFromStockCount(request, currentAccountId, asDraft);
+            return createFromStockCount(request, asDraft);
         }
 
         validateRequest(request);
 
         String adjustmentType = resolveCreatableType(request.getAdjustmentType());
-
-        Account creator = accountRepository.findById(currentAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
         Map<Integer, StockAdjustmentItemRequest> itemMap = request.getItems().stream()
                 .collect(Collectors.toMap(
@@ -627,15 +616,10 @@ public class StockadjustmentService {
         adjustment.setStockAdjustmentCode(generateCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
-        adjustment.setCreatedBy(creator);
         adjustment.setReason(request.getReason().trim());
         adjustment.setExpenseID(null);
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
-        if (approvedNow) {
-            adjustment.setApprovedBy(creator);
-            adjustment.setApprovedAt(Instant.now());
-        }
 
         Stockadjustment savedAdjustment = stockadjustmentRepository.save(adjustment);
 
@@ -684,15 +668,10 @@ public class StockadjustmentService {
      * Khi phiếu được lập thẳng ở trạng thái {@code Hoàn thành}, phiếu kiểm kê được lật sang
      * {@code Đã điều chỉnh} ngay tại đây.
      */
-    private Integer createFromStockCount(StockAdjustmentCreateRequest request,
-                                         Integer currentAccountId,
-                                         boolean asDraft) {
+    private Integer createFromStockCount(StockAdjustmentCreateRequest request, boolean asDraft) {
         if (request.getStockCountId() == null) {
             throw new IllegalArgumentException("Vui lòng chọn phiếu kiểm kê");
         }
-
-        Account creator = accountRepository.findById(currentAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
         Stockcount count = stockcountRepository.findById(request.getStockCountId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
@@ -730,10 +709,10 @@ public class StockadjustmentService {
 
         Integer firstId = null;
         if (!increaseLines.isEmpty()) {
-            firstId = persistCountSlip(TYPE_COUNT_INCREASE, increaseLines, count, creator, status, reason, request);
+            firstId = persistCountSlip(TYPE_COUNT_INCREASE, increaseLines, count, status, reason, request);
         }
         if (!decreaseLines.isEmpty()) {
-            Integer id = persistCountSlip(TYPE_COUNT_DECREASE, decreaseLines, count, creator, status, reason, request);
+            Integer id = persistCountSlip(TYPE_COUNT_DECREASE, decreaseLines, count, status, reason, request);
             firstId = firstId != null ? firstId : id;
         }
 
@@ -746,7 +725,6 @@ public class StockadjustmentService {
     private Integer persistCountSlip(String adjustmentType,
                                      List<StockAdjustmentCountLineResponse> lines,
                                      Stockcount count,
-                                     Account creator,
                                      String status,
                                      String reason,
                                      StockAdjustmentCreateRequest request) {
@@ -756,16 +734,11 @@ public class StockadjustmentService {
         adjustment.setStockAdjustmentCode(generateCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
-        adjustment.setCreatedBy(creator);
         adjustment.setReason(reason);
         adjustment.setStockCountID(count);
         adjustment.setExpenseID(null);
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
-        if (approvedNow) {
-            adjustment.setApprovedBy(creator);
-            adjustment.setApprovedAt(Instant.now());
-        }
 
         Stockadjustment savedAdjustment = stockadjustmentRepository.save(adjustment);
 
@@ -912,7 +885,7 @@ public class StockadjustmentService {
      * chỉ Owner tạo/thực hiện phiếu điều chỉnh kho.
      */
     @Transactional
-    public void complete(Integer adjustmentId, Integer currentAccountId) {
+    public void complete(Integer adjustmentId) {
         Stockadjustment adjustment = stockadjustmentRepository.findByIdWithRelations(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu điều chỉnh kho"));
 
@@ -920,12 +893,7 @@ public class StockadjustmentService {
             throw new IllegalArgumentException("Chỉ có thể thực hiện phiếu đang ở trạng thái nháp");
         }
 
-        Account actor = accountRepository.findById(currentAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
-
         adjustment.setStatus(StockAdjustmentStatus.COMPLETED);
-        adjustment.setApprovedBy(actor);
-        adjustment.setApprovedAt(Instant.now());
         applyStockEffect(adjustment,
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId));
         markStockCountAdjusted(adjustment.getStockCountID());
@@ -1012,7 +980,6 @@ public class StockadjustmentService {
                 formatInstant(adjustment.getDate()),
                 adjustment.getAdjustmentType(),
                 formatAdjustmentType(adjustment.getAdjustmentType()),
-                adjustment.getCreatedBy() != null ? adjustment.getCreatedBy().getName() : "Không rõ",
                 details.size(),
                 estimatedValue,
                 statusName,
@@ -1219,8 +1186,7 @@ public class StockadjustmentService {
         if (containsNormalized(formatCode(adjustment.getId()), normalizedKeyword)
                 || containsNormalized(adjustment.getReason(), normalizedKeyword)
                 || containsNormalized(formatAdjustmentType(adjustment.getAdjustmentType()), normalizedKeyword)
-                || containsNormalized(getStatusName(adjustment), normalizedKeyword)
-                || containsNormalized(adjustment.getCreatedBy() != null ? adjustment.getCreatedBy().getName() : null, normalizedKeyword)) {
+                || containsNormalized(getStatusName(adjustment), normalizedKeyword)) {
             return true;
         }
         return details.stream().anyMatch(detail -> {

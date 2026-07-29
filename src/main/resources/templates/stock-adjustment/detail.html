@@ -172,11 +172,6 @@
                         </div>
 
                         <div class="info-row">
-                            <div class="info-label">Người tạo</div>
-                            <div th:text="${detail.createdByName}">Nguyễn Văn Minh</div>
-                        </div>
-
-                        <div class="info-row">
                             <div class="info-label">Lý do</div>
                             <div th:text="${detail.reason}">Hàng hết hạn sử dụng</div>
                         </div>
@@ -189,17 +184,6 @@
                                       th:text="${detail.statusName}">
                                     Hoàn thành
                                 </span>
-                            </div>
-                        </div>
-
-                        <!-- Không còn bước duyệt: cột approvedBy/approvedAt nay ghi ai thực hiện (hoặc hủy) phiếu. -->
-                        <div class="info-row" th:if="${detail.approvedByName != null && detail.approvedByName != 'Chưa có'}">
-                            <div class="info-label">Người thực hiện</div>
-                            <div>
-                                <span th:text="${detail.approvedByName}">Chủ nhà thuốc</span>
-                                <span class="text-secondary"
-                                      th:if="${detail.approvedAtDisplay != null && !detail.approvedAtDisplay.isBlank()}"
-                                      th:text="${' · ' + detail.approvedAtDisplay}"></span>
                             </div>
                         </div>
 
