@@ -14,9 +14,9 @@ import com.example.project.entity.Income;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
-import com.example.project.entity.Expense;
+import com.example.project.entity.Productunit;
 import com.example.project.entity.Stockadjustment;
-import com.example.project.entity.Stockcount;
+import com.example.project.entity.Stockadjustmentdetail;
 import com.example.project.entity.Supplier;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.CustomerRepository;
@@ -25,6 +25,7 @@ import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.StockadjustmentRepository;
+import com.example.project.repository.StockadjustmentdetailRepository;
 import com.example.project.repository.SupplierRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -65,6 +66,13 @@ public class IncomeService {
     /** Legacy stock-adjustment status before BA removed the approval step (2026-07-27). */
     private static final String STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY = "Duyệt";
 
+    /**
+     * Hai loại phiếu điều chỉnh được phép liên kết phiếu thu "Thu tiền nhân viên đền bù"
+     * ({@code Dac_ta_Income_StockAdjustment.xlsx} sheet 03).
+     */
+    private static final Set<String> EMPLOYEE_LIABLE_ADJUSTMENT_TYPES =
+            Set.of("DESTROY_EMPLOYEE_FAULT", "COUNT_DECREASE");
+
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_BANKING = "BANKING";
     private static final String PAYMENT_MIXED = "MIXED";
@@ -78,6 +86,7 @@ public class IncomeService {
     private final ReturnRepository returnRepository;
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final StockadjustmentRepository stockadjustmentRepository;
+    private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
     // Lazily opens/reuses the collector's shift the moment an income is actually recorded — same
     // hook as InvoiceService/ReturnService (phát sinh giao dịch là tạo báo cáo ca). Income is
     // only creatable by Owner/Pharmacist (see IncomeController routes), so this never opens a shift
@@ -92,6 +101,7 @@ public class IncomeService {
                          ReturnRepository returnRepository,
                          PurchaseinvoiceRepository purchaseinvoiceRepository,
                          StockadjustmentRepository stockadjustmentRepository,
+                         StockadjustmentdetailRepository stockadjustmentdetailRepository,
                          ShiftreportService shiftreportService) {
         this.incomeRepository = incomeRepository;
         this.accountRepository = accountRepository;
@@ -101,6 +111,7 @@ public class IncomeService {
         this.returnRepository = returnRepository;
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.stockadjustmentRepository = stockadjustmentRepository;
+        this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
         this.shiftreportService = shiftreportService;
     }
 
@@ -261,17 +272,26 @@ public class IncomeService {
         }
         Set<Integer> linkedAdjustmentIds = linkedStockAdjustmentIds();
 
-        return stockadjustmentRepository.findAllWithRelations().stream()
+        List<Stockadjustment> eligible = stockadjustmentRepository.findAllWithRelations().stream()
                 .filter(this::isCompletedStockAdjustment)
-                .filter(adjustment -> matchesResponsibleEmployee(adjustment, accountId))
+                .filter(this::isEmployeeLiableStockAdjustment)
                 .filter(adjustment -> !linkedAdjustmentIds.contains(adjustment.getId()))
                 .sorted(Comparator.comparing(Stockadjustment::getDate, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Stockadjustment::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+
+        Set<Integer> eligibleIds = eligible.stream()
+                .map(Stockadjustment::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Integer, BigDecimal> reimbursementById = reimbursementByAdjustmentIds(eligibleIds);
+
+        return eligible.stream()
                 .map(adjustment -> new IncomeReferenceOptionResponse(
                         adjustment.getId(),
                         adjustment.getStockAdjustmentCode(),
                         formatInstant(adjustment.getDate()),
-                        null,
+                        reimbursementById.getOrDefault(adjustment.getId(), BigDecimal.ZERO),
                         adjustment.getReason()))
                 .toList();
     }
@@ -444,7 +464,7 @@ public class IncomeService {
         String partyTypeDisplay = switch (typeCode) {
             case IncomeTypeOptionResponse.CUSTOMER -> "Khách hàng";
             case IncomeTypeOptionResponse.SUPPLIER -> "Nhà cung cấp";
-            case IncomeTypeOptionResponse.EMPLOYEE -> "Nhân viên";
+            case IncomeTypeOptionResponse.EMPLOYEE -> "Người chịu trách nhiệm";
             default -> "—";
         };
 
@@ -699,7 +719,7 @@ public class IncomeService {
             throw new IllegalArgumentException("Vui lòng chọn hóa đơn bán hàng còn nợ");
         }
         if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType) && request.getAccountId() == null) {
-            throw new IllegalArgumentException("Vui lòng chọn nhân viên");
+            throw new IllegalArgumentException("Vui lòng chọn người chịu trách nhiệm");
         }
         if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType) && request.getStockAdjustmentId() == null) {
             throw new IllegalArgumentException("Vui lòng chọn phiếu điều chỉnh kho");
@@ -741,12 +761,14 @@ public class IncomeService {
             if (!isCompletedStockAdjustment(adjustment)) {
                 throw new IllegalArgumentException("Chỉ có thể liên kết phiếu điều chỉnh đã hoàn thành");
             }
-            if (!matchesResponsibleEmployee(adjustment, request.getAccountId())) {
-                throw new IllegalArgumentException("Phiếu điều chỉnh không thuộc nhân viên đã chọn");
+            if (!isEmployeeLiableStockAdjustment(adjustment)) {
+                throw new IllegalArgumentException(
+                        "Chỉ có thể liên kết phiếu hủy hàng (lỗi nhân viên) hoặc giảm theo kiểm kê");
             }
             if (linkedStockAdjustmentIds().contains(adjustment.getId())) {
                 throw new IllegalArgumentException("Phiếu điều chỉnh này đã được liên kết với phiếu thu khác");
             }
+            validateEmployeePaymentAmount(adjustment, request.getAmount());
         }
     }
 
@@ -774,7 +796,7 @@ public class IncomeService {
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khách hàng")));
         } else if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType)) {
             income.setAccountID(accountRepository.findById(request.getAccountId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhân viên")));
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người chịu trách nhiệm")));
         }
     }
 
@@ -944,22 +966,57 @@ public class IncomeService {
                 || STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY.equals(status);
     }
 
-    /**
-     * Employee liable for a stock adjustment: {@code expenseID.accountID} when finance linked an
-     * expense, otherwise {@code stockCountID.createdBy} for count-sourced slips.
-     */
-    private boolean matchesResponsibleEmployee(Stockadjustment adjustment, Integer accountId) {
-        if (adjustment == null || accountId == null) {
-            return false;
+    private boolean isEmployeeLiableStockAdjustment(Stockadjustment adjustment) {
+        return adjustment != null
+                && adjustment.getAdjustmentType() != null
+                && EMPLOYEE_LIABLE_ADJUSTMENT_TYPES.contains(adjustment.getAdjustmentType());
+    }
+
+    /** Giá trị đền bù đề xuất theo giá bán niêm yết — cùng công thức với {@code StockadjustmentService}. */
+    private Map<Integer, BigDecimal> reimbursementByAdjustmentIds(Set<Integer> adjustmentIds) {
+        if (adjustmentIds == null || adjustmentIds.isEmpty()) {
+            return Map.of();
         }
-        Expense expense = adjustment.getExpenseID();
-        if (expense != null && expense.getAccountID() != null
-                && accountId.equals(expense.getAccountID().getId())) {
-            return true;
+        Map<Integer, BigDecimal> totals = new LinkedHashMap<>();
+        for (Stockadjustmentdetail detail : stockadjustmentdetailRepository.findAllWithRelations()) {
+            Stockadjustment adjustment = detail.getStockAdjustmentID();
+            if (adjustment == null || adjustment.getId() == null
+                    || !adjustmentIds.contains(adjustment.getId())
+                    || !isEmployeeLiableStockAdjustment(adjustment)) {
+                continue;
+            }
+            Productunit unit = detail.getProductUnitID();
+            BigDecimal sellPrice = unit != null && unit.getSellPrice() != null
+                    ? unit.getSellPrice() : BigDecimal.ZERO;
+            int qty = detail.getQuantity() != null ? detail.getQuantity() : 0;
+            totals.merge(adjustment.getId(), sellPrice.multiply(BigDecimal.valueOf(qty)), BigDecimal::add);
         }
-        Stockcount count = adjustment.getStockCountID();
-        return count != null && count.getCreatedBy() != null
-                && accountId.equals(count.getCreatedBy().getId());
+        return totals;
+    }
+
+    private BigDecimal reimbursementValueFor(Stockadjustment adjustment) {
+        if (adjustment == null || adjustment.getId() == null) {
+            return BigDecimal.ZERO;
+        }
+        return reimbursementByAdjustmentIds(Set.of(adjustment.getId()))
+                .getOrDefault(adjustment.getId(), BigDecimal.ZERO);
+    }
+
+    private void validateEmployeePaymentAmount(Stockadjustment adjustment, BigDecimal paymentAmount) {
+        if (paymentAmount == null) {
+            return;
+        }
+        BigDecimal required = reimbursementValueFor(adjustment);
+        BigDecimal normalizedPayment = paymentAmount.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal normalizedRequired = required.setScale(2, RoundingMode.HALF_UP);
+        if (normalizedRequired.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Phiếu điều chỉnh không có giá trị đền bù");
+        }
+        if (normalizedPayment.compareTo(normalizedRequired) != 0) {
+            throw new IllegalArgumentException(
+                    "Phiếu thu đền bù phải thu đủ một lần ("
+                            + formatMoney(required) + ")");
+        }
     }
 
     private boolean isPositive(BigDecimal value) {

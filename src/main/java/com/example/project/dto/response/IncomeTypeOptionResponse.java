@@ -24,7 +24,7 @@ public class IncomeTypeOptionResponse {
     public static List<IncomeTypeOptionResponse> all() {
         return List.of(
                 new IncomeTypeOptionResponse(SUPPLIER, "Thu nợ nhà cung cấp"),
-                new IncomeTypeOptionResponse(EMPLOYEE, "Thu tiền nhân viên đền bù"),
+                new IncomeTypeOptionResponse(EMPLOYEE, "Thu tiền người chịu trách nhiệm đền bù"),
                 new IncomeTypeOptionResponse(CUSTOMER, "Thu nợ khách hàng"),
                 new IncomeTypeOptionResponse(TAX_REFUND, "Thu hoàn thuế"),
                 new IncomeTypeOptionResponse(SUPPLIER_COMMISSION, "Thu hoa hồng NCC"),
@@ -91,7 +91,8 @@ public class IncomeTypeOptionResponse {
         return switch (option.code) {
             case CUSTOMER -> "Khách hàng".equalsIgnoreCase(value);
             case SUPPLIER -> "Nhà cung cấp".equalsIgnoreCase(value);
-            case EMPLOYEE -> "Nhân viên".equalsIgnoreCase(value);
+            case EMPLOYEE -> "Nhân viên".equalsIgnoreCase(value)
+                    || "Thu tiền nhân viên đền bù".equalsIgnoreCase(value);
             default -> false;
         };
     }

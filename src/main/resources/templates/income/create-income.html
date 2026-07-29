@@ -465,19 +465,19 @@
                             </div>
 
                             <div class="col-12 col-md-6 party-field" id="employeeField">
-                                <label class="form-label">Nhân viên <span class="text-danger">*</span></label>
+                                <label class="form-label">Người chịu trách nhiệm <span class="text-danger">*</span></label>
                                 <div class="party-search-wrap">
                                     <input type="text"
                                            id="employeeSearchInput"
                                            class="form-control party-search-input"
                                            autocomplete="off"
-                                           placeholder="Tìm nhân viên theo tên">
+                                           placeholder="Tìm người chịu trách nhiệm theo tên">
                                     <i class="ti ti-search party-search-icon"></i>
                                     <input type="hidden" th:field="*{accountId}" id="accountIdInput">
                                     <div id="employeeSearchResults" class="party-search-results"></div>
                                 </div>
                                 <div class="income-inline-error" id="accountIdError">
-                                    Vui lòng chọn nhân viên.
+                                    Vui lòng chọn người chịu trách nhiệm.
                                 </div>
                             </div>
 
@@ -487,7 +487,8 @@
                                     <option value="">-- Chọn phiếu điều chỉnh --</option>
                                     <option th:each="item : ${stockAdjustments}"
                                             th:value="${item.id}"
-                                            th:text="${item.code + ' — ' + item.dateDisplay + (item.detail != null ? ' — ' + item.detail : '')}">
+                                            th:attr="data-amount=${item.amount}"
+                                            th:text="${item.code + ' — ' + item.dateDisplay + (item.amount != null ? ' — Đền bù: ' + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ' : '') + (item.detail != null ? ' — ' + item.detail : '')}">
                                         PDC-001
                                     </option>
                                 </select>
@@ -717,7 +718,7 @@
             searchId: 'employeeSearchInput',
             resultsId: 'employeeSearchResults',
             errorId: 'accountIdError',
-            message: 'Vui lòng chọn nhân viên.'
+            message: 'Vui lòng chọn người chịu trách nhiệm.'
         },
         stockAdjustmentIdInput: { errorId: 'stockAdjustmentIdError', message: 'Vui lòng chọn phiếu điều chỉnh kho.' }
     };
@@ -890,16 +891,27 @@
     }
 
     function requiresManualAmount(type) {
-        return isSimpleManualIncomeType(type) || type === 'EMPLOYEE';
+        return isSimpleManualIncomeType(type);
     }
 
     function allowsEditablePaymentAmount(type) {
         return type === 'CUSTOMER' || type === 'SUPPLIER';
     }
 
+    function requiresFullReferencePayment(type) {
+        return type === 'EMPLOYEE';
+    }
+
     function getSelectedReferenceDebt() {
         const type = document.getElementById('incomeTypeInput').value;
-        const selectId = type === 'SUPPLIER' ? 'returnIdInput' : 'invoiceIdInput';
+        let selectId;
+        if (type === 'SUPPLIER') {
+            selectId = 'returnIdInput';
+        } else if (type === 'EMPLOYEE') {
+            selectId = 'stockAdjustmentIdInput';
+        } else {
+            selectId = 'invoiceIdInput';
+        }
         const select = document.getElementById(selectId);
         if (!select || !select.value) {
             return 0;
@@ -1010,6 +1022,32 @@
             return 'Số tiền thu không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
         }
         return 'Số tiền thu không được vượt quá số tiền nợ (' + debtLabel + ').';
+    }
+
+    function validateFullReferencePayment(amount) {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!requiresFullReferencePayment(type)) {
+            return true;
+        }
+        const required = getSelectedReferenceDebt();
+        if (required <= 0 || amount === required) {
+            clearPaymentAmountError();
+            return true;
+        }
+        showPaymentAmountError(
+            'Phải thu đủ giá trị đền bù một lần (' + formatMoney(required) + ').');
+        return false;
+    }
+
+    function enforceFullReferenceAmount() {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!requiresFullReferencePayment(type)) {
+            return;
+        }
+        const select = document.getElementById('stockAdjustmentIdInput');
+        if (select && select.value) {
+            applySuggestedAmount(select);
+        }
     }
 
     function validateLinkedDebtAmount(amount) {
@@ -1230,10 +1268,16 @@
         if (debtHint) {
             if (type === 'CUSTOMER') {
                 debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền nợ của hóa đơn.';
+                debtHint.style.display = 'block';
             } else if (type === 'SUPPLIER') {
                 debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền NCC còn nợ.';
+                debtHint.style.display = 'block';
+            } else if (type === 'EMPLOYEE') {
+                debtHint.textContent = 'Phải thu đủ giá trị đền bù một lần; không được thu một phần.';
+                debtHint.style.display = 'block';
+            } else {
+                debtHint.style.display = 'none';
             }
-            debtHint.style.display = editable ? 'block' : 'none';
         }
         if (!editable) {
             clearPaymentAmountError();
@@ -1248,6 +1292,7 @@
         lastSplitPaidField = null;
         clearPaymentAmountError();
         syncPaymentEditableState();
+        enforceFullReferenceAmount();
         syncPayment();
     }
 
@@ -1392,7 +1437,7 @@
         } else {
             clearAllPartyReferenceErrors();
         }
-        if (options.resetLinkedAmount && (type === 'CUSTOMER' || type === 'SUPPLIER')) {
+        if (options.resetLinkedAmount && (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE')) {
             setAmount(0);
         }
         touchedPartyFields.clear();
@@ -1571,11 +1616,14 @@
             '<span class="fw-semibold text-success">' + escapeHtml(detail.code) + '</span>');
         infoHtml += infoRowHtml('Ngày lập', escapeHtml(detail.dateDisplay));
         infoHtml += infoRowHtml('Loại điều chỉnh', escapeHtml(detail.adjustmentTypeDisplay));
-        infoHtml += infoRowHtml('Người tạo', escapeHtml(detail.createdByName));
         infoHtml += infoRowHtml('Lý do', escapeHtml(detail.reason));
         infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.statusName, detail.statusCssClass));
         infoHtml += infoRowHtml('Tổng giá trị ước tính',
             '<span class="fw-semibold text-success">' + formatMoney(detail.estimatedValue) + '</span>');
+        if (detail.employeeLiable) {
+            infoHtml += infoRowHtml('Giá trị đền bù (giá bán)',
+                '<span class="fw-semibold text-warning">' + formatMoney(detail.totalReimbursementValue) + '</span>');
+        }
         if (detail.note) {
             infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
         }
@@ -1583,15 +1631,23 @@
 
         const vatHeader = detail.showOutputVat
             ? '<th>Thuế GTGT đầu ra</th>' : '';
+        const reimbursementHeader = detail.employeeLiable
+            ? '<th>Ước tính đền bù (giá bán)</th>' : '';
         document.getElementById('referenceItemsHead').innerHTML =
             '<tr>'
             + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
             + '<th>Đơn vị</th><th>Tồn hiện tại</th><th>Chênh lệch</th><th>Giá trị ước tính</th>'
-            + vatHeader + '<th>Ghi chú</th>'
+            + vatHeader + reimbursementHeader + '<th>Ghi chú</th>'
             + '</tr>';
 
         const items = detail.items || [];
-        const colSpan = detail.showOutputVat ? 10 : 9;
+        let colSpan = 9;
+        if (detail.showOutputVat) {
+            colSpan += 1;
+        }
+        if (detail.employeeLiable) {
+            colSpan += 1;
+        }
         if (!items.length) {
             document.getElementById('referenceItemsBody').innerHTML =
                 '<tr><td colspan="' + colSpan + '" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
@@ -1615,6 +1671,21 @@
                     vatCell = '<td class="text-secondary">—</td>';
                 }
             }
+            let reimbursementCell = '';
+            if (detail.employeeLiable) {
+                if (item.reimbursementValue != null) {
+                    reimbursementCell = '<td>'
+                        + '<span class="fw-semibold text-warning">' + formatMoney(item.reimbursementValue) + '</span>';
+                    if (item.reimbursementUnitPrice != null) {
+                        reimbursementCell += '<div class="small text-secondary">'
+                            + formatMoney(item.reimbursementUnitPrice) + '/'
+                            + escapeHtml(item.unitName || 'đơn vị') + '</div>';
+                    }
+                    reimbursementCell += '</td>';
+                } else {
+                    reimbursementCell = '<td class="text-secondary">—</td>';
+                }
+            }
             return '<tr>'
                 + '<td class="fw-semibold text-success">' + escapeHtml(item.productId) + '</td>'
                 + '<td>' + escapeHtml(item.productName) + '</td>'
@@ -1626,17 +1697,20 @@
                 + ' <span class="badge ms-1' + badgeClass + '">' + escapeHtml(item.directionDisplay) + '</span></td>'
                 + '<td class="fw-semibold">' + formatMoney(item.lineCost) + '</td>'
                 + vatCell
+                + reimbursementCell
                 + '<td>' + escapeHtml(item.note || '—') + '</td>'
                 + '</tr>';
         }).join('');
 
-        const totalColspan = detail.showOutputVat ? 6 : 6;
         bodyHtml += '<tr class="fw-semibold">'
-            + '<td colspan="' + totalColspan + '">Tổng cộng</td>'
+            + '<td colspan="6">Tổng cộng</td>'
             + '<td>' + escapeHtml(detail.totalQuantity) + '</td>'
             + '<td class="text-success">' + formatMoney(detail.estimatedValue) + '</td>';
         if (detail.showOutputVat) {
             bodyHtml += '<td class="text-success">' + formatMoney(detail.totalOutputVat) + '</td>';
+        }
+        if (detail.employeeLiable) {
+            bodyHtml += '<td class="text-warning">' + formatMoney(detail.totalReimbursementValue) + '</td>';
         }
         bodyHtml += '<td></td></tr>';
         document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
@@ -1794,7 +1868,14 @@
         const response = await fetch(basePath + '/references/stock-adjustments?accountId=' + accountId);
         const items = await response.json();
         populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', items, selectedValue, function (item) {
-            return item.code + ' — ' + item.dateDisplay + (item.detail ? ' — ' + item.detail : '');
+            let label = item.code + ' — ' + item.dateDisplay;
+            if (item.amount != null) {
+                label += ' — Đền bù: ' + formatMoney(item.amount);
+            }
+            if (item.detail) {
+                label += ' — ' + item.detail;
+            }
+            return label;
         });
     }
 
@@ -1864,6 +1945,7 @@
         } else if (fieldId === 'accountIdInput') {
             clearSelectError('stockAdjustmentIdInput');
             populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', [], null, function () { return ''; });
+            setAmount(0);
         }
     }
 
@@ -2070,7 +2152,9 @@
         bindPartyReferenceField('returnIdInput', function () {
             applySuggestedAmount(this);
         });
-        bindPartyReferenceField('stockAdjustmentIdInput');
+        bindPartyReferenceField('stockAdjustmentIdInput', function () {
+            applySuggestedAmount(this);
+        });
 
         initPartySearchDisplays();
 
@@ -2144,6 +2228,10 @@
         if (returnSelect && returnSelect.value) {
             applySuggestedAmount(returnSelect);
         }
+        const stockAdjustmentSelect = document.getElementById('stockAdjustmentIdInput');
+        if (stockAdjustmentSelect && stockAdjustmentSelect.value) {
+            applySuggestedAmount(stockAdjustmentSelect);
+        }
 
         document.getElementById('incomeForm').addEventListener('submit', function (event) {
             syncPayment();
@@ -2167,6 +2255,11 @@
             }
 
             if (!validateLinkedDebtAmount(amount)) {
+                event.preventDefault();
+                return;
+            }
+
+            if (!validateFullReferencePayment(amount)) {
                 event.preventDefault();
                 return;
             }
