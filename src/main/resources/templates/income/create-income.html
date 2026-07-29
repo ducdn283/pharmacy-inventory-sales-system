@@ -1,0 +1,2425 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tạo phiếu thu | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .income-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .income-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .btn-income-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+            border-radius: 12px;
+        }
+
+        .btn-income-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #ffffff;
+        }
+
+        .auto-field {
+            background: #fbfdfc !important;
+            color: #6b7280 !important;
+            border-color: #e5e7eb;
+            cursor: default;
+            font-style: italic;
+        }
+
+        .party-field {
+            display: none;
+        }
+
+        .party-field.show,
+        .reference-field.show {
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+
+        .party-search-wrap:focus-within {
+            z-index: 40;
+        }
+
+        .reference-field {
+            display: none;
+        }
+
+        .money-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            font-size: 14px;
+        }
+
+        .money-input-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        .money-input-wrap .form-control {
+            width: 100%;
+            padding-right: 22px;
+        }
+
+        .money-input-wrap .form-control.is-invalid {
+            background-image: none;
+            padding-right: 22px;
+        }
+
+        .split-payment-error {
+            display: none;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            padding: 0.625rem 0.75rem;
+            border-radius: 10px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+
+        .split-payment-error.is-visible {
+            display: flex;
+        }
+
+        .split-payment-error i {
+            flex-shrink: 0;
+            margin-top: 1px;
+            font-size: 1rem;
+        }
+
+        .money-stepper {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            bottom: 1px;
+            width: 18px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #dee2e6;
+            border-radius: 0 6px 6px 0;
+            overflow: hidden;
+        }
+
+        .money-step-btn {
+            flex: 1;
+            border: none;
+            background: #f8f9fa;
+            color: #6b7280;
+            font-size: 9px;
+            line-height: 1;
+            padding: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .money-step-btn:hover {
+            background: #e9ecef;
+            color: #111827;
+        }
+
+        .form-check-input:checked {
+            background-color: #059669;
+            border-color: #059669;
+        }
+
+        .income-inline-error {
+            display: none;
+            width: 100%;
+            margin-top: 0.25rem;
+            font-size: 0.875em;
+            color: #dc3545;
+        }
+
+        .income-inline-error.is-visible {
+            display: block;
+        }
+
+        .party-search-wrap {
+            position: relative;
+        }
+
+        .party-search-input {
+            padding-right: 2.25rem;
+        }
+
+        .party-search-input-with-icon {
+            padding-left: 2.25rem;
+        }
+
+        /* Bootstrap is-invalid adds a background icon on the right — hide it here because
+           we already render ti-search (and inline error text below). Keeps icons from stacking. */
+        .party-search-wrap .party-search-input.is-invalid {
+            background-image: none;
+            padding-right: 2.25rem;
+        }
+
+        .party-search-wrap .party-search-input.is-invalid ~ .party-search-leading-icon {
+            color: #dc3545;
+        }
+
+        .party-search-wrap .party-search-input.is-invalid ~ .party-search-icon {
+            color: #dc3545;
+        }
+
+        .party-field .income-inline-error,
+        .reference-field .income-inline-error {
+            margin-top: 0.35rem;
+        }
+
+        #paidAmount.is-invalid {
+            background-image: none;
+        }
+
+        #singlePaidBox .income-inline-error {
+            margin-top: 0.35rem;
+        }
+
+        #reasonInput.is-invalid {
+            background-image: none;
+        }
+
+        .party-search-leading-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #059669;
+            pointer-events: none;
+            font-size: 1.05rem;
+        }
+
+        .party-search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            pointer-events: none;
+        }
+
+        .party-search-results {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
+        }
+
+        .party-search-results.show {
+            display: block;
+        }
+
+        .party-search-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .party-search-item .ti {
+            font-size: 1.05rem;
+            color: #059669;
+            flex-shrink: 0;
+        }
+
+        .party-search-item span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .party-search-item:last-child {
+            border-bottom: none;
+        }
+
+        .party-search-item:hover {
+            background: #ecfdf5;
+        }
+
+        .reference-detail-section {
+            display: none;
+            margin-top: 4px;
+        }
+
+        .reference-detail-section.show {
+            display: block;
+        }
+
+        .reference-detail-section .income-card.border {
+            box-shadow: none;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 180px minmax(0, 1fr);
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #6b7280;
+        }
+
+        .info-row > div:last-child {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            min-width: 0;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .reference-detail-section .table thead th {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f9fafb;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .reference-detail-section .table tbody td {
+            font-size: 13px;
+            vertical-align: middle;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 991.98px) {
+            .income-page-content {
+                padding-top: 84px !important;
+            }
+
+            .info-row {
+                grid-template-columns: 1fr;
+                gap: 4px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content income-page-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">Tạo phiếu thu</h1>
+                <p class="text-secondary mb-0">Ghi nhận một khoản tiền thu vào quỹ.</p>
+            </div>
+            <a th:href="${basePath}" class="btn btn-outline-secondary">
+                <i class="ti ti-arrow-left me-1"></i>
+                Quay lại danh sách
+            </a>
+        </div>
+
+        <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="incomeForm">
+            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+            <div class="row g-4">
+                <div class="col-12 col-xl-8">
+
+                    <div class="income-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-cash-banknote text-success me-1"></i>
+                            Thông tin phiếu thu
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Người lập</label>
+                                <input type="text" class="form-control auto-field"
+                                       th:value="${creatorName != null ? creatorName : 'Tài khoản hiện tại'}"
+                                       value="Tài khoản hiện tại" readonly tabindex="-1">
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Loại phiếu thu <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{incomeType}" id="incomeTypeInput" required>
+                                    <option value="">-- Chọn loại phiếu thu --</option>
+                                    <option th:each="item : ${incomeTypes}"
+                                            th:value="${item.code}"
+                                            th:text="${item.label}">Thu nợ khách hàng</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-6 party-field" id="customerField">
+                                <label class="form-label">
+                                    <i class="ti ti-user text-success me-1"></i>
+                                    Khách hàng <span class="text-danger">*</span>
+                                </label>
+                                <div class="party-search-wrap">
+                                    <i class="ti ti-user party-search-leading-icon" id="customerSearchLeadingIcon"></i>
+                                    <input type="text"
+                                           id="customerSearchInput"
+                                           class="form-control party-search-input party-search-input-with-icon"
+                                           autocomplete="off"
+                                           placeholder="Tìm khách hàng theo tên hoặc SĐT">
+                                    <i class="ti ti-search party-search-icon"></i>
+                                    <input type="hidden" th:field="*{customerId}" id="customerIdInput">
+                                    <div id="customerSearchResults" class="party-search-results"></div>
+                                </div>
+                                <div class="income-inline-error" id="customerIdError">
+                                    Vui lòng chọn khách hàng.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 reference-field" id="debtInvoiceField">
+                                <label class="form-label">Hóa đơn bán hàng còn nợ <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{invoiceId}" id="invoiceIdInput">
+                                    <option value="">-- Chọn hóa đơn còn nợ --</option>
+                                    <option th:each="item : ${debtInvoices}"
+                                            th:value="${item.id}"
+                                            th:attr="data-amount=${item.amount}"
+                                            th:text="${item.code + ' — ' + item.dateDisplay + ' — Nợ: ' + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                        HD-001
+                                    </option>
+                                </select>
+                                <div class="income-inline-error" id="invoiceIdError">
+                                    Vui lòng chọn hóa đơn bán hàng còn nợ.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 party-field" id="supplierField">
+                                <label class="form-label">Nhà cung cấp <span class="text-danger">*</span></label>
+                                <div class="party-search-wrap">
+                                    <input type="text"
+                                           id="supplierSearchInput"
+                                           class="form-control party-search-input"
+                                           autocomplete="off"
+                                           placeholder="Tìm nhà cung cấp theo tên">
+                                    <i class="ti ti-search party-search-icon"></i>
+                                    <input type="hidden" th:field="*{supplierId}" id="supplierIdInput">
+                                    <div id="supplierSearchResults" class="party-search-results"></div>
+                                </div>
+                                <div class="income-inline-error" id="supplierIdError">
+                                    Vui lòng chọn nhà cung cấp.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 reference-field" id="supplierReturnField">
+                                <label class="form-label">Phiếu trả hàng NCC <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{returnId}" id="returnIdInput">
+                                    <option value="">-- Chọn phiếu trả hàng NCC --</option>
+                                    <option th:each="item : ${supplierReturns}"
+                                            th:value="${item.id}"
+                                            th:attr="data-amount=${item.amount}"
+                                            th:text="${item.code + ' — ' + item.dateDisplay + (item.amount != null ? ' — ' + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ' : '') + (item.detail != null ? ' — ' + item.detail : '')}">
+                                        THNCC-001
+                                    </option>
+                                </select>
+                                <div class="income-inline-error" id="returnIdError">
+                                    Vui lòng chọn phiếu trả hàng nhà cung cấp.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 party-field" id="employeeField">
+                                <label class="form-label" id="employeeFieldLabel">Người chịu trách nhiệm <span class="text-danger">*</span></label>
+                                <div class="party-search-wrap">
+                                    <input type="text"
+                                           id="employeeSearchInput"
+                                           class="form-control party-search-input"
+                                           autocomplete="off"
+                                           placeholder="Tìm người chịu trách nhiệm theo tên">
+                                    <i class="ti ti-search party-search-icon"></i>
+                                    <input type="hidden" th:field="*{accountId}" id="accountIdInput">
+                                    <div id="employeeSearchResults" class="party-search-results"></div>
+                                </div>
+                                <div class="income-inline-error" id="accountIdError">
+                                    Vui lòng chọn người chịu trách nhiệm.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 reference-field" id="stockAdjustmentField">
+                                <label class="form-label">Phiếu điều chỉnh kho <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{stockAdjustmentId}" id="stockAdjustmentIdInput">
+                                    <option value="">-- Chọn phiếu điều chỉnh --</option>
+                                    <option th:each="item : ${stockAdjustments}"
+                                            th:value="${item.id}"
+                                            th:attr="data-amount=${item.amount}"
+                                            th:text="${item.code + ' — ' + item.dateDisplay + (item.amount != null ? ' — Đền bù: ' + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ' : '') + (item.detail != null ? ' — ' + item.detail : '')}">
+                                        PDC-001
+                                    </option>
+                                </select>
+                                <div class="income-inline-error" id="stockAdjustmentIdError">
+                                    Vui lòng chọn phiếu điều chỉnh kho.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 reference-field" id="shiftReportField">
+                                <label class="form-label">Báo cáo ca <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{shiftReportOfAccountId}" id="shiftReportOfAccountIdInput">
+                                    <option value="">-- Chọn báo cáo ca --</option>
+                                    <option th:each="item : ${shiftReportsWithShortage}"
+                                            th:value="${item.id}"
+                                            th:attr="data-amount=${item.amount}"
+                                            th:text="${item.code + ' — ' + item.dateDisplay + (item.amount != null ? ' — Thiếu: ' + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ' : '') + (item.detail != null ? ' — ' + item.detail : '')}">
+                                        BC-001
+                                    </option>
+                                </select>
+                                <div class="income-inline-error" id="shiftReportOfAccountIdError">
+                                    Vui lòng chọn báo cáo ca.
+                                </div>
+                            </div>
+
+                            <div class="col-12 reference-detail-section" id="referenceDetailSection">
+                                <div class="income-card mb-0 border">
+                                    <div class="p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <div class="section-title mb-0" id="referenceDetailTitle">
+                                            <i class="ti ti-info-circle text-success me-1"></i>
+                                            Chi tiết phiếu liên quan
+                                        </div>
+                                        <span class="text-secondary small" id="referenceDetailLoading" style="display:none;">
+                                            Đang tải…
+                                        </span>
+                                    </div>
+                                    <div class="p-4" id="referenceInfoBody"></div>
+                                </div>
+
+                                <div class="income-card mt-3 border">
+                                    <div class="p-4 border-bottom">
+                                        <div class="section-title" id="referenceItemsTitle">
+                                            <i class="ti ti-package text-success me-1"></i>
+                                            Chi tiết hàng hóa
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead id="referenceItemsHead"></thead>
+                                            <tbody id="referenceItemsBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 party-field" id="manualAmountField">
+                                <label class="form-label">Số tiền thu <span class="text-danger">*</span></label>
+                                <div class="money-input-wrap">
+                                    <input type="text" inputmode="numeric" class="form-control"
+                                           id="manualAmountInput" placeholder="0"
+                                           oninput="handleManualAmountInput(this)">
+                                    <div class="money-stepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('manualAmountInput', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('manualAmountInput', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                    </div>
+                                </div>
+                                <div class="income-inline-error" id="manualAmountError">
+                                    Vui lòng nhập số tiền thu lớn hơn 0.
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="col-12 col-xl-4">
+                    <div class="income-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-calculator text-success me-1"></i>
+                            Thanh toán
+                        </div>
+
+                        <input type="hidden" th:field="*{amount}" id="amountField">
+
+                        <div class="money-summary-row">
+                            <span class="text-secondary">Tổng số tiền thu</span>
+                            <strong class="text-success" id="totalDisplay">0đ</strong>
+                        </div>
+
+                        <hr>
+
+                        <div class="mb-3">
+                            <label class="form-label d-block mb-2">Hình thức thanh toán</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payCash" value="cash" checked onchange="onPayMethodChange()">
+                                    <label class="form-check-label" for="payCash">Tiền mặt</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payBanking" value="banking" onchange="onPayMethodChange()">
+                                    <label class="form-check-label" for="payBanking">Chuyển khoản</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payBoth" value="both" onchange="onPayMethodChange()">
+                                    <label class="form-check-label" for="payBoth">Tiền mặt + Chuyển khoản</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="singlePaidBox">
+                            <label class="form-label">Số tiền thu</label>
+                            <input type="text" inputmode="numeric" class="form-control"
+                                   id="paidAmount" readonly tabindex="-1">
+                            <div class="income-inline-error" id="paymentAmountError"></div>
+                        </div>
+
+                        <div class="form-text text-secondary mb-2" id="partialDebtHint" style="display:none;">
+                            Có thể thu một phần; tối đa bằng số tiền nợ của chứng từ liên kết.
+                        </div>
+
+                        <div id="splitPaidBox" style="display:none;">
+                            <div class="mb-3">
+                                <label class="form-label">Tiền mặt</label>
+                                <div class="money-input-wrap">
+                                    <input type="text" inputmode="numeric" class="form-control"
+                                           id="cashAmount" oninput="handlePaidInput(this)">
+                                    <div class="money-stepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('cashAmount', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('cashAmount', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Chuyển khoản</label>
+                                <div class="money-input-wrap">
+                                    <input type="text" inputmode="numeric" class="form-control"
+                                           id="bankingAmount" oninput="handlePaidInput(this)">
+                                    <div class="money-stepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('bankingAmount', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('bankingAmount', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="split-payment-error" id="splitPaymentAmountError" role="alert">
+                                <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                                <span id="splitPaymentAmountErrorText"></span>
+                            </div>
+                        </div>
+
+                        <input type="hidden" th:field="*{paidByCash}" id="paidByCashField">
+                        <input type="hidden" th:field="*{paidByBanking}" id="paidByBankingField">
+
+                        <div class="text-danger small" id="overpaidWarning" style="display:none;">
+                            Số tiền thu đang lớn hơn tổng số tiền thu.
+                        </div>
+                    </div>
+
+                    <div class="income-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-file-description text-success me-1"></i>
+                            Nội dung phiếu thu
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Nội dung thu <span class="text-danger">*</span></label>
+                            <textarea class="form-control" rows="2" th:field="*{reason}" id="reasonInput"
+                                      placeholder="VD: Thu nợ khách hàng, hoàn ứng nhân viên…"></textarea>
+                            <div class="income-inline-error" id="reasonError">
+                                Vui lòng nhập nội dung thu.
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Ghi chú</label>
+                            <textarea class="form-control" rows="3" th:field="*{note}"
+                                      placeholder="Nhập ghi chú nếu có"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="income-card p-4">
+                        <button th:if="${#strings.startsWith(basePath, '/owner')}"
+                                type="submit" name="action" value="submit"
+                                class="btn btn-income-primary w-100 mb-3">
+                            <i class="ti ti-circle-check me-1"></i>
+                            Hoàn thành
+                        </button>
+
+                        <button th:unless="${#strings.startsWith(basePath, '/owner')}"
+                                type="submit" name="action" value="submit"
+                                class="btn btn-income-primary w-100 mb-3">
+                            <i class="ti ti-send me-1"></i>
+                            Gửi duyệt
+                        </button>
+
+                        <button type="submit" name="action" value="draft"
+                                class="btn btn-outline-secondary w-100">
+                            <i class="ti ti-device-floppy me-1"></i>
+                            Lưu nháp
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+    </div>
+</main>
+
+<script th:inline="javascript">
+    const basePath = /*[[${basePath}]]*/ '/owner/incomes';
+    const customers = /*[[${customers}]]*/ [];
+    const suppliers = /*[[${suppliers}]]*/ [];
+    const employees = /*[[${employees}]]*/ [];
+
+    const AMOUNT_REQUIRED_MSG = 'Vui lòng nhập số tiền thu lớn hơn 0.';
+    const REASON_REQUIRED_MSG = 'Vui lòng nhập nội dung thu.';
+    const serverErrorMessage = /*[[${errorMessage != null ? errorMessage : ''}]]*/ '';
+
+    const PARTY_REFERENCE_FIELDS = {
+        customerIdInput: {
+            searchId: 'customerSearchInput',
+            resultsId: 'customerSearchResults',
+            errorId: 'customerIdError',
+            message: 'Vui lòng chọn khách hàng.'
+        },
+        invoiceIdInput: { errorId: 'invoiceIdError', message: 'Vui lòng chọn hóa đơn bán hàng còn nợ.' },
+        supplierIdInput: {
+            searchId: 'supplierSearchInput',
+            resultsId: 'supplierSearchResults',
+            errorId: 'supplierIdError',
+            message: 'Vui lòng chọn nhà cung cấp.'
+        },
+        returnIdInput: { errorId: 'returnIdError', message: 'Vui lòng chọn phiếu trả hàng nhà cung cấp.' },
+        accountIdInput: {
+            searchId: 'employeeSearchInput',
+            resultsId: 'employeeSearchResults',
+            errorId: 'accountIdError',
+            message: 'Vui lòng chọn người chịu trách nhiệm.'
+        },
+        stockAdjustmentIdInput: { errorId: 'stockAdjustmentIdError', message: 'Vui lòng chọn phiếu điều chỉnh kho.' },
+        shiftReportOfAccountIdInput: { errorId: 'shiftReportOfAccountIdError', message: 'Vui lòng chọn báo cáo ca.' }
+    };
+
+    const touchedPartyFields = new Set();
+
+    function setErrorVisible(errorEl, visible) {
+        if (!errorEl) {
+            return;
+        }
+        errorEl.classList.toggle('is-visible', visible);
+    }
+
+    function getPartyHiddenInput(fieldId) {
+        return document.getElementById(fieldId);
+    }
+
+    function getPartySearchInput(fieldId) {
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        return config && config.searchId ? document.getElementById(config.searchId) : null;
+    }
+
+    function clearSelectError(fieldId) {
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        if (!config) {
+            return;
+        }
+        const hidden = getPartyHiddenInput(fieldId);
+        const search = getPartySearchInput(fieldId);
+        const select = hidden && hidden.tagName === 'SELECT' ? hidden : null;
+        if (search) {
+            search.classList.remove('is-invalid');
+        }
+        if (select) {
+            select.classList.remove('is-invalid');
+        }
+        setErrorVisible(document.getElementById(config.errorId), false);
+    }
+
+    function showSelectError(fieldId, message, options) {
+        options = options || {};
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        const hidden = getPartyHiddenInput(fieldId);
+        if (!config || !hidden || hidden.value) {
+            return false;
+        }
+        const search = getPartySearchInput(fieldId);
+        const select = hidden.tagName === 'SELECT' ? hidden : null;
+        if (search) {
+            search.classList.add('is-invalid');
+        } else if (select) {
+            select.classList.add('is-invalid');
+        }
+        const error = document.getElementById(config.errorId);
+        if (error) {
+            error.textContent = message || config.message;
+            setErrorVisible(error, true);
+        }
+        const focusTarget = search || select;
+        if (focusTarget && options.autoFocus !== false) {
+            focusTarget.focus();
+            focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return true;
+    }
+
+    function clearAllPartyReferenceErrors() {
+        Object.keys(PARTY_REFERENCE_FIELDS).forEach(clearSelectError);
+    }
+
+    function isPartyReferenceRequired(selectId, type) {
+        if (type === 'CUSTOMER') {
+            return selectId === 'customerIdInput' || selectId === 'invoiceIdInput';
+        }
+        if (type === 'SUPPLIER') {
+            return selectId === 'supplierIdInput' || selectId === 'returnIdInput';
+        }
+        if (type === 'EMPLOYEE') {
+            return selectId === 'accountIdInput' || selectId === 'stockAdjustmentIdInput';
+        }
+        if (type === 'SHIFT_SHORTAGE') {
+            return selectId === 'accountIdInput' || selectId === 'shiftReportOfAccountIdInput';
+        }
+        return false;
+    }
+
+    function canValidateReferenceField(selectId, type) {
+        if (type === 'CUSTOMER' && selectId === 'invoiceIdInput') {
+            return !!document.getElementById('customerIdInput').value;
+        }
+        if (type === 'SUPPLIER' && selectId === 'returnIdInput') {
+            return !!document.getElementById('supplierIdInput').value;
+        }
+        if (type === 'EMPLOYEE' && selectId === 'stockAdjustmentIdInput') {
+            return !!document.getElementById('accountIdInput').value;
+        }
+        if (type === 'SHIFT_SHORTAGE' && selectId === 'shiftReportOfAccountIdInput') {
+            return !!document.getElementById('accountIdInput').value;
+        }
+        return true;
+    }
+
+    function syncSelectError(fieldId, force) {
+        const hidden = getPartyHiddenInput(fieldId);
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!hidden || !isPartyReferenceRequired(fieldId, type)) {
+            clearSelectError(fieldId);
+            return;
+        }
+        if (hidden.value) {
+            clearSelectError(fieldId);
+            return;
+        }
+        if (!force && !touchedPartyFields.has(fieldId)) {
+            clearSelectError(fieldId);
+            return;
+        }
+        if (!canValidateReferenceField(fieldId, type)) {
+            clearSelectError(fieldId);
+            return;
+        }
+        showSelectError(fieldId, undefined, { autoFocus: false });
+    }
+
+    function validatePartyReferenceFields(type) {
+        clearAllPartyReferenceErrors();
+        let valid = true;
+        let firstInvalid = null;
+
+        function markInvalid(fieldId) {
+            touchedPartyFields.add(fieldId);
+            if (!canValidateReferenceField(fieldId, type)) {
+                return;
+            }
+            const hidden = getPartyHiddenInput(fieldId);
+            if (!hidden || hidden.value) {
+                return;
+            }
+            if (showSelectError(fieldId)) {
+                valid = false;
+                if (!firstInvalid) {
+                    firstInvalid = getPartySearchInput(fieldId) || hidden;
+                }
+            }
+        }
+
+        if (type === 'CUSTOMER') {
+            if (!document.getElementById('customerIdInput').value) {
+                markInvalid('customerIdInput');
+            } else if (!document.getElementById('invoiceIdInput').value) {
+                markInvalid('invoiceIdInput');
+            }
+        } else if (type === 'SUPPLIER') {
+            if (!document.getElementById('supplierIdInput').value) {
+                markInvalid('supplierIdInput');
+            } else if (!document.getElementById('returnIdInput').value) {
+                markInvalid('returnIdInput');
+            }
+        } else if (type === 'EMPLOYEE') {
+            if (!document.getElementById('accountIdInput').value) {
+                markInvalid('accountIdInput');
+            } else if (!document.getElementById('stockAdjustmentIdInput').value) {
+                markInvalid('stockAdjustmentIdInput');
+            }
+        } else if (type === 'SHIFT_SHORTAGE') {
+            if (!document.getElementById('accountIdInput').value) {
+                markInvalid('accountIdInput');
+            } else if (!document.getElementById('shiftReportOfAccountIdInput').value) {
+                markInvalid('shiftReportOfAccountIdInput');
+            }
+        }
+
+        if (firstInvalid) {
+            firstInvalid.focus();
+            firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return valid;
+    }
+
+    function isSimpleManualIncomeType(type) {
+        return type === 'OTHER' || type === 'TAX_REFUND' || type === 'SUPPLIER_COMMISSION';
+    }
+
+    function requiresManualAmount(type) {
+        return isSimpleManualIncomeType(type);
+    }
+
+    function allowsEditablePaymentAmount(type) {
+        return type === 'CUSTOMER' || type === 'SUPPLIER';
+    }
+
+    function requiresFullReferencePayment(type) {
+        return type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE';
+    }
+
+    function getSelectedReferenceDebt() {
+        const type = document.getElementById('incomeTypeInput').value;
+        let selectId;
+        if (type === 'SUPPLIER') {
+            selectId = 'returnIdInput';
+        } else if (type === 'EMPLOYEE') {
+            selectId = 'stockAdjustmentIdInput';
+        } else if (type === 'SHIFT_SHORTAGE') {
+            selectId = 'shiftReportOfAccountIdInput';
+        } else {
+            selectId = 'invoiceIdInput';
+        }
+        const select = document.getElementById(selectId);
+        if (!select || !select.value) {
+            return 0;
+        }
+        const option = select.options[select.selectedIndex];
+        return option && option.dataset.amount ? Number(option.dataset.amount) : 0;
+    }
+
+    function clearPaymentAmountError() {
+        const paidAmount = document.getElementById('paidAmount');
+        const paymentError = document.getElementById('paymentAmountError');
+        const cashAmount = document.getElementById('cashAmount');
+        const bankingAmount = document.getElementById('bankingAmount');
+        const splitError = document.getElementById('splitPaymentAmountError');
+        const splitErrorText = document.getElementById('splitPaymentAmountErrorText');
+        if (paidAmount) {
+            paidAmount.classList.remove('is-invalid');
+        }
+        if (cashAmount) {
+            cashAmount.classList.remove('is-invalid');
+        }
+        if (bankingAmount) {
+            bankingAmount.classList.remove('is-invalid');
+        }
+        if (paymentError) {
+            paymentError.textContent = '';
+            setErrorVisible(paymentError, false);
+        }
+        if (splitErrorText) {
+            splitErrorText.textContent = '';
+        }
+        if (splitError) {
+            setErrorVisible(splitError, false);
+        }
+    }
+
+    function showPaymentAmountError(message, options) {
+        options = options || {};
+        clearPaymentAmountError();
+        const text = message || AMOUNT_REQUIRED_MSG;
+        if (currentPayMethod() === 'both') {
+            const splitError = document.getElementById('splitPaymentAmountError');
+            const splitErrorText = document.getElementById('splitPaymentAmountErrorText');
+            if (splitErrorText) {
+                splitErrorText.textContent = text;
+            }
+            if (splitError) {
+                setErrorVisible(splitError, true);
+                if (options.scroll !== false) {
+                    splitError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+            return;
+        }
+        const paidAmount = document.getElementById('paidAmount');
+        const paymentError = document.getElementById('paymentAmountError');
+        if (paidAmount) {
+            paidAmount.classList.add('is-invalid');
+            paidAmount.focus();
+            paidAmount.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        if (paymentError) {
+            paymentError.textContent = text;
+            setErrorVisible(paymentError, true);
+        }
+    }
+
+    function shouldSkipSplitPaymentBlurValidation(activeElement) {
+        if (!activeElement) {
+            return false;
+        }
+        if (activeElement.id === 'cashAmount' || activeElement.id === 'bankingAmount') {
+            return true;
+        }
+        return !!activeElement.closest('.party-search-wrap, .party-search-results, .party-search-item');
+    }
+
+    function runSplitPaymentBlurValidation(input) {
+        setTimeout(function () {
+            const active = document.activeElement;
+            if (active === input || shouldSkipSplitPaymentBlurValidation(active)) {
+                return;
+            }
+            const type = document.getElementById('incomeTypeInput').value;
+            if (!allowsEditablePaymentAmount(type) || currentPayMethod() !== 'both') {
+                return;
+            }
+            syncPayment();
+            const total = parsePrice(document.getElementById('cashAmount'))
+                + parsePrice(document.getElementById('bankingAmount'));
+            if (total <= 0) {
+                showPaymentAmountError(AMOUNT_REQUIRED_MSG, { scroll: false });
+                return;
+            }
+            validateLinkedDebtAmount(total);
+        }, 0);
+    }
+
+    function linkedDebtOverLimitMessage(type, maxDebt) {
+        const debtLabel = formatMoney(maxDebt);
+        if (currentPayMethod() === 'both') {
+            if (type === 'SUPPLIER') {
+                return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
+            }
+            return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền nợ (' + debtLabel + ').';
+        }
+        if (type === 'SUPPLIER') {
+            return 'Số tiền thu không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
+        }
+        return 'Số tiền thu không được vượt quá số tiền nợ (' + debtLabel + ').';
+    }
+
+    function validateFullReferencePayment(amount) {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!requiresFullReferencePayment(type)) {
+            return true;
+        }
+        const required = getSelectedReferenceDebt();
+        if (required <= 0 || amount === required) {
+            clearPaymentAmountError();
+            return true;
+        }
+        showPaymentAmountError(
+            type === 'SHIFT_SHORTAGE'
+                ? 'Phải thu đủ số tiền thiếu của ca một lần (' + formatMoney(required) + ').'
+                : 'Phải thu đủ giá trị đền bù một lần (' + formatMoney(required) + ').');
+        return false;
+    }
+
+    function enforceFullReferenceAmount() {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!requiresFullReferencePayment(type)) {
+            return;
+        }
+        const select = document.getElementById('stockAdjustmentIdInput');
+        if (select && select.value) {
+            applySuggestedAmount(select);
+        }
+        const shiftSelect = document.getElementById('shiftReportOfAccountIdInput');
+        if (shiftSelect && shiftSelect.value) {
+            applySuggestedAmount(shiftSelect);
+        }
+    }
+
+    function validateLinkedDebtAmount(amount) {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!allowsEditablePaymentAmount(type)) {
+            return true;
+        }
+        const maxDebt = getSelectedReferenceDebt();
+        if (maxDebt <= 0 || amount <= maxDebt) {
+            clearPaymentAmountError();
+            return true;
+        }
+        showPaymentAmountError(linkedDebtOverLimitMessage(type, maxDebt));
+        return false;
+    }
+
+    function clearAmountError() {
+        const manualInput = document.getElementById('manualAmountInput');
+        const manualError = document.getElementById('manualAmountError');
+        if (manualInput) {
+            manualInput.classList.remove('is-invalid');
+        }
+        if (manualError) {
+            manualError.textContent = '';
+            setErrorVisible(manualError, false);
+        }
+        clearPaymentAmountError();
+    }
+
+    function showAmountError(message) {
+        clearAmountError();
+        const manualInput = document.getElementById('manualAmountInput');
+        const manualError = document.getElementById('manualAmountError');
+        const text = message || AMOUNT_REQUIRED_MSG;
+        const type = document.getElementById('incomeTypeInput').value;
+
+        if (allowsEditablePaymentAmount(type)) {
+            showPaymentAmountError(text);
+            return;
+        }
+
+        if (!requiresManualAmount(type) || !manualInput) {
+            if (window.pmToast) {
+                pmToast(text, 'error');
+            } else {
+                alert(text);
+            }
+            return;
+        }
+
+        if (!message && parsePrice(manualInput) > 0) {
+            return;
+        }
+
+        manualInput.classList.add('is-invalid');
+        if (manualError) {
+            manualError.textContent = text;
+            setErrorVisible(manualError, true);
+        }
+        manualInput.focus();
+        manualInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function clearReasonError() {
+        const input = document.getElementById('reasonInput');
+        const error = document.getElementById('reasonError');
+        if (input) {
+            input.classList.remove('is-invalid');
+        }
+        setErrorVisible(error, false);
+    }
+
+    function showReasonError(message) {
+        clearReasonError();
+        const input = document.getElementById('reasonInput');
+        const error = document.getElementById('reasonError');
+        const text = message || REASON_REQUIRED_MSG;
+
+        if (!input || (input.value || '').trim()) {
+            return false;
+        }
+
+        input.classList.add('is-invalid');
+        if (error) {
+            error.textContent = text;
+            setErrorVisible(error, true);
+        }
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
+    }
+
+    function validateReasonField() {
+        const input = document.getElementById('reasonInput');
+        if (input && (input.value || '').trim()) {
+            clearReasonError();
+            return true;
+        }
+        showReasonError(REASON_REQUIRED_MSG);
+        return false;
+    }
+
+    function applyServerFieldErrors() {
+        if (!serverErrorMessage) {
+            return;
+        }
+        if (serverErrorMessage.indexOf('nội dung thu') >= 0) {
+            showReasonError(serverErrorMessage);
+        } else if (serverErrorMessage.indexOf('vượt quá số tiền') >= 0) {
+            showAmountError(serverErrorMessage);
+        } else if (window.pmToast) {
+            pmToast(serverErrorMessage, 'error');
+        } else {
+            alert(serverErrorMessage);
+        }
+    }
+
+    function formatMoney(value) {
+        if (value == null || value === '') {
+            return '';
+        }
+        return Number(value).toLocaleString('vi-VN') + 'đ';
+    }
+
+    function formatPriceDisplay(value) {
+        if (value == null || value === '') {
+            return '';
+        }
+        const num = Number(String(value).replace(/\./g, ''));
+        if (!Number.isFinite(num)) {
+            return '';
+        }
+        return num.toLocaleString('vi-VN');
+    }
+
+    function parsePrice(input) {
+        if (!input || !input.value) {
+            return 0;
+        }
+        const num = Number(String(input.value).replace(/\./g, ''));
+        return Number.isFinite(num) ? num : 0;
+    }
+
+    let paidTouched = false;
+    let lastSplitPaidField = null;
+
+    function currentPayMethod() {
+        const method = document.querySelector('input[name="payMethod"]:checked');
+        return method ? method.value : 'cash';
+    }
+
+    function setAmount(total) {
+        const normalized = total > 0 ? Math.round(total) : 0;
+        document.getElementById('amountField').value = normalized > 0 ? normalized : '';
+        const manualInput = document.getElementById('manualAmountInput');
+        if (manualInput && document.getElementById('manualAmountField').classList.contains('show')) {
+            manualInput.value = normalized > 0 ? formatPriceDisplay(normalized) : '';
+        }
+        if (normalized > 0) {
+            clearAmountError();
+        }
+        paidTouched = false;
+        lastSplitPaidField = null;
+        syncPayment();
+    }
+
+    function handleManualAmountInput(input) {
+        const digits = String(input.value).replace(/[^\d]/g, '');
+        const value = digits ? Number(digits) : 0;
+        input.value = value > 0 ? formatPriceDisplay(value) : '';
+        setAmount(value);
+        if (value > 0) {
+            input.classList.remove('is-invalid');
+            const manualError = document.getElementById('manualAmountError');
+            if (manualError) {
+                manualError.textContent = '';
+                setErrorVisible(manualError, false);
+            }
+        }
+    }
+
+    function handleSinglePaidInput(input) {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (!allowsEditablePaymentAmount(type)) {
+            return;
+        }
+        const digits = String(input.value).replace(/[^\d]/g, '');
+        const value = digits ? Number(digits) : 0;
+        input.value = value > 0 ? formatPriceDisplay(value) : '';
+        paidTouched = true;
+        document.getElementById('amountField').value = value > 0 ? value : '';
+        document.getElementById('totalDisplay').textContent = formatMoney(value);
+        clearPaymentAmountError();
+
+        const method = currentPayMethod();
+        if (method === 'banking') {
+            document.getElementById('paidByCashField').value = 0;
+            document.getElementById('paidByBankingField').value = value;
+        } else {
+            document.getElementById('paidByCashField').value = value;
+            document.getElementById('paidByBankingField').value = 0;
+        }
+
+        if (value > 0) {
+            validateLinkedDebtAmount(value);
+        }
+    }
+
+    function syncPaymentEditableState() {
+        const type = document.getElementById('incomeTypeInput').value;
+        const paidAmount = document.getElementById('paidAmount');
+        const editable = allowsEditablePaymentAmount(type);
+        if (paidAmount) {
+            paidAmount.readOnly = !editable;
+            paidAmount.tabIndex = editable ? 0 : -1;
+        }
+        const debtHint = document.getElementById('partialDebtHint');
+        if (debtHint) {
+            if (type === 'CUSTOMER') {
+                debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền nợ của hóa đơn.';
+                debtHint.style.display = 'block';
+            } else if (type === 'SUPPLIER') {
+                debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền NCC còn nợ.';
+                debtHint.style.display = 'block';
+            } else if (type === 'EMPLOYEE') {
+                debtHint.textContent = 'Phải thu đủ giá trị đền bù một lần; không được thu một phần.';
+                debtHint.style.display = 'block';
+            } else if (type === 'SHIFT_SHORTAGE') {
+                debtHint.textContent = 'Phải thu đủ số tiền thiếu của ca một lần; không được thu một phần.';
+                debtHint.style.display = 'block';
+            } else {
+                debtHint.style.display = 'none';
+            }
+        }
+        if (!editable) {
+            clearPaymentAmountError();
+        }
+    }
+
+    function onPayMethodChange() {
+        const both = currentPayMethod() === 'both';
+        document.getElementById('singlePaidBox').style.display = both ? 'none' : 'block';
+        document.getElementById('splitPaidBox').style.display = both ? 'block' : 'none';
+        paidTouched = false;
+        lastSplitPaidField = null;
+        clearPaymentAmountError();
+        syncPaymentEditableState();
+        enforceFullReferenceAmount();
+        syncPayment();
+    }
+
+    function handlePaidInput(input) {
+        const digits = String(input.value).replace(/[^\d]/g, '');
+        input.value = digits ? Number(digits).toLocaleString('vi-VN') : '';
+        paidTouched = true;
+        if (currentPayMethod() === 'both') {
+            if (input.id === 'cashAmount') {
+                lastSplitPaidField = 'cash';
+            } else if (input.id === 'bankingAmount') {
+                lastSplitPaidField = 'banking';
+            }
+        }
+        syncPayment();
+    }
+
+    function stepMoney(inputId, delta) {
+        const input = document.getElementById(inputId);
+        if (!input || input.readOnly || input.disabled) {
+            return;
+        }
+        const next = Math.max(0, parsePrice(input) + delta);
+        input.value = next ? next.toLocaleString('vi-VN') : '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function balanceSplitPayment(total) {
+        const cashInput = document.getElementById('cashAmount');
+        const bankingInput = document.getElementById('bankingAmount');
+        let cash = parsePrice(cashInput);
+        let banking = parsePrice(bankingInput);
+
+        if (!paidTouched) {
+            cash = total;
+            banking = 0;
+        } else if (lastSplitPaidField === 'banking') {
+            banking = Math.min(Math.max(0, banking), total);
+            cash = total - banking;
+        } else {
+            cash = Math.min(Math.max(0, cash), total);
+            banking = total - cash;
+        }
+
+        cashInput.value = cash > 0 ? formatPriceDisplay(cash) : '';
+        bankingInput.value = banking > 0 ? formatPriceDisplay(banking) : '';
+        return { cash: cash, banking: banking };
+    }
+
+    function syncPayment() {
+        const type = document.getElementById('incomeTypeInput').value;
+        let total = Number(document.getElementById('amountField').value || 0);
+        const cashField = document.getElementById('paidByCashField');
+        const bankingField = document.getElementById('paidByBankingField');
+        const method = currentPayMethod();
+        let paid;
+
+        if (method === 'both') {
+            if (allowsEditablePaymentAmount(type) && paidTouched) {
+                const cash = parsePrice(document.getElementById('cashAmount'));
+                const banking = parsePrice(document.getElementById('bankingAmount'));
+                total = cash + banking;
+                document.getElementById('amountField').value = total > 0 ? total : '';
+                cashField.value = cash;
+                bankingField.value = banking;
+                paid = total;
+                validateLinkedDebtAmount(total);
+            } else {
+                const { cash, banking } = balanceSplitPayment(total);
+                cashField.value = cash;
+                bankingField.value = banking;
+                paid = cash + banking;
+            }
+        } else if (allowsEditablePaymentAmount(type) && paidTouched) {
+            const paidAmountInput = document.getElementById('paidAmount');
+            paid = parsePrice(paidAmountInput);
+            total = paid;
+            document.getElementById('amountField').value = paid > 0 ? paid : '';
+            if (method === 'banking') {
+                cashField.value = 0;
+                bankingField.value = paid;
+            } else {
+                cashField.value = paid;
+                bankingField.value = 0;
+            }
+        } else {
+            const paidAmountInput = document.getElementById('paidAmount');
+            paidAmountInput.value = total > 0 ? formatPriceDisplay(total) : '';
+            paid = total;
+            if (method === 'banking') {
+                cashField.value = 0;
+                bankingField.value = paid;
+            } else {
+                cashField.value = paid;
+                bankingField.value = 0;
+            }
+        }
+
+        document.getElementById('totalDisplay').textContent = formatMoney(total);
+        document.getElementById('overpaidWarning').style.display = paid > total && total > 0 ? 'block' : 'none';
+    }
+
+    function initPaymentFromForm() {
+        const amountField = document.getElementById('amountField');
+        const manualInput = document.getElementById('manualAmountInput');
+        const existingAmount = Number(amountField && amountField.value ? amountField.value : 0);
+        if (manualInput && existingAmount > 0) {
+            manualInput.value = formatPriceDisplay(existingAmount);
+        }
+
+        const cash = Number(document.getElementById('paidByCashField').value || 0);
+        const banking = Number(document.getElementById('paidByBankingField').value || 0);
+        if (cash > 0 && banking > 0) {
+            document.getElementById('payBoth').checked = true;
+            document.getElementById('cashAmount').value = formatPriceDisplay(cash);
+            document.getElementById('bankingAmount').value = formatPriceDisplay(banking);
+            paidTouched = true;
+        } else if (banking > 0) {
+            document.getElementById('payBanking').checked = true;
+        } else {
+            document.getElementById('payCash').checked = true;
+        }
+        onPayMethodChange();
+        if (existingAmount > 0) {
+            syncPayment();
+        }
+    }
+
+    function updateEmployeeFieldCopy(type) {
+        const label = document.getElementById('employeeFieldLabel');
+        const search = document.getElementById('employeeSearchInput');
+        const error = document.getElementById('accountIdError');
+        if (!label || !search || !error) {
+            return;
+        }
+        if (type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE') {
+            label.innerHTML = 'Người chịu trách nhiệm <span class="text-danger">*</span>';
+            search.placeholder = 'Tìm người chịu trách nhiệm theo tên';
+            error.textContent = 'Vui lòng chọn người chịu trách nhiệm.';
+            PARTY_REFERENCE_FIELDS.accountIdInput.message = 'Vui lòng chọn người chịu trách nhiệm.';
+        }
+    }
+
+    function toggleTypeFields(options) {
+        options = options || {};
+        const type = document.getElementById('incomeTypeInput').value;
+        document.getElementById('supplierField').classList.toggle('show', type === 'SUPPLIER');
+        document.getElementById('customerField').classList.toggle('show', type === 'CUSTOMER');
+        document.getElementById('employeeField').classList.toggle('show', type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE');
+        document.getElementById('debtInvoiceField').classList.toggle('show', type === 'CUSTOMER');
+        document.getElementById('supplierReturnField').classList.toggle('show', type === 'SUPPLIER');
+        document.getElementById('stockAdjustmentField').classList.toggle('show', type === 'EMPLOYEE');
+        document.getElementById('shiftReportField').classList.toggle('show', type === 'SHIFT_SHORTAGE');
+        updateEmployeeFieldCopy(type);
+        document.getElementById('manualAmountField').classList.toggle('show', requiresManualAmount(type));
+        syncPaymentEditableState();
+        if (!requiresManualAmount(type)) {
+            clearAmountError();
+        } else {
+            clearAllPartyReferenceErrors();
+        }
+        if (options.resetLinkedAmount && (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE')) {
+            setAmount(0);
+        }
+        touchedPartyFields.clear();
+        clearAllPartyReferenceErrors();
+        hideReferenceDetailSection();
+    }
+
+    let referenceDetailRequestId = 0;
+
+    const REFERENCE_DETAIL_BY_SELECT = {
+        invoiceIdInput: {
+            type: 'invoice',
+            detailUrl: function (id) { return basePath + '/references/invoices/' + id + '/detail'; }
+        },
+        returnIdInput: {
+            type: 'return',
+            detailUrl: function (id) { return basePath + '/references/supplier-returns/' + id + '/detail'; }
+        },
+        stockAdjustmentIdInput: {
+            type: 'stockAdjustment',
+            detailUrl: function (id) { return basePath + '/references/stock-adjustments/' + id + '/detail'; }
+        },
+        shiftReportOfAccountIdInput: {
+            type: 'shiftReport',
+            detailUrl: function (id) { return basePath + '/references/shift-reports/' + id + '/detail'; }
+        }
+    };
+
+    function hideReferenceDetailSection() {
+        const section = document.getElementById('referenceDetailSection');
+        if (section) {
+            section.classList.remove('show');
+        }
+        const loading = document.getElementById('referenceDetailLoading');
+        if (loading) {
+            loading.style.display = 'none';
+        }
+    }
+
+    function showReferenceDetailSection() {
+        const section = document.getElementById('referenceDetailSection');
+        if (section) {
+            section.classList.add('show');
+        }
+    }
+
+    function infoRowHtml(label, valueHtml) {
+        return '<div class="info-row">'
+            + '<div class="info-label">' + escapeHtml(label) + '</div>'
+            + '<div>' + (valueHtml || '—') + '</div>'
+            + '</div>';
+    }
+
+    function statusBadgeHtml(name, cssClass) {
+        return '<span class="status-badge' + (cssClass ? ' ' + escapeHtml(cssClass) : '') + '">'
+            + escapeHtml(name || '—') + '</span>';
+    }
+
+    function renderInvoiceReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin hóa đơn';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-shopping-cart text-success me-1"></i>Hàng hóa bán';
+
+        let infoHtml = infoRowHtml('Số hóa đơn',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.invoiceCode) + '</span>');
+        infoHtml += infoRowHtml('Thời gian lập', escapeHtml(detail.dateDisplay));
+        infoHtml += infoRowHtml('Khách hàng', escapeHtml(detail.customerName));
+        if (detail.customerPhone) {
+            infoHtml += infoRowHtml('Số điện thoại', escapeHtml(detail.customerPhone));
+        }
+        infoHtml += infoRowHtml('Người bán', escapeHtml(detail.employeeName));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.statusName, detail.statusCssClass));
+        infoHtml += infoRowHtml('Tổng thanh toán',
+            '<span class="fw-semibold text-success">' + formatMoney(detail.total) + '</span>');
+        infoHtml += infoRowHtml('Đã trả tiền mặt', formatMoney(detail.paidByCash));
+        infoHtml += infoRowHtml('Đã trả chuyển khoản', formatMoney(detail.paidByBanking));
+        infoHtml += infoRowHtml('Còn nợ',
+            '<span class="fw-semibold text-warning">' + formatMoney(detail.debtAmount) + '</span>');
+        infoHtml += infoRowHtml('Hình thức thanh toán', escapeHtml(detail.paymentDisplay));
+        if (detail.note) {
+            infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Đơn vị</th><th>SL</th><th>Giá bán</th><th class="text-end">Thành tiền</th>'
+            + '</tr>';
+
+        const items = detail.items || [];
+        if (!items.length) {
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td colspan="8" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+            return;
+        }
+
+        let bodyHtml = items.map(function (item) {
+            return '<tr>'
+                + '<td class="fw-semibold text-success">' + escapeHtml(item.productCode || item.productId) + '</td>'
+                + '<td>' + escapeHtml(item.productName) + '</td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
+                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
+                + '<td>' + escapeHtml(item.quantity) + '</td>'
+                + '<td>' + formatMoney(item.unitSellPrice) + '</td>'
+                + '<td class="text-end fw-semibold">' + formatMoney(item.subtotal) + '</td>'
+                + '</tr>';
+        }).join('');
+        bodyHtml += '<tr class="fw-semibold">'
+            + '<td colspan="7">Tổng cộng</td>'
+            + '<td class="text-end text-success">' + formatMoney(detail.total) + '</td>'
+            + '</tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderReturnReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin phiếu trả hàng';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-package text-success me-1"></i>Hàng hóa trả lại nhà cung cấp';
+
+        let infoHtml = infoRowHtml('Mã phiếu',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.returnCode) + '</span>');
+        infoHtml += infoRowHtml('Ngày trả', escapeHtml(detail.returnDateDisplay));
+        infoHtml += infoRowHtml('Phiếu nhập gốc', escapeHtml(detail.purchaseCode));
+        infoHtml += infoRowHtml('Nhà cung cấp', escapeHtml(detail.supplierName));
+        infoHtml += infoRowHtml('Người tạo', escapeHtml(detail.creatorName));
+        infoHtml += infoRowHtml('Lý do', escapeHtml(detail.reason));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.status, detail.statusCssClass));
+        infoHtml += infoRowHtml('Tổng tiền hoàn',
+            '<span class="fw-semibold text-success">' + formatMoney(detail.totalRefund) + '</span>');
+        infoHtml += infoRowHtml('NCC còn nợ',
+            '<span class="fw-semibold text-warning">' + formatMoney(detail.offsetDebtAmount) + '</span>');
+        if (detail.note) {
+            infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Đơn vị</th><th>SL trả</th><th>Đơn giá nhập</th><th class="text-end">Tiền hoàn</th>'
+            + '</tr>';
+
+        const items = detail.items || [];
+        if (!items.length) {
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td colspan="8" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+            return;
+        }
+
+        let bodyHtml = items.map(function (item) {
+            return '<tr>'
+                + '<td class="fw-semibold text-success">' + escapeHtml(item.productId) + '</td>'
+                + '<td>' + escapeHtml(item.productName) + '</td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
+                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
+                + '<td>' + escapeHtml(item.returnQty) + '</td>'
+                + '<td>' + formatMoney(item.unitImportPrice) + '</td>'
+                + '<td class="text-end fw-semibold">' + formatMoney(item.lineRefund) + '</td>'
+                + '</tr>';
+        }).join('');
+        bodyHtml += '<tr class="fw-semibold">'
+            + '<td colspan="7">Tổng cộng</td>'
+            + '<td class="text-end text-success">' + formatMoney(detail.totalRefund) + '</td>'
+            + '</tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderStockAdjustmentReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin phiếu điều chỉnh';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-package text-success me-1"></i>Hàng hóa điều chỉnh';
+
+        let infoHtml = infoRowHtml('Mã phiếu',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.code) + '</span>');
+        infoHtml += infoRowHtml('Ngày lập', escapeHtml(detail.dateDisplay));
+        infoHtml += infoRowHtml('Loại điều chỉnh', escapeHtml(detail.adjustmentTypeDisplay));
+        infoHtml += infoRowHtml('Lý do', escapeHtml(detail.reason));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.statusName, detail.statusCssClass));
+        infoHtml += infoRowHtml('Tổng giá trị ước tính',
+            '<span class="fw-semibold text-success">' + formatMoney(detail.estimatedValue) + '</span>');
+        if (detail.employeeLiable) {
+            infoHtml += infoRowHtml('Giá trị đền bù (giá bán)',
+                '<span class="fw-semibold text-warning">' + formatMoney(detail.totalReimbursementValue) + '</span>');
+        }
+        if (detail.note) {
+            infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        const vatHeader = detail.showOutputVat
+            ? '<th>Thuế GTGT đầu ra</th>' : '';
+        const reimbursementHeader = detail.employeeLiable
+            ? '<th>Ước tính đền bù (giá bán)</th>' : '';
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Đơn vị</th><th>Tồn hiện tại</th><th>Chênh lệch</th><th>Giá trị ước tính</th>'
+            + vatHeader + reimbursementHeader + '<th>Ghi chú</th>'
+            + '</tr>';
+
+        const items = detail.items || [];
+        let colSpan = 9;
+        if (detail.showOutputVat) {
+            colSpan += 1;
+        }
+        if (detail.employeeLiable) {
+            colSpan += 1;
+        }
+        if (!items.length) {
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td colspan="' + colSpan + '" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+            return;
+        }
+
+        let bodyHtml = items.map(function (item) {
+            const sign = item.direction === 'IN' ? '+' : '−';
+            const qtyClass = item.direction === 'IN' ? ' text-success' : ' text-danger';
+            const badgeClass = item.direction === 'IN'
+                ? ' bg-success-subtle text-success' : ' bg-danger-subtle text-danger';
+            let vatCell = '';
+            if (detail.showOutputVat) {
+                if (item.vatAmount != null) {
+                    vatCell = '<td><span class="fw-semibold">' + formatMoney(item.vatAmount) + '</span>'
+                        + (item.vatRate != null
+                            ? ' <span class="badge bg-secondary-subtle text-secondary ms-1">'
+                            + escapeHtml(item.vatRate) + '%</span>' : '')
+                        + '</td>';
+                } else {
+                    vatCell = '<td class="text-secondary">—</td>';
+                }
+            }
+            let reimbursementCell = '';
+            if (detail.employeeLiable) {
+                if (item.reimbursementValue != null) {
+                    reimbursementCell = '<td>'
+                        + '<span class="fw-semibold text-warning">' + formatMoney(item.reimbursementValue) + '</span>';
+                    if (item.reimbursementUnitPrice != null) {
+                        reimbursementCell += '<div class="small text-secondary">'
+                            + formatMoney(item.reimbursementUnitPrice) + '/'
+                            + escapeHtml(item.unitName || 'đơn vị') + '</div>';
+                    }
+                    reimbursementCell += '</td>';
+                } else {
+                    reimbursementCell = '<td class="text-secondary">—</td>';
+                }
+            }
+            return '<tr>'
+                + '<td class="fw-semibold text-success">' + escapeHtml(item.productId) + '</td>'
+                + '<td>' + escapeHtml(item.productName) + '</td>'
+                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
+                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
+                + '<td>' + escapeHtml(item.currentStock) + '</td>'
+                + '<td><span class="fw-semibold' + qtyClass + '">' + sign + escapeHtml(item.quantity) + '</span>'
+                + ' <span class="badge ms-1' + badgeClass + '">' + escapeHtml(item.directionDisplay) + '</span></td>'
+                + '<td class="fw-semibold">' + formatMoney(item.lineCost) + '</td>'
+                + vatCell
+                + reimbursementCell
+                + '<td>' + escapeHtml(item.note || '—') + '</td>'
+                + '</tr>';
+        }).join('');
+
+        bodyHtml += '<tr class="fw-semibold">'
+            + '<td colspan="6">Tổng cộng</td>'
+            + '<td>' + escapeHtml(detail.totalQuantity) + '</td>'
+            + '<td class="text-success">' + formatMoney(detail.estimatedValue) + '</td>';
+        if (detail.showOutputVat) {
+            bodyHtml += '<td class="text-success">' + formatMoney(detail.totalOutputVat) + '</td>';
+        }
+        if (detail.employeeLiable) {
+            bodyHtml += '<td class="text-warning">' + formatMoney(detail.totalReimbursementValue) + '</td>';
+        }
+        bodyHtml += '<td></td></tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderShiftReportReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin báo cáo ca';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-calculator text-success me-1"></i>Đối chiếu tiền mặt';
+
+        let infoHtml = infoRowHtml('Mã ca',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.shiftReportCode) + '</span>');
+        infoHtml += infoRowHtml('Người trực ca', escapeHtml(detail.cashierName));
+        infoHtml += infoRowHtml('Ngày ca', escapeHtml(detail.shiftDateDisplay));
+        infoHtml += infoRowHtml('Ca', escapeHtml(detail.shiftType));
+        infoHtml += infoRowHtml('Bắt đầu', escapeHtml(detail.startTimeDisplay));
+        infoHtml += infoRowHtml('Kết thúc', escapeHtml(detail.endTimeDisplay || '—'));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.status, detail.statusCssClass));
+        if (detail.noteDiscrepancy) {
+            infoHtml += infoRowHtml('Ghi chú chênh lệch', escapeHtml(detail.noteDiscrepancy));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr><th>Hạng mục</th><th class="text-end">Giá trị</th></tr>';
+
+        const shortage = detail.cashDiscrepancy != null && detail.cashDiscrepancy < 0
+            ? Math.abs(detail.cashDiscrepancy) : 0;
+        let bodyHtml = '';
+        bodyHtml += '<tr><td>Tiền mặt đầu ca</td><td class="text-end">' + formatMoney(detail.openingCash) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt thu trong ca</td><td class="text-end">' + formatMoney(detail.totalCashIn) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt chi trong ca</td><td class="text-end">' + formatMoney(detail.totalCashOut) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt cuối ca (dự kiến)</td><td class="text-end">' + formatMoney(detail.expectedClosingCash) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt thực đếm</td><td class="text-end">' + formatMoney(detail.actualClosingCash) + '</td></tr>';
+        bodyHtml += '<tr class="fw-semibold"><td>Chênh lệch tiền mặt</td><td class="text-end text-danger">' + formatMoney(detail.cashDiscrepancy) + '</td></tr>';
+        bodyHtml += '<tr class="fw-semibold"><td>Số tiền thiếu cần thu</td><td class="text-end text-warning">' + formatMoney(shortage) + '</td></tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
+    function renderReferenceDetail(referenceType, detail) {
+        if (referenceType === 'invoice') {
+            renderInvoiceReferenceDetail(detail);
+        } else if (referenceType === 'return') {
+            renderReturnReferenceDetail(detail);
+        } else if (referenceType === 'stockAdjustment') {
+            renderStockAdjustmentReferenceDetail(detail);
+        } else if (referenceType === 'shiftReport') {
+            renderShiftReportReferenceDetail(detail);
+        }
+    }
+
+    async function loadReferenceDetail(referenceType, referenceId) {
+        if (!referenceId) {
+            hideReferenceDetailSection();
+            return;
+        }
+
+        const requestId = ++referenceDetailRequestId;
+        showReferenceDetailSection();
+        document.getElementById('referenceDetailLoading').style.display = 'inline';
+        document.getElementById('referenceInfoBody').innerHTML =
+            '<div class="text-secondary">Đang tải thông tin phiếu…</div>';
+        document.getElementById('referenceItemsHead').innerHTML = '';
+        document.getElementById('referenceItemsBody').innerHTML =
+            '<tr><td class="text-center text-secondary py-4">Đang tải…</td></tr>';
+
+        let url;
+        if (referenceType === 'invoice') {
+            url = basePath + '/references/invoices/' + referenceId + '/detail';
+        } else if (referenceType === 'return') {
+            url = basePath + '/references/supplier-returns/' + referenceId + '/detail';
+        } else if (referenceType === 'stockAdjustment') {
+            url = basePath + '/references/stock-adjustments/' + referenceId + '/detail';
+        } else if (referenceType === 'shiftReport') {
+            url = basePath + '/references/shift-reports/' + referenceId + '/detail';
+        } else {
+            hideReferenceDetailSection();
+            return;
+        }
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('load failed');
+            }
+            const detail = await response.json();
+            if (requestId !== referenceDetailRequestId) {
+                return;
+            }
+            document.getElementById('referenceDetailLoading').style.display = 'none';
+            renderReferenceDetail(referenceType, detail);
+        } catch (error) {
+            if (requestId !== referenceDetailRequestId) {
+                return;
+            }
+            document.getElementById('referenceDetailLoading').style.display = 'none';
+            document.getElementById('referenceInfoBody').innerHTML =
+                '<div class="text-danger">Không tải được chi tiết phiếu. Vui lòng thử chọn lại.</div>';
+            document.getElementById('referenceItemsHead').innerHTML = '';
+            document.getElementById('referenceItemsBody').innerHTML =
+                '<tr><td class="text-center text-secondary py-4">—</td></tr>';
+        }
+    }
+
+    function onReferenceSelectionChanged(selectId) {
+        const config = REFERENCE_DETAIL_BY_SELECT[selectId];
+        const select = document.getElementById(selectId);
+        if (!config || !select || !select.value) {
+            hideReferenceDetailSection();
+            return;
+        }
+        loadReferenceDetail(config.type, select.value);
+    }
+
+    function syncReferenceDetailFromForm() {
+        const type = document.getElementById('incomeTypeInput').value;
+        if (type === 'CUSTOMER') {
+            onReferenceSelectionChanged('invoiceIdInput');
+        } else if (type === 'SUPPLIER') {
+            onReferenceSelectionChanged('returnIdInput');
+        } else if (type === 'EMPLOYEE') {
+            onReferenceSelectionChanged('stockAdjustmentIdInput');
+        } else if (type === 'SHIFT_SHORTAGE') {
+            onReferenceSelectionChanged('shiftReportOfAccountIdInput');
+        } else {
+            hideReferenceDetailSection();
+        }
+    }
+
+    function populateReferenceSelect(selectId, placeholder, items, selectedValue, buildLabel) {
+        const select = document.getElementById(selectId);
+        select.innerHTML = '';
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = placeholder;
+        select.appendChild(empty);
+
+        items.forEach(function (item) {
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = buildLabel(item);
+            if (item.amount != null) {
+                option.dataset.amount = item.amount;
+            }
+            if (String(selectedValue || '') === String(item.id)) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        if (selectedValue && String(select.value) === String(selectedValue)) {
+            onReferenceSelectionChanged(selectId);
+        } else if (!select.value) {
+            hideReferenceDetailSection();
+        }
+    }
+
+    async function loadDebtInvoices(customerId, selectedValue) {
+        if (!customerId) {
+            populateReferenceSelect('invoiceIdInput', '-- Chọn hóa đơn còn nợ --', [], null, function () { return ''; });
+            return;
+        }
+        const response = await fetch(basePath + '/references/debt-invoices?customerId=' + customerId);
+        const items = await response.json();
+        populateReferenceSelect('invoiceIdInput', '-- Chọn hóa đơn còn nợ --', items, selectedValue, function (item) {
+            return item.code + ' — ' + item.dateDisplay + ' — Nợ: ' + formatMoney(item.amount)
+                + (item.detail ? ' — ' + item.detail : '');
+        });
+    }
+
+    async function loadSupplierReturns(supplierId, selectedValue) {
+        if (!supplierId) {
+            populateReferenceSelect('returnIdInput', '-- Chọn phiếu trả hàng NCC --', [], null, function () { return ''; });
+            return;
+        }
+        const response = await fetch(basePath + '/references/supplier-returns?supplierId=' + supplierId);
+        const items = await response.json();
+        populateReferenceSelect('returnIdInput', '-- Chọn phiếu trả hàng NCC --', items, selectedValue, function (item) {
+            let label = item.code + ' — ' + item.dateDisplay;
+            if (item.amount != null) {
+                label += ' — ' + formatMoney(item.amount);
+            }
+            if (item.detail) {
+                label += ' — ' + item.detail;
+            }
+            return label;
+        });
+    }
+
+    async function loadShiftReportsWithShortage(accountId, selectedValue) {
+        if (!accountId) {
+            populateReferenceSelect('shiftReportOfAccountIdInput', '-- Chọn báo cáo ca --', [], null, function () { return ''; });
+            return;
+        }
+        const response = await fetch(basePath + '/references/shift-reports?accountId=' + accountId);
+        const items = await response.json();
+        populateReferenceSelect('shiftReportOfAccountIdInput', '-- Chọn báo cáo ca --', items, selectedValue, function (item) {
+            let label = item.code + ' — ' + item.dateDisplay;
+            if (item.amount != null) {
+                label += ' — Thiếu: ' + formatMoney(item.amount);
+            }
+            if (item.detail) {
+                label += ' — ' + item.detail;
+            }
+            return label;
+        });
+    }
+
+    async function loadStockAdjustments(accountId, selectedValue) {
+        if (!accountId) {
+            populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', [], null, function () { return ''; });
+            return;
+        }
+        const response = await fetch(basePath + '/references/stock-adjustments?accountId=' + accountId);
+        const items = await response.json();
+        populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', items, selectedValue, function (item) {
+            let label = item.code + ' — ' + item.dateDisplay;
+            if (item.amount != null) {
+                label += ' — Đền bù: ' + formatMoney(item.amount);
+            }
+            if (item.detail) {
+                label += ' — ' + item.detail;
+            }
+            return label;
+        });
+    }
+
+    function normalizeSearchText(value) {
+        if (!value) {
+            return '';
+        }
+        return value.toString()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/gi, 'd')
+            .toLowerCase()
+            .trim();
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function customerLabel(item) {
+        return item.phoneNumber ? item.name + ' — ' + item.phoneNumber : item.name;
+    }
+
+    function customerIconClass(item) {
+        return item && item.customerType === 'COMPANY' ? 'ti-building' : 'ti-user';
+    }
+
+    function updateCustomerSearchLeadingIcon(item) {
+        const icon = document.getElementById('customerSearchLeadingIcon');
+        if (!icon) {
+            return;
+        }
+        icon.className = 'ti ' + customerIconClass(item) + ' party-search-leading-icon';
+    }
+
+    function partyLabel(item) {
+        return item.name;
+    }
+
+    function searchPartyItems(items, keyword, buildLabel) {
+        const normalized = normalizeSearchText(keyword);
+        if (!normalized) {
+            return items.slice(0, 20);
+        }
+        return items
+            .filter(function (item) {
+                return normalizeSearchText(buildLabel(item)).includes(normalized);
+            })
+            .slice(0, 20);
+    }
+
+    function resetPartyReferences(fieldId) {
+        hideReferenceDetailSection();
+        if (fieldId === 'customerIdInput') {
+            clearSelectError('invoiceIdInput');
+            populateReferenceSelect('invoiceIdInput', '-- Chọn hóa đơn còn nợ --', [], null, function () { return ''; });
+            updateCustomerSearchLeadingIcon(null);
+            setAmount(0);
+        } else if (fieldId === 'supplierIdInput') {
+            clearSelectError('returnIdInput');
+            populateReferenceSelect('returnIdInput', '-- Chọn phiếu trả hàng NCC --', [], null, function () { return ''; });
+            setAmount(0);
+        } else if (fieldId === 'accountIdInput') {
+            clearSelectError('stockAdjustmentIdInput');
+            clearSelectError('shiftReportOfAccountIdInput');
+            populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', [], null, function () { return ''; });
+            populateReferenceSelect('shiftReportOfAccountIdInput', '-- Chọn báo cáo ca --', [], null, function () { return ''; });
+            setAmount(0);
+        }
+    }
+
+    function wirePartySearch(fieldId, items, buildLabel, onSelected, options) {
+        options = options || {};
+        const config = PARTY_REFERENCE_FIELDS[fieldId];
+        const hidden = getPartyHiddenInput(fieldId);
+        const search = getPartySearchInput(fieldId);
+        const results = config && config.resultsId ? document.getElementById(config.resultsId) : null;
+        const wrap = search ? search.closest('.party-search-wrap') : null;
+        if (!hidden || !search || !results) {
+            return;
+        }
+
+        function renderItemHtml(item) {
+            if (typeof options.renderItem === 'function') {
+                return options.renderItem(item, buildLabel);
+            }
+            return '<div class="party-search-item" data-id="' + item.id + '">'
+                + escapeHtml(buildLabel(item)) + '</div>';
+        }
+
+        function itemLabelFromElement(itemEl) {
+            const labelEl = itemEl.querySelector('[data-label]');
+            if (labelEl) {
+                return labelEl.textContent.trim();
+            }
+            return itemEl.textContent.trim();
+        }
+
+        function hideResults() {
+            results.classList.remove('show');
+        }
+
+        function renderMatches(keyword) {
+            const matches = searchPartyItems(items, keyword, buildLabel);
+            if (!matches.length) {
+                results.innerHTML = '<div class="party-search-item text-secondary">Không tìm thấy kết quả</div>';
+                results.classList.add('show');
+                return;
+            }
+            results.innerHTML = matches.map(function (item) {
+                return renderItemHtml(item);
+            }).join('');
+            results.classList.add('show');
+        }
+
+        function selectItem(id, label, selectedItem) {
+            hidden.value = id;
+            search.value = label;
+            hideResults();
+            clearSelectError(fieldId);
+            if (typeof options.onItemSelected === 'function') {
+                options.onItemSelected(selectedItem);
+            }
+            if (onSelected) {
+                onSelected(id);
+            }
+        }
+
+        search.addEventListener('input', function () {
+            const hadSelection = !!hidden.value;
+            hidden.value = '';
+            if (hadSelection) {
+                resetPartyReferences(fieldId);
+            }
+            renderMatches(search.value);
+        });
+
+        search.addEventListener('focus', function () {
+            renderMatches(search.value);
+            setTimeout(function () {
+                search.select();
+            }, 0);
+        });
+
+        search.addEventListener('blur', function () {
+            touchedPartyFields.add(fieldId);
+            if (!hidden.value && search.value.trim()) {
+                const trimmed = search.value.trim();
+                const exact = items.find(function (item) {
+                    return buildLabel(item) === trimmed;
+                });
+                if (exact) {
+                    hidden.value = exact.id;
+                    clearSelectError(fieldId);
+                    if (typeof options.onItemSelected === 'function') {
+                        options.onItemSelected(exact);
+                    }
+                }
+            }
+            syncSelectError(fieldId);
+        });
+
+        results.addEventListener('mousedown', function (event) {
+            event.preventDefault();
+        });
+
+        results.addEventListener('click', function (event) {
+            const item = event.target.closest('.party-search-item[data-id]');
+            if (!item) {
+                return;
+            }
+            const selected = items.find(function (entry) {
+                return String(entry.id) === String(item.dataset.id);
+            }) || null;
+            selectItem(item.dataset.id, itemLabelFromElement(item), selected);
+        });
+
+        document.addEventListener('click', function (event) {
+            if (wrap && !wrap.contains(event.target)) {
+                hideResults();
+            }
+        });
+    }
+
+    function initPartySearchDisplays() {
+        wirePartySearch('customerIdInput', customers, customerLabel, function (customerId) {
+            clearSelectError('invoiceIdInput');
+            hideReferenceDetailSection();
+            loadDebtInvoices(customerId, null);
+        }, {
+            renderItem: function (item, buildLabel) {
+                const icon = customerIconClass(item);
+                return '<div class="party-search-item" data-id="' + item.id + '">'
+                    + '<i class="ti ' + icon + '"></i>'
+                    + '<span data-label="1">' + escapeHtml(buildLabel(item)) + '</span>'
+                    + '</div>';
+            },
+            onItemSelected: function (item) {
+                updateCustomerSearchLeadingIcon(item);
+            }
+        });
+        wirePartySearch('supplierIdInput', suppliers, partyLabel, function (supplierId) {
+            clearSelectError('returnIdInput');
+            hideReferenceDetailSection();
+            loadSupplierReturns(supplierId, null);
+        });
+        wirePartySearch('accountIdInput', employees, partyLabel, function (accountId) {
+            const type = document.getElementById('incomeTypeInput').value;
+            clearSelectError('stockAdjustmentIdInput');
+            clearSelectError('shiftReportOfAccountIdInput');
+            hideReferenceDetailSection();
+            setAmount(0);
+            if (type === 'SHIFT_SHORTAGE') {
+                loadShiftReportsWithShortage(accountId, null);
+            } else if (type === 'EMPLOYEE') {
+                loadStockAdjustments(accountId, null);
+            }
+        });
+
+        [
+            { fieldId: 'customerIdInput', items: customers, buildLabel: customerLabel, searchId: 'customerSearchInput' },
+            { fieldId: 'supplierIdInput', items: suppliers, buildLabel: partyLabel, searchId: 'supplierSearchInput' },
+            { fieldId: 'accountIdInput', items: employees, buildLabel: partyLabel, searchId: 'employeeSearchInput' }
+        ].forEach(function (entry) {
+            const hidden = getPartyHiddenInput(entry.fieldId);
+            const search = document.getElementById(entry.searchId);
+            if (!hidden || !search || !hidden.value) {
+                return;
+            }
+            const selected = entry.items.find(function (item) {
+                return String(item.id) === String(hidden.value);
+            });
+            if (selected) {
+                search.value = entry.buildLabel(selected);
+                if (entry.fieldId === 'customerIdInput') {
+                    updateCustomerSearchLeadingIcon(selected);
+                }
+            }
+        });
+    }
+
+    function bindPartyReferenceField(selectId, onChange) {
+        const select = document.getElementById(selectId);
+        if (!select) {
+            return;
+        }
+        select.addEventListener('change', function () {
+            touchedPartyFields.add(selectId);
+            syncSelectError(selectId);
+            onReferenceSelectionChanged(selectId);
+            if (onChange) {
+                onChange.call(this);
+            }
+        });
+        select.addEventListener('blur', function () {
+            touchedPartyFields.add(selectId);
+            syncSelectError(selectId);
+        });
+    }
+
+    function applySuggestedAmount(selectElement) {
+        const option = selectElement.options[selectElement.selectedIndex];
+        const amount = option && option.dataset.amount ? Number(option.dataset.amount) : null;
+        if (amount && amount > 0) {
+            setAmount(amount);
+        } else if (!selectElement.value) {
+            setAmount(0);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('incomeTypeInput').addEventListener('change', function () {
+            toggleTypeFields({ resetLinkedAmount: true });
+        });
+
+        bindPartyReferenceField('invoiceIdInput', function () {
+            applySuggestedAmount(this);
+        });
+        bindPartyReferenceField('returnIdInput', function () {
+            applySuggestedAmount(this);
+        });
+        bindPartyReferenceField('stockAdjustmentIdInput', function () {
+            applySuggestedAmount(this);
+        });
+        bindPartyReferenceField('shiftReportOfAccountIdInput', function () {
+            applySuggestedAmount(this);
+        });
+
+        initPartySearchDisplays();
+
+        const reasonInput = document.getElementById('reasonInput');
+        if (reasonInput) {
+            reasonInput.addEventListener('input', function () {
+                if ((this.value || '').trim()) {
+                    clearReasonError();
+                }
+            });
+            reasonInput.addEventListener('blur', function () {
+                if (!(this.value || '').trim()) {
+                    showReasonError(REASON_REQUIRED_MSG);
+                }
+            });
+        }
+
+        const manualAmountInput = document.getElementById('manualAmountInput');
+        if (manualAmountInput) {
+            manualAmountInput.addEventListener('blur', function () {
+                const type = document.getElementById('incomeTypeInput').value;
+                if (!requiresManualAmount(type) || parsePrice(this) > 0) {
+                    return;
+                }
+                if (type === 'EMPLOYEE' && !validatePartyReferenceFields(type)) {
+                    return;
+                }
+                showAmountError(AMOUNT_REQUIRED_MSG);
+            });
+        }
+
+        const paidAmountInput = document.getElementById('paidAmount');
+        if (paidAmountInput) {
+            paidAmountInput.addEventListener('input', function () {
+                handleSinglePaidInput(this);
+            });
+            paidAmountInput.addEventListener('blur', function () {
+                const type = document.getElementById('incomeTypeInput').value;
+                if (!allowsEditablePaymentAmount(type)) {
+                    return;
+                }
+                const value = parsePrice(this);
+                if (value <= 0) {
+                    showPaymentAmountError(AMOUNT_REQUIRED_MSG);
+                    return;
+                }
+                validateLinkedDebtAmount(value);
+            });
+        }
+
+        ['cashAmount', 'bankingAmount'].forEach(function (inputId) {
+            const splitInput = document.getElementById(inputId);
+            if (!splitInput) {
+                return;
+            }
+            splitInput.addEventListener('blur', function () {
+                runSplitPaymentBlurValidation(this);
+            });
+        });
+
+        toggleTypeFields();
+        initPaymentFromForm();
+        applyServerFieldErrors();
+        syncReferenceDetailFromForm();
+
+        const invoiceSelect = document.getElementById('invoiceIdInput');
+        if (invoiceSelect && invoiceSelect.value) {
+            applySuggestedAmount(invoiceSelect);
+        }
+        const returnSelect = document.getElementById('returnIdInput');
+        if (returnSelect && returnSelect.value) {
+            applySuggestedAmount(returnSelect);
+        }
+        const stockAdjustmentSelect = document.getElementById('stockAdjustmentIdInput');
+        if (stockAdjustmentSelect && stockAdjustmentSelect.value) {
+            applySuggestedAmount(stockAdjustmentSelect);
+        }
+        const shiftReportSelect = document.getElementById('shiftReportOfAccountIdInput');
+        if (shiftReportSelect && shiftReportSelect.value) {
+            applySuggestedAmount(shiftReportSelect);
+        }
+
+        document.getElementById('incomeForm').addEventListener('submit', function (event) {
+            syncPayment();
+
+            const type = document.getElementById('incomeTypeInput').value;
+            clearAmountError();
+            clearReasonError();
+
+            if (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE') {
+                if (!validatePartyReferenceFields(type)) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+
+            const amount = Number(document.getElementById('amountField').value || 0);
+            if (amount <= 0) {
+                event.preventDefault();
+                showAmountError(AMOUNT_REQUIRED_MSG);
+                return;
+            }
+
+            if (!validateLinkedDebtAmount(amount)) {
+                event.preventDefault();
+                return;
+            }
+
+            if (!validateFullReferencePayment(amount)) {
+                event.preventDefault();
+                return;
+            }
+
+            if (!validateReasonField()) {
+                event.preventDefault();
+                return;
+            }
+
+            const cash = Number(document.getElementById('paidByCashField').value || 0);
+            const banking = Number(document.getElementById('paidByBankingField').value || 0);
+            if (cash + banking !== amount) {
+                event.preventDefault();
+                const message = 'Tiền mặt + chuyển khoản phải bằng tổng số tiền thu.';
+                if (window.pmToast) {
+                    pmToast(message, 'error');
+                } else {
+                    alert(message);
+                }
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -47,18 +47,6 @@ public class Return {
     @Column(name = "returnType", nullable = false, length = 50)
     private String returnType;
 
-    @ColumnDefault("0.00")
-    @Column(name = "refundCash", precision = 15, scale = 2)
-    private BigDecimal refundCash;
-
-    @ColumnDefault("0.00")
-    @Column(name = "refundBanking", precision = 15, scale = 2)
-    private BigDecimal refundBanking;
-
-    @ColumnDefault("0.00")
-    @Column(name = "refundCredit", precision = 15, scale = 2)
-    private BigDecimal refundCredit;
-
     @NotNull
     @Column(name = "totalRefund", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalRefund;
@@ -66,14 +54,6 @@ public class Return {
     @ColumnDefault("0.00")
     @Column(name = "offsetDebtAmount", precision = 15, scale = 2)
     private BigDecimal offsetDebtAmount;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "expenseID")
-    private Expense expenseID;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "incomeID")
-    private Income incomeID;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shiftReportID")

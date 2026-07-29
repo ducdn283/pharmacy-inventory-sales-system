@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Danh sách phê duyệt | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .approval-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .stock-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .stat-card {
+            min-height: 120px;
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: #d1fae5;
+            color: #059669;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .btn-stock-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+            border-radius: 12px;
+        }
+
+        .btn-stock-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #ffffff;
+        }
+
+        .btn-stock-primary:disabled {
+            background: #a7f3d0;
+            border-color: #a7f3d0;
+        }
+
+        .table thead th {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f9fafb;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        /* Cột thẳng hàng theo tỉ lệ cố định — tránh "Mã phiếu" (vd CA-00005) bị đẩy hẹp và xuống dòng
+           khi "Tóm tắt" (chuỗi dài) chiếm hết chỗ trống dưới auto-layout mặc định của bảng. */
+        .approval-table {
+            table-layout: fixed;
+        }
+
+        .approval-table td {
+            overflow: hidden;
+        }
+
+        .approval-table td.col-nowrap {
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .approval-table td.col-summary {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .type-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-approved {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .status-rejected {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .action-form {
+            display: inline-block;
+        }
+
+        .row-resolved {
+            opacity: .75;
+        }
+
+        /* Filter row inside the table card — same look as invoice-list's filter bar. */
+        .filter-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            flex: 0 1 200px;
+            height: 40px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0 14px;
+            font-size: 13px;
+            color: #374151;
+            outline: none;
+            transition: border-color .15s;
+            background: #ffffff;
+        }
+
+        .filter-select:focus {
+            border-color: #6ee7b7;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .1);
+        }
+
+        .btn-search {
+            height: 40px;
+            padding: 0 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-search.primary {
+            background: #059669;
+            color: #ffffff;
+        }
+
+        .btn-search.primary:hover {
+            background: #047857;
+        }
+
+        .btn-search.reset {
+            background: transparent;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+            text-decoration: none;
+        }
+
+        .btn-search.reset:hover {
+            background: #f9fafb;
+            color: #111827;
+        }
+
+        @media (max-width: 991.98px) {
+            .approval-content {
+                padding-top: 84px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+<div th:replace="~{fragments/confirm :: confirm}"></div>
+
+<main id="content" class="content approval-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">Danh sách phê duyệt</h1>
+                <p class="text-secondary mb-0">
+                    Phiếu đang chờ duyệt và các phiếu vừa xử lý gần đây (trả hàng, điều chỉnh kho, kiểm kê, báo cáo ca)
+                </p>
+            </div>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6 col-xl">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Tổng chờ duyệt</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.totalCount}">0</div>
+                            <div class="text-warning small">Cần Owner xử lý</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-clipboard-list"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Trả hàng</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.returnCount}">0</div>
+                            <div class="text-secondary small">Phiếu trả chờ duyệt</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-rotate-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <!-- Chỉ còn Kiểm kê: phiếu điều chỉnh kho bỏ bước duyệt từ 27/07/2026. -->
+                            <div class="text-secondary small mb-2">Kiểm kê</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.stockCountCount}">0</div>
+                            <div class="text-secondary small">Phiếu kho chờ duyệt</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-adjustments"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Báo cáo ca</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.shiftReportCount}">0</div>
+                            <div class="text-secondary small">Ca chờ duyệt</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-clock-dollar"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Phiếu chi</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.expenseCount}">0</div>
+                            <div class="text-secondary small">Chi chờ duyệt</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-cash-banknote"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Standalone bulk form (checkboxes + submit button reference it via the form attribute) —
+             kept as a sibling of the filter form so no form is ever nested inside another. -->
+        <form id="bulkApproveForm" th:action="@{/owner/approvals/bulk-approve}" method="post">
+            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        </form>
+
+        <div class="stock-card">
+            <div class="p-4 border-bottom">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+                    <div>
+                        <h2 class="fs-6 mb-0">Danh sách phiếu</h2>
+                        <div class="text-secondary small mt-1">
+                            Hiển thị <span th:text="${items.size()}">0</span> phiếu — gồm đang chờ duyệt và mới xử lý gần đây
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                            id="btnBulkApprove"
+                            form="bulkApproveForm"
+                            class="btn btn-stock-primary"
+                            disabled
+                            data-confirm="Duyệt tất cả phiếu đã chọn?">
+                        <i class="ti ti-checks me-1"></i>
+                        Duyệt phiếu đã chọn
+                    </button>
+                </div>
+
+                <form method="get" th:action="@{/owner/approvals}">
+                    <div class="filter-row">
+                        <select class="filter-select" name="type">
+                            <option value="">Tất cả loại phiếu</option>
+                            <option th:each="typeItem : ${types}"
+                                    th:value="${typeItem}"
+                                    th:text="${typeItem}"
+                                    th:selected="${typeItem == filterType}">
+                            </option>
+                        </select>
+                        <button type="submit" class="btn-search primary">
+                            <i class="ti ti-search"></i>Tìm kiếm
+                        </button>
+                        <a th:href="@{/owner/approvals}" class="btn-search reset">
+                            <i class="ti ti-refresh"></i>Đặt lại
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 approval-table">
+                    <colgroup>
+                        <col style="width:44px;">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                        <col style="width:calc((100% - 44px) / 7);">
+                    </colgroup>
+                    <thead>
+                    <tr>
+                        <th style="width:44px;text-align:center;">
+                            <input type="checkbox" id="selectAllApprovals" title="Chọn tất cả phiếu đang chờ duyệt">
+                        </th>
+                        <th>Loại</th>
+                        <th>Mã phiếu</th>
+                        <th>Người tạo</th>
+                        <th>Ngày tạo</th>
+                        <th>Tóm tắt</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    <tr th:each="item : ${items}" th:classappend="${item.pending} ? '' : 'row-resolved'">
+                        <td style="text-align:center;">
+                            <input type="checkbox"
+                                   class="approval-row-check"
+                                   name="items"
+                                   th:value="${item.selector}"
+                                   th:if="${item.pending}"
+                                   form="bulkApproveForm">
+                        </td>
+
+                        <td class="col-nowrap">
+                            <span class="type-badge" th:text="${item.type}">Trả hàng</span>
+                        </td>
+
+                        <td class="col-nowrap">
+                            <span class="fw-semibold text-success" th:text="${item.code}">TH-000001</span>
+                        </td>
+
+                        <td class="col-nowrap" th:text="${item.requesterName}">Nguyễn Văn A</td>
+
+                        <td class="col-nowrap" th:text="${item.requestedAtDisplay}">01/06/2026 10:00</td>
+
+                        <td class="col-summary" th:text="${item.summary}">Hoàn 100.000đ</td>
+
+                        <td class="col-nowrap">
+                            <span class="status-badge"
+                                  th:classappend="${' ' + item.statusCssClass}"
+                                  th:text="${item.status}">Chờ duyệt</span>
+                        </td>
+
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary me-1"
+                               th:href="${item.detailUrl}"
+                               title="Xem chi tiết">
+                                <i class="ti ti-eye"></i>
+                            </a>
+
+                            <th:block th:if="${item.pending}">
+                                <form class="action-form"
+                                      th:action="${item.approveUrl}"
+                                      method="post">
+                                    <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                    <input type="hidden" name="redirectTo" value="/owner/approvals">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-stock-primary me-1"
+                                            title="Duyệt"
+                                            data-confirm="Duyệt phiếu này?">
+                                        <i class="ti ti-check"></i>
+                                    </button>
+                                </form>
+
+                                <form class="action-form"
+                                      th:action="${item.rejectUrl}"
+                                      method="post">
+                                    <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                    <input type="hidden" name="redirectTo" value="/owner/approvals">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Từ chối"
+                                            data-confirm="Từ chối phiếu này?">
+                                        <i class="ti ti-x"></i>
+                                    </button>
+                                </form>
+                            </th:block>
+                        </td>
+                    </tr>
+
+                    <tr th:if="${#lists.isEmpty(items)}">
+                        <td colspan="8" class="text-center text-secondary py-4">
+                            Không có phiếu nào.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+    (function () {
+        const selectAll = document.getElementById('selectAllApprovals');
+        const bulkBtn = document.getElementById('btnBulkApprove');
+        if (!selectAll || !bulkBtn) return;
+
+        function checks() {
+            return Array.from(document.querySelectorAll('.approval-row-check'));
+        }
+
+        function selectedChecks() {
+            return checks().filter(function (c) { return c.checked; });
+        }
+
+        function refreshBulkState() {
+            const all = checks();
+            const selected = selectedChecks();
+            bulkBtn.disabled = selected.length === 0;
+
+            if (!all.length) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+                return;
+            }
+            selectAll.checked = selected.length === all.length;
+            selectAll.indeterminate = selected.length > 0 && selected.length < all.length;
+        }
+
+        selectAll.addEventListener('change', function () {
+            checks().forEach(function (c) { c.checked = selectAll.checked; });
+            refreshBulkState();
+        });
+
+        checks().forEach(function (c) {
+            c.addEventListener('change', refreshBulkState);
+        });
+
+        refreshBulkState();
+    })();
+</script>
+
+</body>
+</html>

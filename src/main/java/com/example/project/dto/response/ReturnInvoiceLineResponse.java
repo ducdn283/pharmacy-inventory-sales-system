@@ -33,9 +33,15 @@ public class ReturnInvoiceLineResponse {
     private BigDecimal unitSellPrice;
 
     /**
+     * Thuế suất GTGT của DÒNG HÓA ĐƠN GỐC (snapshot lúc bán, F-12) — phiếu trả phải đảo đúng thuế suất
+     * đã kê khi bán, không lấy thuế suất hiện hành. Màn tạo dùng để tạm tính net/thuế của tiền hoàn.
+     */
+    private BigDecimal vatRate;
+
+    /**
      * Whether this line's returned goods will be put back into stock — hard-coded by item type
      * (only the manufacturer's default packaging unit, {@code productunit.isDefault}). Shown read-only
-     * on the create screen; there is no manual checkbox (BA 2026-07-12).
+     * on the create screen; there is no manual checkbox .
      */
     private boolean restockable;
 }

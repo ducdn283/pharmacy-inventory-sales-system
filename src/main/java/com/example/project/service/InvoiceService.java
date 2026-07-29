@@ -86,6 +86,10 @@ public class InvoiceService {
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
     private final ReturnRepository returnRepository;
+    // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
+    // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
+    // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
+    private final ShiftreportService shiftreportService;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           InvoicedetailRepository invoicedetailRepository,
@@ -95,7 +99,8 @@ public class InvoiceService {
                           CustomerRepository customerRepository,
                           AccountRepository accountRepository,
                           FinancialsettingRepository financialsettingRepository,
-                          ReturnRepository returnRepository) {
+                          ReturnRepository returnRepository,
+                          ShiftreportService shiftreportService) {
         this.invoiceRepository = invoiceRepository;
         this.invoicedetailRepository = invoicedetailRepository;
         this.productRepository = productRepository;
@@ -105,6 +110,7 @@ public class InvoiceService {
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.returnRepository = returnRepository;
+        this.shiftreportService = shiftreportService;
     }
 
     @Transactional(readOnly = true)
@@ -163,7 +169,7 @@ public class InvoiceService {
             }
         }
         return byId.entrySet().stream()
-                .map(entry -> new CustomerOptionResponse(entry.getKey(), entry.getValue(), null))
+                .map(entry -> new CustomerOptionResponse(entry.getKey(), entry.getValue(), null, null))
                 .sorted(Comparator.comparing(CustomerOptionResponse::getName,
                         Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
@@ -312,12 +318,12 @@ public class InvoiceService {
         return customerRepository.findAll().stream()
                 .sorted(Comparator.comparing(Customer::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .map(customer -> new CustomerOptionResponse(
-                        customer.getId(), customer.getName(), customer.getPhoneNumber()))
+                        customer.getId(), customer.getName(), customer.getPhoneNumber(), customer.getCustomerType()))
                 .toList();
     }
 
     @Transactional
-    public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId) {
+    public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId, boolean allowDebt) {
         if (request.getDetails() == null || request.getDetails().isEmpty()) {
             throw new IllegalArgumentException("Hóa đơn phải có ít nhất một sản phẩm");
         }
@@ -388,6 +394,9 @@ public class InvoiceService {
         }
 
         BigDecimal debt = total.subtract(paid);
+        if (debt.compareTo(BigDecimal.ZERO) > 0 && !allowDebt) {
+            throw new IllegalArgumentException("Phải thu đủ tiền, không được ghi nợ");
+        }
         if (debt.compareTo(BigDecimal.ZERO) > 0 && customer == null) {
             throw new IllegalArgumentException("Khách lẻ phải thanh toán đủ; chọn khách hàng để ghi nợ");
         }
@@ -400,6 +409,11 @@ public class InvoiceService {
         savedInvoice.setDebtAmount(debt);
         savedInvoice.setTotalVATOutput(totalVATOutput);
         savedInvoice.setStatus(debt.compareTo(BigDecimal.ZERO) > 0 ? STATUS_DEBT : STATUS_COMPLETED);
+
+        // A sale is a real transaction the instant it's recorded, regardless of payment mix —
+        // open/reuse the seller's shift and attach it (no amount-based condition).
+        savedInvoice.setShiftReportID(shiftreportService.ensureOpenShiftFor(currentAccountId));
+
         invoiceRepository.save(savedInvoice);
 
         return savedInvoice.getId();
@@ -767,6 +781,7 @@ public class InvoiceService {
 
         Customer customer = invoice.getCustomerID();
         Invoice original = invoice.getOriginalInvoiceID();
+        Invoice root = invoice.getRootInvoiceID();
 
         Map<Integer, String> returnSlips = returnRepository
                 .findByInvoiceID_IdOrderByReturnDateDesc(invoiceId)
@@ -777,17 +792,25 @@ public class InvoiceService {
                         (a, b) -> a,
                         LinkedHashMap::new));
 
+        String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
+        String taxCode = isStatus(statusName, STATUS_SIGNED)
+                ? financialsettingRepository.findFirstByOrderByIdAsc()
+                        .map(setting -> trimToNull(setting.getTaxCode()))
+                        .orElse(null)
+                : null;
+
         return new InvoiceDetailPageResponse(
                 invoice.getId(),
                 invoiceCode(invoice),
                 invoice.getInvoicePattern(),
+                taxCode,
                 invoice.getDate(),
                 formatDate(invoice.getDate()),
                 customer != null ? customer.getName() : "Khách lẻ",
                 customer != null ? customer.getPhoneNumber() : null,
                 invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
                 invoiceTypeDisplay(invoice.getInvoiceType()),
-                invoice.getStatus() != null ? invoice.getStatus() : "Không rõ",
+                statusName,
                 statusCssClass(invoice.getStatus()),
                 Boolean.TRUE.equals(invoice.getPrescriptionRequired()),
                 invoice.getPrescriptionCode(),
@@ -796,6 +819,8 @@ public class InvoiceService {
                 returnSlips,
                 original != null ? original.getId() : null,
                 original != null ? invoiceCode(original) : null,
+                root != null ? root.getId() : null,
+                root != null ? invoiceCode(root) : null,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
                 totalVATOutput,

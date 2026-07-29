@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chi tiết báo cáo ca | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .shift-report-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .shift-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 180px minmax(0, 1fr);
+            padding: 11px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #6b7280;
+        }
+
+        .wrap-anywhere {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-draft {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-rejected {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .status-approved {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .status-default {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-shift-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+            border-radius: 12px;
+        }
+
+        .btn-shift-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #ffffff;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .discrepancy-banner {
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .discrepancy-ok {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .discrepancy-over {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .discrepancy-short {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        @media (max-width: 991.98px) {
+            .shift-report-content {
+                padding-top: 84px !important;
+            }
+
+            .info-row {
+                grid-template-columns: 1fr;
+                gap: 4px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+<div th:replace="~{fragments/confirm :: confirm}"></div>
+
+<main id="content" class="content shift-report-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">
+                    Chi tiết báo cáo ca -
+                    <span th:text="${detail.shiftReportCode}">CA-000001</span>
+                </h1>
+                <p class="text-secondary mb-0">Xem thông tin, tiền quỹ và trạng thái của ca làm việc</p>
+            </div>
+
+            <a th:href="${basePath}" class="btn btn-outline-secondary">
+                <i class="ti ti-arrow-left me-1"></i>
+                Quay lại danh sách
+            </a>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <!-- Ca dở dang từ ngày trước — PendingShiftInterceptor đang chặn mọi thao tác khác cho tới
+             khi ca này được chốt. Giải thích rõ để người dùng không tưởng là lỗi điều hướng. -->
+        <div th:if="${mustCloseNow}" class="alert alert-warning d-flex gap-3 align-items-start mb-4">
+            <i class="ti ti-alert-triangle fs-4 mt-1"></i>
+            <div>
+                <div class="fw-semibold mb-1">Bắt buộc chốt ca này trước khi làm việc tiếp</div>
+                <div>
+                    Ca ngày <strong th:text="${detail.shiftDateDisplay}">01/07/2026</strong> chưa được chốt
+                    trên hệ thống. Mọi thao tác khác đang tạm bị khoá.
+                    Hãy nhập <strong>đúng số tiền bạn đã kiểm đếm khi kết thúc ca hôm đó</strong> rồi nộp báo cáo
+                    ở phần <strong>Chốt ca</strong> bên dưới. Nếu ca bị bỏ dở do sự cố (ví dụ: mất điện, máy hỏng,...),
+                    ghi rõ vào ô <strong>Ghi chú chênh lệch</strong> để chủ nhà thuốc nắm khi duyệt.
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-12 col-xl-8">
+
+                <div class="shift-card mb-4">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-info-circle text-success me-1"></i>
+                            Thông tin ca làm việc
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="info-row">
+                            <div class="info-label">Mã ca</div>
+                            <div class="fw-semibold text-success" th:text="${detail.shiftReportCode}">CA-000001</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Người trực</div>
+                            <div th:text="${detail.cashierName}">Nguyễn Văn A</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Ngày / Ca</div>
+                            <div>
+                                <span th:text="${detail.shiftDateDisplay}">01/06/2026</span>
+                                — <span th:text="${detail.shiftType}">Sáng</span>
+                            </div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Giờ bắt đầu</div>
+                            <div th:text="${detail.startTimeDisplay}">08:00</div>
+                        </div>
+
+                        <div class="info-row" th:if="${detail.endTimeDisplay != null and !detail.endTimeDisplay.isEmpty()}">
+                            <div class="info-label">Giờ kết thúc</div>
+                            <div th:text="${detail.endTimeDisplay}">12:00</div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Trạng thái</div>
+                            <div>
+                                <span class="status-badge"
+                                      th:classappend="${' ' + detail.statusCssClass}"
+                                      th:text="${detail.status}">
+                                    Nháp
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="info-row" th:if="${detail.approvedAtDisplay != null and !detail.approvedAtDisplay.isEmpty()}">
+                            <div class="info-label">Thời điểm duyệt</div>
+                            <div th:text="${detail.approvedAtDisplay}">01/06/2026 14:00</div>
+                        </div>
+
+                        <div class="info-row" th:if="${detail.note != null and !detail.note.isEmpty()}">
+                            <div class="info-label">Ghi chú</div>
+                            <div th:text="${detail.note}">Ghi chú</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shift-card">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-cash text-success me-1"></i>
+                            Doanh thu &amp; công nợ trong ca
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="summary-row">
+                            <span class="text-secondary">Số hóa đơn bán hàng</span>
+                            <strong th:text="${detail.totalInvoices}">0</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Doanh thu bán hàng</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Số phiếu trả hàng</span>
+                            <strong th:text="${detail.totalReturns}">0</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Tiền hoàn trả hàng</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalReturnAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Thu nợ khách hàng (phiếu thu)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalDebtCollected, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Tiền mặt thu vào</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalCashIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Chuyển khoản thu vào</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalBankingIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">Tiền mặt chi ra (phiếu chi)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalCashOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <!-- Chỉ nằm ở panel này, KHÔNG vào "Đối chiếu tiền mặt": tiền chuyển khoản
+                             không đi qua két nên không ảnh hưởng số đếm cuối ca. -->
+                        <div class="summary-row">
+                            <span class="text-secondary">Chuyển khoản chi ra (phiếu chi)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalBankingOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+
+                        <!-- Thu CK − chi CK. Để người chốt ca tự soát với thông báo ngân hàng; KHÔNG
+                             phải đối chiếu (không có số thực đếm) nên không có banner chênh lệch. -->
+                        <div class="summary-row">
+                            <span class="text-secondary fw-semibold">Chuyển khoản ròng trong ca</span>
+                            <strong th:classappend="${detail.totalBankingNet != null and detail.totalBankingNet.signum() &lt; 0 ? ' text-danger' : ' text-success'}"
+                                    th:text="${(detail.totalBankingNet != null and detail.totalBankingNet.signum() > 0 ? '+' : '') + #numbers.formatDecimal(detail.totalBankingNet, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="col-12 col-xl-4">
+                <div class="shift-card p-4 mb-4"
+                     id="cashReconCard"
+                     th:data-cash-in="${detail.totalCashIn}"
+                     th:data-cash-out="${detail.totalCashOut}">
+                    <div class="section-title mb-4">Đối chiếu tiền mặt</div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Tiền đầu ca</span>
+                        <strong id="reconOpening"
+                                th:text="${#numbers.formatDecimal(detail.openingCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Tiền mặt thu trong ca</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.totalCashIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Tiền chi trong ca</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.totalCashOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Tiền cuối ca dự kiến</span>
+                        <strong id="reconExpected"
+                                th:text="${detail.expectedClosingCash != null ? #numbers.formatDecimal(detail.expectedClosingCash, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">0đ</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Tiền cuối ca thực tế</span>
+                        <strong id="reconActual"
+                                th:text="${detail.actualClosingCash != null ? #numbers.formatDecimal(detail.actualClosingCash, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">—</strong>
+                    </div>
+
+                    <div class="discrepancy-banner"
+                         id="reconBanner"
+                         th:style="${detail.cashDiscrepancy == null ? 'display:none' : ''}"
+                         th:classappend="${detail.cashDiscrepancy == null ? '' : (detail.cashDiscrepancy.signum() == 0 ? 'discrepancy-ok' : (detail.cashDiscrepancy.signum() > 0 ? 'discrepancy-over' : 'discrepancy-short'))}">
+                        <div class="fw-semibold mb-1">
+                            Chênh lệch tiền mặt:
+                            <span id="reconDiscrepancy"
+                                  th:text="${detail.cashDiscrepancy != null ? (detail.cashDiscrepancy.signum() > 0 ? '+' : '') + #numbers.formatDecimal(detail.cashDiscrepancy, 0, 'POINT', 0, 'COMMA') + 'đ' : ''}">0đ</span>
+                        </div>
+                        <div id="reconVerdict"
+                             th:text="${detail.cashDiscrepancy == null ? '' : (detail.cashDiscrepancy.signum() == 0 ? 'Đủ quỹ.' : (detail.cashDiscrepancy.signum() > 0 ? 'Dư quỹ so với dự kiến.' : 'Thiếu quỹ so với dự kiến.'))}"></div>
+                    </div>
+
+                    <div th:if="${detail.noteDiscrepancy != null and !detail.noteDiscrepancy.isEmpty()}">
+                        <div class="text-secondary small mb-1">Ghi chú chênh lệch</div>
+                        <div class="wrap-anywhere" th:text="${detail.noteDiscrepancy}">Ghi chú</div>
+                    </div>
+                </div>
+
+                <div class="shift-card p-4">
+                    <form th:if="${detail.canClose and isOwnShift}"
+                          id="closeShiftForm"
+                          th:action="${basePath + '/' + detail.id + '/close'}"
+                          method="post"
+                          class="mb-3">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                        <div class="mb-3">
+                            <label class="form-label">Tiền mặt đầu ca (lấy từ két)</label>
+                            <input type="text" inputmode="numeric" data-money
+                                   class="form-control"
+                                   id="inputOpeningCash"
+                                   name="openingCash"
+                                   th:value="${detail.openingCash}">
+                            <div class="form-text">Số tiền thực tế đã nhận đầu ca — có thể sửa lại nếu khác mức quỹ được cấp.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Tiền mặt cuối ca (thực đếm)</label>
+                            <input type="text" inputmode="numeric" data-money
+                                   class="form-control"
+                                   id="inputActualClosingCash"
+                                   name="actualClosingCash"
+                                   required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Ghi chú chênh lệch (nếu có)</label>
+                            <textarea class="form-control" name="noteDiscrepancy" rows="2"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Ghi chú ca làm việc</label>
+                            <textarea class="form-control" name="note" rows="2"
+                                      placeholder="Nhập ghi chú về ca làm việc..."
+                                      th:text="${detail.note}"></textarea>
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-shift-primary w-100"
+                                th:text="${isOwner ? 'Xác nhận ca' : (detail.status == 'Từ chối' ? 'Sửa và nộp lại' : 'Nộp báo cáo ca')}"
+                                th:attr="data-confirm=${isOwner ? 'Xác nhận ca này?' : 'Xác nhận nộp báo cáo ca?'}">
+                            Nộp báo cáo ca
+                        </button>
+                    </form>
+
+                    <div th:if="${isOwner and detail.status == 'Chờ duyệt'}">
+                        <form th:action="${basePath + '/' + detail.id + '/approve'}"
+                              method="post"
+                              class="mb-3">
+                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit"
+                                    class="btn btn-shift-primary w-100"
+                                    data-confirm="Duyệt báo cáo ca này?">
+                                <i class="ti ti-check me-1"></i>
+                                Duyệt báo cáo ca
+                            </button>
+                        </form>
+
+                        <form th:action="${basePath + '/' + detail.id + '/reject'}"
+                              method="post"
+                              class="mb-3">
+                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit"
+                                    class="btn btn-outline-danger w-100"
+                                    data-confirm="Từ chối báo cáo ca này?">
+                                <i class="ti ti-x me-1"></i>
+                                Từ chối
+                            </button>
+                        </form>
+                    </div>
+
+                    <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
+                        Quay lại danh sách
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+<script>
+    (function () {
+        const card = document.getElementById('cashReconCard');
+        const openingInput = document.getElementById('inputOpeningCash');
+        const actualInput = document.getElementById('inputActualClosingCash');
+        if (!card || !openingInput || !actualInput) return; // read-only view (đã nộp) — server values stand
+
+        const cashIn = Number(card.dataset.cashIn || 0);
+        const cashOut = Number(card.dataset.cashOut || 0);
+
+        const reconOpening = document.getElementById('reconOpening');
+        const reconExpected = document.getElementById('reconExpected');
+        const reconActual = document.getElementById('reconActual');
+        const banner = document.getElementById('reconBanner');
+        const reconDiscrepancy = document.getElementById('reconDiscrepancy');
+        const reconVerdict = document.getElementById('reconVerdict');
+
+        function fmt(v) {
+            return v.toLocaleString('vi-VN') + 'đ';
+        }
+
+        // Đọc bằng pmMoneyValue (bóc dấu chấm phân cách của money-input.js) thay vì Number(input.value)
+        // trực tiếp — input giờ là type=text đã format "12.500", Number() sẽ hiểu nhầm dấu chấm là thập phân.
+        function recalc() {
+            const opening = window.pmMoneyValue ? window.pmMoneyValue(openingInput) : Number(openingInput.value || 0);
+            const expected = opening + cashIn - cashOut;
+            reconOpening.textContent = fmt(opening);
+            reconExpected.textContent = fmt(expected);
+
+            if (actualInput.value === '') {
+                reconActual.textContent = '—';
+                banner.style.display = 'none';
+                return;
+            }
+
+            const actual = window.pmMoneyValue ? window.pmMoneyValue(actualInput) : Number(actualInput.value);
+            const diff = actual - expected;
+            reconActual.textContent = fmt(actual);
+            reconDiscrepancy.textContent = (diff > 0 ? '+' : '') + fmt(diff);
+            reconVerdict.textContent = diff === 0 ? 'Đủ quỹ.' : (diff > 0 ? 'Dư quỹ so với dự kiến.' : 'Thiếu quỹ so với dự kiến.');
+            banner.className = 'discrepancy-banner ' + (diff === 0 ? 'discrepancy-ok' : (diff > 0 ? 'discrepancy-over' : 'discrepancy-short'));
+            banner.style.display = '';
+        }
+
+        openingInput.addEventListener('input', recalc);
+        actualInput.addEventListener('input', recalc);
+        // Phải đợi money-input.js format xong ô tiền (DOMContentLoaded, listener của nó đăng ký TRƯỚC
+        // listener này nên chạy trước): trước đó ô còn giữ nguyên chuỗi server "1772000.00", pmMoneyValue
+        // hiểu dấu chấm là dấu phân cách → 177.200.000đ cho tới khi người dùng gõ vào ô.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', recalc);
+        } else {
+            recalc();
+        }
+    })();
+</script>
+
+</body>
+</html>

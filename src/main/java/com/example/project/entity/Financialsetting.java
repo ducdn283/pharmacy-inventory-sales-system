@@ -6,8 +6,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
-
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -93,4 +93,13 @@ public class Financialsetting {
 
     @Column(name = "returnPolicyMaxDays")
     private Integer returnPolicyMaxDays;
+
+    @Column(name = "bankAccountBalance", precision = 15, scale = 2)
+    private BigDecimal bankAccountBalance;
+
+    @Column(name = "cashSafeBalance", precision = 15, scale = 2)
+    private BigDecimal cashSafeBalance;
+
+    @Column(name = "balanceUpdatedAt")
+    private LocalDateTime balanceUpdatedAt;
 }

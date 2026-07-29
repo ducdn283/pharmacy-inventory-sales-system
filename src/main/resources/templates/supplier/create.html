@@ -89,9 +89,14 @@
               <label for="supplierTaxCode" class="form-label">
                 Mã số thuế <span class="text-danger">*</span>
               </label>
+              <!-- MST 10 số, có thể kèm "-3 số" cho đơn vị trực thuộc → cho gõ cả dấu gạch ngang. -->
               <input id="supplierTaxCode" type="text" class="form-control"
                      th:field="*{taxCode}"
                      th:classappend="${#fields.hasErrors('taxCode')} ? ' is-invalid'"
+                     inputmode="numeric" data-digits="-"
+                     data-unique-url="/supplier/check-duplicate"
+                     data-unique-field="taxCode"
+                     data-unique-message="Mã số thuế đã được sử dụng bởi nhà cung cấp khác"
                      maxlength="20"
                      placeholder="VD: 0101234567 hoặc 0101234567-001">
               <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
@@ -105,7 +110,10 @@
                 <input id="supplierPhone" type="tel" class="form-control"
                        th:field="*{phone}"
                        th:classappend="${#fields.hasErrors('phone')} ? ' is-invalid'"
-                       inputmode="numeric" maxlength="10"
+                       inputmode="numeric" maxlength="10" data-digits
+                       data-unique-url="/supplier/check-duplicate"
+                       data-unique-field="phone"
+                       data-unique-message="Số điện thoại đã được sử dụng bởi nhà cung cấp khác"
                        pattern="0(2|3|5|7|8|9)[0-9]{8}"
                        title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                        placeholder="0900000000">
@@ -118,6 +126,9 @@
                 <input id="supplierEmail" type="email" class="form-control"
                        th:field="*{email}"
                        th:classappend="${#fields.hasErrors('email')} ? ' is-invalid'"
+                       data-unique-url="/supplier/check-duplicate"
+                       data-unique-field="email"
+                       data-unique-message="Email đã được sử dụng bởi nhà cung cấp khác"
                        maxlength="100"
                        pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                        title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
@@ -161,5 +172,12 @@
 
   </div>
 </main>
+
+<!-- Chặn ngay lúc gõ cho 2 ô data-digits: mã số thuế (cho cả dấu gạch) và số điện thoại. -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- Báo trùng MST / SĐT / email ngay lúc rời ô. Bảng supplier không có UNIQUE nào ở DB nên chặn thật
+     vẫn là SupplierService.validateUnique — đây chỉ là lớp báo sớm. -->
+<div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
 </body>
 </html>

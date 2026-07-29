@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tạo phiếu chi | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .expense-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .expense-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .btn-expense-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+            border-radius: 12px;
+        }
+
+        .btn-expense-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #ffffff;
+        }
+
+        .auto-field {
+            background: #fbfdfc !important;
+            color: #6b7280 !important;
+            border-color: #e5e7eb;
+            cursor: default;
+            font-style: italic;
+        }
+
+        .form-check-input:checked {
+            background-color: #059669;
+            border-color: #059669;
+        }
+
+        @media (max-width: 991.98px) {
+            .expense-page-content {
+                padding-top: 84px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content expense-page-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">Tạo phiếu chi</h1>
+                <p class="text-secondary mb-0">Ghi nhận một khoản tiền chi ra khỏi quỹ.</p>
+            </div>
+            <a th:href="${basePath}" class="btn btn-outline-secondary">
+                <i class="ti ti-arrow-left me-1"></i>
+                Quay lại danh sách
+            </a>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+
+        <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="expenseForm">
+            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+            <div class="row g-4">
+                <div class="col-12 col-xl-8">
+
+                    <div class="expense-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-cash text-success me-1"></i>
+                            Thông tin phiếu chi
+                        </div>
+
+                        <div class="row g-3">
+                            <!-- Mã phiếu do server sinh lúc lưu; không hiện ô "PC-…" rỗng trên màn tạo
+                                 vì nó chẳng cho người dùng thêm thông tin gì. Xem mã ở màn chi tiết. -->
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Người lập</label>
+                                <input type="text" class="form-control auto-field"
+                                       th:value="${creatorName != null ? creatorName : 'Tài khoản hiện tại'}"
+                                       value="Tài khoản hiện tại" readonly tabindex="-1">
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Ngày chi</label>
+                                <input type="date" class="form-control" th:field="*{date}" id="dateInput">
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Loại phiếu chi <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{expenseType}" id="expenseTypeInput" required>
+                                    <option value="">-- Chọn loại phiếu chi --</option>
+                                    <option th:each="entry : ${expenseTypeLabels}"
+                                            th:value="${entry.key}"
+                                            th:text="${entry.value}">Chi phí vận hành</option>
+                                </select>
+                            </div>
+
+                            <!-- Chỉ hiện với loại "Hoàn tiền trả hàng". Danh sách render sẵn từ server
+                                 (khác Phiếu thu phải gọi AJAX vì nó còn phụ thuộc NCC đã chọn). -->
+                            <div class="col-12" id="returnRefundFields" style="display: none;">
+                                <label class="form-label">
+                                    Phiếu trả hàng của khách <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" th:field="*{returnId}" id="returnIdInput">
+                                    <option value="">-- Chọn phiếu trả hàng cần hoàn tiền --</option>
+                                    <option th:each="item : ${customerReturns}"
+                                            th:value="${item.id}"
+                                            th:text="${item.code + ' · ' + item.dateDisplay + ' · '
+                                                     + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA')
+                                                     + 'đ · ' + item.detail}">
+                                        PT-000001
+                                    </option>
+                                </select>
+                                <div class="form-text"
+                                     th:if="${customerReturns != null and customerReturns.isEmpty()}">
+                                    <i class="ti ti-alert-circle me-1"></i>
+                                    Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                </div>
+                                <div class="form-text" th:unless="${customerReturns != null and customerReturns.isEmpty()}">
+                                    <i class="ti ti-info-circle me-1"></i>
+                                    Chỉ liệt kê phiếu trả hàng đã duyệt, còn phát sinh tiền hoàn và chưa có phiếu chi.
+                                    Số tiền được lấy từ phiếu trả, không sửa được.
+                                </div>
+                            </div>
+
+                            <!-- Hiện với các loại trong ExpenseType.PURCHASE_LINKABLE — hiện chỉ "Chi phí
+                                 vận hành", nơi gom mọi khoản chi liên quan phiếu nhập, kể cả nợ NCC.
+                                 Khác ô hoàn tiền ở trên: không bắt buộc chọn (trả tiền NCC không gắn hóa
+                                 đơn cụ thể là hợp lệ) và số tiền vẫn sửa được. -->
+                            <div class="col-12" id="purchaseLinkFields" style="display: none;">
+                                <label class="form-label">Thanh toán cho phiếu nhập</label>
+                                <select class="form-select" th:field="*{purchaseId}" id="purchaseIdInput">
+                                    <option value="">-- Không gắn phiếu nhập (lương, điện, nước…) --</option>
+                                    <option th:each="item : ${purchaseInvoices}"
+                                            th:value="${item.id}"
+                                            th:text="${item.code + ' · ' + item.dateDisplay + ' · còn '
+                                                     + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA')
+                                                     + 'đ · ' + item.detail}">
+                                        PN-000001
+                                    </option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="ti ti-info-circle me-1"></i>
+                                    Chọn phiếu nhập sẽ tự điền số còn phải trả — bạn vẫn sửa được để trả một phần.
+                                    Khi phiếu chi được duyệt, số tiền sẽ được cộng vào phần đã trả của phiếu nhập.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Lý do chi <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" th:field="*{reason}"
+                                       placeholder="VD: Tiền điện tháng 7, ứng lương nhân viên A…">
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Số tiền cần chi <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="text" inputmode="numeric" data-money class="form-control"
+                                           th:field="*{amount}" id="amountInput" placeholder="0">
+                                    <span class="input-group-text">đ</span>
+                                </div>
+                                <div class="form-text" id="amountLockedHint" style="display: none;">
+                                    <i class="ti ti-lock me-1"></i>
+                                    <span id="amountLockedText">
+                                        Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.
+                                    </span>
+                                    Chi ít hơn thì bỏ chọn "Đã chi đủ" bên cạnh, đừng sửa số này.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" th:field="*{fullyPaid}"
+                                           id="fullyPaidInput" checked>
+                                    <label class="form-check-label" for="fullyPaidInput">
+                                        Đã chi đủ số tiền trên ngay bây giờ
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="partialPaymentFields" class="col-12" style="display: none;">
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">Số tiền đã chi thực tế</label>
+                                        <div class="input-group">
+                                            <input type="text" inputmode="numeric" data-money class="form-control"
+                                                   th:field="*{paid}" id="paidInput" placeholder="0">
+                                            <span class="input-group-text">đ</span>
+                                        </div>
+                                    </div>
+                                    <!-- Tiền mặt chỉ dành cho Chủ nhà thuốc: kế toán chi qua chuyển
+                                         khoản, không giữ quỹ nên cũng không có báo cáo ca để đối soát. -->
+                                    <div class="col-12 col-md-4" th:if="${canPayCash}">
+                                        <label class="form-label">Trong đó tiền mặt</label>
+                                        <div class="input-group">
+                                            <input type="text" inputmode="numeric" data-money class="form-control"
+                                                   th:field="*{paidByCash}" id="cashInput" placeholder="0">
+                                            <span class="input-group-text">đ</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">Trong đó chuyển khoản</label>
+                                        <div class="input-group">
+                                            <input type="text" inputmode="numeric" data-money class="form-control"
+                                                   th:field="*{paidByBanking}" id="bankingInput" placeholder="0">
+                                            <span class="input-group-text">đ</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">
+                                        <i class="ti ti-info-circle me-1"></i>
+                                        Nếu chưa chi hết, phiếu sẽ ở trạng thái "Chờ thanh toán" cho đến khi ghi nhận đủ.
+                                        <span th:if="${!canPayCash}">
+                                            Kế toán chỉ chi qua chuyển khoản.
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Ghi chú</label>
+                                <textarea class="form-control" rows="3" th:field="*{note}"
+                                          placeholder="Nhập ghi chú nếu có"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="col-12 col-xl-4">
+                    <div class="expense-card p-4">
+                        <!-- Owner: submit auto-approves the slip. -->
+                        <button th:if="${#strings.startsWith(basePath, '/owner')}"
+                                type="submit" name="action" value="submit"
+                                class="btn btn-expense-primary w-100 mb-3"
+                                data-confirm="Tạo và duyệt phiếu chi này?">
+                            <i class="ti ti-circle-check me-1"></i>
+                            Tạo &amp; duyệt
+                        </button>
+
+                        <!-- Accountant: submit sends the slip to the Owner for approval. -->
+                        <button th:unless="${#strings.startsWith(basePath, '/owner')}"
+                                type="submit" name="action" value="submit"
+                                class="btn btn-expense-primary w-100 mb-3"
+                                data-confirm="Gửi phiếu chi này cho chủ nhà thuốc duyệt?">
+                            <i class="ti ti-send me-1"></i>
+                            Gửi duyệt
+                        </button>
+
+                        <button type="submit" name="action" value="draft"
+                                class="btn btn-outline-secondary w-100">
+                            <i class="ti ti-device-floppy me-1"></i>
+                            Lưu nháp
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+    </div>
+</main>
+
+<script th:inline="javascript">
+    // Map scalar thuần (không phải entity JPA) nên an toàn với th:inline.
+    const RETURN_REFUND_AMOUNTS = /*[[${customerReturnAmounts}]]*/ {};
+    const PURCHASE_PAYABLE_AMOUNTS = /*[[${purchaseInvoiceAmounts}]]*/ {};
+    // Từ ExpenseType.PURCHASE_LINKABLE — không hardcode ở đây để JS không lệch khỏi Java.
+    const PURCHASE_LINKABLE_TYPES = /*[[${purchaseLinkableTypes}]]*/ [];
+    const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
+
+    function today() {
+        const date = new Date();
+        const offset = date.getTimezoneOffset();
+        return new Date(date.getTime() - offset * 60000).toISOString().split('T')[0];
+    }
+
+    function togglePartialPaymentFields() {
+        const fullyPaid = document.getElementById('fullyPaidInput').checked;
+        document.getElementById('partialPaymentFields').style.display = fullyPaid ? 'none' : '';
+    }
+
+    function currentType() {
+        return document.getElementById('expenseTypeInput').value;
+    }
+
+    function isRefundPayout() {
+        return currentType() === TYPE_RETURN_REFUND;
+    }
+
+    function supportsPurchaseLink() {
+        return PURCHASE_LINKABLE_TYPES.indexOf(currentType()) !== -1;
+    }
+
+    /** Ghi số tiền rồi phát sự kiện input để fragment money-input định dạng lại (650000 -> 650.000). */
+    function setAmount(value) {
+        const amountInput = document.getElementById('amountInput');
+        amountInput.value = value == null ? '' : String(value);
+        amountInput.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+
+    function syncRefundAmount() {
+        const returnId = document.getElementById('returnIdInput').value;
+        // Khoá ô tiền ngay khi chọn loại hoàn tiền — server cũng ghi đè, đây chỉ là phản ánh cho người dùng thấy.
+        setAmount(returnId ? RETURN_REFUND_AMOUNTS[returnId] : '');
+    }
+
+    /**
+     * Chọn phiếu nhập thì số tiền cần chi = phần còn phải trả của phiếu đó. Trả một phần KHÔNG phải
+     * là sửa số này nhỏ đi — bỏ chọn "Đã chi đủ" rồi nhập số thực chi bên dưới, phiếu vẫn giữ đúng
+     * nghĩa vụ và nằm ở "Chờ thanh toán" cho tới khi trả hết. Server cũng ghi đè y hệt.
+     */
+    function syncPurchaseAmount() {
+        const purchaseId = document.getElementById('purchaseIdInput').value;
+        setAmount(purchaseId ? PURCHASE_PAYABLE_AMOUNTS[purchaseId] : '');
+        applyAmountLock();
+    }
+
+    /** Ô tiền bị khoá bất cứ khi nào nó được suy ra từ một chứng từ đã chọn. */
+    function applyAmountLock() {
+        const amountInput = document.getElementById('amountInput');
+        const refundPayout = isRefundPayout();
+        const purchasePicked = supportsPurchaseLink()
+            && !!document.getElementById('purchaseIdInput').value;
+        const locked = refundPayout || purchasePicked;
+
+        amountInput.readOnly = locked;
+        amountInput.classList.toggle('auto-field', locked);
+        document.getElementById('amountLockedHint').style.display = locked ? '' : 'none';
+        document.getElementById('amountLockedText').textContent = refundPayout
+            ? 'Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.'
+            : 'Số tiền lấy theo phần còn phải trả của phiếu nhập đã chọn.';
+    }
+
+    function toggleReferenceFields() {
+        const refundPayout = isRefundPayout();
+        const purchaseLink = supportsPurchaseLink();
+
+        document.getElementById('returnRefundFields').style.display = refundPayout ? '' : 'none';
+        document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
+
+        // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
+        if (!refundPayout) {
+            document.getElementById('returnIdInput').value = '';
+        }
+        if (!purchaseLink) {
+            document.getElementById('purchaseIdInput').value = '';
+        }
+
+        if (refundPayout) {
+            syncRefundAmount();
+        }
+        applyAmountLock();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const dateInput = document.getElementById('dateInput');
+        if (!dateInput.value) {
+            dateInput.value = today();
+        }
+
+        document.getElementById('fullyPaidInput').addEventListener('change', togglePartialPaymentFields);
+        togglePartialPaymentFields();
+
+        document.getElementById('expenseTypeInput').addEventListener('change', toggleReferenceFields);
+        document.getElementById('returnIdInput').addEventListener('change', syncRefundAmount);
+        document.getElementById('purchaseIdInput').addEventListener('change', syncPurchaseAmount);
+        toggleReferenceFields();
+
+        if (document.getElementById('returnIdInput').value) {
+            syncRefundAmount();
+        }
+        if (document.getElementById('purchaseIdInput').value) {
+            syncPurchaseAmount();
+        }
+
+        document.getElementById('expenseForm').addEventListener('submit', function (event) {
+            function reject(message) {
+                event.preventDefault();
+                if (window.pmToast) {
+                    pmToast(message, 'error');
+                } else {
+                    alert(message);
+                }
+            }
+
+            if (isRefundPayout() && !document.getElementById('returnIdInput').value) {
+                reject('Vui lòng chọn phiếu trả hàng của khách cần hoàn tiền.');
+                return;
+            }
+            // pmMoneyValue ignores the thousand separators — Number("500.000") would read 500.
+            const amount = pmMoneyValue(document.getElementById('amountInput'));
+            if (amount <= 0) {
+                reject('Vui lòng nhập số tiền cần chi lớn hơn 0.');
+                return;
+            }
+
+            // Chặn sớm ở client cho đỡ mất công submit; server vẫn kiểm lại (mới là nơi quyết định).
+            const purchaseId = supportsPurchaseLink() ? document.getElementById('purchaseIdInput').value : '';
+            if (purchaseId) {
+                const payable = PURCHASE_PAYABLE_AMOUNTS[purchaseId];
+                if (payable != null && amount > payable) {
+                    reject('Số tiền chi vượt quá số còn phải trả cho phiếu nhập này ('
+                        + payable.toLocaleString('vi-VN') + 'đ).');
+                }
+            }
+        });
+    });
+</script>
+
+<!-- Sau khối script trên: listener submit của fragment phải chạy SAU listener kiểm tra ở trên,
+     để khi validate chặn submit thì ô tiền vẫn giữ định dạng có dấu phân cách. -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+</body>
+</html>

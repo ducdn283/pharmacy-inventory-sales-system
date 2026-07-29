@@ -3,7 +3,7 @@ SELECT 1, 1, 'Viên', 1.0000, 500.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 1);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 2, 1, 'Vỉ', 10.0000, 5000.00, 0, 1, 1, NULL
+SELECT 2, 1, 'Vỉ', 10.0000, 5000.00, 0, 0, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 2);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
@@ -15,7 +15,7 @@ SELECT 4, 2, 'Ống', 1.0000, 1000.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 4);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 5, 2, 'Vỉ', 5.0000, 5000.00, 0, 1, 1, NULL
+SELECT 5, 2, 'Vỉ', 5.0000, 5000.00, 0, 0, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 5);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
@@ -51,15 +51,15 @@ SELECT 13, 7, 'Hộp', 1.0000, 730000.00, 1, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 13);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 14, 8, 'Cái', 1.0000, 19300.00, 1, 1, 1, NULL
+SELECT 14, 8, 'Cái', 1.0000, 19300.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 14);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 15, 8, 'Hộp', 20.0000, 386000.00, 0, 0, 1, NULL
+SELECT 15, 8, 'Hộp', 20.0000, 386000.00, 1, 0, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 15);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 16, 9, 'Cái', 1.0000, 320.00, 1, 1, 1, NULL
+SELECT 16, 9, 'Cái', 1.0000, 320.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 16);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
@@ -91,7 +91,7 @@ SELECT 23, 15, 'Viên', 1.0000, 3500.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 23);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 24, 15, 'Vỉ', 10.0000, 35000.00, 0, 1, 1, NULL
+SELECT 24, 15, 'Vỉ', 10.0000, 35000.00, 0, 0, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 24);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
@@ -111,7 +111,7 @@ SELECT 28, 18, 'Viên', 1.0000, 5000.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 28);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 29, 18, 'Vỉ', 10.0000, 50000.00, 1, 0, 1, NULL
+SELECT 29, 18, 'Vỉ', 10.0000, 50000.00, 0, 0, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 29);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
@@ -123,7 +123,7 @@ SELECT 31, 19, 'Viên', 1.0000, 900.00, 0, 1, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 31);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)
-SELECT 32, 19, 'Vỉ', 10.0000, 9000.00, 0, 1, 1, NULL
+SELECT 32, 19, 'Vỉ', 10.0000, 9000.00, 0, 0, 1, NULL
 WHERE NOT EXISTS (SELECT 1 FROM productunit WHERE productUnitID = 32);
 
 INSERT INTO productunit (productUnitID, productID, unitName, ratio, sellPrice, isDefault, isBaseUnit, isActive, note)

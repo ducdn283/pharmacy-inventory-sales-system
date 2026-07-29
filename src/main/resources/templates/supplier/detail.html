@@ -192,9 +192,15 @@
           <label for="editTaxCode" class="form-label">
             Mã số thuế <span class="text-danger">*</span>
           </label>
+          <!-- MST 10 số, có thể kèm "-3 số" cho đơn vị trực thuộc → cho gõ cả dấu gạch ngang. -->
           <input id="editTaxCode" type="text" class="form-control"
                  th:field="*{taxCode}"
                  th:classappend="${#fields.hasErrors('taxCode')} ? ' is-invalid'"
+                 inputmode="numeric" data-digits="-"
+                 data-unique-url="/supplier/check-duplicate"
+                 data-unique-field="taxCode"
+                 th:attr="data-unique-id=${supplier.id}"
+                 data-unique-message="Mã số thuế đã được sử dụng bởi nhà cung cấp khác"
                  maxlength="20"
                  placeholder="VD: 0101234567 hoặc 0101234567-001">
           <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
@@ -208,7 +214,11 @@
             <input id="editPhone" type="tel" class="form-control"
                    th:field="*{phone}"
                    th:classappend="${#fields.hasErrors('phone')} ? ' is-invalid'"
-                   inputmode="numeric" maxlength="10"
+                   inputmode="numeric" maxlength="10" data-digits
+                   data-unique-url="/supplier/check-duplicate"
+                   data-unique-field="phone"
+                   th:attr="data-unique-id=${supplier.id}"
+                   data-unique-message="Số điện thoại đã được sử dụng bởi nhà cung cấp khác"
                    pattern="0(2|3|5|7|8|9)[0-9]{8}"
                    title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                    placeholder="0900000000">
@@ -221,6 +231,10 @@
             <input id="editEmail" type="email" class="form-control"
                    th:field="*{email}"
                    th:classappend="${#fields.hasErrors('email')} ? ' is-invalid'"
+                   data-unique-url="/supplier/check-duplicate"
+                   data-unique-field="email"
+                   th:attr="data-unique-id=${supplier.id}"
+                   data-unique-message="Email đã được sử dụng bởi nhà cung cấp khác"
                    maxlength="100"
                    pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                    title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
@@ -629,5 +643,11 @@
     updateSelectedCount();
   })();
 </script>
+
+<!-- Xem chú thích ở supplier/create.html — cùng 2 ô data-digits trong form sửa. -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- data-unique-id = id NCC đang sửa, để nó không tự báo trùng với chính mình. -->
+<div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
 </body>
 </html>

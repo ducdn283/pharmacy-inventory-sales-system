@@ -307,6 +307,11 @@
                             <div th:text="${detail.invoicePattern}">2K26MAA</div>
                         </div>
 
+                        <div class="info-row" th:if="${detail.taxCode != null}">
+                            <div class="info-label">Mã số thuế</div>
+                            <div th:text="${detail.taxCode}">022176001896</div>
+                        </div>
+
                         <div class="info-row">
                             <div class="info-label">Thời gian lập</div>
                             <div th:text="${detail.dateDisplay}">01/07/2026 14:10</div>
@@ -323,6 +328,15 @@
                                 <a th:href="${basePath + '/' + detail.originalInvoiceId}"
                                    class="text-success fw-semibold text-decoration-none"
                                    th:text="${detail.originalInvoiceCode}">HD000040</a>
+                            </div>
+                        </div>
+
+                        <div class="info-row" th:if="${detail.rootInvoiceId != null}">
+                            <div class="info-label">Hóa đơn nguồn gốc</div>
+                            <div>
+                                <a th:href="${basePath + '/' + detail.rootInvoiceId}"
+                                   class="text-success fw-semibold text-decoration-none"
+                                   th:text="${detail.rootInvoiceCode}">HD000040</a>
                             </div>
                         </div>
 
@@ -360,6 +374,15 @@
                                           th:text="${entry.value}">TH-000001</span>
                                     <span th:if="${!stat.last}">, </span>
                                 </span>
+                            </div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-label">Trạng thái trả hàng</div>
+                            <div>
+                                <span class="status-badge"
+                                      th:classappend="${' ' + detail.returnStatusCssClass}"
+                                      th:text="${detail.returnStatusDisplay}">Không</span>
                             </div>
                         </div>
 
@@ -524,6 +547,15 @@
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Hình thức TT</span>
                             <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-secondary">Trạng thái trả hàng</span>
+                            <span class="status-badge"
+                                  th:classappend="${' ' + detail.returnStatusCssClass}"
+                                  th:text="${detail.returnStatusDisplay}">
+                                Không
+                            </span>
                         </div>
 
                         <div class="d-flex justify-content-between">

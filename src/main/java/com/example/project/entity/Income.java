@@ -66,6 +66,10 @@ public class Income {
     @Column(name = "paidByBanking", nullable = false, precision = 15, scale = 2)
     private BigDecimal paidByBanking;
 
+    @NotNull
+    @Column(name = "paidByCredit", nullable = false, precision = 15, scale = 2)
+    private BigDecimal paidByCredit;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplierID")
     private Supplier supplierID;
@@ -89,4 +93,8 @@ public class Income {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stockAdjustmentID")
     private Stockadjustment stockAdjustmentID;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shiftReportOfAccountID")
+    private Shiftreport shiftReportOfAccountID;
 }

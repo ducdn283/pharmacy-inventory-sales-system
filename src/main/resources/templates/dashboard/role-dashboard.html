@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tổng quan | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        body {
+            background: #f5f6f8;
+        }
+
+        .dashboard-content {
+            padding-top: 84px !important;
+            padding-bottom: 48px;
+        }
+
+        .dash-card {
+            background: #ffffff;
+            border: 1px solid #eef0f3;
+            border-radius: 16px;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .welcome-card {
+            padding: 24px;
+        }
+
+        .welcome-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .welcome-subtitle {
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .quick-action {
+            border-radius: 10px;
+            padding: 9px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #374151;
+        }
+
+        .quick-action.primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+        }
+
+        .metric-card {
+            min-height: 128px;
+            padding: 20px;
+        }
+
+        .metric-title {
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .metric-value {
+            color: #111827;
+            font-size: 24px;
+            font-weight: 800;
+            line-height: 1.1;
+            word-break: break-word;
+        }
+
+        .metric-helper {
+            margin-top: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .metric-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .tone-success {
+            color: #059669;
+        }
+
+        .tone-success .metric-icon,
+        .badge-success-soft {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .tone-info {
+            color: #2563eb;
+        }
+
+        .tone-info .metric-icon,
+        .badge-info-soft {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .tone-warning {
+            color: #d97706;
+        }
+
+        .tone-warning .metric-icon,
+        .badge-warning-soft {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .tone-orange {
+            color: #ea580c;
+        }
+
+        .tone-orange .metric-icon,
+        .badge-orange-soft {
+            background: #ffedd5;
+            color: #ea580c;
+        }
+
+        .tone-danger {
+            color: #dc2626;
+        }
+
+        .tone-danger .metric-icon,
+        .badge-danger-soft {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .tone-secondary {
+            color: #6b7280;
+        }
+
+        .badge-secondary-soft {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0;
+        }
+
+        .chart-box {
+            min-height: 320px;
+            padding: 20px 20px 12px;
+        }
+
+        .chart-wrap {
+            height: 260px;
+            width: 100%;
+            position: relative;
+        }
+
+        .bar-chart {
+            height: 240px;
+            display: flex;
+            align-items: flex-end;
+            gap: 18px;
+            padding: 18px 8px 0;
+            border-bottom: 1px solid #cbd5e1;
+        }
+
+        .bar-item {
+            flex: 1;
+            min-width: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            height: 100%;
+        }
+
+        .bar {
+            width: 28px;
+            min-height: 4px;
+            background: #059669;
+            border-radius: 7px 7px 0 0;
+        }
+
+        .bar-label {
+            margin-top: 10px;
+            color: #6b7280;
+            font-size: 11px;
+        }
+
+        .line-chart svg {
+            width: 100%;
+            height: 240px;
+            overflow: visible;
+        }
+
+        .line-chart .axis {
+            stroke: #e5e7eb;
+            stroke-width: 1;
+        }
+
+        .line-chart .line {
+            fill: none;
+            stroke: #6b7280;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .line-chart .dot {
+            fill: #6b7280;
+        }
+
+        .line-chart .label {
+            fill: #6b7280;
+            font-size: 11px;
+        }
+
+        .todo-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .todo-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            background: #fff8ed;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .todo-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: #ffedd5;
+            color: #ea580c;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .todo-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .todo-desc {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .soft-badge {
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .table thead th {
+            background: #f9fafb;
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 700;
+            border-bottom: 1px solid #eef0f3;
+        }
+
+        .table tbody td {
+            font-size: 13px;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .text-money {
+            color: #059669;
+            font-weight: 700;
+        }
+
+        @media (max-width: 991.98px) {
+            .dashboard-content {
+                padding-top: 76px !important;
+            }
+
+            .bar-chart {
+                gap: 8px;
+            }
+
+            .bar {
+                width: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content dashboard-content">
+    <div class="container-fluid">
+
+        <div class="dash-card welcome-card mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <div class="welcome-title">
+                        Xin chào,
+                        <span th:text="${dashboard.greetingName ?: 'Người dùng'}">Người dùng</span>
+                    </div>
+                    <div class="welcome-subtitle mt-1" th:text="${dashboard.subtitle}">
+                        Tổng quan hôm nay
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <a th:each="action : ${dashboard.quickActions}"
+                   th:href="${action.url}"
+                   class="quick-action"
+                   th:classappend="${action.primary} ? ' primary' : ''"
+                   th:text="${action.label}">
+                    Hành động
+                </a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6 col-xl-2" th:each="metric : ${dashboard.metrics}">
+                <a th:href="${metric.url}" class="text-decoration-none">
+                    <div class="dash-card metric-card h-100"
+                         th:classappend="${' tone-' + metric.tone}">
+                        <div class="d-flex justify-content-between gap-3">
+                            <div>
+                                <div class="metric-title" th:text="${metric.title}">Chỉ số</div>
+                                <div class="metric-value" th:text="${metric.value}">0</div>
+                                <div class="metric-helper" th:text="${metric.helper}">Mô tả</div>
+                            </div>
+                            <div class="metric-icon">
+                                <i th:class="${metric.icon}"></i>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-12 col-xl-8">
+                <div class="dash-card chart-box">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="section-title" th:text="${dashboard.chartTitle}">
+                            Biểu đồ
+                        </h2>
+                    </div>
+
+                    <div id="dashboardChart" class="chart-wrap"></div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-4">
+                <div class="dash-card p-4 h-100">
+                    <h2 class="section-title mb-3" th:text="${dashboard.todoTitle}">
+                        Việc cần xử lý
+                    </h2>
+
+                    <div class="todo-list">
+                        <a th:each="item : ${dashboard.todoItems}"
+                           th:href="${item.url}"
+                           class="todo-item">
+                            <span class="todo-icon">
+                                <i class="ti ti-alert-circle"></i>
+                            </span>
+
+                            <span class="flex-grow-1">
+                                <span class="todo-title d-block" th:text="${item.title}">
+                                    Việc cần xử lý
+                                </span>
+                                <span class="todo-desc d-block" th:text="${item.description}">
+                                    Mô tả
+                                </span>
+                            </span>
+
+                            <span class="soft-badge"
+                                  th:classappend="${' badge-' + item.tone + '-soft'}"
+                                  th:text="${item.badge}">
+                                Chờ xử lý
+                            </span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4" th:if="${dashboard.roleCode == 'OWNER'}">
+            <div class="col-12 col-xl-8">
+                <div class="dash-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="section-title" th:text="${dashboard.performanceTitle}">
+                            Hiệu suất
+                        </h2>
+                        <span class="text-secondary small">Cập nhật hôm nay</span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead>
+                            <tr>
+                                <th>Nhân viên</th>
+                                <th>Doanh thu hôm nay</th>
+                                <th>Số hóa đơn</th>
+                                <th>Công nợ</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                            </thead>
+
+                            <tbody>
+                            <tr th:each="row : ${dashboard.performanceRows}">
+                                <td class="fw-semibold" th:text="${row.name}">Nhân viên</td>
+                                <td class="text-money" th:text="${row.revenueDisplay}">0đ</td>
+                                <td th:text="${row.invoiceCount}">0</td>
+                                <td th:text="${row.debtDisplay}">0đ</td>
+                                <td>
+                                    <span class="soft-badge"
+                                          th:classappend="${' badge-' + row.tone + '-soft'}"
+                                          th:text="${row.status}">
+                                        Tốt
+                                    </span>
+                                </td>
+                            </tr>
+
+                            <tr th:if="${#lists.isEmpty(dashboard.performanceRows)}">
+                                <td colspan="5" class="text-center text-secondary py-4">
+                                    Chưa có dữ liệu hóa đơn hôm nay.
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-4">
+                <div class="dash-card p-4 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="section-title" th:text="${dashboard.approvalTitle}">
+                            Phê duyệt gần đây
+                        </h2>
+                        <a th:href="@{/owner/approvals}" class="small text-success text-decoration-none">
+                            Xem tất cả
+                        </a>
+                    </div>
+
+                    <div class="todo-list">
+                        <a th:each="item : ${dashboard.approvalItems}"
+                           th:href="${item.detailUrl}"
+                           class="todo-item">
+                            <span class="todo-icon">
+                                <i class="ti ti-clock"></i>
+                            </span>
+
+                            <span class="flex-grow-1">
+                                <span class="todo-title d-block"
+                                      th:text="${item.type + ' ' + item.code}">
+                                    Phiếu
+                                </span>
+                                <span class="todo-desc d-block"
+                                      th:text="${item.requesterName + ' • ' + item.requestedAtDisplay}">
+                                    Người gửi
+                                </span>
+                            </span>
+
+                            <span class="soft-badge badge-warning-soft" th:text="${item.status}">
+                                Chờ duyệt
+                            </span>
+                        </a>
+
+                        <div th:if="${#lists.isEmpty(dashboard.approvalItems)}"
+                             class="text-center text-secondary py-4">
+                            Không có yêu cầu chờ duyệt.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dash-card p-4" th:if="${dashboard.roleCode == 'PHARMACIST'}">
+            <h2 class="section-title mb-3" th:text="${dashboard.recentInvoiceTitle}">
+                Hóa đơn gần đây
+            </h2>
+
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                    <tr>
+                        <th>Mã hóa đơn</th>
+                        <th>Thời gian</th>
+                        <th>Khách hàng</th>
+                        <th>Tổng tiền</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    <tr th:each="invoice : ${dashboard.recentInvoices}">
+                        <td th:text="${invoice.code}">INV-000001</td>
+                        <td th:text="${invoice.time}">09:15</td>
+                        <td th:text="${invoice.customerName}">Khách lẻ</td>
+                        <td class="text-money" th:text="${invoice.totalDisplay}">0đ</td>
+                        <td>
+                            <span class="soft-badge"
+                                  th:classappend="${' badge-' + invoice.tone + '-soft'}"
+                                  th:text="${invoice.status}">
+                                Hoàn tất
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <a th:href="${invoice.url}" class="text-success text-decoration-none fw-semibold">
+                                Xem
+                            </a>
+                        </td>
+                    </tr>
+
+                    <tr th:if="${#lists.isEmpty(dashboard.recentInvoices)}">
+                        <td colspan="6" class="text-center text-secondary py-4">
+                            Chưa có hóa đơn gần đây.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script th:inline="javascript">
+    const chartLabels = /*[[${dashboard.chartLabels}]]*/ [];
+    const chartDataRaw = /*[[${dashboard.chartData}]]*/ [];
+    const chartType = /*[[${dashboard.chartType}]]*/ 'line';
+
+    const chartData = Array.isArray(chartDataRaw)
+        ? chartDataRaw.map(function (value) {
+            return Number(value || 0);
+        })
+        : [];
+
+    function formatMoneyShort(value) {
+        const numberValue = Number(value || 0);
+
+        if (numberValue >= 1000000) {
+            return (numberValue / 1000000)
+                .toFixed(1)
+                .replace('.0', '') + 'Mđ';
+        }
+
+        return new Intl.NumberFormat('vi-VN').format(numberValue) + 'đ';
+    }
+
+    function renderBarChart(container, labels, data) {
+        const max = Math.max.apply(null, data.concat([1]));
+        let html = '';
+
+        labels.forEach(function (label, index) {
+            const value = data[index] || 0;
+            const barHeight = Math.max(4, Math.round(value / max * 210));
+            const title = label + ': ' + formatMoneyShort(value);
+
+            html += '<div class="bar-item" title="' + title + '">';
+            html += '<div class="bar" style="height:' + barHeight + 'px"></div>';
+            html += '<div class="bar-label">' + label + '</div>';
+            html += '</div>';
+        });
+
+        container.className = 'chart-wrap bar-chart';
+        container.innerHTML = html;
+    }
+
+    function renderLineChart(container, labels, data) {
+        const width = 760;
+        const height = 230;
+        const paddingX = 36;
+        const paddingY = 24;
+        const max = Math.max.apply(null, data.concat([1]));
+        const stepX = labels.length > 1 ? (width - paddingX * 2) / (labels.length - 1) : 0;
+
+        const points = data.map(function (value, index) {
+            const x = paddingX + stepX * index;
+            const y = height - paddingY - (value / max) * (height - paddingY * 2);
+
+            return {
+                x: x,
+                y: y,
+                value: value
+            };
+        });
+
+        let path = '';
+
+        points.forEach(function (point, index) {
+            path += (index === 0 ? 'M ' : ' L ') + point.x + ' ' + point.y;
+        });
+
+        let gridLines = '';
+
+        [0, 1, 2, 3].forEach(function (item) {
+            const y = paddingY + item * ((height - paddingY * 2) / 3);
+            gridLines += '<line class="axis" x1="' + paddingX + '" y1="' + y + '" x2="' + (width - paddingX) + '" y2="' + y + '"></line>';
+        });
+
+        let dots = '';
+
+        points.forEach(function (point) {
+            dots += '<circle class="dot" cx="' + point.x + '" cy="' + point.y + '" r="4">';
+            dots += '<title>' + formatMoneyShort(point.value) + '</title>';
+            dots += '</circle>';
+        });
+
+        let xLabels = '';
+
+        labels.forEach(function (label, index) {
+            const x = paddingX + stepX * index;
+            xLabels += '<text class="label" x="' + x + '" y="' + (height - 2) + '" text-anchor="middle">' + label + '</text>';
+        });
+
+        container.className = 'chart-wrap line-chart';
+        container.innerHTML =
+            '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none">' +
+            gridLines +
+            '<path class="line" d="' + path + '"></path>' +
+            dots +
+            xLabels +
+            '</svg>';
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const container = document.getElementById('dashboardChart');
+
+        if (!container || !chartLabels || chartLabels.length === 0) {
+            return;
+        }
+
+        if (chartType === 'bar') {
+            renderBarChart(container, chartLabels, chartData);
+        } else {
+            renderLineChart(container, chartLabels, chartData);
+        }
+    });
+</script>
+
+</body>
+</html>

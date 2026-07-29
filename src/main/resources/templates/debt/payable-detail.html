@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+  <meta charset="UTF-8"/>
+  <title th:text="${pageTitle}">Chi tiết nợ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script type="module" crossorigin src="./assets/js/main.js" th:src="@{/assets/js/main.js}"></script>
+  <link rel="stylesheet" crossorigin href="./assets/css/main.css" th:href="@{/assets/css/main.css}">
+
+  <style>
+    :root {
+      --sup-red: #dc2626;
+      --sup-red-dark: #b91c1c;
+      --sup-blue: #0284c7;
+      --sup-blue-bg: #e0f2fe;
+      --sup-amber: #d97706;
+      --sup-amber-bg: #fef3c7;
+      --sup-border: #e5e7eb;
+      --sup-bg: #f6f7f9;
+      --sup-muted: #6b7280;
+    }
+
+    body { background: var(--sup-bg); }
+
+    .main-card {
+      background: #fff;
+      border: 1px solid var(--sup-border);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(16,24,40,.04);
+      padding: 24px;
+    }
+
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    @media (max-width: 767px) {
+      .summary-row { grid-template-columns: 1fr; }
+    }
+    .summary-item {
+      padding: 14px 16px;
+      background: #f9fafb;
+      border: 1px solid #f3f4f6;
+      border-radius: 12px;
+    }
+    .summary-item .label {
+      font-size: 12px;
+      color: var(--sup-muted);
+      margin-bottom: 4px;
+    }
+    .summary-item .value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .summary-item .value.amount {
+      color: var(--sup-red);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .type-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .type-badge.customer { background: var(--sup-blue-bg); color: var(--sup-blue); }
+    .type-badge.supplier { background: var(--sup-amber-bg); color: var(--sup-amber); }
+
+    .sup-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    .sup-table th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sup-muted);
+      background: #f9fafb;
+      border-bottom: 1px solid var(--sup-border);
+      white-space: nowrap;
+    }
+    .sup-table td {
+      padding: 13px 14px;
+      font-size: 13px;
+      color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .sup-table tr:last-child td { border-bottom: none; }
+    .sup-table tr:hover td { background: #fafafa; }
+    .sup-code { font-weight: 600; color: #111827; }
+    .sup-table th.col-amount,
+    .sup-table td.col-amount { text-align: right; }
+    .amount-payable { color: var(--sup-red); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .detail-sub { font-size: 12px; color: var(--sup-muted); margin-top: 2px; }
+
+    .btn-back {
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--sup-border);
+      background: #fff;
+      color: #374151;
+      text-decoration: none;
+    }
+    .btn-back:hover { background: #f9fafb; color: #111827; }
+
+    .btn-pay {
+      background: var(--sup-red);
+      border-color: var(--sup-red);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn-pay:hover { background: var(--sup-red-dark); border-color: var(--sup-red-dark); color: #fff; }
+
+    .empty-row td { color: var(--sup-muted); font-size: 13px; padding: 40px 0; text-align: center; }
+  </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content py-8">
+  <div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+      <div>
+        <h1 class="fs-4 mb-1" th:text="'Chi tiết nợ — ' + ${detail.name}">Chi tiết nợ</h1>
+      </div>
+      <a th:href="${basePath}" class="btn-back">
+        <i class="ti ti-arrow-left"></i>Quay lại danh sách
+      </a>
+    </div>
+
+    <div class="main-card">
+      <div class="summary-row">
+        <div class="summary-item">
+          <div class="label">Đối tượng</div>
+          <div class="value">
+            <span class="type-badge"
+                  th:classappend="${detail.partyType == 'CUSTOMER' ? ' customer' : ' supplier'}"
+                  th:text="${detail.partyTypeDisplay}">Khách hàng</span>
+          </div>
+        </div>
+        <div class="summary-item">
+          <div class="label">Tên</div>
+          <div class="value" th:text="${detail.name}">Nguyễn Văn A</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">Tổng nợ</div>
+          <div class="value amount"
+               th:text="${#numbers.formatDecimal(detail.totalPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+        </div>
+      </div>
+
+      <h2 class="fs-6 fw-semibold mb-3"
+          th:text="${detail.partyType == 'CUSTOMER' ? 'Danh sách phiếu trả hàng cần hoàn tiền' : 'Danh sách phiếu nhập còn nợ'}">
+        Danh sách phiếu trả hàng cần hoàn tiền
+      </h2>
+
+      <div class="table-responsive">
+        <table class="sup-table">
+          <thead>
+            <tr>
+              <th th:text="${detail.partyType == 'CUSTOMER' ? 'Mã phiếu trả' : 'Mã phiếu nhập'}">Mã phiếu trả</th>
+              <th>Ngày</th>
+              <th class="col-amount">Nợ</th>
+              <th style="width:120px;text-align:center;"
+                  th:text="${detail.partyType == 'CUSTOMER' ? 'Hoàn tiền' : 'Chi trả'}">Hoàn tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="line : ${detail.lines}">
+              <td>
+                <div class="sup-code" th:text="${line.code}">TH-001</div>
+                <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}">HĐ HD-001</div>
+              </td>
+              <td th:text="${line.dateDisplay}">01/07/2026 14:10</td>
+              <td class="col-amount amount-payable"
+                  th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">100.000đ</td>
+              <td style="text-align:center;">
+                <a class="btn btn-sm btn-pay"
+                   th:if="${detail.partyType == 'CUSTOMER'}"
+                   th:href="@{${expenseBasePath + '/create'}(expenseType=${returnRefundExpenseType}, returnId=${line.id})}">
+                  <i class="ti ti-cash me-1"></i>Hoàn tiền
+                </a>
+                <a class="btn btn-sm btn-pay"
+                   th:if="${detail.partyType == 'SUPPLIER'}"
+                   th:href="@{${expenseBasePath + '/create'}(expenseType=${operationalExpenseType}, purchaseId=${line.id}, supplierId=${detail.entityId})}">
+                  <i class="ti ti-cash me-1"></i>Chi trả
+                </a>
+              </td>
+            </tr>
+
+            <tr th:if="${#lists.isEmpty(detail.lines)}" class="empty-row">
+              <td colspan="4">Không có khoản nợ nào.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+</body>
+</html>

@@ -83,6 +83,10 @@ public class Shiftreport {
     @Column(name = "totalCashOut", precision = 15, scale = 2)
     private BigDecimal totalCashOut;
 
+    @ColumnDefault("0.00")
+    @Column(name = "totalBankingOut", precision = 15, scale = 2)
+    private BigDecimal totalBankingOut;
+
     @Column(name = "expectedClosingCash", precision = 15, scale = 2)
     private BigDecimal expectedClosingCash;
 
@@ -99,10 +103,6 @@ public class Shiftreport {
     @NotNull
     @Column(name = "status", nullable = false, length = 50)
     private String status;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approvedBy")
-    private Account approvedBy;
 
     @Column(name = "approvedAt")
     private Instant approvedAt;

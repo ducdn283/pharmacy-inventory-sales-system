@@ -116,6 +116,10 @@
                 okBtn.focus();
             }
 
+            // Global helper for programmatic confirm (e.g. form submit guards):
+            //     pmConfirm('Bạn có chắc chắn?', function () { form.submit(); });
+            window.pmConfirm = open;
+
             function close() {
                 backdrop.classList.remove('open');
                 onOk = null;

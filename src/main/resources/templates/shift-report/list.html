@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Danh sách báo cáo ca | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .shift-report-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .shift-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .stat-card {
+            min-height: 120px;
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: #d1fae5;
+            color: #059669;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .btn-shift-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+            border-radius: 12px;
+        }
+
+        .btn-shift-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #ffffff;
+        }
+
+        .table thead th {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f9fafb;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-draft {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-rejected {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .status-approved {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .status-default {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .pagination .page-link {
+            color: #059669;
+            border-radius: 10px;
+            margin: 0 2px;
+        }
+
+        .pagination .active .page-link {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+        }
+
+        @media (max-width: 991.98px) {
+            .shift-report-content {
+                padding-top: 84px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content shift-report-content">
+    <div class="container-fluid">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="fs-4 mb-1">Danh sách báo cáo ca</h1>
+                <p class="text-secondary mb-0">
+                    Theo dõi các ca làm việc — báo cáo được tự động tạo ngay khi có giao dịch bán hàng/trả hàng đầu tiên trong ca
+                </p>
+            </div>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="shift-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Tổng báo cáo</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.totalCount}">0</div>
+                            <div class="text-success small">Tất cả ca làm việc</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-clipboard-list"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="shift-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Ca đang mở (Nháp)</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.draftCount}">0</div>
+                            <div class="text-secondary small">Chưa nộp báo cáo</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-file-pencil"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="shift-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Chờ duyệt</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.pendingCount}">0</div>
+                            <div class="text-warning small">Đang chờ Owner duyệt</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="shift-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">Đã duyệt</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.approvedCount}">0</div>
+                            <div class="text-success small">Đã chốt ca</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-check"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="shift-card p-4 mb-4">
+            <form method="get" th:action="${basePath}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-xl-4">
+                        <label class="form-label">Từ khóa</label>
+                        <input type="text"
+                               class="form-control"
+                               name="keyword"
+                               th:value="${keyword}"
+                               placeholder="Tìm theo mã ca, người trực, trạng thái">
+                    </div>
+
+                    <div class="col-12 col-md-4 col-xl-2">
+                        <label class="form-label">Từ ngày</label>
+                        <input type="date" class="form-control" name="fromDate" th:value="${fromDate}">
+                    </div>
+
+                    <div class="col-12 col-md-4 col-xl-2">
+                        <label class="form-label">Đến ngày</label>
+                        <input type="date" class="form-control" name="toDate" th:value="${toDate}">
+                    </div>
+
+                    <div class="col-12 col-md-4 col-xl-2">
+                        <label class="form-label">Trạng thái</label>
+                        <select class="form-select" name="status">
+                            <option value="">Tất cả trạng thái</option>
+                            <option th:each="statusItem : ${statuses}"
+                                    th:value="${statusItem}"
+                                    th:text="${statusItem}"
+                                    th:selected="${statusItem == filterStatus}">
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-xl-2 d-grid">
+                        <button type="submit" class="btn btn-shift-primary">
+                            <i class="ti ti-search me-1"></i>
+                            Tìm kiếm
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="shift-card">
+            <div class="p-4 border-bottom d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fs-6 mb-0">Danh sách báo cáo ca</h2>
+                    <div class="text-secondary small mt-1">
+                        Hiển thị <span th:text="${shifts.size()}">0</span> /
+                        <span th:text="${totalItems}">0</span> báo cáo
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Mã ca</th>
+                        <th>Người trực</th>
+                        <th>Ngày / Ca</th>
+                        <th>Giờ bắt đầu - kết thúc</th>
+                        <th>Tiền đầu ca</th>
+                        <th>Doanh thu</th>
+                        <th>Chênh lệch quỹ</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    <tr th:each="item : ${shifts}">
+                        <td>
+                            <span class="fw-semibold text-success" th:text="${item.shiftReportCode}">CA-000001</span>
+                        </td>
+
+                        <td th:text="${item.cashierName}">Nguyễn Văn A</td>
+
+                        <td>
+                            <div th:text="${item.shiftDateDisplay}">01/06/2026</div>
+                            <div class="text-secondary small" th:text="${item.shiftType}">Sáng</div>
+                        </td>
+
+                        <td>
+                            <span th:text="${item.startTimeDisplay}">08:00</span>
+                            <span th:if="${item.endTimeDisplay != null and !item.endTimeDisplay.isEmpty()}">
+                                &rarr; <span th:text="${item.endTimeDisplay}">12:00</span>
+                            </span>
+                        </td>
+
+                        <td th:text="${#numbers.formatDecimal(item.openingCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+
+                        <td th:text="${#numbers.formatDecimal(item.totalRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+
+                        <td>
+                            <span th:if="${item.cashDiscrepancy == null}" class="text-secondary">—</span>
+                            <span th:if="${item.cashDiscrepancy != null}"
+                                  th:classappend="${item.cashDiscrepancy.signum() > 0 ? ' text-success' : (item.cashDiscrepancy.signum() < 0 ? ' text-danger' : ' text-secondary')}"
+                                  th:text="${(item.cashDiscrepancy.signum() > 0 ? '+' : '') + #numbers.formatDecimal(item.cashDiscrepancy, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                0đ
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="status-badge"
+                                  th:classappend="${' ' + item.statusCssClass}"
+                                  th:text="${item.status}">
+                                Nháp
+                            </span>
+                        </td>
+
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary"
+                               th:href="${basePath + '/' + item.id}">
+                                <i class="ti ti-eye me-1"></i>
+                                Xem
+                            </a>
+                        </td>
+                    </tr>
+
+                    <tr th:if="${#lists.isEmpty(shifts)}">
+                        <td colspan="9" class="text-center text-secondary py-4">
+                            Không tìm thấy báo cáo ca nào.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="p-4 border-top" th:if="${totalPages > 1}">
+                <nav>
+                    <ul class="pagination justify-content-end mb-0">
+                        <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
+                            <a class="page-link"
+                               th:href="@{${basePath}(page=${currentPage - 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}">
+                                Trước
+                            </a>
+                        </li>
+
+                        <li class="page-item"
+                            th:each="pageNumber : ${#numbers.sequence(0, totalPages - 1)}"
+                            th:classappend="${pageNumber == currentPage} ? 'active'">
+                            <a class="page-link"
+                               th:href="@{${basePath}(page=${pageNumber}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}"
+                               th:text="${pageNumber + 1}">
+                                1
+                            </a>
+                        </li>
+
+                        <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? 'disabled'">
+                            <a class="page-link"
+                               th:href="@{${basePath}(page=${currentPage + 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}">
+                                Sau
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+</body>
+</html>

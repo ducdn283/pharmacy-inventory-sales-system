@@ -29,6 +29,18 @@ public class SidebarMenuService {
     /** Single-item "home" group; rendered as a plain link, so this label is not shown. */
     private static final String GROUP_MAIN = "Tổng quan";
 
+    // Top-level icons shared across roles, so the same concept never picks up a different glyph
+    // in one role's menu than in another's (2026-07-25 sidebar redesign).
+    private static final String ICON_DASHBOARD = "ti ti-trending-up";
+    private static final String ICON_TRANSACTIONS = "ti ti-file-text";
+    private static final String ICON_PRODUCTS = "ti ti-package";
+    private static final String ICON_SUPPLY = "ti ti-truck";
+    private static final String ICON_WAREHOUSE = "ti ti-inbox";
+    private static final String ICON_FINANCE = "ti ti-cash";
+    private static final String ICON_CUSTOMER = "ti ti-user";
+    private static final String ICON_SHIFT_REPORT = "ti ti-clipboard-data";
+    private static final String ICON_NOTIFICATION = "ti ti-bell";
+
     private final Map<String, List<SidebarMenuGroup>> menusByRole = new LinkedHashMap<>();
 
     public SidebarMenuService() {
@@ -108,128 +120,108 @@ public class SidebarMenuService {
 
     private List<SidebarMenuGroup> ownerMenu() {
         return List.of(
-                linkGroup(GROUP_MAIN, "ti ti-chart-line",
-                        i("Tổng quan", "/owner/dashboard", "ti ti-chart-line")),
+                linkGroup(GROUP_MAIN, ICON_DASHBOARD,
+                        i("Tổng quan", "/owner/dashboard", ICON_DASHBOARD)),
+                linkGroup("Thông báo", ICON_NOTIFICATION,
+                        i("Thông báo", "/owner/notifications", ICON_NOTIFICATION)),
+
+                menuGroup("Giao dịch", ICON_TRANSACTIONS,
+                        i("Bán hàng", "/owner/selling", "ti ti-shopping-cart"),
+                        i("Danh sách hóa đơn", "/owner/invoices", ICON_TRANSACTIONS),
+                        i("Danh sách trả hàng", "/owner/returns", "ti ti-rotate")),
 
                 menuGroup("Quản trị", "ti ti-settings",
                         i("Danh sách người dùng", "/owner/users", "ti ti-users"),
                         i("Bảng phân quyền", "/owner/permissions", "ti ti-shield-lock")),
 
-                linkGroup("Bán hàng", "ti ti-shopping-cart",
-                        i("Bán hàng", "/owner/selling", "ti ti-shopping-cart")),
+                menuGroup("Hàng hóa", ICON_PRODUCTS,
+                        i("Danh sách hàng hóa", "/owner/products", ICON_PRODUCTS),
+                        i("Danh sách loại hàng", "/owner/types", "ti ti-category"),
+                        i("Danh sách nhà sản xuất", "/owner/producers", "ti ti-building-factory-2"),
+                        i("Danh sách vị trí", "/owner/positions", "ti ti-map-pin")),
 
-                menuGroup("Hàng hóa", "ti ti-package",
-                        i("Danh sách hàng hóa", "/owner/products", "ti ti-package")),
-
-                menuGroup("Danh mục hàng hóa", "ti ti-layout-grid",
-                        i("Danh sách vị trí", "/owner/positions", "ti ti-map-pin"),
-                        i("Loại hàng", "/owner/types", "ti ti-category"),
-                        i("Nhà sản xuất", "/owner/producers", "ti ti-building-factory-2")),
-
-                menuGroup("Cung ứng", "ti ti-truck",
-                        i("Danh sách nhà cung cấp", "/supplier", "ti ti-truck"),
-                        i("Danh sách dự trù mua hàng", "/owner/procurements", "ti ti-clipboard-list"),
+                menuGroup("Cung ứng", ICON_SUPPLY,
+                        i("Danh sách nhà cung cấp", "/supplier", ICON_SUPPLY),
                         i("Danh sách phiếu nhập", "/owner/purchase-invoices", "ti ti-receipt"),
-                        i("Trả hàng nhà cung cấp", "/owner/return-purchases", "ti ti-rotate-2")),
+                        i("Danh sách dự trù", "/owner/procurements", "ti ti-clipboard-list"),
+                        i("Danh sách trả hàng NCC", "/owner/return-purchases", "ti ti-rotate-2")),
 
-                menuGroup("Tài chính", "ti ti-cash-banknote",
+                menuGroup("Kho", ICON_WAREHOUSE,
+                        i("Danh sách điều chỉnh tồn", "/owner/stock-adjustments", ICON_WAREHOUSE),
+                        i("Danh sách kiểm kho", "/owner/stock-counts", "ti ti-clipboard-list")),
+
+                menuGroup("Tài chính", ICON_FINANCE,
                         i("Danh sách công nợ", "/owner/debts", "ti ti-credit-card"),
-                        i("Danh sách hóa đơn VAT", "/owner/vat-invoices", "ti ti-file-dollar"),
+                        i("Danh sách khoản thu", "/owner/incomes", ICON_FINANCE),
+                        i("Danh sách khoản chi", "/owner/expenses", "ti ti-cash"),
+                        i("Kỳ thuế", "/owner/tax-periods", "ti ti-receipt-tax"),
+                        i("Thiết lập giá", "/owner/price-settings", "ti ti-tag"),
                         i("Thiết lập tài chính", "/owner/financial-setting", "ti ti-settings")),
 
-                menuGroup("Kho", "ti ti-archive",
-                        i("Kiểm kê kho", "/owner/stock-counts", "ti ti-clipboard-list"),
-                        i("Điều chỉnh kho", "/owner/stock-adjustments", "ti ti-archive")),
+                linkGroup("Khách hàng", ICON_CUSTOMER,
+                        i("Khách hàng", "/customer", ICON_CUSTOMER)),
 
-                menuGroup("Giao dịch", "ti ti-file-invoice",
-                        i("Danh sách hóa đơn", "/owner/invoices", "ti ti-file-invoice"),
-                        i("Danh sách khoản thu", "/owner/incomes", "ti ti-cash-banknote"),
-                        i("Danh sách khoản chi", "/owner/expenses", "ti ti-cash"),
-                        i("Danh sách trả hàng", "/owner/returns", "ti ti-rotate")),
-
-                linkGroup("Khách hàng", "ti ti-users",
-                        i("Khách hàng", "/customer", "ti ti-users")),
+                linkGroup("Báo cáo ca", ICON_SHIFT_REPORT,
+                        i("Báo cáo ca", "/owner/shift-reports", ICON_SHIFT_REPORT)),
 
                 linkGroup("Phê duyệt", "ti ti-clipboard-check",
-                        i("Phê duyệt", "/owner/approvals", "ti ti-clipboard-check")),
-
-                menuGroup("Báo cáo", "ti ti-report",
-                        i("Báo cáo ca", "/owner/shift-reports", "ti ti-report"),
-                        i("Báo cáo tổng hợp theo ngày", "/owner/daily-reports", "ti ti-report-analytics"))
+                        i("Phê duyệt", "/owner/approvals", "ti ti-clipboard-check"))
         );
     }
 
     private List<SidebarMenuGroup> pharmacistMenu() {
         return List.of(
-                linkGroup(GROUP_MAIN, "ti ti-chart-line",
-                        i("Tổng quan", "/pharmacist/dashboard", "ti ti-chart-line")),
+                linkGroup(GROUP_MAIN, ICON_DASHBOARD,
+                        i("Tổng quan", "/pharmacist/dashboard", ICON_DASHBOARD)),
+                linkGroup("Thông báo", ICON_NOTIFICATION,
+                        i("Thông báo", "/pharmacist/notifications", ICON_NOTIFICATION)),
 
                 linkGroup("Bán hàng", "ti ti-shopping-cart",
                         i("Bán hàng", "/pharmacist/selling", "ti ti-shopping-cart")),
 
-                menuGroup("Hàng hóa", "ti ti-package",
-                        i("Danh sách hàng hóa", "/pharmacist/products", "ti ti-package"),
-                        i("Loại hàng", "/pharmacist/types", "ti ti-category"),
-                        i("Nhà sản xuất", "/pharmacist/producers", "ti ti-building-factory-2")),
-
-                linkGroup("Danh sách vị trí", "ti ti-map-pin",
-                        i("Danh sách vị trí", "/pharmacist/positions", "ti ti-map-pin")),
-
-                menuGroup("Cung ứng", "ti ti-truck",
-                        i("Danh sách nhà cung cấp", "/supplier", "ti ti-truck"),
-                        i("Danh sách phiếu nhập", "/pharmacist/purchase-invoices", "ti ti-receipt")),
-
-                menuGroup("Kho", "ti ti-archive",
-                        i("Kiểm kê", "/pharmacist/stock-counts", "ti ti-clipboard-list"),
-                        i("Điều chỉnh", "/pharmacist/stock-adjustments", "ti ti-archive")),
-
-                menuGroup("Giao dịch", "ti ti-file-invoice",
-                        i("Danh sách hóa đơn", "/pharmacist/invoices", "ti ti-file-invoice"),
-                        i("Danh sách khoản thu", "/pharmacist/incomes", "ti ti-cash-banknote"),
+                menuGroup("Giao dịch", ICON_TRANSACTIONS,
+                        i("Danh sách hóa đơn", "/pharmacist/invoices", ICON_TRANSACTIONS),
                         i("Danh sách trả hàng", "/pharmacist/returns", "ti ti-rotate")),
 
-                linkGroup("Khách hàng", "ti ti-users",
-                        i("Khách hàng", "/customer", "ti ti-users")),
+                linkGroup("Hàng hóa", ICON_PRODUCTS,
+                        i("Hàng hóa", "/pharmacist/products", ICON_PRODUCTS)),
 
-                linkGroup("Báo cáo ca", "ti ti-report",
-                        i("Báo cáo ca", "/pharmacist/shift-reports", "ti ti-report"))
+                menuGroup("Kho", ICON_WAREHOUSE,
+                        i("Danh sách kiểm kho", "/pharmacist/stock-counts", "ti ti-clipboard-list")),
+
+                menuGroup("Tài chính", ICON_FINANCE,
+                        i("Danh sách khoản thu", "/pharmacist/incomes", ICON_FINANCE)),
+
+                linkGroup("Khách hàng", ICON_CUSTOMER,
+                        i("Khách hàng", "/customer", ICON_CUSTOMER)),
+
+                linkGroup("Báo cáo ca", ICON_SHIFT_REPORT,
+                        i("Báo cáo ca", "/pharmacist/shift-reports", ICON_SHIFT_REPORT))
         );
     }
 
     private List<SidebarMenuGroup> accountantMenu() {
         return List.of(
-                linkGroup(GROUP_MAIN, "ti ti-chart-line",
-                        i("Tổng quan", "/accountant/dashboard", "ti ti-chart-line")),
+                linkGroup(GROUP_MAIN, ICON_DASHBOARD,
+                        i("Tổng quan", "/accountant/dashboard", ICON_DASHBOARD)),
+                linkGroup("Thông báo", ICON_NOTIFICATION,
+                        i("Thông báo", "/accountant/notifications", ICON_NOTIFICATION)),
 
-                menuGroup("Hàng hóa", "ti ti-package",
-                        i("Danh sách hàng hóa", "/accountant/products", "ti ti-package"),
-                        i("Loại hàng", "/accountant/types", "ti ti-category"),
-                        i("Nhà sản xuất", "/accountant/producers", "ti ti-building-factory-2")),
+                menuGroup("Tài chính", ICON_FINANCE,
+                        i("Danh sách công nợ", "/accountant/debts", "ti ti-credit-card"),
+                        i("Danh sách khoản thu", "/accountant/incomes", ICON_FINANCE),
+                        i("Danh sách khoản chi", "/accountant/expenses", "ti ti-cash"),
+                        i("Kỳ thuế", "/accountant/tax-periods", "ti ti-receipt-tax")),
 
-                linkGroup("Nhà cung cấp", "ti ti-truck",
-                        i("Nhà cung cấp", "/supplier", "ti ti-truck")),
+                menuGroup("Cung ứng", ICON_SUPPLY,
+                        i("Danh sách phiếu nhập", "/accountant/purchase-invoices", "ti ti-receipt")),
 
-                linkGroup("Khách hàng", "ti ti-users",
-                        i("Khách hàng", "/customer", "ti ti-users")),
+                linkGroup("Khách hàng", ICON_CUSTOMER,
+                        i("Khách hàng", "/customer", ICON_CUSTOMER)),
 
-                linkGroup("Công nợ", "ti ti-credit-card",
-                        i("Công nợ", "/accountant/debts", "ti ti-credit-card")),
-
-                linkGroup("Phiếu nhập", "ti ti-receipt",
-                        i("Phiếu nhập", "/accountant/purchase-invoices", "ti ti-receipt")),
-
-                linkGroup("Khoản chi", "ti ti-cash",
-                        i("Khoản chi", "/accountant/expenses", "ti ti-cash")),
-
-                linkGroup("Thiết lập tài chính", "ti ti-settings",
-                        i("Thiết lập tài chính", "/accountant/financial-setting", "ti ti-settings")),
-
-                linkGroup("Báo cáo", "ti ti-report",
-                        i("Danh sách báo cáo ngày", "/accountant/daily-reports", "ti ti-report")),
-
-                menuGroup("Hóa đơn", "ti ti-file-invoice",
-                        i("Danh sách hóa đơn", "/accountant/invoices", "ti ti-file-invoice"),
-                        i("Danh sách hóa đơn VAT", "/accountant/vat-invoices", "ti ti-file-dollar"))
+                menuGroup("Giao dịch", ICON_TRANSACTIONS,
+                        i("Danh sách hóa đơn", "/accountant/invoices", ICON_TRANSACTIONS),
+                        i("Danh sách trả hàng", "/accountant/returns", "ti ti-rotate"))
         );
     }
 

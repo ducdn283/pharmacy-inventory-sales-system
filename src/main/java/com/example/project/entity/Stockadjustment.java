@@ -33,18 +33,6 @@ public class Stockadjustment {
     private Instant date;
 
     @NotNull
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "createdBy", nullable = false)
-    private Account createdBy;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approvedBy")
-    private Account approvedBy;
-
-    @Column(name = "approvedAt")
-    private Instant approvedAt;
-
-    @NotNull
     @Column(name = "reason", nullable = false, columnDefinition = "TEXT")
     private String reason;
 

@@ -30,9 +30,15 @@ public class ReturnPurchaseLineResponse {
     /** Current on-hand stock across the line's batches — the max this line can still return. */
     private Integer returnableQty;
 
-    /** NET import cost per base unit (chưa thuế) — shown in the "Đơn giá nhập" column. */
+    /** GROSS import price per import-unit (đã gồm thuế — chốt nhóm) — hiển thị cột "Đơn giá nhập". */
     private BigDecimal importPricePerBase;
 
-    /** GROSS refund unit price (net + input VAT) — NCC hoàn 100%; basis for the "Tiền hoàn" column. */
+    /** Đơn giá hoàn / đơn vị = 100% gross = đúng {@link #importPricePerBase} (NCC hoàn đúng số đã trả). */
     private BigDecimal refundUnitPrice;
+
+    /**
+     * Thuế suất GTGT trên dòng phiếu nhập gốc — dùng để tạm tính phần thuế ĐẦU VÀO phải đảo lại. Chỉ có ý
+     * nghĩa với Nhóm 3/4; màn tạo nhận thêm cờ {@code deductionGroup} để biết có hiển thị hay không.
+     */
+    private BigDecimal vatRate;
 }

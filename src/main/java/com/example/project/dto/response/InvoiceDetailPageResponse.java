@@ -16,6 +16,8 @@ public class InvoiceDetailPageResponse {
     private Integer id;
     private String invoiceCode;
     private String invoicePattern;
+    /** Mã số thuế đơn vị — chỉ hiển thị khi hóa đơn đã ký. */
+    private String taxCode;
 
     private LocalDateTime date;
     private String dateDisplay;
@@ -40,6 +42,9 @@ public class InvoiceDetailPageResponse {
 
     private Integer originalInvoiceId;
     private String originalInvoiceCode;
+
+    private Integer rootInvoiceId;
+    private String rootInvoiceCode;
 
     private BigDecimal subtotal;
     private BigDecimal discount;

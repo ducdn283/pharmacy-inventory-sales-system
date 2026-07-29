@@ -219,6 +219,7 @@ public class StockcountController {
 
     @PostMapping(OWNER_BASE + "/{stockCountId}/approve")
     public String approve(@PathVariable Integer stockCountId,
+                          @RequestParam(name = "redirectTo", required = false) String redirectTo,
                           RedirectAttributes redirectAttributes) {
         try {
             stockcountService.approve(stockCountId, currentUserContext.getCurrentAccountId());
@@ -227,11 +228,12 @@ public class StockcountController {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
 
-        return "redirect:" + OWNER_BASE + "/" + stockCountId;
+        return "redirect:" + (redirectTo != null && !redirectTo.isBlank() ? redirectTo : OWNER_BASE + "/" + stockCountId);
     }
 
     @PostMapping(OWNER_BASE + "/{stockCountId}/reject")
     public String reject(@PathVariable Integer stockCountId,
+                         @RequestParam(name = "redirectTo", required = false) String redirectTo,
                          RedirectAttributes redirectAttributes) {
         try {
             stockcountService.reject(stockCountId, currentUserContext.getCurrentAccountId());
@@ -240,7 +242,7 @@ public class StockcountController {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
 
-        return "redirect:" + OWNER_BASE + "/" + stockCountId;
+        return "redirect:" + (redirectTo != null && !redirectTo.isBlank() ? redirectTo : OWNER_BASE + "/" + stockCountId);
     }
 
     private String resolveBasePath(HttpServletRequest request) {

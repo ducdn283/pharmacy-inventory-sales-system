@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -30,6 +31,10 @@ public class FinancialsettingResponse {
     private BigDecimal annualRevenueThreshold2;
     private Boolean autoOffsetDebtOnRefund;
     private Integer returnPolicyMaxDays;
+    private BigDecimal bankAccountBalance;
+    private BigDecimal cashSafeBalance;
+    private LocalDateTime balanceUpdatedAt;
+
 
     public static FinancialsettingResponse from(Financialsetting financialsetting) {
         return new FinancialsettingResponse(
@@ -50,7 +55,10 @@ public class FinancialsettingResponse {
                 financialsetting.getAnnualRevenueThreshold1(),
                 financialsetting.getAnnualRevenueThreshold2(),
                 financialsetting.getAutoOffsetDebtOnRefund(),
-                financialsetting.getReturnPolicyMaxDays()
+                financialsetting.getReturnPolicyMaxDays(),
+                financialsetting.getBankAccountBalance(),
+                financialsetting.getCashSafeBalance(),
+                financialsetting.getBalanceUpdatedAt()
         );
     }
 }

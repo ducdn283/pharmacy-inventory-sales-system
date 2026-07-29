@@ -30,16 +30,10 @@ public class PlaceholderController {
     }
 
     @GetMapping({
-            "/owner/dashboard",
             "/owner/suppliers",
-            "/owner/debts",
             "/owner/vat-invoices",
             "/owner/customers",
-            "/owner/approvals",
             "/owner/notifications",
-            "/owner/incomes",
-            "/owner/expenses",
-            "/owner/shift-reports",
             "/owner/daily-reports"
     })
     public String owner(HttpServletRequest request, Model model) {
@@ -47,21 +41,18 @@ public class PlaceholderController {
     }
 
     @GetMapping({
-            "/pharmacist/dashboard",
             "/pharmacist/customers",
-            "/pharmacist/shift-reports",
             "/pharmacist/notifications",
-            "/pharmacist/incomes",
             "/pharmacist/stock-outs/create"
     })
     public String pharmacist(HttpServletRequest request, Model model) {
         return render(request, model);
     }
 
+    // "/accountant/returns" mới có trong sidebar (2026-07-25) nhưng Return hiện chỉ có route cho
+    // Owner + Pharmacist — để placeholder thay vì mở quyền truy cập màn hình thật cho Kế toán.
     @GetMapping({
             "/accountant/dashboard",
-            "/accountant/debts",
-            "/accountant/expenses",
             "/accountant/daily-reports",
             "/accountant/vat-invoices",
             "/accountant/notifications"

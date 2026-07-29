@@ -19,16 +19,20 @@ import java.util.List;
 /**
  * Customer-return screens (list / detail / create / approve / reject).
  *
- * <p>Reachable by the Owner (approver) and the Pharmacist (creator). Both share the same templates;
- * the active base path (<code>/owner/returns</code> or <code>/pharmacist/returns</code>) is resolved
- * per request so links stay within the caller's role prefix. Approve/reject are Owner-only (enforced
- * by SecurityConfig on <code>/owner/**</code>).</p>
+ * <p>Reachable by the Owner (approver), the Pharmacist (creator), and — read-only — the Accountant.
+ * All three share the same templates; the active base path (<code>/owner/returns</code>,
+ * <code>/pharmacist/returns</code> or <code>/accountant/returns</code>) is resolved per request so
+ * links stay within the caller's role prefix. Create/submit/approve/reject are never mapped under
+ * {@code ACCOUNTANT_BASE} — the create/detail templates additionally hide those actions behind
+ * {@code currentRole != 'ACCOUNTANT'} so the Accountant only ever sees a view link. Approve/reject
+ * remain Owner-only (enforced by SecurityConfig on <code>/owner/**</code>).</p>
  */
 @Controller
 public class ReturnController {
 
     private static final String OWNER_BASE = "/owner/returns";
     private static final String PHARMACIST_BASE = "/pharmacist/returns";
+    private static final String ACCOUNTANT_BASE = "/accountant/returns";
 
     private final ReturnService returnService;
     private final CurrentUserContext currentUserContext;
@@ -38,11 +42,10 @@ public class ReturnController {
         this.currentUserContext = currentUserContext;
     }
 
-    @GetMapping({OWNER_BASE, PHARMACIST_BASE})
+    @GetMapping({OWNER_BASE, PHARMACIST_BASE, ACCOUNTANT_BASE})
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                        @RequestParam(name = "fromDate", required = false) String fromDate,
                        @RequestParam(name = "toDate", required = false) String toDate,
-                       @RequestParam(name = "returnType", required = false) String returnType,
                        @RequestParam(name = "status", required = false) String status,
                        @RequestParam(name = "page", defaultValue = "0") int page,
                        @RequestParam(name = "size", defaultValue = "5") int size,
@@ -56,19 +59,17 @@ public class ReturnController {
         }
 
         Page<ReturnListItemResponse> returnPage =
-                returnService.search(keyword, fromDate, toDate, returnType, status, PageRequest.of(page, size));
+                returnService.search(keyword, fromDate, toDate, status, PageRequest.of(page, size));
 
         model.addAttribute("returnPage", returnPage);
         model.addAttribute("returns", returnPage.getContent());
         model.addAttribute("stats", returnService.getStats());
 
         model.addAttribute("statuses", returnService.listStatuses());
-        model.addAttribute("returnTypeLabels", returnService.returnTypeLabels());
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
-        model.addAttribute("filterReturnType", returnType);
         model.addAttribute("filterStatus", status);
 
         model.addAttribute("currentPage", returnPage.getNumber());
@@ -82,11 +83,11 @@ public class ReturnController {
 
     @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create"})
     public String createPage(HttpServletRequest request, Model model) {
-        model.addAttribute("form", new ReturnCreateRequest());
-        model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
-        model.addAttribute("returnTypeLabels", returnService.returnTypeLabels());
-        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        model.addAttribute("basePath", resolveBasePath(request));
+        ReturnCreateRequest form = new ReturnCreateRequest();
+        // Điền sẵn tỷ lệ hoàn mặc định của nhà thuốc; người lập vẫn chỉnh được cho từng phiếu.
+        form.setRefundRate(returnService.getDefaultRefundRate());
+        model.addAttribute("form", form);
+        addCreateFormOptions(model, request);
         return "return/create";
     }
 
@@ -125,12 +126,20 @@ public class ReturnController {
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
-            model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
-            model.addAttribute("returnTypeLabels", returnService.returnTypeLabels());
-            model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-            model.addAttribute("basePath", basePath);
+            addCreateFormOptions(model, request);
             return "return/create";
         }
+    }
+
+    /** Dữ liệu dùng chung cho màn tạo (lần đầu và khi render lại sau lỗi validate). */
+    private void addCreateFormOptions(Model model, HttpServletRequest request) {
+        model.addAttribute("returnableInvoices", returnService.listReturnableInvoices(null));
+        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
+        model.addAttribute("returnWindowDays", returnService.getReturnWindowDays());
+        model.addAttribute("returnWindowLabel", returnService.getReturnWindowLabel());
+        model.addAttribute("defaultRefundRate", returnService.getDefaultRefundRate());
+        model.addAttribute("autoOffsetDebt", returnService.isAutoOffsetDebt());
+        model.addAttribute("basePath", resolveBasePath(request));
     }
 
     @PostMapping({OWNER_BASE + "/{returnId}/submit", PHARMACIST_BASE + "/{returnId}/submit"})
@@ -150,15 +159,19 @@ public class ReturnController {
         return "redirect:" + basePath + "/" + returnId;
     }
 
-    @GetMapping({OWNER_BASE + "/{returnId}", PHARMACIST_BASE + "/{returnId}"})
+    @GetMapping({OWNER_BASE + "/{returnId}", PHARMACIST_BASE + "/{returnId}", ACCOUNTANT_BASE + "/{returnId}"})
     public String detail(@PathVariable Integer returnId, HttpServletRequest request, Model model) {
         model.addAttribute("detail", returnService.getDetail(returnId));
         model.addAttribute("basePath", resolveBasePath(request));
+        // Cho phép bấm thẳng từ "Hóa đơn gốc" sang màn chi tiết hóa đơn — cả 3 role đều xem được hóa đơn.
+        model.addAttribute("invoiceBasePath", resolveInvoiceBasePath(request));
         return "return/detail";
     }
 
     @PostMapping(OWNER_BASE + "/{returnId}/approve")
-    public String approve(@PathVariable Integer returnId, RedirectAttributes redirectAttributes) {
+    public String approve(@PathVariable Integer returnId,
+                          @RequestParam(name = "redirectTo", required = false) String redirectTo,
+                          RedirectAttributes redirectAttributes) {
         try {
             returnService.approve(returnId);
             redirectAttributes.addFlashAttribute("successMessage",
@@ -166,21 +179,42 @@ public class ReturnController {
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
-        return "redirect:" + OWNER_BASE + "/" + returnId;
+        return "redirect:" + (redirectTo != null && !redirectTo.isBlank() ? redirectTo : OWNER_BASE + "/" + returnId);
     }
 
     @PostMapping(OWNER_BASE + "/{returnId}/reject")
-    public String reject(@PathVariable Integer returnId, RedirectAttributes redirectAttributes) {
+    public String reject(@PathVariable Integer returnId,
+                         @RequestParam(name = "redirectTo", required = false) String redirectTo,
+                         RedirectAttributes redirectAttributes) {
         try {
             returnService.reject(returnId);
             redirectAttributes.addFlashAttribute("successMessage", "Đã từ chối phiếu trả hàng");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
-        return "redirect:" + OWNER_BASE + "/" + returnId;
+        return "redirect:" + (redirectTo != null && !redirectTo.isBlank() ? redirectTo : OWNER_BASE + "/" + returnId);
     }
 
     private String resolveBasePath(HttpServletRequest request) {
-        return request.getRequestURI().startsWith(PHARMACIST_BASE) ? PHARMACIST_BASE : OWNER_BASE;
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return PHARMACIST_BASE;
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return ACCOUNTANT_BASE;
+        }
+        return OWNER_BASE;
+    }
+
+    /** Invoice-detail base for the current role (InvoiceController maps all three). */
+    private String resolveInvoiceBasePath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/invoices";
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return "/accountant/invoices";
+        }
+        return "/owner/invoices";
     }
 }

@@ -90,7 +90,7 @@ public class InvoiceController {
         model.addAttribute("totalItems", invoicePage.getTotalElements());
         model.addAttribute("pageTitle", "Danh sách hóa đơn");
         model.addAttribute("basePath", basePath);
-        return "invoice-list";
+        return "invoice/invoice-list";
     }
 
     @GetMapping(value = {"/owner/invoices/{invoiceId}/lines",
@@ -113,7 +113,7 @@ public class InvoiceController {
         model.addAttribute("basePath", resolveBasePath(request));
         model.addAttribute("returnBasePath", resolveReturnBasePath(request));
         model.addAttribute("pageTitle", "Chi tiết hóa đơn " + detail.getInvoiceCode());
-        return "invoice-detail";
+        return "invoice/invoice-detail";
     }
 
     @PostMapping({"/owner/invoices/{invoiceId}/sign", "/accountant/invoices/{invoiceId}/sign"})
@@ -158,7 +158,7 @@ public class InvoiceController {
             model.addAttribute("form", new InvoiceCreateRequest());
         }
         addSellingPageData(request, model);
-        return "create-invoice";
+        return "invoice/create-invoice";
     }
 
     @PostMapping({"/owner/selling", "/pharmacist/selling"})
@@ -167,13 +167,14 @@ public class InvoiceController {
                              RedirectAttributes redirectAttributes,
                              Model model) {
         try {
-            invoiceService.createSaleInvoice(form, currentUserContext.getCurrentAccountId());
+            invoiceService.createSaleInvoice(
+                    form, currentUserContext.getCurrentAccountId(), !currentUserContext.isPharmacist());
             redirectAttributes.addFlashAttribute("success", "Tạo hóa đơn bán hàng thành công");
             return "redirect:" + invoiceListBasePath(request);
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             addSellingPageData(request, model);
-            return "create-invoice";
+            return "invoice/create-invoice";
         }
     }
 
@@ -181,6 +182,7 @@ public class InvoiceController {
         model.addAttribute("products", invoiceService.listSellableProducts());
         model.addAttribute("customers", invoiceService.listCustomers());
         model.addAttribute("sellerName", currentUserContext.getCurrentAccountName());
+        model.addAttribute("debtAllowed", !currentUserContext.isPharmacist());
         model.addAttribute("basePath", resolveSellingBasePath(request));
         model.addAttribute("invoicesPath", invoiceListBasePath(request));
     }

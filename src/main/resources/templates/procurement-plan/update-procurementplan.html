@@ -1757,11 +1757,21 @@
         form.addEventListener('submit', function (event) {
             syncLineAmountsBeforeSubmit();
 
-            if (initialCompleted || !toggle.checked) {
+            if (initialCompleted || !toggle.checked || form.dataset.confirmed === '1') {
                 return;
             }
 
-            if (!window.confirm(COMPLETED_CONFIRM_MESSAGE)) {
+            event.preventDefault();
+            if (typeof window.pmConfirm === 'function') {
+                window.pmConfirm(COMPLETED_CONFIRM_MESSAGE, function () {
+                    form.dataset.confirmed = '1';
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                });
+            } else if (!window.confirm(COMPLETED_CONFIRM_MESSAGE)) {
                 event.preventDefault();
             }
         });
@@ -1784,6 +1794,8 @@
         document.body.appendChild(iframe);
     });
 </script>
+
+<div th:replace="~{fragments/confirm :: confirm}"></div>
 
 </body>
 </html>

@@ -142,6 +142,85 @@
         .product-search-name { font-size: 14px; color: #111827; font-weight: 600; }
         .product-search-stock { font-size: 12px; color: #059669; white-space: nowrap; }
 
+        .customer-picker {
+            position: relative;
+        }
+
+        .customer-picker-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .customer-picker-icon {
+            font-size: 1.1rem;
+            color: #059669;
+            flex-shrink: 0;
+        }
+
+        .customer-picker-icon.muted {
+            color: #9ca3af;
+        }
+
+        .customer-picker-label {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .customer-picker-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, .12);
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 30;
+            display: none;
+        }
+
+        .customer-picker-menu.show {
+            display: block;
+        }
+
+        .customer-picker-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .customer-picker-option:last-child {
+            border-bottom: none;
+        }
+
+        .customer-picker-option:hover,
+        .customer-picker-option.active {
+            background: #ecfdf5;
+        }
+
+        .customer-picker-option .ti {
+            font-size: 1.1rem;
+            color: #059669;
+            flex-shrink: 0;
+        }
+
+        .customer-picker-option[data-value=""] .ti {
+            color: #9ca3af;
+        }
+
         .product-title-code {
             font-size: 11px;
             color: #9ca3af;
@@ -588,13 +667,35 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Khách hàng</label>
-                                <select class="form-select" th:field="*{customerId}" onchange="calculateSummary()">
-                                    <option value="">Khách lẻ</option>
-                                    <option th:each="customer : ${customers}"
-                                            th:value="${customer.id}"
-                                            th:text="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}">
-                                    </option>
-                                </select>
+                                <div class="customer-picker" id="customerPicker">
+                                    <button type="button"
+                                            class="form-select customer-picker-trigger"
+                                            id="customerPickerTrigger"
+                                            aria-haspopup="listbox"
+                                            aria-expanded="false">
+                                        <i class="ti ti-user customer-picker-icon muted" id="customerPickerIcon"></i>
+                                        <span class="customer-picker-label" id="customerPickerLabel">Khách lẻ</span>
+                                    </button>
+                                    <input type="hidden" th:field="*{customerId}" id="customerId">
+                                    <div class="customer-picker-menu" id="customerPickerMenu" role="listbox">
+                                        <div class="customer-picker-option active"
+                                             data-value=""
+                                             data-label="Khách lẻ"
+                                             data-icon="ti-user"
+                                             data-muted="1">
+                                            <i class="ti ti-user"></i>
+                                            <span>Khách lẻ</span>
+                                        </div>
+                                        <div th:each="customer : ${customers}"
+                                             class="customer-picker-option"
+                                             th:data-value="${customer.id}"
+                                             th:data-label="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"
+                                             th:data-icon="${customer.customerType == 'COMPANY' ? 'ti-building' : 'ti-user'}">
+                                            <i th:class="${customer.customerType == 'COMPANY' ? 'ti ti-building' : 'ti ti-user'}"></i>
+                                            <span th:text="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6">
@@ -785,7 +886,7 @@
                             <strong id="paidDisplay">0đ</strong>
                         </div>
 
-                        <div class="money-summary-row">
+                        <div class="money-summary-row" th:if="${debtAllowed}">
                             <span class="text-secondary">Còn nợ</span>
                             <strong class="text-warning" id="debtDisplay">0đ</strong>
                         </div>
@@ -800,7 +901,8 @@
                         <div class="text-secondary small">
                             <p class="mb-2">1. Tick đơn vị cần bán và nhập số lượng ngay bên cạnh — đơn giá tự điền theo đơn vị.</p>
                             <p class="mb-2">2. Bấm <strong>+</strong> ở cuối dòng để thêm cùng sản phẩm ở lô khác; mặc định lô HSD gần nhất.</p>
-                            <p class="mb-2">3. Khách lẻ phải thanh toán đủ; chọn khách hàng nếu muốn ghi nợ.</p>
+                            <p class="mb-2" th:if="${debtAllowed}">3. Khách lẻ phải thanh toán đủ; chọn khách hàng nếu muốn ghi nợ.</p>
+                            <p class="mb-2" th:unless="${debtAllowed}">3. Phải thu đủ tiền, không được ghi nợ.</p>
                             <p class="mb-0">4. Bật "thuốc kê đơn" thì phải nhập mã đơn thuốc.</p>
                         </div>
                     </div>
@@ -831,6 +933,7 @@
 <script th:inline="javascript">
     const products = /*[[${products}]]*/ [];
     const initialDetails = /*[[${form.details}]]*/ [];
+    const debtAllowed = /*[[${debtAllowed}]]*/ true;
     const productById = {};
     products.forEach(p => productById[p.productId] = p);
 
@@ -1595,8 +1698,81 @@
     }
 
     function isWalkInCustomer() {
-        const select = document.getElementById('customerId');
-        return !select || select.value === '';
+        const hidden = document.getElementById('customerId');
+        return !hidden || hidden.value === '';
+    }
+
+    /** Walk-in customers and pharmacists must collect the full invoice total (no debt). */
+    function requiresFullPayment() {
+        return isWalkInCustomer() || !debtAllowed;
+    }
+
+    function initCustomerPicker() {
+        const picker = document.getElementById('customerPicker');
+        const trigger = document.getElementById('customerPickerTrigger');
+        const menu = document.getElementById('customerPickerMenu');
+        const hidden = document.getElementById('customerId');
+        const icon = document.getElementById('customerPickerIcon');
+        const label = document.getElementById('customerPickerLabel');
+        if (!picker || !trigger || !menu || !hidden || !icon || !label) {
+            return;
+        }
+
+        function findOption(value) {
+            const options = menu.querySelectorAll('.customer-picker-option');
+            for (const option of options) {
+                if (String(option.dataset.value) === String(value)) {
+                    return option;
+                }
+            }
+            return menu.querySelector('.customer-picker-option[data-value=""]');
+        }
+
+        function setSelection(value) {
+            hidden.value = value;
+            const option = findOption(value);
+            if (!option) {
+                return;
+            }
+
+            menu.querySelectorAll('.customer-picker-option').forEach(function (el) {
+                el.classList.remove('active');
+            });
+            option.classList.add('active');
+
+            const iconClass = option.dataset.icon || 'ti-user';
+            icon.className = 'ti ' + iconClass + ' customer-picker-icon'
+                + (option.dataset.muted ? ' muted' : '');
+            label.textContent = option.dataset.label || 'Khách lẻ';
+            menu.classList.remove('show');
+            trigger.setAttribute('aria-expanded', 'false');
+            calculateSummary();
+        }
+
+        if (hidden.value) {
+            setSelection(hidden.value);
+        }
+
+        trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            const open = menu.classList.toggle('show');
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+
+        menu.addEventListener('click', function (event) {
+            const option = event.target.closest('.customer-picker-option');
+            if (!option) {
+                return;
+            }
+            setSelection(option.dataset.value);
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!picker.contains(event.target)) {
+                menu.classList.remove('show');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        });
     }
 
     function onPayMethodChange() {
@@ -1677,7 +1853,7 @@
         if (method === 'both') {
             let cash;
             let banking;
-            if (isWalkInCustomer()) {
+            if (requiresFullPayment()) {
                 ({ cash, banking } = balanceWalkInSplitPayment(total));
             } else {
                 cash = parsePrice(document.getElementById('cashAmount'));
@@ -1688,7 +1864,7 @@
             paid = cash + banking;
         } else {
             const paidAmountInput = document.getElementById('paidAmount');
-            if (isWalkInCustomer()) {
+            if (requiresFullPayment()) {
                 paidAmountInput.value = formatPriceDisplay(total);
                 paidAmountInput.readOnly = true;
             } else {
@@ -1713,7 +1889,10 @@
         document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
         document.getElementById('totalDisplay').textContent = formatMoney(total);
         document.getElementById('paidDisplay').textContent = formatMoney(paid);
-        document.getElementById('debtDisplay').textContent = formatMoney(debt);
+        const debtDisplay = document.getElementById('debtDisplay');
+        if (debtDisplay) {
+            debtDisplay.textContent = formatMoney(debt);
+        }
         document.getElementById('overpaidWarning').style.display = paid > total ? 'block' : 'none';
 
         updateSubmitState();
@@ -1824,6 +2003,7 @@
             });
         }
         toggleEmptyState();
+        initCustomerPicker();
         calculateSummary();
 
         document.getElementById('batchPickerCloseBtn').addEventListener('click', closeBatchPicker);

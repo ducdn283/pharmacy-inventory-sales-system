@@ -23,6 +23,15 @@ public class ReturnPurchaseListItemResponse {
     private int itemCount;
     private BigDecimal totalRefund;
 
+    /**
+     * Phần giá trị hàng trả đã CẤN TRỪ vào công nợ nhà thuốc nợ NCC = {@code MIN(totalRefund, dư nợ phiếu
+     * nhập lúc duyệt)}. Đây là số CỐ ĐỊNH (đặc tả bổ sung 27/07) — khác nghĩa cũ "NCC còn phải hoàn".
+     */
+    private BigDecimal offsetDebtAmount;
+
+    /** Tiền thật NCC còn phải hoàn = {@code totalRefund − offsetDebtAmount}. */
+    private BigDecimal cashRefundDue;
+
     private String returnType;
     private String returnTypeDisplay;
 

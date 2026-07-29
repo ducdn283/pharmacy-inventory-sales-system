@@ -336,10 +336,7 @@ public class ProductService {
         if (barcode != null && productRepository.existsByBarcode(barcode)) {
             errors.add("Barcode '" + barcode + "' đã tồn tại");
         }
-        if (request.getMinStock() != null && request.getMaxStock() != null
-                && request.getMinStock() > request.getMaxStock()) {
-            errors.add("Tồn tối thiểu không được lớn hơn tồn tối đa");
-        }
+        validateStockBounds(request, errors);
         if (request.getTypeId() != null && !typeRepository.existsById(request.getTypeId())) {
             errors.add("Loại hàng không hợp lệ");
         }
@@ -516,10 +513,7 @@ public class ProductService {
         if (barcode != null && productRepository.existsByBarcodeExcludingProduct(barcode, productId)) {
             errors.add("Barcode '" + barcode + "' đã tồn tại");
         }
-        if (request.getMinStock() != null && request.getMaxStock() != null
-                && request.getMinStock() > request.getMaxStock()) {
-            errors.add("Tồn tối thiểu không được lớn hơn tồn tối đa");
-        }
+        validateStockBounds(request, errors);
         if (request.getTypeId() != null && !typeRepository.existsById(request.getTypeId())) {
             errors.add("Loại hàng không hợp lệ");
         }
@@ -714,6 +708,26 @@ public class ProductService {
         }
 
         return resolved;
+    }
+
+    /**
+     * Tồn tối thiểu / tối đa: cả hai đều không được âm và min không được lớn hơn max. Ô nhập trên
+     * form là {@code type=number min=0}, nhưng ràng buộc đó chỉ là của trình duyệt — một POST thẳng
+     * vẫn gửi được số âm, nên phải kiểm lại ở đây. Dùng chung cho cả tạo mới lẫn sửa.
+     */
+    private void validateStockBounds(ProductCreateRequest request, List<String> errors) {
+        Integer minStock = request.getMinStock();
+        Integer maxStock = request.getMaxStock();
+
+        if (minStock != null && minStock < 0) {
+            errors.add("Tồn tối thiểu không được âm");
+        }
+        if (maxStock != null && maxStock < 0) {
+            errors.add("Tồn tối đa không được âm");
+        }
+        if (minStock != null && maxStock != null && minStock > maxStock) {
+            errors.add("Tồn tối thiểu không được lớn hơn tồn tối đa");
+        }
     }
 
     private String trimToNull(String value) {

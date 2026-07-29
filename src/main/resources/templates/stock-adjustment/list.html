@@ -135,7 +135,7 @@
         <div th:replace="~{fragments/toast :: flash}"></div>
 
         <div class="row g-3 mb-4">
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl-4">
                 <div class="stock-card p-4">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -150,28 +150,13 @@
                 </div>
             </div>
 
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl-4">
                 <div class="stock-card p-4">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="text-secondary small">Chờ duyệt</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.pendingCount}">0</div>
-                            <div class="text-warning small">Cần xử lý sớm</div>
-                        </div>
-                        <div class="stat-icon">
-                            <i class="ti ti-clock"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="stock-card p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="text-secondary small">Đã duyệt</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.approvedCount}">0</div>
-                            <div class="text-success small">Hoàn tất</div>
+                            <div class="text-secondary small">Hoàn thành</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.completedCount}">0</div>
+                            <div class="text-success small">Tồn kho đã cập nhật</div>
                         </div>
                         <div class="stat-icon">
                             <i class="ti ti-circle-check"></i>
@@ -180,20 +165,21 @@
                 </div>
             </div>
 
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl-4">
                 <div class="stock-card p-4">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="text-secondary small">Từ chối</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.rejectedCount}">0</div>
-                            <div class="text-danger small">Cần xem xét ngay</div>
+                            <div class="text-secondary small">Đã hủy</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.cancelledCount}">0</div>
+                            <div class="text-danger small">Đã đảo lại tồn kho</div>
                         </div>
                         <div class="stat-icon">
-                            <i class="ti ti-alert-circle"></i>
+                            <i class="ti ti-ban"></i>
                         </div>
                     </div>
                 </div>
             </div>
+
         </div>
 
         <div class="stock-card p-4 mb-4">
@@ -273,7 +259,6 @@
                         <th>Mã phiếu</th>
                         <th>Ngày lập</th>
                         <th>Loại điều chỉnh</th>
-                        <th>Người tạo</th>
                         <th>Số mặt hàng</th>
                         <th>Giá trị ước tính</th>
                         <th>Trạng thái</th>
@@ -289,7 +274,6 @@
                             <span class="badge bg-secondary-subtle text-secondary"
                                   th:text="${item.adjustmentTypeDisplay}">Hủy hàng</span>
                         </td>
-                        <td th:text="${item.createdByName}">Nguyễn Văn Minh</td>
                         <td>
                             <span class="badge bg-success-subtle text-success"
                                   th:text="${item.totalItems}">2</span>
@@ -302,7 +286,7 @@
                             <span class="status-badge"
                                   th:classappend="${' ' + item.statusCssClass}"
                                   th:text="${item.statusName}">
-                                Chờ duyệt
+                                Hoàn thành
                             </span>
                         </td>
                         <td class="text-end">

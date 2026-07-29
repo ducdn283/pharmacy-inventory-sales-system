@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8"/>
-  <title>Danh sách dự trù mua hàng</title>
+  <title>Danh sách khoản thu</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/images/apple-touch-icon.png" th:href="@{/assets/images/apple-touch-icon.png}">
   <link rel="icon" type="image/png" sizes="32x32" href="./assets/images/favicon-32x32.png" th:href="@{/assets/images/favicon-32x32.png}">
@@ -65,16 +65,16 @@
       background: var(--sup-green-bg);
       color: var(--sup-green);
     }
-    .kpi-card.kpi-in-progress .kpi-icon {
-      background: #ecfdf5;
-      color: #059669;
+    .kpi-card.kpi-pending .kpi-icon {
+      background: #fef3c7;
+      color: #d97706;
     }
-    .kpi-card.kpi-in-progress .kpi-sub { color: #059669; }
-    .kpi-card.kpi-completed .kpi-icon {
-      background: #eff6ff;
+    .kpi-card.kpi-pending .kpi-sub { color: #d97706; }
+    .kpi-card.kpi-approved .kpi-icon {
+      background: #dbeafe;
       color: #2563eb;
     }
-    .kpi-card.kpi-completed .kpi-sub { color: #2563eb; }
+    .kpi-card.kpi-approved .kpi-sub { color: #2563eb; }
 
     .main-card {
       background: #fff;
@@ -144,26 +144,9 @@
     }
     .btn-search.reset:hover { background: #f9fafb; color: #111827; }
 
-    .btn-create {
-      height: 40px;
-      padding: 0 20px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      background: var(--sup-green);
-      color: #fff;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      text-decoration: none;
-      white-space: nowrap;
-    }
-    .btn-create:hover { background: var(--sup-green-dark); color: #fff; }
-
-    .sup-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    .sup-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .sup-table th {
-      padding: 10px 14px;
+      padding: 10px 10px;
       text-align: left;
       font-size: 12px;
       font-weight: 600;
@@ -173,27 +156,38 @@
       white-space: nowrap;
     }
     .sup-table td {
-      padding: 13px 14px;
+      padding: 13px 10px;
       font-size: 13px;
       color: #374151;
       border-bottom: 1px solid #f3f4f6;
       vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .sup-table tr:last-child td { border-bottom: none; }
     .sup-table tr:hover td { background: #fafafa; }
-    .sup-code {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--sup-muted);
-      letter-spacing: .04em;
-    }
     .sup-name { font-weight: 600; color: #111827; }
-    .sup-note {
-      max-width: 260px;
+
+    .sup-table .col-code { width: 11%; }
+    .sup-table .col-date { width: 15%; }
+    .sup-table .col-type { width: 13%; }
+    .sup-table .col-applicant { width: 17%; }
+    .sup-table .col-amount { width: 14%; }
+    .sup-table .col-payment { width: 12%; }
+    .sup-table .col-status { width: 13%; }
+    .sup-table .col-action { width: 5%; text-align: center; }
+
+    .sup-table th.col-action,
+    .sup-table td.col-action {
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: var(--sup-muted);
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .btn-outline-success:hover,
+    .btn-outline-success:active {
+      color: #fff !important;
     }
 
     .status-badge {
@@ -204,89 +198,20 @@
       font-size: 12px;
       font-weight: 600;
       white-space: nowrap;
-      background: #e8f7f1;
-      color: #059669;
+      background: #f3f4f6;
+      color: #4b5563;
     }
-
-    .status-badge.status-completed {
-      background: #eff6ff;
-      color: #2563eb;
-    }
+    .status-badge.status-completed { background: #e8f7f1; color: #059669; }
+    .status-badge.status-pending { background: #fef3c7; color: #d97706; }
+    .status-badge.status-rejected { background: #fee2e2; color: #dc2626; }
+    .status-badge.status-draft { background: #f3f4f6; color: #4b5563; }
+    .status-badge.status-default { background: #f3f4f6; color: #6b7280; }
 
     .pagination .page-link { color: var(--sup-green); border-color: var(--sup-border); font-size: 13px; }
     .pagination .page-item.active .page-link { background: var(--sup-green); border-color: var(--sup-green); color: #fff; }
     .pagination .page-item.disabled .page-link { color: #d1d5db; }
 
     .empty-row td { color: var(--sup-muted); font-size: 13px; padding: 40px 0; }
-
-    .btn-delete {
-      width: 34px;
-      height: 34px;
-      border: 1px solid #fecaca;
-      border-radius: 8px;
-      background: #fff;
-      color: #dc2626;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      padding: 0;
-      font-size: 16px;
-    }
-    .btn-delete:hover { background: #fef2f2; border-color: #fca5a5; }
-
-    .update-link {
-      width: 34px;
-      height: 34px;
-      border: 1px solid #a7f3d0;
-      border-radius: 8px;
-      background: #ecfdf5;
-      color: var(--sup-green);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-      font-size: 16px;
-    }
-    .update-link:hover {
-      background: #d1fae5;
-      border-color: #6ee7b7;
-      color: var(--sup-green-dark);
-    }
-
-    .view-link {
-      width: 34px;
-      height: 34px;
-      border: 1px solid #bfdbfe;
-      border-radius: 8px;
-      background: #eff6ff;
-      color: #2563eb;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-      font-size: 16px;
-    }
-    .view-link:hover {
-      background: #dbeafe;
-      border-color: #93c5fd;
-      color: #1d4ed8;
-    }
-
-    .btn-delete-locked {
-      width: 34px;
-      height: 34px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      background: #f9fafb;
-      color: #9ca3af;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: not-allowed;
-      padding: 0;
-      font-size: 15px;
-    }
 
     @media (max-width: 767px) {
       .filter-row { flex-direction: column; align-items: stretch; }
@@ -315,37 +240,54 @@
     </div>
 
     <div class="row g-3 mb-4">
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-6 col-xl-3">
         <div class="kpi-card">
-          <span class="kpi-icon"><i class="ti ti-clipboard-list"></i></span>
-          <div class="kpi-label">Tổng dự trù mua hàng</div>
-          <div class="kpi-number" th:text="${totalProcurementPlans}">0</div>
-          <div class="kpi-sub">Tất cả phiếu dự trù</div>
+          <span class="kpi-icon"><i class="ti ti-cash-banknote"></i></span>
+          <div class="kpi-label">Tổng phiếu thu</div>
+          <div class="kpi-number" th:text="${totalIncomes}">0</div>
+          <div class="kpi-sub">Tất cả khoản thu</div>
         </div>
       </div>
-      <div class="col-12 col-md-4">
-        <div class="kpi-card kpi-in-progress">
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card">
+          <span class="kpi-icon"><i class="ti ti-calendar-stats"></i></span>
+          <div class="kpi-label">Phiếu thu hôm nay</div>
+          <div class="kpi-number" th:text="${todayIncomes}">0</div>
+          <div class="kpi-sub"
+               th:text="'Số tiền: ' + ${#numbers.formatDecimal(todayAmount, 0, 'POINT', 0, 'COMMA')} + 'đ'">
+            Số tiền: 0đ
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card kpi-pending">
           <span class="kpi-icon"><i class="ti ti-clock"></i></span>
-          <div class="kpi-label">Chưa hoàn thành</div>
-          <div class="kpi-number" th:text="${inProgressProcurementPlans}">0</div>
-          <div class="kpi-sub">Đang thực hiện</div>
+          <div class="kpi-label">Chờ duyệt</div>
+          <div class="kpi-number" th:text="${pendingIncomes}">0</div>
+          <div class="kpi-sub"
+               th:text="'Tổng: ' + ${#numbers.formatDecimal(pendingAmount, 0, 'POINT', 0, 'COMMA')} + 'đ'">
+            Tổng: 0đ
+          </div>
         </div>
       </div>
-      <div class="col-12 col-md-4">
-        <div class="kpi-card kpi-completed">
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card kpi-approved">
           <span class="kpi-icon"><i class="ti ti-circle-check"></i></span>
-          <div class="kpi-label">Đã hoàn thành</div>
-          <div class="kpi-number" th:text="${completedProcurementPlans}">0</div>
-          <div class="kpi-sub">Phiếu đã xử lý xong</div>
+          <div class="kpi-label">Hoàn thành</div>
+          <div class="kpi-number" th:text="${approvedIncomes}">0</div>
+          <div class="kpi-sub"
+               th:text="'Tổng: ' + ${#numbers.formatDecimal(approvedAmount, 0, 'POINT', 0, 'COMMA')} + 'đ'">
+            Tổng: 0đ
+          </div>
         </div>
       </div>
     </div>
 
     <div class="main-card">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fs-5 fw-semibold mb-0" style="color:#111827;">Danh sách dự trù mua hàng</h2>
-        <a th:if="${currentRole == 'OWNER'}" th:href="${basePath + '/create-procurementplan'}" class="btn-create">
-          <i class="ti ti-plus"></i>Tạo dự trù mua hàng
+      <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <h2 class="fs-5 fw-semibold mb-0" style="color:#111827;">Danh sách khoản thu</h2>
+        <a th:href="${basePath + '/create'}" class="btn btn-search primary">
+          <i class="ti ti-plus"></i>Tạo phiếu thu
         </a>
       </div>
 
@@ -357,7 +299,7 @@
                  class="filter-input"
                  name="search"
                  th:value="${search}"
-                 placeholder="Tìm theo mã dự trù">
+                 placeholder="Tìm theo mã phiếu hoặc nội dung thu">
           <input type="date"
                  class="filter-input filter-date"
                  name="fromDate"
@@ -368,12 +310,36 @@
                  name="toDate"
                  th:value="${toDate}"
                  title="Đến ngày">
+          <select class="filter-select" name="incomeType">
+            <option value="">Loại phiếu thu</option>
+            <option th:each="item : ${incomeTypes}"
+                    th:value="${item.code}"
+                    th:text="${item.label}"
+                    th:selected="${filterIncomeType == item.code}">
+            </option>
+          </select>
           <select class="filter-select" name="status">
             <option value="">Trạng thái</option>
             <option th:each="item : ${statuses}"
                     th:value="${item}"
                     th:text="${item}"
                     th:selected="${filterStatus == item}">
+            </option>
+          </select>
+          <select class="filter-select" name="paymentType">
+            <option value="">Hình thức</option>
+            <option th:each="entry : ${paymentTypeLabels}"
+                    th:value="${entry.key}"
+                    th:text="${entry.value}"
+                    th:selected="${filterPaymentType == entry.key}">
+            </option>
+          </select>
+          <select class="filter-select" name="applicantId">
+            <option value="">Người lập</option>
+            <option th:each="applicant : ${applicants}"
+                    th:value="${applicant.id}"
+                    th:text="${applicant.name}"
+                    th:selected="${filterApplicantId != null && filterApplicantId == applicant.id}">
             </option>
           </select>
           <button type="submit" class="btn-search primary">
@@ -385,97 +351,79 @@
         </div>
       </form>
 
-      <div style="overflow-x:auto;">
-        <table class="sup-table">
+      <table class="sup-table">
           <thead>
             <tr>
-              <th>Mã dự trù</th>
-              <th>Ngày chỉnh sửa cuối</th>
-              <th>Trạng thái</th>
-              <th>Ghi chú</th>
-              <th th:if="${currentRole == 'OWNER'}" style="text-align:center;">Thao tác</th>
-              <th th:if="${currentRole == 'OWNER'}" style="text-align:center;">Xóa</th>
+              <th class="col-code">Mã phiếu</th>
+              <th class="col-date">Ngày thu</th>
+              <th class="col-type">Loại phiếu thu</th>
+              <th class="col-applicant">Người lập</th>
+              <th class="col-amount">Số tiền</th>
+              <th class="col-payment">Hình thức</th>
+              <th class="col-status">Trạng thái</th>
+              <th class="col-action">Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            <tr th:each="plan : ${procurementPlans}">
-              <td class="sup-name" th:text="${plan.procurementCode}">DT-00001</td>
-              <td th:text="${plan.date != null ? #temporals.format(plan.date, 'dd/MM/yyyy HH:mm') : '—'}">
-                01/06/2026 10:15
+            <tr th:each="item : ${incomes}">
+              <td>
+                <a th:href="${basePath + '/' + item.id}"
+                   class="sup-name text-success text-decoration-none"
+                   th:text="${item.code}">PT-000001</a>
               </td>
+              <td th:text="${item.dateDisplay}">01/07/2026 14:10</td>
+              <td th:text="${item.incomeTypeDisplay}">Bán hàng</td>
+              <td th:text="${item.applicantName}">Dược sĩ A</td>
+              <td class="sup-name"
+                  th:text="${#numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                120.000đ
+              </td>
+              <td th:text="${item.paymentDisplay}">Tiền mặt</td>
               <td>
                 <span class="status-badge"
-                      th:classappend="${plan.status == 'Đã hoàn thành'} ? ' status-completed' : ''"
-                      th:text="${plan.status != null ? plan.status : '—'}">
-                  Chờ duyệt
-                </span>
+                      th:classappend="${' ' + item.statusCssClass}"
+                      th:text="${item.statusName}">Hoàn thành</span>
               </td>
-              <td class="sup-note" th:text="${plan.note != null and !#strings.isEmpty(plan.note) ? plan.note : '—'}">Ghi chú</td>
-              <td th:if="${currentRole == 'OWNER'}" style="text-align:center;">
-                <a th:if="${plan.status != 'Đã hoàn thành'}"
-                   class="update-link"
-                   th:href="${basePath + '/update-procurementplan/' + plan.id}"
-                   title="Cập nhật dự trù">
-                  <i class="ti ti-edit"></i>
-                </a>
-                <a th:if="${plan.status == 'Đã hoàn thành'}"
-                   class="view-link"
-                   th:href="${basePath + '/update-procurementplan/' + plan.id}"
-                   title="Xem chi tiết dự trù">
+              <td class="col-action">
+                <a class="btn btn-sm btn-outline-success"
+                   th:href="${basePath + '/' + item.id}"
+                   title="Xem chi tiết">
                   <i class="ti ti-eye"></i>
                 </a>
               </td>
-              <td th:if="${currentRole == 'OWNER'}" style="text-align:center;">
-                <form th:if="${plan.status != 'Đã hoàn thành'}"
-                      th:action="${basePath + '/delete/' + plan.id}"
-                      method="post"
-                      class="d-inline"
-                      onsubmit="return confirm('Bạn có chắc chắn muốn xóa dự trù mua hàng này không?');">
-                  <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                  <button type="submit" class="btn-delete" title="Xóa dự trù">
-                    <i class="ti ti-trash"></i>
-                  </button>
-                </form>
-                <span th:if="${plan.status == 'Đã hoàn thành'}"
-                      class="btn-delete-locked"
-                      title="Dự trù đã hoàn thành, không thể xóa">
-                  <i class="ti ti-lock"></i>
-                </span>
-              </td>
             </tr>
 
-            <tr th:if="${#lists.isEmpty(procurementPlans)}" class="empty-row">
-              <td th:colspan="${currentRole == 'OWNER' ? 6 : 4}" style="text-align:center;">
-                Không tìm thấy dự trù mua hàng nào.
+            <tr th:if="${#lists.isEmpty(incomes)}" class="empty-row">
+              <td colspan="8" style="text-align:center;">
+                Không tìm thấy phiếu thu nào.
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
 
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
            th:if="${totalItems > 0}">
         <div class="text-secondary" style="font-size:13px;">
           Hiển thị
-          <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + procurementPlans.size()}">5</span>
-          trong tổng số <span th:text="${totalItems}" class="fw-semibold">0</span> dự trù mua hàng
+          <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + incomes.size()}">5</span>
+          trong tổng số <span th:text="${totalItems}" class="fw-semibold">0</span> phiếu thu
         </div>
         <nav th:if="${totalPages > 1}">
           <ul class="pagination mb-0">
             <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
               <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
+                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, paymentType=${filterPaymentType}, applicantId=${filterApplicantId}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
             </li>
             <li class="page-item"
                 th:each="p : ${#numbers.sequence(0, totalPages - 1)}"
                 th:classappend="${p == currentPage} ? ' active'">
               <a class="page-link"
                  th:text="${p + 1}"
-                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, page=${p}, size=${pageSize})}">1</a>
+                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, paymentType=${filterPaymentType}, applicantId=${filterApplicantId}, page=${p}, size=${pageSize})}">1</a>
             </li>
             <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
               <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
+                 th:href="@{${basePath}(search=${search}, fromDate=${fromDate}, toDate=${toDate}, incomeType=${filterIncomeType}, status=${filterStatus}, paymentType=${filterPaymentType}, applicantId=${filterApplicantId}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
             </li>
           </ul>
         </nav>

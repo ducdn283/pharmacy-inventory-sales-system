@@ -9,7 +9,6 @@ public class StockAdjustmentStatsResponse {
 
     private long monthlyCount;
     private long draftCount;
-    private long pendingCount;
-    private long approvedCount;
-    private long rejectedCount;
+    private long completedCount;
+    private long cancelledCount;
 }

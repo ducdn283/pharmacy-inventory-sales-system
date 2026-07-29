@@ -276,21 +276,6 @@
                             </div>
 
                             <div class="col-12 col-md-4">
-                                <label class="form-label">Đã thanh toán</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
-                                       class="form-control"
-                                       th:field="*{paid}"
-                                       id="paid"
-                                       oninput="calculateSummary()">
-                                <div class="text-danger small mt-1"
-                                     th:if="${#fields.hasErrors('paid')}"
-                                     th:errors="*{paid}">
-                                </div>
-                            </div>
-
-                            <div class="col-12 col-md-4">
                                 <label class="form-label">Hạn thanh toán công nợ NCC</label>
                                 <input type="date"
                                        class="form-control"
@@ -385,7 +370,7 @@
                                     <td>
                                         <input type="number"
                                                min="0"
-                                               step="1000"
+                                               step="1"
                                                required
                                                data-required-message="Vui lòng nhập giá nhập"
                                                class="form-control price-input"
@@ -512,13 +497,14 @@
                         </div>
 
                         <div class="money-summary-row">
-                            <span class="text-secondary">Đã thanh toán</span>
-                            <strong id="paidDisplay">0đ</strong>
+                            <span class="text-secondary">Còn nợ nhà cung cấp</span>
+                            <strong class="text-warning" id="debtDisplay">0đ</strong>
                         </div>
 
-                        <div class="money-summary-row">
-                            <span class="text-secondary">Còn nợ</span>
-                            <strong class="text-warning" id="debtDisplay">0đ</strong>
+                        <div class="text-secondary small mt-2">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Phiếu nhập luôn được lập ở trạng thái "Nợ". Ghi nhận thanh toán bằng cách
+                            lập phiếu chi trỏ tới phiếu nhập này.
                         </div>
                     </div>
 
@@ -719,24 +705,18 @@
 
         const additionCost = numberValue(document.getElementById('additionCost'));
         const discount = numberValue(document.getElementById('discount'));
-        const paid = numberValue(document.getElementById('paid'));
 
         let totalAmount = subtotal + additionCost - discount;
         if (totalAmount < 0) {
             totalAmount = 0;
         }
 
-        let debt = totalAmount - paid;
-        if (debt < 0) {
-            debt = 0;
-        }
-
         document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
         document.getElementById('additionCostDisplay').textContent = formatMoney(additionCost);
         document.getElementById('discountDisplay').textContent = formatMoney(discount);
         document.getElementById('totalAmountDisplay').textContent = formatMoney(totalAmount);
-        document.getElementById('paidDisplay').textContent = formatMoney(paid);
-        document.getElementById('debtDisplay').textContent = formatMoney(debt);
+        // Phiếu nhập mới luôn chưa trả đồng nào, nên còn nợ = tổng tiền.
+        document.getElementById('debtDisplay').textContent = formatMoney(totalAmount);
     }
 
     function refreshRowIndexes() {
@@ -1048,7 +1028,7 @@
                 </td>
 
                 <td>
-                    <input type="number" min="0" step="1000" required data-required-message="Vui lòng nhập giá nhập"
+                    <input type="number" min="0" step="1" required data-required-message="Vui lòng nhập giá nhập"
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
                            oninput="calculateSummary()">
@@ -1166,6 +1146,9 @@
         calculateSummary();
     });
 </script>
+
+<!-- Chặn 'e' / '+' / '-' trong các ô số (số lượng, giá nhập, chi phí phát sinh, chiết khấu). -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
 </html>

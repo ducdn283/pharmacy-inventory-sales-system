@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Cài đặt giá bán | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .price-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .price-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .btn-price-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+            border-radius: 12px;
+        }
+
+        .btn-price-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #fff;
+        }
+
+        .table thead th {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f9fafb;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .product-row {
+            cursor: pointer;
+        }
+
+        .product-row:hover {
+            background: #f9fafb;
+        }
+
+        .btn-toggle-units {
+            border: 0;
+            background: transparent;
+            color: #6b7280;
+            padding: 2px 6px;
+            line-height: 1;
+        }
+
+        .btn-toggle-units i {
+            transition: transform .15s ease-in-out;
+            display: inline-block;
+        }
+
+        .product-row.is-open .btn-toggle-units i {
+            transform: rotate(90deg);
+        }
+
+        .product-row.is-open {
+            background: #f9fafb;
+        }
+
+        .unit-panel > td {
+            background: #f9fafb;
+            border-top: 0;
+        }
+
+        .unit-table {
+            margin: 0;
+        }
+
+        .unit-table th {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            background: transparent !important;
+        }
+
+        .unit-table td,
+        .unit-table th {
+            padding-top: 8px;
+            padding-bottom: 8px;
+        }
+
+        .price-cell-form {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .price-cell-form .input-group {
+            max-width: 180px;
+        }
+
+        .base-unit-badge {
+            font-size: 10px;
+        }
+
+        .pagination .page-link {
+            color: #059669;
+            border-color: #e5e7eb;
+            font-size: 13px;
+        }
+
+        .pagination .page-item.active .page-link {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+        }
+
+        /* --- Chi tiết giá & thuế modal ------------------------------------------------------
+           Tự dựng thay vì dùng Bootstrap: theme đóng gói Bootstrap dạng ES module nên KHÔNG có
+           window.bootstrap để gọi new bootstrap.Modal() sau khi fetch xong. Cùng cách làm với
+           modal chọn phiếu kiểm kê ở màn Điều chỉnh kho. */
+        .pd-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1080;
+            display: none;
+        }
+
+        .pd-modal.is-open {
+            display: block;
+        }
+
+        .pd-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(16, 24, 40, .5);
+        }
+
+        .pd-modal-dialog {
+            position: relative;
+            max-width: 900px;
+            margin: 40px auto;
+            max-height: calc(100vh - 80px);
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(16, 24, 40, .18);
+            overflow: hidden;
+        }
+
+        .pd-modal-header,
+        .pd-modal-footer {
+            padding: 16px 20px;
+        }
+
+        .pd-modal-header {
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .pd-modal-footer {
+            border-top: 1px solid #e5e7eb;
+            text-align: right;
+        }
+
+        .pd-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .pd-stat {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 10px 12px;
+            height: 100%;
+        }
+
+        .pd-stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            color: #6b7280;
+        }
+
+        .pd-stat-value {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        /* Biểu đồ có thể rộng hơn khung khi sản phẩm nhiều lô — cuộn NGANG trong hộp của nó,
+           không được đẩy cả trang trượt ngang. */
+        .pd-chart-scroll {
+            overflow-x: auto;
+        }
+
+        .pd-legend {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .pd-legend .swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin-right: 4px;
+            vertical-align: baseline;
+        }
+
+        .pd-tax-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            background: #f9fafb;
+        }
+
+        .pd-tax-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 5px 0;
+            font-size: 13px;
+        }
+
+        .pd-tax-line.is-total {
+            border-top: 1px dashed #d1d5db;
+            margin-top: 6px;
+            padding-top: 10px;
+            font-weight: 600;
+        }
+
+        .btn-detail {
+            border: 0;
+            background: transparent;
+            color: #059669;
+            padding: 2px 6px;
+            line-height: 1;
+        }
+
+        .btn-detail:hover {
+            color: #047857;
+        }
+
+        @media (max-width: 991.98px) {
+            .price-page-content {
+                padding-top: 84px !important;
+            }
+
+            .pd-modal-dialog {
+                margin: 16px;
+                max-height: calc(100vh - 32px);
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+
+<main id="content" class="content price-page-content">
+    <div class="container-fluid">
+
+        <div class="mb-4">
+            <h1 class="fs-4 mb-1">Cài đặt giá bán</h1>
+            <p class="text-secondary mb-0">
+                Thay đổi giá bán của từng sản phẩm.
+            </p>
+        </div>
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <div class="price-card p-4 mb-4">
+            <form method="get" th:action="@{/owner/price-settings}" class="row g-3">
+                <input type="hidden" name="size" th:value="${pageSize}">
+
+                <div class="col-12 col-xl-5">
+                    <input type="text" class="form-control" name="keyword" th:value="${keyword}"
+                           placeholder="Tìm theo mã sản phẩm hoặc tên sản phẩm">
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <select class="form-select" name="typeId">
+                        <option value="">Loại hàng</option>
+                        <option th:each="type : ${types}"
+                                th:value="${type.id}"
+                                th:text="${type.name}"
+                                th:selected="${filterTypeId == type.id}">
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <select class="form-select" name="sort">
+                        <option value="name_asc" th:selected="${sort == 'name_asc'}">
+                            Tên sản phẩm: A → Z
+                        </option>
+                        <option value="name_desc" th:selected="${sort == 'name_desc'}">
+                            Tên sản phẩm: Z → A
+                        </option>
+                        <option value="price_asc" th:selected="${sort == 'price_asc'}">
+                            Giá bán: tăng dần
+                        </option>
+                        <option value="price_desc" th:selected="${sort == 'price_desc'}">
+                            Giá bán: giảm dần
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-6 col-xl-1">
+                    <button type="submit" class="btn btn-price-primary w-100">
+                        <i class="ti ti-search"></i>
+                    </button>
+                </div>
+
+                <div class="col-6 col-xl-1">
+                    <a th:href="@{/owner/price-settings}" class="btn btn-outline-secondary w-100">
+                        <i class="ti ti-refresh"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="price-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h2 class="fs-6 mb-0">
+                    Danh sách giá bán
+                    <span class="badge bg-success-subtle text-success ms-2"
+                          th:text="${totalItems + ' sản phẩm'}">0 sản phẩm</span>
+                </h2>
+
+                <button type="button" id="toggleAllUnits" class="btn btn-sm btn-outline-secondary"
+                        th:if="${!#lists.isEmpty(rows)}">
+                    <i class="ti ti-chevrons-down me-1"></i>
+                    <span data-label>Mở tất cả</span>
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th style="width: 44px;"></th>
+                        <th>Mã SP</th>
+                        <th>Tên sản phẩm</th>
+                        <th>Loại hàng</th>
+                        <th>Giá nhập trung bình</th>
+                        <th>Đơn vị</th>
+                        <th style="width: 60px;" class="text-center">Chi tiết</th>
+                    </tr>
+                    </thead>
+
+                    <tbody th:each="row : ${rows}">
+                    <tr class="product-row"
+                        th:classappend="${expandProductId != null and expandProductId == row.productId} ? ' is-open' : ''"
+                        th:attr="data-unit-target=${'units-' + row.productId}">
+                        <td class="text-center">
+                            <button type="button" class="btn-toggle-units" aria-label="Mở rộng đơn vị">
+                                <i class="ti ti-chevron-right"></i>
+                            </button>
+                        </td>
+                        <td class="fw-semibold text-success" th:text="${row.productCode}">SP0001</td>
+                        <td th:text="${row.productName}">Paracetamol 500mg</td>
+                        <td class="text-secondary" th:text="${row.typeName}">Thuốc kê đơn</td>
+                        <td>
+                            <span th:if="${row.averageImportPricePerBase != null}"
+                                  th:text="${#numbers.formatDecimal(row.averageImportPricePerBase, 0, 'POINT', 0, 'COMMA') + 'đ'}">10.000đ</span>
+                            <span th:if="${row.averageImportPricePerBase == null}" class="text-secondary">
+                                Chưa có lô tồn
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary-subtle text-secondary"
+                                  th:text="${row.unitCount + ' đơn vị'}">2 đơn vị</span>
+                        </td>
+                        <td class="text-center">
+                            <!-- Nằm trong hàng vốn đã bắt click để mở/đóng đơn vị, nên handler của
+                                 nút phải stopPropagation (xem JS) — bấm "Chi tiết" không được kéo
+                                 theo việc bung bảng đơn vị. -->
+                            <button type="button" class="btn-detail" data-detail-product-id
+                                    th:attr="data-detail-product-id=${row.productId}"
+                                    th:title="'Xem chi tiết giá &amp; thuế của ' + ${row.productName}">
+                                <i class="ti ti-chart-histogram"></i>
+                            </button>
+                        </td>
+                    </tr>
+
+                    <tr class="unit-panel"
+                        th:id="${'units-' + row.productId}"
+                        th:classappend="${expandProductId != null and expandProductId == row.productId} ? '' : ' d-none'">
+                        <td colspan="7" class="px-4 py-3">
+                            <table class="table unit-table align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th>Đơn vị</th>
+                                    <th>Tỷ lệ quy đổi</th>
+                                    <th style="min-width: 280px;">Giá bán hiện tại</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="unit : ${row.units}">
+                                    <td>
+                                        <span th:text="${unit.unitName}">Hộp</span>
+                                        <span th:if="${unit.baseUnit}"
+                                              class="badge bg-secondary-subtle text-secondary base-unit-badge ms-1">
+                                            Đơn vị cơ bản
+                                        </span>
+                                    </td>
+                                    <td class="text-secondary"
+                                        th:text="${unit.ratio != null} ? ${#numbers.formatDecimal(unit.ratio, 0, 'POINT', 0, 'COMMA')} : '—'">1
+                                    </td>
+                                    <td>
+                                        <form method="post" th:action="@{/owner/price-settings/cell}"
+                                              class="price-cell-form mb-0">
+                                            <input type="hidden" th:if="${_csrf}"
+                                                   th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                            <input type="hidden" name="productUnitId" th:value="${unit.productUnitId}">
+                                            <input type="hidden" name="expandProductId" th:value="${row.productId}">
+                                            <input type="hidden" name="keyword" th:value="${keyword}">
+                                            <input type="hidden" name="typeId" th:value="${filterTypeId}">
+                                            <input type="hidden" name="sort" th:value="${sort}">
+                                            <input type="hidden" name="page" th:value="${currentPage}">
+                                            <input type="hidden" name="size" th:value="${pageSize}">
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" min="0" step="1" class="form-control"
+                                                       name="sellPrice" th:value="${unit.currentSellPrice}">
+                                                <span class="input-group-text">đ</span>
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-price-primary">Lưu</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                    </tbody>
+
+                    <tbody th:if="${#lists.isEmpty(rows)}">
+                    <tr>
+                        <td colspan="7" class="text-center text-secondary py-4">
+                            Không tìm thấy sản phẩm nào.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
+                 th:if="${totalItems > 0}">
+                <div class="text-secondary small">
+                    Hiển thị
+                    <span th:text="${currentPage * pageSize + 1}">1</span>
+                    -
+                    <span th:text="${currentPage * pageSize + rows.size()}">10</span>
+                    trong tổng số
+                    <span th:text="${totalItems}">0</span>
+                    sản phẩm
+                </div>
+
+                <nav th:if="${totalPages > 1}">
+                    <ul class="pagination mb-0">
+                        <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
+                            <a class="page-link"
+                               th:href="@{/owner/price-settings(keyword=${keyword}, typeId=${filterTypeId}, sort=${sort}, page=${currentPage - 1}, size=${pageSize})}">
+                                Trước
+                            </a>
+                        </li>
+
+                        <li class="page-item"
+                            th:each="pageNumber : ${#numbers.sequence(0, totalPages - 1)}"
+                            th:classappend="${pageNumber == currentPage} ? ' active'">
+                            <a class="page-link"
+                               th:text="${pageNumber + 1}"
+                               th:href="@{/owner/price-settings(keyword=${keyword}, typeId=${filterTypeId}, sort=${sort}, page=${pageNumber}, size=${pageSize})}">
+                                1
+                            </a>
+                        </li>
+
+                        <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
+                            <a class="page-link"
+                               th:href="@{/owner/price-settings(keyword=${keyword}, typeId=${filterTypeId}, sort=${sort}, page=${currentPage + 1}, size=${pageSize})}">
+                                Sau
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<!-- Chi tiết giá & thuế. Nội dung do JS đổ vào sau khi fetch, nên ở đây chỉ có khung. -->
+<div class="pd-modal" id="priceDetailModal" role="dialog" aria-modal="true"
+     aria-labelledby="pdModalTitle">
+    <div class="pd-modal-backdrop" data-pd-close></div>
+    <div class="pd-modal-dialog">
+        <div class="pd-modal-header d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <h2 class="fs-6 mb-1" id="pdModalTitle">Chi tiết giá &amp; thuế</h2>
+                <div class="text-secondary small" id="pdModalSubtitle">—</div>
+            </div>
+            <button type="button" class="btn-close" aria-label="Đóng" data-pd-close></button>
+        </div>
+
+        <div class="pd-modal-body" id="pdModalBody">
+            <div class="text-secondary small py-4 text-center">Đang tải…</div>
+        </div>
+
+        <div class="pd-modal-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-pd-close>Đóng</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        function panelOf(productRow) {
+            var id = productRow.getAttribute('data-unit-target');
+            return id ? document.getElementById(id) : null;
+        }
+
+        function setOpen(productRow, open) {
+            var panel = panelOf(productRow);
+            if (!panel) {
+                return;
+            }
+            panel.classList.toggle('d-none', !open);
+            productRow.classList.toggle('is-open', open);
+        }
+
+        var productRows = Array.prototype.slice.call(document.querySelectorAll('.product-row'));
+
+        productRows.forEach(function (productRow) {
+            productRow.addEventListener('click', function () {
+                setOpen(productRow, productRow.classList.contains('is-open') === false);
+            });
+        });
+
+        var toggleAll = document.getElementById('toggleAllUnits');
+        if (toggleAll) {
+            toggleAll.addEventListener('click', function () {
+                var shouldOpen = productRows.some(function (productRow) {
+                    return !productRow.classList.contains('is-open');
+                });
+                productRows.forEach(function (productRow) {
+                    setOpen(productRow, shouldOpen);
+                });
+                toggleAll.querySelector('[data-label]').textContent =
+                    shouldOpen ? 'Đóng tất cả' : 'Mở tất cả';
+                toggleAll.querySelector('i').className =
+                    shouldOpen ? 'ti ti-chevrons-up me-1' : 'ti ti-chevrons-down me-1';
+            });
+        }
+    })();
+</script>
+
+<script>
+    // ------------------------------------------------------------------ Chi tiết giá & thuế
+    (function () {
+        var GREEN = '#059669';
+        var RED = '#dc2626';
+        var GREY = '#9ca3af';
+
+        var modal = document.getElementById('priceDetailModal');
+        var body = document.getElementById('pdModalBody');
+        var subtitle = document.getElementById('pdModalSubtitle');
+        var lastTrigger = null;
+
+        function money(value) {
+            if (value === null || value === undefined) return '—';
+            return Math.round(Number(value)).toLocaleString('vi-VN') + 'đ';
+        }
+
+        function signedMoney(value) {
+            if (value === null || value === undefined) return '—';
+            var rounded = Math.round(Number(value));
+            return (rounded > 0 ? '+' : '') + rounded.toLocaleString('vi-VN') + 'đ';
+        }
+
+        /**
+         * Tiền THUẾ giữ tới 2 số lẻ, khác với giá bán/giá nhập làm tròn về đồng chẵn.
+         * Các con số ở đây là thuế của ĐÚNG MỘT đơn vị nên rất nhỏ: làm tròn 23,81 − 20,33 = 3,48
+         * thành "24 − 20 = 3" khiến chính bảng tự mâu thuẫn với nhau.
+         */
+        function taxMoney(value) {
+            if (value === null || value === undefined) return '—';
+            return Number(value).toLocaleString('vi-VN', {maximumFractionDigits: 2}) + 'đ';
+        }
+
+        function signedTaxMoney(value) {
+            if (value === null || value === undefined) return '—';
+            return (Number(value) > 0 ? '+' : '') + taxMoney(value);
+        }
+
+        function percent(value) {
+            if (value === null || value === undefined) return '—';
+            return Number(value).toLocaleString('vi-VN', {maximumFractionDigits: 2}) + '%';
+        }
+
+        /** Không bao giờ nội suy chuỗi từ server thẳng vào innerHTML — tên lô/sản phẩm là dữ liệu. */
+        function escapeHtml(value) {
+            return String(value === null || value === undefined ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function open(productId, trigger) {
+            lastTrigger = trigger || null;
+            subtitle.textContent = 'Đang tải…';
+            body.innerHTML = '<div class="text-secondary small py-4 text-center">Đang tải…</div>';
+            modal.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+
+            fetch('/owner/price-settings/' + encodeURIComponent(productId) + '/detail',
+                    {headers: {'Accept': 'application/json'}})
+                .then(function (response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                })
+                .then(render)
+                .catch(function () {
+                    subtitle.textContent = '';
+                    body.innerHTML = '<div class="alert alert-danger mb-0">'
+                        + 'Không tải được chi tiết sản phẩm. Vui lòng thử lại.</div>';
+                });
+        }
+
+        function close() {
+            modal.classList.remove('is-open');
+            document.body.style.overflow = '';
+            if (lastTrigger) {
+                lastTrigger.focus();
+                lastTrigger = null;
+            }
+        }
+
+        /**
+         * Biểu đồ cột: mỗi lô ĐANG TỒN một cột = giá nhập/đơn vị cơ bản, so với đường kẻ ngang là
+         * giá bán hiện tại. Cột nào vượt qua đường đó nghĩa là lô ấy nhập vào đắt hơn giá đang bán
+         * → tô đỏ, vì đó chính là trường hợp màn này sinh ra để phát hiện.
+         *
+         * Vẽ tay bằng SVG: dự án không được thêm thư viện ngoài (CSP + không sửa bundle theme).
+         */
+        function chartSvg(detail) {
+            var batches = detail.batches || [];
+            if (!batches.length) {
+                return '<div class="text-secondary small py-4 text-center border rounded">'
+                    + 'Sản phẩm chưa có lô nào còn tồn để so sánh giá nhập.</div>';
+            }
+
+            var sell = detail.sellPricePerBase === null || detail.sellPricePerBase === undefined
+                ? null : Number(detail.sellPricePerBase);
+            var padL = 68, padR = 16, padT = 18, padB = 54;
+            var slot = 74;
+            var plotW = Math.max(batches.length * slot, 360);
+            var width = padL + plotW + padR;
+            var height = 250;
+            var plotH = height - padT - padB;
+
+            var maxValue = Math.max.apply(null, batches.map(function (b) {
+                return Number(b.importPricePerBase);
+            }).concat(sell === null ? [] : [sell]));
+            var top = maxValue > 0 ? maxValue * 1.15 : 1;
+            var y = function (value) { return padT + plotH - (value / top) * plotH; };
+
+            var parts = [];
+            parts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '"'
+                + ' height="' + height + '" role="img"'
+                + ' aria-label="Giá nhập từng lô còn tồn so với giá bán hiện tại">');
+
+            // Lưới ngang + nhãn trục tiền
+            for (var i = 0; i <= 4; i++) {
+                var value = top * i / 4;
+                var gy = y(value);
+                parts.push('<line x1="' + padL + '" y1="' + gy + '" x2="' + (width - padR)
+                    + '" y2="' + gy + '" stroke="#e5e7eb" stroke-width="1"/>');
+                parts.push('<text x="' + (padL - 8) + '" y="' + (gy + 4)
+                    + '" text-anchor="end" font-size="10" fill="#9ca3af">'
+                    + Math.round(value).toLocaleString('vi-VN') + '</text>');
+            }
+
+            batches.forEach(function (batch, index) {
+                var value = Number(batch.importPricePerBase);
+                var loss = sell !== null && value > sell;
+                var barW = 34;
+                var cx = padL + index * slot + slot / 2;
+                var barY = y(value);
+                var barH = padT + plotH - barY;
+
+                parts.push('<rect x="' + (cx - barW / 2) + '" y="' + barY + '" width="' + barW
+                    + '" height="' + Math.max(barH, 1) + '" rx="4" fill="'
+                    + (loss ? RED : GREEN) + '" fill-opacity="' + (loss ? '.85' : '.75') + '">'
+                    + '<title>' + escapeHtml(batch.lotNumber) + ' · nhập ' + money(value)
+                    + (sell === null ? '' : ' · chênh lệch ' + signedMoney(batch.grossMargin))
+                    + '</title></rect>');
+
+                parts.push('<text x="' + cx + '" y="' + (barY - 5) + '" text-anchor="middle"'
+                    + ' font-size="10" font-weight="600" fill="' + (loss ? RED : '#374151') + '">'
+                    + Math.round(value).toLocaleString('vi-VN') + '</text>');
+
+                // Nhãn trục X: số lô (cắt bớt cho khỏi đè nhau) + hạn dùng
+                var label = String(batch.lotNumber || '—');
+                if (label.length > 10) label = label.slice(0, 9) + '…';
+                parts.push('<text x="' + cx + '" y="' + (height - padB + 18)
+                    + '" text-anchor="middle" font-size="10" fill="#6b7280">'
+                    + escapeHtml(label) + '</text>');
+                parts.push('<text x="' + cx + '" y="' + (height - padB + 32)
+                    + '" text-anchor="middle" font-size="9" fill="#9ca3af">HSD '
+                    + escapeHtml(batch.expirationDate) + '</text>');
+            });
+
+            if (sell !== null) {
+                var sy = y(sell);
+                parts.push('<line x1="' + padL + '" y1="' + sy + '" x2="' + (width - padR)
+                    + '" y2="' + sy + '" stroke="' + GREY + '" stroke-width="1.5"'
+                    + ' stroke-dasharray="6 4"/>');
+                parts.push('<text x="' + (padL + 4) + '" y="' + (sy - 6) + '" font-size="10"'
+                    + ' font-weight="600" fill="#4b5563">Giá bán ' + money(sell) + '</text>');
+            }
+
+            parts.push('</svg>');
+            return '<div class="pd-chart-scroll">' + parts.join('') + '</div>';
+        }
+
+        function batchTable(detail) {
+            var batches = detail.batches || [];
+            if (!batches.length) return '';
+            var deduction = detail.taxProjection && detail.taxProjection.deduction;
+
+            var rows = batches.map(function (batch) {
+                var margin = batch.grossMargin;
+                var negative = margin !== null && margin !== undefined && Number(margin) < 0;
+                return '<tr>'
+                    + '<td>' + escapeHtml(batch.lotNumber) + '</td>'
+                    + '<td class="text-secondary">' + escapeHtml(batch.expirationDate) + '</td>'
+                    + '<td class="text-end">' + Number(batch.storageQuantity || 0).toLocaleString('vi-VN') + '</td>'
+                    + '<td class="text-end">' + money(batch.importPricePerBase) + '</td>'
+                    + (deduction ? '<td class="text-end text-secondary">' + taxMoney(batch.embeddedInputVat) + '</td>' : '')
+                    + '<td class="text-end ' + (negative ? 'text-danger fw-semibold' : '') + '">'
+                    + signedMoney(margin) + '</td>'
+                    + '<td class="text-end ' + (negative ? 'text-danger' : 'text-secondary') + '">'
+                    + percent(batch.grossMarginPercent) + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            return '<div class="table-responsive mt-3">'
+                + '<table class="table table-sm align-middle mb-0">'
+                + '<thead><tr>'
+                + '<th>Số lô</th><th>Hạn dùng</th><th class="text-end">Tồn</th>'
+                + '<th class="text-end">Giá nhập</th>'
+                + (deduction ? '<th class="text-end">GTGT đầu vào</th>' : '')
+                + '<th class="text-end">Chênh lệch</th><th class="text-end">Tỷ suất</th>'
+                + '</tr></thead>'
+                + '<tbody>' + rows + '</tbody></table></div>';
+        }
+
+        function taxLine(label, value, extraClass) {
+            return '<div class="pd-tax-line ' + (extraClass || '') + '">'
+                + '<span class="text-secondary">' + label + '</span>'
+                + '<span>' + value + '</span></div>';
+        }
+
+        function taxCard(detail) {
+            var tax = detail.taxProjection;
+            if (!tax) return '';
+
+            var lines = '';
+            if (tax.exempt) {
+                lines = taxLine('Thuế GTGT', '<span class="badge bg-success-subtle text-success">Miễn thuế</span>')
+                    + taxLine('Thuế TNCN', '<span class="badge bg-success-subtle text-success">Miễn thuế</span>');
+            } else if (tax.direct) {
+                lines = taxLine('GTGT (1% × giá bán)', taxMoney(tax.outputVat))
+                    + taxLine('TNCN (0,5% × giá bán)', taxMoney(tax.incomeTax));
+            } else {
+                lines = taxLine('GTGT đầu ra (trong giá bán)', taxMoney(tax.outputVat))
+                    // Chỉ gắn dấu trừ khi thật sự có số — "− —" đọc như lỗi hiển thị.
+                    + taxLine('GTGT đầu vào (trong giá nhập)',
+                        tax.inputVat === null || tax.inputVat === undefined
+                            ? '—' : '− ' + taxMoney(tax.inputVat))
+                    + taxLine('GTGT phải nộp', taxMoney(tax.vatPayable))
+                    + taxLine('Thu nhập chịu thuế (giá bán − giá vốn)', taxMoney(tax.incomeTaxBase))
+                    + taxLine('TNCN (' + percent(tax.incomeTaxRatePercent) + ')', taxMoney(tax.incomeTax));
+            }
+
+            var netNegative = Number(tax.netProfit) < 0;
+
+            return '<div class="pd-tax-card">'
+                + '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">'
+                + '<div class="fw-semibold">Thuế nếu bán 1 ' + escapeHtml(detail.baseUnitName) + '</div>'
+                + '<span class="badge bg-success-subtle text-success">'
+                + escapeHtml(tax.groupLabel) + '</span>'
+                + '</div>'
+                + '<p class="text-secondary small mb-3">' + escapeHtml(tax.formula) + '</p>'
+                + taxLine('Giá bán (đã gồm thuế)', money(tax.sellPricePerBase))
+                + taxLine('Giá vốn bình quân lô còn tồn', money(tax.importPricePerBase))
+                + taxLine('Chênh lệch trước thuế', signedMoney(tax.grossMargin))
+                + '<div class="mt-2 mb-1 border-top pt-2"></div>'
+                + lines
+                + taxLine('Tổng thuế', taxMoney(tax.totalTax), 'is-total')
+                + taxLine('Lợi nhuận sau thuế',
+                    '<span class="' + (netNegative ? 'text-danger' : 'text-success') + '">'
+                    + signedTaxMoney(tax.netProfit) + '</span>', 'is-total')
+                + '<div class="text-secondary small mt-3">'
+                + '<i class="ti ti-percentage me-1"></i>Thuế suất GTGT của sản phẩm: '
+                + percent(tax.productVatRatePercent) + ' · ' + escapeHtml(tax.productVatRateSource)
+                + (tax.productVatApplies ? ''
+                    : ' <em>(nhóm hiện tại không dùng tới thuế suất này)</em>')
+                + '</div>'
+                + (tax.caveat
+                    ? '<div class="alert alert-warning small mb-0 mt-3 py-2">'
+                        + '<i class="ti ti-alert-triangle me-1"></i>' + escapeHtml(tax.caveat) + '</div>'
+                    : '')
+                + '</div>';
+        }
+
+        function statCard(label, value, extraClass) {
+            return '<div class="col-6 col-lg-3"><div class="pd-stat">'
+                + '<div class="pd-stat-label">' + label + '</div>'
+                + '<div class="pd-stat-value ' + (extraClass || '') + '">' + value + '</div>'
+                + '</div></div>';
+        }
+
+        function render(detail) {
+            subtitle.textContent = detail.productCode + ' · ' + detail.typeName
+                + ' · đơn vị cơ bản: ' + detail.baseUnitName;
+
+            var range = detail.minImportPricePerBase === null
+                || detail.minImportPricePerBase === undefined
+                ? '—'
+                : (Number(detail.minImportPricePerBase) === Number(detail.maxImportPricePerBase)
+                    ? money(detail.minImportPricePerBase)
+                    : money(detail.minImportPricePerBase) + ' – ' + money(detail.maxImportPricePerBase));
+
+            var html = '<div class="fs-6 fw-semibold mb-3">' + escapeHtml(detail.productName) + '</div>';
+
+            html += '<div class="row g-2 mb-3">'
+                + statCard('Giá bán hiện tại', money(detail.sellPricePerBase))
+                + statCard('Giá nhập trung bình', money(detail.averageImportPricePerBase))
+                + statCard('Khoảng giá nhập', range)
+                + statCard('Tồn kho', Number(detail.totalStock || 0).toLocaleString('vi-VN')
+                    + ' ' + escapeHtml(detail.baseUnitName))
+                + '</div>';
+
+            if (detail.hasLossMakingBatch) {
+                html += '<div class="alert alert-danger small py-2">'
+                    + '<i class="ti ti-alert-triangle me-1"></i>'
+                    + 'Có lô đang tồn có giá nhập CAO HƠN giá bán hiện tại — bán ra là lỗ.</div>';
+            }
+
+            html += '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">'
+                + '<div class="fw-semibold small">Giá nhập từng lô còn tồn</div>'
+                + '<div class="pd-legend">'
+                + '<span class="me-3"><span class="swatch" style="background:' + GREEN + '"></span>Có lãi</span>'
+                + '<span class="me-3"><span class="swatch" style="background:' + RED + '"></span>Lỗ</span>'
+                + '<span><span class="swatch" style="background:' + GREY + '"></span>Giá bán</span>'
+                + '</div></div>';
+
+            html += chartSvg(detail);
+            html += batchTable(detail);
+            html += '<div class="mt-4">' + taxCard(detail) + '</div>';
+
+            body.innerHTML = html;
+        }
+
+        document.querySelectorAll('[data-detail-product-id]').forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                // Hàng sản phẩm cũng bắt click để bung bảng đơn vị — chặn lại, nếu không bấm
+                // "Chi tiết" sẽ vừa mở modal vừa xổ bảng đơn vị phía sau.
+                event.stopPropagation();
+                open(button.getAttribute('data-detail-product-id'), button);
+            });
+        });
+
+        modal.querySelectorAll('[data-pd-close]').forEach(function (element) {
+            element.addEventListener('click', close);
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                close();
+            }
+        });
+    })();
+</script>
+</body>
+</html>

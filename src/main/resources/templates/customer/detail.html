@@ -217,7 +217,11 @@
             <input id="editPhone" type="tel" class="form-control"
                    th:field="*{phoneNumber}"
                    th:classappend="${#fields.hasErrors('phoneNumber')} ? ' is-invalid'"
-                   inputmode="numeric" maxlength="10"
+                   inputmode="numeric" maxlength="10" data-digits
+                   data-unique-url="/customer/check-duplicate"
+                   data-unique-field="phoneNumber"
+                   th:attr="data-unique-id=${customer.id}"
+                   data-unique-message="Số điện thoại đã tồn tại trong hệ thống"
                    pattern="0(2|3|5|7|8|9)[0-9]{8}"
                    title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                    placeholder="0900000000">
@@ -225,7 +229,13 @@
           </div>
           <div class="col-12 col-md-6">
             <label id="editTaxLabel" for="editTax" class="form-label">Mã số thuế</label>
+            <!-- Cá nhân = CCCD/CMND, doanh nghiệp = MST (10 số, có thể kèm "-3 số") → cho cả dấu gạch. -->
             <input id="editTax" type="text" class="form-control"
+                   inputmode="numeric" data-digits="-"
+                   data-unique-url="/customer/check-duplicate"
+                   data-unique-field="taxCode"
+                   th:attr="data-unique-id=${customer.id}"
+                   data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
                    th:field="*{taxCode}" maxlength="100" placeholder="Nhập mã số thuế">
           </div>
         </div>
@@ -240,6 +250,7 @@
           <div class="col-12 col-md-6">
             <label for="editBankAcc" class="form-label">Số tài khoản ngân hàng</label>
             <input id="editBankAcc" type="text" class="form-control"
+                   inputmode="numeric" data-digits
                    th:field="*{bankAccountNumber}" maxlength="100" placeholder="Nhập số tài khoản">
           </div>
           <div class="col-12 col-md-6">
@@ -355,5 +366,11 @@
     }
   })();
 </script>
+
+<!-- Xem chú thích ở customer/create.html — cùng 3 ô data-digits trong form sửa. -->
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- data-unique-id = id khách đang sửa, để nó không tự báo trùng với chính mình. -->
+<div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
 </body>
 </html>
