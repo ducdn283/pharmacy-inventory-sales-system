@@ -49,6 +49,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -333,9 +334,7 @@ public class ProductService {
             errors.add("Tên hàng hóa không được để trống");
         }
         // Mã hàng is an internal code — auto-generated ("SP" + sequence), not entered by the user.
-        if (barcode != null && productRepository.existsByBarcode(barcode)) {
-            errors.add("Barcode '" + barcode + "' đã tồn tại");
-        }
+        validateUniqueness(name, barcode, trimToNull(request.getRegistrationNumber()), null, errors);
         validateStockBounds(request, errors);
         if (request.getTypeId() != null && !typeRepository.existsById(request.getTypeId())) {
             errors.add("Loại hàng không hợp lệ");
@@ -510,9 +509,7 @@ public class ProductService {
         if (name == null) {
             errors.add("Tên hàng hóa không được để trống");
         }
-        if (barcode != null && productRepository.existsByBarcodeExcludingProduct(barcode, productId)) {
-            errors.add("Barcode '" + barcode + "' đã tồn tại");
-        }
+        validateUniqueness(name, barcode, trimToNull(request.getRegistrationNumber()), productId, errors);
         validateStockBounds(request, errors);
         if (request.getTypeId() != null && !typeRepository.existsById(request.getTypeId())) {
             errors.add("Loại hàng không hợp lệ");
@@ -708,6 +705,49 @@ public class ProductService {
         }
 
         return resolved;
+    }
+
+    /**
+     * Ba trường định danh của hàng hóa, dùng chung cho cả tạo mới lẫn sửa.
+     *
+     * <p><strong>Tên hàng hóa: bắt buộc và không được trùng.</strong> So sánh do collation của cột
+     * quyết định ({@code utf8mb4_0900_ai_ci}) nên "Paracetamol" / "paracetamol" / "Páracetamol"
+     * được coi là một — đúng nghĩa "trùng tên" mà người dùng hiểu.</p>
+     *
+     * <p><strong>Barcode và Số đăng ký: chỉ kiểm khi có nhập.</strong> Bỏ trống nghĩa là "chưa khai
+     * báo", không phải một giá trị rỗng dùng chung — nếu kiểm cả khi trống thì sản phẩm thứ hai
+     * không có số đăng ký sẽ bị báo trùng với sản phẩm đầu tiên cũng không có, chặn nhầm một trường
+     * hợp hoàn toàn hợp lệ. {@code trimToNull} ở nơi gọi đã biến chuỗi trắng thành {@code null},
+     * nên ở đây chỉ cần kiểm {@code != null}.</p>
+     *
+     * <p>Không bảng nào trong số này có ràng buộc UNIQUE ở DB ngoài {@code code}/{@code barcode},
+     * nên tầng service là chỗ chặn duy nhất — giống {@code CustomerService}/{@code SupplierService}.</p>
+     *
+     * @param productId id bản ghi đang sửa; {@code null} khi tạo mới. Bản ghi luôn "trùng với chính
+     *                  nó", nên khi sửa phải loại nó ra khỏi phép kiểm.
+     */
+    private void validateUniqueness(String name, String barcode, String registrationNumber,
+                                    Integer productId, List<String> errors) {
+        if (name != null && isTaken(productId,
+                () -> productRepository.existsByName(name),
+                () -> productRepository.existsByNameExcludingProduct(name, productId))) {
+            errors.add("Tên hàng hóa '" + name + "' đã tồn tại");
+        }
+        if (barcode != null && isTaken(productId,
+                () -> productRepository.existsByBarcode(barcode),
+                () -> productRepository.existsByBarcodeExcludingProduct(barcode, productId))) {
+            errors.add("Barcode '" + barcode + "' đã tồn tại");
+        }
+        if (registrationNumber != null && isTaken(productId,
+                () -> productRepository.existsByRegistrationNumber(registrationNumber),
+                () -> productRepository.existsByRegistrationNumberExcludingProduct(registrationNumber, productId))) {
+            errors.add("Số đăng ký '" + registrationNumber + "' đã tồn tại");
+        }
+    }
+
+    /** Create checks every row; edit checks every row but the one being edited. */
+    private boolean isTaken(Integer productId, BooleanSupplier onCreate, BooleanSupplier onUpdate) {
+        return productId == null ? onCreate.getAsBoolean() : onUpdate.getAsBoolean();
     }
 
     /**
