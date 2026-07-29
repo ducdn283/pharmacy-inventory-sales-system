@@ -5,21 +5,25 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "notification")
+@Table(name = "Notification")
 public class Notification {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "notificationID", nullable = false)
     private Integer id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "accountID")
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "accountID", nullable = false)
     private Account accountID;
 
     @NotNull
@@ -27,8 +31,9 @@ public class Notification {
     private String message;
 
     @NotNull
+    @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "createdAt", nullable = false)
-    private Instant createdAt;
+    private Instant createdAt = Instant.now();
 
     @Size(max = 255)
     @NotNull
@@ -47,13 +52,15 @@ public class Notification {
 
     @Size(max = 20)
     @NotNull
+    @ColumnDefault("'INFO'")
     @Column(name = "severity", nullable = false, length = 20)
-    private String severity;
+    private String severity = "INFO";
 
     @Size(max = 20)
     @NotNull
+    @ColumnDefault("'UNREAD'")
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private String status = "UNREAD";
 
     @Size(max = 50)
     @NotNull
@@ -72,8 +79,9 @@ public class Notification {
     private String actionUrl;
 
     @NotNull
+    @ColumnDefault("0")
     @Column(name = "isRead", nullable = false)
-    private Boolean isRead;
+    private Boolean isRead = false;
 
     @Column(name = "readAt")
     private LocalDateTime readAt;
@@ -88,6 +96,8 @@ public class Notification {
     @Column(name = "dedupeKey", length = 255)
     private String dedupeKey;
 
-    @Column(name = "isActive")
-    private Boolean isActive;
+    @NotNull
+    @ColumnDefault("1")
+    @Column(name = "isActive", nullable = false)
+    private Boolean isActive = true;
 }

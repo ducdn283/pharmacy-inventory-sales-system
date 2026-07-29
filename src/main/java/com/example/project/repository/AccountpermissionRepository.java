@@ -4,7 +4,7 @@ import com.example.project.entity.Accountpermission;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
+import com.example.project.entity.Account;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,4 +74,14 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
            and ap.accountID.status = true
            """)
     boolean existsActiveByRole(@Param("role") String role);
+
+    @Query("""
+       select distinct a
+       from Accountpermission ap
+       join ap.accountID a
+       where upper(ap.role) = upper(:role)
+       and a.status = true
+       order by a.id
+       """)
+    List<Account> findActiveAccountsByRole(@Param("role") String role);
 }
