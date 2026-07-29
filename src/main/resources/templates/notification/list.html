@@ -124,12 +124,13 @@
 </head>
 
 <body>
-<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 <div th:replace="~{fragments/topbar :: topbar}"></div>
-<div th:replace="~{fragments/toast :: toast}"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 
-<main id="main" class="main">
-    <div class="container-fluid notification-page-content">
+<main id="content" class="content notification-page-content">
+    <div class="container-fluid">
+
+        <div th:replace="~{fragments/toast :: flash}"></div>
 
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
