@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.ReturnPurchaseStatus;
+import com.example.project.constant.StockAdjustmentStatus;
 import com.example.project.dto.request.IncomeCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
 import com.example.project.dto.response.IncomeDetailResponse;
@@ -13,7 +14,9 @@ import com.example.project.entity.Income;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
+import com.example.project.entity.Expense;
 import com.example.project.entity.Stockadjustment;
+import com.example.project.entity.Stockcount;
 import com.example.project.entity.Supplier;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.CustomerRepository;
@@ -59,7 +62,8 @@ public class IncomeService {
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
-    private static final String STOCK_ADJUSTMENT_STATUS_APPROVED = "Duyệt";
+    /** Legacy stock-adjustment status before BA removed the approval step (2026-07-27). */
+    private static final String STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY = "Duyệt";
 
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_BANKING = "BANKING";
@@ -258,9 +262,8 @@ public class IncomeService {
         Set<Integer> linkedAdjustmentIds = linkedStockAdjustmentIds();
 
         return stockadjustmentRepository.findAllWithRelations().stream()
-                .filter(adjustment -> STOCK_ADJUSTMENT_STATUS_APPROVED.equals(adjustment.getStatus()))
-                .filter(adjustment -> adjustment.getCreatedBy() != null
-                        && accountId.equals(adjustment.getCreatedBy().getId()))
+                .filter(this::isCompletedStockAdjustment)
+                .filter(adjustment -> matchesResponsibleEmployee(adjustment, accountId))
                 .filter(adjustment -> !linkedAdjustmentIds.contains(adjustment.getId()))
                 .sorted(Comparator.comparing(Stockadjustment::getDate, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Stockadjustment::getId, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -735,11 +738,10 @@ public class IncomeService {
         if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType)) {
             Stockadjustment adjustment = stockadjustmentRepository.findById(request.getStockAdjustmentId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu điều chỉnh kho"));
-            if (!STOCK_ADJUSTMENT_STATUS_APPROVED.equals(adjustment.getStatus())) {
-                throw new IllegalArgumentException("Chỉ có thể liên kết phiếu điều chỉnh đã duyệt");
+            if (!isCompletedStockAdjustment(adjustment)) {
+                throw new IllegalArgumentException("Chỉ có thể liên kết phiếu điều chỉnh đã hoàn thành");
             }
-            if (adjustment.getCreatedBy() == null
-                    || !request.getAccountId().equals(adjustment.getCreatedBy().getId())) {
+            if (!matchesResponsibleEmployee(adjustment, request.getAccountId())) {
                 throw new IllegalArgumentException("Phiếu điều chỉnh không thuộc nhân viên đã chọn");
             }
             if (linkedStockAdjustmentIds().contains(adjustment.getId())) {
@@ -931,6 +933,33 @@ public class IncomeService {
                 .filter(Objects::nonNull)
                 .map(Stockadjustment::getId)
                 .collect(Collectors.toSet());
+    }
+
+    private boolean isCompletedStockAdjustment(Stockadjustment adjustment) {
+        if (adjustment == null || adjustment.getStatus() == null) {
+            return false;
+        }
+        String status = adjustment.getStatus();
+        return StockAdjustmentStatus.COMPLETED.equals(status)
+                || STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY.equals(status);
+    }
+
+    /**
+     * Employee liable for a stock adjustment: {@code expenseID.accountID} when finance linked an
+     * expense, otherwise {@code stockCountID.createdBy} for count-sourced slips.
+     */
+    private boolean matchesResponsibleEmployee(Stockadjustment adjustment, Integer accountId) {
+        if (adjustment == null || accountId == null) {
+            return false;
+        }
+        Expense expense = adjustment.getExpenseID();
+        if (expense != null && expense.getAccountID() != null
+                && accountId.equals(expense.getAccountID().getId())) {
+            return true;
+        }
+        Stockcount count = adjustment.getStockCountID();
+        return count != null && count.getCreatedBy() != null
+                && accountId.equals(count.getCreatedBy().getId());
     }
 
     private boolean isPositive(BigDecimal value) {
