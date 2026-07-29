@@ -39,22 +39,41 @@
                        role="button"
                        aria-label="Thông báo">
                         <i class="ti ti-bell"></i>
-                        <span class="pm-notification-dot" aria-hidden="true"></span>
+                        <span th:if="${unreadNotificationCount != null and unreadNotificationCount > 0}"
+                              class="pm-notification-dot"
+                              aria-hidden="true"></span>
                     </a>
 
                     <div class="dropdown-menu dropdown-menu-end dropdown-menu-md p-0 pm-notification-menu">
                         <ul class="list-unstyled p-0 m-0">
-                            <li class="p-3 border-bottom">
-                                <div class="small">
-                                    <p class="mb-1 fw-semibold">Cảnh báo tồn kho</p>
-                                    <p class="mb-0 text-secondary">Một số sản phẩm đã dưới mức tồn kho tối thiểu.</p>
+                            <li class="px-3 py-3 border-bottom d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold small">Thông báo mới</span>
+                                <span class="badge bg-success"
+                                      th:if="${unreadNotificationCount != null and unreadNotificationCount > 0}"
+                                      th:text="${unreadNotificationCount}">
+            0
+        </span>
+                            </li>
+
+                            <li th:if="${latestNotifications == null or #lists.isEmpty(latestNotifications)}"
+                                class="p-3 border-bottom">
+                                <div class="small text-secondary">
+                                    Hiện chưa có thông báo.
                                 </div>
                             </li>
 
-                            <li class="p-3 border-bottom">
+                            <li th:each="item : ${latestNotifications}"
+                                class="p-3 border-bottom">
                                 <div class="small">
-                                    <p class="mb-1 fw-semibold">Cảnh báo hạn sử dụng</p>
-                                    <p class="mb-0 text-secondary">Có lô hàng sắp hết hạn cần kiểm tra.</p>
+                                    <p class="mb-1 fw-semibold" th:text="${item.title}">
+                                        Tiêu đề thông báo
+                                    </p>
+                                    <p class="mb-1 text-secondary" th:text="${item.message}">
+                                        Nội dung thông báo
+                                    </p>
+                                    <span class="text-secondary" th:text="${item.createdAtDisplay}">
+                28/07/2026 22:00
+            </span>
                                 </div>
                             </li>
 

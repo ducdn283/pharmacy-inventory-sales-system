@@ -39,6 +39,7 @@ public class SidebarMenuService {
     private static final String ICON_FINANCE = "ti ti-cash";
     private static final String ICON_CUSTOMER = "ti ti-user";
     private static final String ICON_SHIFT_REPORT = "ti ti-clipboard-data";
+    private static final String ICON_NOTIFICATION = "ti ti-bell";
 
     private final Map<String, List<SidebarMenuGroup>> menusByRole = new LinkedHashMap<>();
 
@@ -121,6 +122,8 @@ public class SidebarMenuService {
         return List.of(
                 linkGroup(GROUP_MAIN, ICON_DASHBOARD,
                         i("Tổng quan", "/owner/dashboard", ICON_DASHBOARD)),
+                linkGroup("Thông báo", ICON_NOTIFICATION,
+                        i("Thông báo", "/owner/notifications", ICON_NOTIFICATION)),
 
                 menuGroup("Giao dịch", ICON_TRANSACTIONS,
                         i("Bán hàng", "/owner/selling", "ti ti-shopping-cart"),
@@ -170,6 +173,8 @@ public class SidebarMenuService {
         return List.of(
                 linkGroup(GROUP_MAIN, ICON_DASHBOARD,
                         i("Tổng quan", "/pharmacist/dashboard", ICON_DASHBOARD)),
+                linkGroup("Thông báo", ICON_NOTIFICATION,
+                        i("Thông báo", "/pharmacist/notifications", ICON_NOTIFICATION)),
 
                 linkGroup("Bán hàng", "ti ti-shopping-cart",
                         i("Bán hàng", "/pharmacist/selling", "ti ti-shopping-cart")),
@@ -199,6 +204,8 @@ public class SidebarMenuService {
         return List.of(
                 linkGroup(GROUP_MAIN, ICON_DASHBOARD,
                         i("Tổng quan", "/accountant/dashboard", ICON_DASHBOARD)),
+                linkGroup("Thông báo", ICON_NOTIFICATION,
+                        i("Thông báo", "/accountant/notifications", ICON_NOTIFICATION)),
 
                 menuGroup("Tài chính", ICON_FINANCE,
                         i("Danh sách công nợ", "/accountant/debts", "ti ti-credit-card"),

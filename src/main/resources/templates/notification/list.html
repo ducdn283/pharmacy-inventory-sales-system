@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Thông báo | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <style>
+        .notification-page-content {
+            padding-top: 96px !important;
+            padding-bottom: 48px;
+        }
+
+        .notification-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: #dcfce7;
+            color: #059669;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .notification-item {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 14px;
+            background: #fff;
+            transition: .16s ease;
+        }
+
+        .notification-item:hover,
+        .notification-item.active {
+            border-color: #059669;
+            background: #f0fdf4;
+        }
+
+        .notification-item.unread {
+            border-left: 4px solid #059669;
+        }
+
+        .notification-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .notification-message {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .badge-soft {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .badge-success { background: #dcfce7; color: #059669; }
+        .badge-warning { background: #fef3c7; color: #d97706; }
+        .badge-danger { background: #fee2e2; color: #dc2626; }
+        .badge-info { background: #dbeafe; color: #2563eb; }
+        .badge-orange { background: #ffedd5; color: #ea580c; }
+        .badge-secondary { background: #f3f4f6; color: #4b5563; }
+
+        .btn-notification-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
+            border-radius: 12px;
+        }
+
+        .btn-notification-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #fff;
+        }
+
+        .notification-detail-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .notification-detail-message {
+            font-size: 14px;
+            color: #374151;
+            white-space: pre-line;
+            line-height: 1.65;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 12px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+<div th:replace="~{fragments/topbar :: topbar}"></div>
+<div th:replace="~{fragments/toast :: toast}"></div>
+
+<main id="main" class="main">
+    <div class="container-fluid notification-page-content">
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+            <div>
+                <h2 class="h4 mb-1 fw-bold">Thông báo</h2>
+                <p class="text-secondary mb-0">Theo dõi cảnh báo hệ thống, phê duyệt, tài chính, kho và kỳ thuế.</p>
+            </div>
+
+            <form th:action="@{${basePath + '/read-all'}}" method="post" class="m-0">
+                <input type="hidden"
+                       th:if="${_csrf}"
+                       th:name="${_csrf.parameterName}"
+                       th:value="${_csrf.token}">
+                <button type="submit" class="btn btn-notification-primary">
+                    <i class="ti ti-checks me-1"></i>
+                    Đánh dấu tất cả đã đọc
+                </button>
+            </form>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="notification-card p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon"><i class="ti ti-bell"></i></div>
+                    <div>
+                        <div class="text-secondary small">Tổng thông báo</div>
+                        <div class="h5 mb-0 fw-bold" th:text="${stats.totalCount}">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="notification-card p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon"><i class="ti ti-mail"></i></div>
+                    <div>
+                        <div class="text-secondary small">Chưa đọc</div>
+                        <div class="h5 mb-0 fw-bold" th:text="${stats.unreadCount}">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="notification-card p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon"><i class="ti ti-clipboard-check"></i></div>
+                    <div>
+                        <div class="text-secondary small">Cần xử lý</div>
+                        <div class="h5 mb-0 fw-bold" th:text="${stats.actionRequiredCount}">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="notification-card p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon"><i class="ti ti-alert-triangle"></i></div>
+                    <div>
+                        <div class="text-secondary small">Khẩn cấp</div>
+                        <div class="h5 mb-0 fw-bold" th:text="${stats.urgentCount}">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="notification-card p-3 mb-4">
+            <form th:action="@{${basePath}}" method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-secondary">Tìm kiếm</label>
+                    <input type="text"
+                           name="keyword"
+                           class="form-control"
+                           placeholder="Tiêu đề hoặc nội dung..."
+                           th:value="${keyword}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small text-secondary">Nhóm</label>
+                    <select name="category" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option th:each="entry : ${categories}"
+                                th:value="${entry.key}"
+                                th:text="${entry.value}"
+                                th:selected="${entry.key == filterCategory}">
+                            Kho
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small text-secondary">Mức độ</label>
+                    <select name="severity" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option th:each="item : ${severities}"
+                                th:value="${item}"
+                                th:text="${item}"
+                                th:selected="${item == filterSeverity}">
+                            INFO
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small text-secondary">Trạng thái</label>
+                    <select name="status" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option th:each="item : ${statuses}"
+                                th:value="${item}"
+                                th:text="${item}"
+                                th:selected="${item == filterStatus}">
+                            UNREAD
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small text-secondary d-block">Chưa đọc</label>
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="unreadOnly"
+                               value="true"
+                               id="unreadOnly"
+                               th:checked="${unreadOnly}">
+                        <label class="form-check-label small" for="unreadOnly">
+                            Chỉ xem chưa đọc
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-notification-primary w-100">
+                        Lọc
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="notification-card p-3">
+                    <h3 class="h6 fw-bold mb-3">Danh sách thông báo</h3>
+
+                    <div th:if="${#lists.isEmpty(notifications)}"
+                         class="text-center text-secondary py-5">
+                        Không có thông báo phù hợp.
+                    </div>
+
+                    <div class="d-flex flex-column gap-3">
+                        <a th:each="item : ${notifications}"
+                           th:href="@{${basePath}(selectedId=${item.id}, keyword=${keyword}, category=${filterCategory}, severity=${filterSeverity}, status=${filterStatus}, unreadOnly=${unreadOnly})}"
+                           class="notification-item"
+                           th:classappend="${selectedNotification != null and selectedNotification.id == item.id ? ' active' : ''} + ' ' + ${!item.isRead ? ' unread' : ''}">
+
+                            <div class="d-flex justify-content-between gap-2 mb-2">
+                                <div class="notification-title" th:text="${item.title}">
+                                    Tiêu đề thông báo
+                                </div>
+                                <span class="badge-soft"
+                                      th:classappend="' badge-' + ${item.severityCssClass}"
+                                      th:text="${item.severityDisplay}">
+                                    Cảnh báo
+                                </span>
+                            </div>
+
+                            <div class="notification-message" th:text="${item.message}">
+                                Nội dung thông báo
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <span class="badge-soft"
+                                      th:classappend="' badge-' + ${item.categoryCssClass}"
+                                      th:text="${item.categoryDisplay}">
+                                    Kho
+                                </span>
+                                <span class="small text-secondary" th:text="${item.createdAtDisplay}">
+                                    28/07/2026 22:00
+                                </span>
+                                <span th:if="${!item.isRead}" class="small fw-semibold text-success">
+                                    Chưa đọc
+                                </span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="notification-card p-4 h-100">
+                    <div th:if="${selectedNotification == null}"
+                         class="text-center text-secondary py-5">
+                        Chọn một thông báo để xem chi tiết.
+                    </div>
+
+                    <div th:if="${selectedNotification != null}">
+                        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
+                            <div>
+                                <h3 class="notification-detail-title mb-2"
+                                    th:text="${selectedNotification.title}">
+                                    Chi tiết thông báo
+                                </h3>
+
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge-soft"
+                                          th:classappend="' badge-' + ${selectedNotification.severityCssClass}"
+                                          th:text="${selectedNotification.severityDisplay}">
+                                        Cảnh báo
+                                    </span>
+
+                                    <span class="badge-soft"
+                                          th:classappend="' badge-' + ${selectedNotification.categoryCssClass}"
+                                          th:text="${selectedNotification.categoryDisplay}">
+                                        Kỳ thuế
+                                    </span>
+
+                                    <span class="badge-soft badge-secondary"
+                                          th:text="${selectedNotification.statusDisplay}">
+                                        Chưa đọc
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="small text-secondary"
+                                 th:text="${selectedNotification.createdAtDisplay}">
+                                28/07/2026 22:00
+                            </div>
+                        </div>
+
+                        <p class="notification-detail-message mb-4"
+                           th:text="${selectedNotification.message}">
+                            Nội dung chi tiết
+                        </p>
+
+                        <div class="d-flex flex-wrap gap-2">
+                            <a th:if="${selectedNotification.actionUrl != null}"
+                               th:href="@{${selectedNotification.actionUrl}}"
+                               class="btn btn-notification-primary">
+                                <i class="ti ti-external-link me-1"></i>
+                                Xem chi tiết
+                            </a>
+
+                            <form th:if="${!selectedNotification.isRead}"
+                                  th:action="@{${basePath + '/' + selectedNotification.id + '/read'}}"
+                                  method="post">
+                                <input type="hidden"
+                                       th:if="${_csrf}"
+                                       th:name="${_csrf.parameterName}"
+                                       th:value="${_csrf.token}">
+                                <button type="submit" class="btn btn-outline-success">
+                                    <i class="ti ti-check me-1"></i>
+                                    Đánh dấu đã đọc
+                                </button>
+                            </form>
+
+                            <form th:action="@{${basePath + '/' + selectedNotification.id + '/dismiss'}}"
+                                  method="post">
+                                <input type="hidden"
+                                       th:if="${_csrf}"
+                                       th:name="${_csrf.parameterName}"
+                                       th:value="${_csrf.token}">
+                                <button type="submit" class="btn btn-outline-secondary">
+                                    <i class="ti ti-eye-off me-1"></i>
+                                    Ẩn thông báo
+                                </button>
+                            </form>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <dl class="row small mb-0">
+                            <dt class="col-sm-3 text-secondary">Loại</dt>
+                            <dd class="col-sm-9" th:text="${selectedNotification.notificationType}">TYPE</dd>
+
+                            <dt class="col-sm-3 text-secondary">Đối tượng</dt>
+                            <dd class="col-sm-9">
+                                <span th:text="${selectedNotification.referenceType ?: '-'}">TAX_PERIOD</span>
+                                <span th:if="${selectedNotification.referenceId != null}"
+                                      th:text="' #' + ${selectedNotification.referenceId}">
+                                    #1
+                                </span>
+                            </dd>
+
+                            <dt class="col-sm-3 text-secondary">Dedupe key</dt>
+                            <dd class="col-sm-9 text-break" th:text="${selectedNotification.dedupeKey ?: '-'}">
+                                -
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+</body>
+</html>

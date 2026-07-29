@@ -5,6 +5,7 @@ import com.example.project.context.CurrentUserContext;
 import com.example.project.service.SidebarMenuService;
 import com.example.project.view.SidebarMenuGroup;
 import com.example.project.view.SidebarMenuItem;
+import com.example.project.service.NotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -42,11 +43,14 @@ public class SidebarInterceptor implements HandlerInterceptor {
 
     private final SidebarMenuService sidebarMenuService;
     private final CurrentUserContext currentUserContext;
+    private final NotificationService notificationService;
 
     public SidebarInterceptor(SidebarMenuService sidebarMenuService,
-                              CurrentUserContext currentUserContext) {
+                              CurrentUserContext currentUserContext,
+                              NotificationService notificationService) {
         this.sidebarMenuService = sidebarMenuService;
         this.currentUserContext = currentUserContext;
+        this.notificationService = notificationService;
     }
 
     public void postHandle(HttpServletRequest request, HttpServletResponse response,
@@ -73,12 +77,17 @@ public class SidebarInterceptor implements HandlerInterceptor {
         String uri = request.getRequestURI();
         String activeUrl = sidebarMenuService.resolveActiveUrl(menu, uri);
         String currentAccountName = currentUserContext.getCurrentAccountName();
+        Integer currentAccountId = currentUserContext.getCurrentAccountId();
+        long unreadNotificationCount = currentAccountId == null ? 0 : notificationService.unreadCount(currentAccountId);
 
         modelAndView.addObject("currentRole", role);
         modelAndView.addObject("currentRoleDisplay", RoleConstants.vietnameseName(role));
         modelAndView.addObject("currentAccountName", currentAccountName);
         modelAndView.addObject("currentUserInitials", buildInitials(currentAccountName));
         modelAndView.addObject("currentNotificationsUrl", notificationsUrl(role));
+        modelAndView.addObject("unreadNotificationCount", unreadNotificationCount);
+        modelAndView.addObject("latestNotifications",
+                currentAccountId == null ? List.of() : notificationService.latest(currentAccountId));
         modelAndView.addObject("sidebarMenu", menu);
         modelAndView.addObject("activeUrl", activeUrl);
         modelAndView.addObject("currentPageTitle", resolvePageTitle(menu, activeUrl));

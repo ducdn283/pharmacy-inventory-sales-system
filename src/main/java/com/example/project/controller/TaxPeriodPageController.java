@@ -4,6 +4,7 @@ import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.TaxPeriodCloseRequest;
 import com.example.project.dto.request.TaxPeriodUpdateRequest;
+import com.example.project.service.TaxRevenueNotificationService;
 import com.example.project.service.TaxperiodsnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Controller;
@@ -41,12 +42,15 @@ public class TaxPeriodPageController {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final TaxperiodsnapshotService taxperiodsnapshotService;
+    private final TaxRevenueNotificationService taxRevenueNotificationService;
     private final CurrentUserContext currentUserContext;
 
     public TaxPeriodPageController(TaxperiodsnapshotService taxperiodsnapshotService,
+                                   TaxRevenueNotificationService taxRevenueNotificationService,
                                    CurrentUserContext currentUserContext) {
         this.taxperiodsnapshotService = taxperiodsnapshotService;
         this.currentUserContext = currentUserContext;
+        this.taxRevenueNotificationService = taxRevenueNotificationService;
     }
 
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
@@ -92,6 +96,7 @@ public class TaxPeriodPageController {
         try {
             period = taxperiodsnapshotService.resolveQuarter(year, quarter);
             model.addAttribute("computation", taxperiodsnapshotService.computePeriod(period));
+            taxRevenueNotificationService.warnIfRevenueThresholdReached(period, null);
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
             return "redirect:" + basePath + "/preview";
@@ -119,6 +124,15 @@ public class TaxPeriodPageController {
         String basePath = resolveBasePath(request);
         try {
             Integer id = taxperiodsnapshotService.closePeriod(form, currentUserContext.getCurrentRole());
+
+            TaxperiodsnapshotService.TaxPeriod closedPeriod =
+                    taxperiodsnapshotService.resolveQuarter(
+                            Integer.parseInt(form.getPeriodLabel().substring(0, 4)),
+                            Integer.parseInt(form.getPeriodLabel().substring(6))
+                    );
+
+            taxRevenueNotificationService.warnIfRevenueThresholdReached(closedPeriod, id);
+
             redirectAttributes.addFlashAttribute("successMessage",
                     "Đã chốt kỳ thuế " + form.getPeriodLabel());
             return "redirect:" + basePath + "/" + id;
