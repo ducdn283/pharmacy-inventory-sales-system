@@ -34,6 +34,7 @@ public class IncomeDetailResponse {
     private Integer invoiceId;
     private Integer returnId;
     private Integer stockAdjustmentId;
+    private Integer shiftReportOfAccountId;
 
     private String note;
 }

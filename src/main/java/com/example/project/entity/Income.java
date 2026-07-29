@@ -93,4 +93,8 @@ public class Income {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stockAdjustmentID")
     private Stockadjustment stockAdjustmentID;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shiftReportOfAccountID")
+    private Shiftreport shiftReportOfAccountID;
 }

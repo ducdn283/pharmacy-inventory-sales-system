@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.ReturnPurchaseStatus;
+import com.example.project.constant.ShiftReportStatus;
 import com.example.project.constant.StockAdjustmentStatus;
 import com.example.project.dto.request.IncomeCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
@@ -15,6 +16,7 @@ import com.example.project.entity.Invoice;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Productunit;
+import com.example.project.entity.Shiftreport;
 import com.example.project.entity.Stockadjustment;
 import com.example.project.entity.Stockadjustmentdetail;
 import com.example.project.entity.Supplier;
@@ -24,6 +26,7 @@ import com.example.project.repository.IncomeRepository;
 import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
+import com.example.project.repository.ShiftreportRepository;
 import com.example.project.repository.StockadjustmentRepository;
 import com.example.project.repository.StockadjustmentdetailRepository;
 import com.example.project.repository.SupplierRepository;
@@ -87,6 +90,7 @@ public class IncomeService {
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final StockadjustmentRepository stockadjustmentRepository;
     private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
+    private final ShiftreportRepository shiftreportRepository;
     // Lazily opens/reuses the collector's shift the moment an income is actually recorded — same
     // hook as InvoiceService/ReturnService (phát sinh giao dịch là tạo báo cáo ca). Income is
     // only creatable by Owner/Pharmacist (see IncomeController routes), so this never opens a shift
@@ -102,6 +106,7 @@ public class IncomeService {
                          PurchaseinvoiceRepository purchaseinvoiceRepository,
                          StockadjustmentRepository stockadjustmentRepository,
                          StockadjustmentdetailRepository stockadjustmentdetailRepository,
+                         ShiftreportRepository shiftreportRepository,
                          ShiftreportService shiftreportService) {
         this.incomeRepository = incomeRepository;
         this.accountRepository = accountRepository;
@@ -112,6 +117,7 @@ public class IncomeService {
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.stockadjustmentRepository = stockadjustmentRepository;
         this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
+        this.shiftreportRepository = shiftreportRepository;
         this.shiftreportService = shiftreportService;
     }
 
@@ -297,6 +303,31 @@ public class IncomeService {
     }
 
     @Transactional(readOnly = true)
+    public List<IncomeReferenceOptionResponse> listShiftReportsWithShortage(Integer accountId) {
+        if (accountId == null) {
+            return List.of();
+        }
+        Set<Integer> linkedShiftIds = linkedShiftReportOfAccountIds();
+
+        return shiftreportRepository.findAllWithRelations().stream()
+                .filter(shift -> shift.getCashierID() != null
+                        && accountId.equals(shift.getCashierID().getId()))
+                .filter(this::isShiftWithCollectibleShortage)
+                .filter(shift -> !linkedShiftIds.contains(shift.getId()))
+                .sorted(Comparator.comparing(Shiftreport::getShiftDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Shiftreport::getStartTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Shiftreport::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(shift -> new IncomeReferenceOptionResponse(
+                        shift.getId(),
+                        shift.getShiftReportCode(),
+                        formatShiftReferenceDate(shift),
+                        collectibleShortageAmount(shift),
+                        "Ca " + nullToEmpty(shift.getShiftType())
+                                + " — Thiếu: " + formatMoney(collectibleShortageAmount(shift))))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public IncomeDetailResponse getDetail(Integer incomeId) {
         Income income = incomeRepository.findByIdWithRelations(incomeId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu thu"));
@@ -464,7 +495,7 @@ public class IncomeService {
         String partyTypeDisplay = switch (typeCode) {
             case IncomeTypeOptionResponse.CUSTOMER -> "Khách hàng";
             case IncomeTypeOptionResponse.SUPPLIER -> "Nhà cung cấp";
-            case IncomeTypeOptionResponse.EMPLOYEE -> "Người chịu trách nhiệm";
+            case IncomeTypeOptionResponse.EMPLOYEE, IncomeTypeOptionResponse.SHIFT_SHORTAGE -> "Người chịu trách nhiệm";
             default -> "—";
         };
 
@@ -472,6 +503,7 @@ public class IncomeService {
         Integer invoiceId = null;
         Integer returnId = null;
         Integer stockAdjustmentId = null;
+        Integer shiftReportOfAccountId = null;
         if (income.getInvoiceID() != null) {
             referenceTypeDisplay = "Hóa đơn bán hàng";
             invoiceId = income.getInvoiceID().getId();
@@ -481,6 +513,9 @@ public class IncomeService {
         } else if (income.getStockAdjustmentID() != null) {
             referenceTypeDisplay = "Phiếu điều chỉnh kho";
             stockAdjustmentId = income.getStockAdjustmentID().getId();
+        } else if (income.getShiftReportOfAccountID() != null) {
+            referenceTypeDisplay = "Báo cáo ca";
+            shiftReportOfAccountId = income.getShiftReportOfAccountID().getId();
         }
 
         return new IncomeDetailResponse(
@@ -503,6 +538,7 @@ public class IncomeService {
                 invoiceId,
                 returnId,
                 stockAdjustmentId,
+                shiftReportOfAccountId,
                 income.getNote());
     }
 
@@ -525,6 +561,12 @@ public class IncomeService {
         if (income.getCustomerID() != null) {
             return IncomeTypeOptionResponse.CUSTOMER;
         }
+        if (income.getShiftReportOfAccountID() != null) {
+            return IncomeTypeOptionResponse.SHIFT_SHORTAGE;
+        }
+        if (income.getAccountID() != null && income.getStockAdjustmentID() != null) {
+            return IncomeTypeOptionResponse.EMPLOYEE;
+        }
         if (income.getAccountID() != null) {
             return IncomeTypeOptionResponse.EMPLOYEE;
         }
@@ -538,8 +580,9 @@ public class IncomeService {
         if (income.getReturnID() != null && income.getReturnID().getReturnCode() != null) {
             return income.getReturnID().getReturnCode();
         }
-        if (income.getShiftReportID() != null && income.getShiftReportID().getShiftReportCode() != null) {
-            return income.getShiftReportID().getShiftReportCode();
+        if (income.getShiftReportOfAccountID() != null
+                && income.getShiftReportOfAccountID().getShiftReportCode() != null) {
+            return income.getShiftReportOfAccountID().getShiftReportCode();
         }
         if (income.getStockAdjustmentID() != null && income.getStockAdjustmentID().getStockAdjustmentCode() != null) {
             return income.getStockAdjustmentID().getStockAdjustmentCode();
@@ -724,6 +767,12 @@ public class IncomeService {
         if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType) && request.getStockAdjustmentId() == null) {
             throw new IllegalArgumentException("Vui lòng chọn phiếu điều chỉnh kho");
         }
+        if (IncomeTypeOptionResponse.SHIFT_SHORTAGE.equals(incomeType) && request.getAccountId() == null) {
+            throw new IllegalArgumentException("Vui lòng chọn người chịu trách nhiệm");
+        }
+        if (IncomeTypeOptionResponse.SHIFT_SHORTAGE.equals(incomeType) && request.getShiftReportOfAccountId() == null) {
+            throw new IllegalArgumentException("Vui lòng chọn báo cáo ca");
+        }
         validateReferenceSelection(incomeType, request);
     }
 
@@ -770,6 +819,20 @@ public class IncomeService {
             }
             validateEmployeePaymentAmount(adjustment, request.getAmount());
         }
+        if (IncomeTypeOptionResponse.SHIFT_SHORTAGE.equals(incomeType)) {
+            Shiftreport shift = shiftreportRepository.findByIdWithRelations(request.getShiftReportOfAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy báo cáo ca"));
+            if (!isShiftWithCollectibleShortage(shift)) {
+                throw new IllegalArgumentException("Báo cáo ca không còn khoản thiếu tiền mặt cần thu");
+            }
+            if (shift.getCashierID() == null || !request.getAccountId().equals(shift.getCashierID().getId())) {
+                throw new IllegalArgumentException("Báo cáo ca không thuộc người chịu trách nhiệm đã chọn");
+            }
+            if (linkedShiftReportOfAccountIds().contains(shift.getId())) {
+                throw new IllegalArgumentException("Báo cáo ca này đã được liên kết với phiếu thu khác");
+            }
+            validateShiftShortagePaymentAmount(shift, request.getAmount());
+        }
     }
 
     private String resolveIncomeType(String rawType) {
@@ -797,6 +860,9 @@ public class IncomeService {
         } else if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType)) {
             income.setAccountID(accountRepository.findById(request.getAccountId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người chịu trách nhiệm")));
+        } else if (IncomeTypeOptionResponse.SHIFT_SHORTAGE.equals(incomeType)) {
+            income.setAccountID(accountRepository.findById(request.getAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người chịu trách nhiệm")));
         }
     }
 
@@ -804,6 +870,7 @@ public class IncomeService {
         income.setInvoiceID(null);
         income.setReturnID(null);
         income.setStockAdjustmentID(null);
+        income.setShiftReportOfAccountID(null);
 
         if (IncomeTypeOptionResponse.CUSTOMER.equals(incomeType)) {
             income.setInvoiceID(invoiceRepository.findById(request.getInvoiceId())
@@ -814,6 +881,9 @@ public class IncomeService {
         } else if (IncomeTypeOptionResponse.EMPLOYEE.equals(incomeType)) {
             income.setStockAdjustmentID(stockadjustmentRepository.findById(request.getStockAdjustmentId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu điều chỉnh kho")));
+        } else if (IncomeTypeOptionResponse.SHIFT_SHORTAGE.equals(incomeType)) {
+            income.setShiftReportOfAccountID(shiftreportRepository.findById(request.getShiftReportOfAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy báo cáo ca")));
         }
     }
 
@@ -1017,6 +1087,73 @@ public class IncomeService {
                     "Phiếu thu đền bù phải thu đủ một lần ("
                             + formatMoney(required) + ")");
         }
+    }
+
+    private void validateShiftShortagePaymentAmount(Shiftreport shift, BigDecimal paymentAmount) {
+        if (paymentAmount == null) {
+            return;
+        }
+        BigDecimal required = collectibleShortageAmount(shift);
+        BigDecimal normalizedPayment = paymentAmount.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal normalizedRequired = required.setScale(2, RoundingMode.HALF_UP);
+        if (normalizedRequired.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Báo cáo ca không có khoản thiếu tiền mặt");
+        }
+        if (normalizedPayment.compareTo(normalizedRequired) != 0) {
+            throw new IllegalArgumentException(
+                    "Phiếu thu thất thoát ca phải thu đủ một lần ("
+                            + formatMoney(required) + ")");
+        }
+    }
+
+    private boolean isShiftWithCollectibleShortage(Shiftreport shift) {
+        if (shift == null || shift.getStatus() == null) {
+            return false;
+        }
+        if (isStatus(shift.getStatus(), ShiftReportStatus.DRAFT)) {
+            return false;
+        }
+        return isPositive(collectibleShortageAmount(shift));
+    }
+
+    /** {@code cashDiscrepancy < 0} means physical cash is short — collectible amount is the absolute value. */
+    private BigDecimal collectibleShortageAmount(Shiftreport shift) {
+        if (shift == null || shift.getCashDiscrepancy() == null) {
+            return BigDecimal.ZERO;
+        }
+        return shift.getCashDiscrepancy().compareTo(BigDecimal.ZERO) < 0
+                ? shift.getCashDiscrepancy().abs()
+                : BigDecimal.ZERO;
+    }
+
+    private Set<Integer> linkedShiftReportOfAccountIds() {
+        return incomeRepository.findAllWithRelations().stream()
+                .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED))
+                .map(Income::getShiftReportOfAccountID)
+                .filter(Objects::nonNull)
+                .map(Shiftreport::getId)
+                .collect(Collectors.toSet());
+    }
+
+    private String formatShiftReferenceDate(Shiftreport shift) {
+        if (shift == null) {
+            return "";
+        }
+        String datePart = shift.getShiftDate() != null
+                ? shift.getShiftDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                : "";
+        String timePart = formatInstant(shift.getEndTime() != null ? shift.getEndTime() : shift.getStartTime());
+        if (datePart.isBlank()) {
+            return timePart;
+        }
+        if (timePart.isBlank()) {
+            return datePart;
+        }
+        return datePart + " " + timePart;
+    }
+
+    private String nullToEmpty(String value) {
+        return value != null ? value : "";
     }
 
     private boolean isPositive(BigDecimal value) {

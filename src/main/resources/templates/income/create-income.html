@@ -465,7 +465,7 @@
                             </div>
 
                             <div class="col-12 col-md-6 party-field" id="employeeField">
-                                <label class="form-label">Người chịu trách nhiệm <span class="text-danger">*</span></label>
+                                <label class="form-label" id="employeeFieldLabel">Người chịu trách nhiệm <span class="text-danger">*</span></label>
                                 <div class="party-search-wrap">
                                     <input type="text"
                                            id="employeeSearchInput"
@@ -494,6 +494,22 @@
                                 </select>
                                 <div class="income-inline-error" id="stockAdjustmentIdError">
                                     Vui lòng chọn phiếu điều chỉnh kho.
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 reference-field" id="shiftReportField">
+                                <label class="form-label">Báo cáo ca <span class="text-danger">*</span></label>
+                                <select class="form-select" th:field="*{shiftReportOfAccountId}" id="shiftReportOfAccountIdInput">
+                                    <option value="">-- Chọn báo cáo ca --</option>
+                                    <option th:each="item : ${shiftReportsWithShortage}"
+                                            th:value="${item.id}"
+                                            th:attr="data-amount=${item.amount}"
+                                            th:text="${item.code + ' — ' + item.dateDisplay + (item.amount != null ? ' — Thiếu: ' + #numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ' : '') + (item.detail != null ? ' — ' + item.detail : '')}">
+                                        BC-001
+                                    </option>
+                                </select>
+                                <div class="income-inline-error" id="shiftReportOfAccountIdError">
+                                    Vui lòng chọn báo cáo ca.
                                 </div>
                             </div>
 
@@ -720,7 +736,8 @@
             errorId: 'accountIdError',
             message: 'Vui lòng chọn người chịu trách nhiệm.'
         },
-        stockAdjustmentIdInput: { errorId: 'stockAdjustmentIdError', message: 'Vui lòng chọn phiếu điều chỉnh kho.' }
+        stockAdjustmentIdInput: { errorId: 'stockAdjustmentIdError', message: 'Vui lòng chọn phiếu điều chỉnh kho.' },
+        shiftReportOfAccountIdInput: { errorId: 'shiftReportOfAccountIdError', message: 'Vui lòng chọn báo cáo ca.' }
     };
 
     const touchedPartyFields = new Set();
@@ -799,6 +816,9 @@
         if (type === 'EMPLOYEE') {
             return selectId === 'accountIdInput' || selectId === 'stockAdjustmentIdInput';
         }
+        if (type === 'SHIFT_SHORTAGE') {
+            return selectId === 'accountIdInput' || selectId === 'shiftReportOfAccountIdInput';
+        }
         return false;
     }
 
@@ -810,6 +830,9 @@
             return !!document.getElementById('supplierIdInput').value;
         }
         if (type === 'EMPLOYEE' && selectId === 'stockAdjustmentIdInput') {
+            return !!document.getElementById('accountIdInput').value;
+        }
+        if (type === 'SHIFT_SHORTAGE' && selectId === 'shiftReportOfAccountIdInput') {
             return !!document.getElementById('accountIdInput').value;
         }
         return true;
@@ -877,6 +900,12 @@
             } else if (!document.getElementById('stockAdjustmentIdInput').value) {
                 markInvalid('stockAdjustmentIdInput');
             }
+        } else if (type === 'SHIFT_SHORTAGE') {
+            if (!document.getElementById('accountIdInput').value) {
+                markInvalid('accountIdInput');
+            } else if (!document.getElementById('shiftReportOfAccountIdInput').value) {
+                markInvalid('shiftReportOfAccountIdInput');
+            }
         }
 
         if (firstInvalid) {
@@ -899,7 +928,7 @@
     }
 
     function requiresFullReferencePayment(type) {
-        return type === 'EMPLOYEE';
+        return type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE';
     }
 
     function getSelectedReferenceDebt() {
@@ -909,6 +938,8 @@
             selectId = 'returnIdInput';
         } else if (type === 'EMPLOYEE') {
             selectId = 'stockAdjustmentIdInput';
+        } else if (type === 'SHIFT_SHORTAGE') {
+            selectId = 'shiftReportOfAccountIdInput';
         } else {
             selectId = 'invoiceIdInput';
         }
@@ -1035,7 +1066,9 @@
             return true;
         }
         showPaymentAmountError(
-            'Phải thu đủ giá trị đền bù một lần (' + formatMoney(required) + ').');
+            type === 'SHIFT_SHORTAGE'
+                ? 'Phải thu đủ số tiền thiếu của ca một lần (' + formatMoney(required) + ').'
+                : 'Phải thu đủ giá trị đền bù một lần (' + formatMoney(required) + ').');
         return false;
     }
 
@@ -1047,6 +1080,10 @@
         const select = document.getElementById('stockAdjustmentIdInput');
         if (select && select.value) {
             applySuggestedAmount(select);
+        }
+        const shiftSelect = document.getElementById('shiftReportOfAccountIdInput');
+        if (shiftSelect && shiftSelect.value) {
+            applySuggestedAmount(shiftSelect);
         }
     }
 
@@ -1275,6 +1312,9 @@
             } else if (type === 'EMPLOYEE') {
                 debtHint.textContent = 'Phải thu đủ giá trị đền bù một lần; không được thu một phần.';
                 debtHint.style.display = 'block';
+            } else if (type === 'SHIFT_SHORTAGE') {
+                debtHint.textContent = 'Phải thu đủ số tiền thiếu của ca một lần; không được thu một phần.';
+                debtHint.style.display = 'block';
             } else {
                 debtHint.style.display = 'none';
             }
@@ -1421,15 +1461,32 @@
         }
     }
 
+    function updateEmployeeFieldCopy(type) {
+        const label = document.getElementById('employeeFieldLabel');
+        const search = document.getElementById('employeeSearchInput');
+        const error = document.getElementById('accountIdError');
+        if (!label || !search || !error) {
+            return;
+        }
+        if (type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE') {
+            label.innerHTML = 'Người chịu trách nhiệm <span class="text-danger">*</span>';
+            search.placeholder = 'Tìm người chịu trách nhiệm theo tên';
+            error.textContent = 'Vui lòng chọn người chịu trách nhiệm.';
+            PARTY_REFERENCE_FIELDS.accountIdInput.message = 'Vui lòng chọn người chịu trách nhiệm.';
+        }
+    }
+
     function toggleTypeFields(options) {
         options = options || {};
         const type = document.getElementById('incomeTypeInput').value;
         document.getElementById('supplierField').classList.toggle('show', type === 'SUPPLIER');
         document.getElementById('customerField').classList.toggle('show', type === 'CUSTOMER');
-        document.getElementById('employeeField').classList.toggle('show', type === 'EMPLOYEE');
+        document.getElementById('employeeField').classList.toggle('show', type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE');
         document.getElementById('debtInvoiceField').classList.toggle('show', type === 'CUSTOMER');
         document.getElementById('supplierReturnField').classList.toggle('show', type === 'SUPPLIER');
         document.getElementById('stockAdjustmentField').classList.toggle('show', type === 'EMPLOYEE');
+        document.getElementById('shiftReportField').classList.toggle('show', type === 'SHIFT_SHORTAGE');
+        updateEmployeeFieldCopy(type);
         document.getElementById('manualAmountField').classList.toggle('show', requiresManualAmount(type));
         syncPaymentEditableState();
         if (!requiresManualAmount(type)) {
@@ -1437,7 +1494,7 @@
         } else {
             clearAllPartyReferenceErrors();
         }
-        if (options.resetLinkedAmount && (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE')) {
+        if (options.resetLinkedAmount && (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE')) {
             setAmount(0);
         }
         touchedPartyFields.clear();
@@ -1459,6 +1516,10 @@
         stockAdjustmentIdInput: {
             type: 'stockAdjustment',
             detailUrl: function (id) { return basePath + '/references/stock-adjustments/' + id + '/detail'; }
+        },
+        shiftReportOfAccountIdInput: {
+            type: 'shiftReport',
+            detailUrl: function (id) { return basePath + '/references/shift-reports/' + id + '/detail'; }
         }
     };
 
@@ -1716,6 +1777,41 @@
         document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
     }
 
+    function renderShiftReportReferenceDetail(detail) {
+        document.getElementById('referenceDetailTitle').innerHTML =
+            '<i class="ti ti-info-circle text-success me-1"></i>Thông tin báo cáo ca';
+        document.getElementById('referenceItemsTitle').innerHTML =
+            '<i class="ti ti-calculator text-success me-1"></i>Đối chiếu tiền mặt';
+
+        let infoHtml = infoRowHtml('Mã ca',
+            '<span class="fw-semibold text-success">' + escapeHtml(detail.shiftReportCode) + '</span>');
+        infoHtml += infoRowHtml('Người chịu trách nhiệm trực ca', escapeHtml(detail.cashierName));
+        infoHtml += infoRowHtml('Ngày ca', escapeHtml(detail.shiftDateDisplay));
+        infoHtml += infoRowHtml('Ca', escapeHtml(detail.shiftType));
+        infoHtml += infoRowHtml('Bắt đầu', escapeHtml(detail.startTimeDisplay));
+        infoHtml += infoRowHtml('Kết thúc', escapeHtml(detail.endTimeDisplay || '—'));
+        infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.status, detail.statusCssClass));
+        if (detail.noteDiscrepancy) {
+            infoHtml += infoRowHtml('Ghi chú chênh lệch', escapeHtml(detail.noteDiscrepancy));
+        }
+        document.getElementById('referenceInfoBody').innerHTML = infoHtml;
+
+        document.getElementById('referenceItemsHead').innerHTML =
+            '<tr><th>Hạng mục</th><th class="text-end">Giá trị</th></tr>';
+
+        const shortage = detail.cashDiscrepancy != null && detail.cashDiscrepancy < 0
+            ? Math.abs(detail.cashDiscrepancy) : 0;
+        let bodyHtml = '';
+        bodyHtml += '<tr><td>Tiền mặt đầu ca</td><td class="text-end">' + formatMoney(detail.openingCash) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt thu trong ca</td><td class="text-end">' + formatMoney(detail.totalCashIn) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt chi trong ca</td><td class="text-end">' + formatMoney(detail.totalCashOut) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt cuối ca (dự kiến)</td><td class="text-end">' + formatMoney(detail.expectedClosingCash) + '</td></tr>';
+        bodyHtml += '<tr><td>Tiền mặt thực đếm</td><td class="text-end">' + formatMoney(detail.actualClosingCash) + '</td></tr>';
+        bodyHtml += '<tr class="fw-semibold"><td>Chênh lệch tiền mặt</td><td class="text-end text-danger">' + formatMoney(detail.cashDiscrepancy) + '</td></tr>';
+        bodyHtml += '<tr class="fw-semibold"><td>Số tiền thiếu cần thu</td><td class="text-end text-warning">' + formatMoney(shortage) + '</td></tr>';
+        document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+    }
+
     function renderReferenceDetail(referenceType, detail) {
         if (referenceType === 'invoice') {
             renderInvoiceReferenceDetail(detail);
@@ -1723,6 +1819,8 @@
             renderReturnReferenceDetail(detail);
         } else if (referenceType === 'stockAdjustment') {
             renderStockAdjustmentReferenceDetail(detail);
+        } else if (referenceType === 'shiftReport') {
+            renderShiftReportReferenceDetail(detail);
         }
     }
 
@@ -1748,6 +1846,8 @@
             url = basePath + '/references/supplier-returns/' + referenceId + '/detail';
         } else if (referenceType === 'stockAdjustment') {
             url = basePath + '/references/stock-adjustments/' + referenceId + '/detail';
+        } else if (referenceType === 'shiftReport') {
+            url = basePath + '/references/shift-reports/' + referenceId + '/detail';
         } else {
             hideReferenceDetailSection();
             return;
@@ -1795,6 +1895,8 @@
             onReferenceSelectionChanged('returnIdInput');
         } else if (type === 'EMPLOYEE') {
             onReferenceSelectionChanged('stockAdjustmentIdInput');
+        } else if (type === 'SHIFT_SHORTAGE') {
+            onReferenceSelectionChanged('shiftReportOfAccountIdInput');
         } else {
             hideReferenceDetailSection();
         }
@@ -1852,6 +1954,25 @@
             let label = item.code + ' — ' + item.dateDisplay;
             if (item.amount != null) {
                 label += ' — ' + formatMoney(item.amount);
+            }
+            if (item.detail) {
+                label += ' — ' + item.detail;
+            }
+            return label;
+        });
+    }
+
+    async function loadShiftReportsWithShortage(accountId, selectedValue) {
+        if (!accountId) {
+            populateReferenceSelect('shiftReportOfAccountIdInput', '-- Chọn báo cáo ca --', [], null, function () { return ''; });
+            return;
+        }
+        const response = await fetch(basePath + '/references/shift-reports?accountId=' + accountId);
+        const items = await response.json();
+        populateReferenceSelect('shiftReportOfAccountIdInput', '-- Chọn báo cáo ca --', items, selectedValue, function (item) {
+            let label = item.code + ' — ' + item.dateDisplay;
+            if (item.amount != null) {
+                label += ' — Thiếu: ' + formatMoney(item.amount);
             }
             if (item.detail) {
                 label += ' — ' + item.detail;
@@ -1944,7 +2065,9 @@
             setAmount(0);
         } else if (fieldId === 'accountIdInput') {
             clearSelectError('stockAdjustmentIdInput');
+            clearSelectError('shiftReportOfAccountIdInput');
             populateReferenceSelect('stockAdjustmentIdInput', '-- Chọn phiếu điều chỉnh --', [], null, function () { return ''; });
+            populateReferenceSelect('shiftReportOfAccountIdInput', '-- Chọn báo cáo ca --', [], null, function () { return ''; });
             setAmount(0);
         }
     }
@@ -2085,9 +2208,16 @@
             loadSupplierReturns(supplierId, null);
         });
         wirePartySearch('accountIdInput', employees, partyLabel, function (accountId) {
+            const type = document.getElementById('incomeTypeInput').value;
             clearSelectError('stockAdjustmentIdInput');
+            clearSelectError('shiftReportOfAccountIdInput');
             hideReferenceDetailSection();
-            loadStockAdjustments(accountId, null);
+            setAmount(0);
+            if (type === 'SHIFT_SHORTAGE') {
+                loadShiftReportsWithShortage(accountId, null);
+            } else if (type === 'EMPLOYEE') {
+                loadStockAdjustments(accountId, null);
+            }
         });
 
         [
@@ -2153,6 +2283,9 @@
             applySuggestedAmount(this);
         });
         bindPartyReferenceField('stockAdjustmentIdInput', function () {
+            applySuggestedAmount(this);
+        });
+        bindPartyReferenceField('shiftReportOfAccountIdInput', function () {
             applySuggestedAmount(this);
         });
 
@@ -2232,6 +2365,10 @@
         if (stockAdjustmentSelect && stockAdjustmentSelect.value) {
             applySuggestedAmount(stockAdjustmentSelect);
         }
+        const shiftReportSelect = document.getElementById('shiftReportOfAccountIdInput');
+        if (shiftReportSelect && shiftReportSelect.value) {
+            applySuggestedAmount(shiftReportSelect);
+        }
 
         document.getElementById('incomeForm').addEventListener('submit', function (event) {
             syncPayment();
@@ -2240,7 +2377,7 @@
             clearAmountError();
             clearReasonError();
 
-            if (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE') {
+            if (type === 'CUSTOMER' || type === 'SUPPLIER' || type === 'EMPLOYEE' || type === 'SHIFT_SHORTAGE') {
                 if (!validatePartyReferenceFields(type)) {
                     event.preventDefault();
                     return;
