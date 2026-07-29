@@ -40,9 +40,10 @@ public class CustomerService {
         List<CustomerResponse> filtered = customerRepository.findAll().stream()
                 .filter(c -> matchesKeyword(c, kw))
                 .filter(c -> typeFilter == null || typeFilter.equals(c.getCustomerType()))
-                .sorted(Comparator.comparing(
-                        c -> c.getName() == null ? "" : c.getName(),
-                        String.CASE_INSENSITIVE_ORDER))
+                // Sắp theo MÃ (= customerID) cho khớp cột mã người dùng đọc đầu tiên, giống màn NCC.
+                // Sắp theo tên thì mã nhảy lung tung giữa danh sách, và khách vừa tạo không biết ở đâu.
+                .sorted(Comparator.comparing(Customer::getId,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(CustomerResponse::from)
                 .toList();
 

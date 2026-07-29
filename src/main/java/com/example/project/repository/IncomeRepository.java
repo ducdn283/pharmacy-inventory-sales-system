@@ -20,6 +20,7 @@ public interface IncomeRepository extends JpaRepository<Income, Integer> {
            left join fetch i.customerID
            left join fetch i.accountID
            left join fetch i.stockAdjustmentID
+           left join fetch i.shiftReportOfAccountID
            where i.id = :id
            """)
     Optional<Income> findByIdWithRelations(Integer id);
@@ -35,6 +36,7 @@ public interface IncomeRepository extends JpaRepository<Income, Integer> {
            left join fetch i.customerID
            left join fetch i.accountID
            left join fetch i.stockAdjustmentID
+           left join fetch i.shiftReportOfAccountID
            """)
     List<Income> findAllWithRelations();
 }

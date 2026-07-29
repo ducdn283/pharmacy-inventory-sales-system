@@ -8,7 +8,8 @@ import java.math.BigDecimal;
 /**
  * Form backing the "create income" screen. {@code applicantID} is always the current user.
  * Reference documents are required by income type: debt sales invoice (CUSTOMER), approved
- * supplier return (SUPPLIER), approved stock adjustment (EMPLOYEE).
+ * supplier return (SUPPLIER), approved stock adjustment (EMPLOYEE),
+ * closed shift report with cash shortage (SHIFT_SHORTAGE).
  */
 @Getter
 @Setter
@@ -43,6 +44,9 @@ public class IncomeCreateRequest {
 
     /** Approved stock adjustment — set when {@code incomeType} is EMPLOYEE. */
     private Integer stockAdjustmentId;
+
+    /** Closed shift report with cash shortage — set when {@code incomeType} is SHIFT_SHORTAGE. */
+    private Integer shiftReportOfAccountId;
 
     private String note;
 }

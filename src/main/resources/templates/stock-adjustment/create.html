@@ -218,13 +218,6 @@
                                        readonly tabindex="-1">
                             </div>
 
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Người tạo</label>
-                                <input type="text" class="form-control auto-field"
-                                       th:value="${creatorName != null ? creatorName : 'Tài khoản hiện tại'}"
-                                       value="Tài khoản hiện tại" readonly tabindex="-1">
-                            </div>
-
                             <div class="col-12 col-md-6" id="typeField">
                                 <label class="form-label">Loại / Nguồn điều chỉnh <span class="text-danger">*</span></label>
                                 <select class="form-select" th:field="*{adjustmentType}" id="adjustmentTypeSelect" required>

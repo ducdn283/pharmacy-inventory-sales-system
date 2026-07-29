@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -45,11 +46,11 @@ public class SupplierService {
         List<SupplierResponse> filtered = supplierRepository.findAll()
                 .stream()
                 .filter(s -> matchesKeyword(s, kw))
-                .sorted((a, b) -> {
-                    String nameA = a.getName() == null ? "" : a.getName();
-                    String nameB = b.getName() == null ? "" : b.getName();
-                    return nameA.compareToIgnoreCase(nameB);
-                })
+                // Sắp theo MÃ (= supplierID, vì NCC-xxxxx suy thẳng từ khoá chính) chứ không theo tên.
+                // Trước đây sắp theo tên nên mã nhảy lung tung giữa danh sách — người dùng đọc cột mã
+                // đầu tiên nên thứ tự phải khớp với nó, và NCC mới tạo luôn nằm ở cuối, tìm được ngay.
+                .sorted(Comparator.comparing(Supplier::getId,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(s -> {
                     SupplierResponse r = SupplierResponse.from(s);
                     r.setProductCount(supplierproductRepository.countBySupplierID_Id(s.getId()));

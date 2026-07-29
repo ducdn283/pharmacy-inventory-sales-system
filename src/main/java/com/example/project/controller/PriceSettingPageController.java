@@ -1,5 +1,6 @@
 package com.example.project.controller;
 
+import com.example.project.dto.response.PriceSettingDetailResponse;
 import com.example.project.dto.response.PriceSettingProductRowResponse;
 import com.example.project.service.PricesettingService;
 import org.springframework.data.domain.Page;
@@ -7,9 +8,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
@@ -70,6 +73,22 @@ public class PriceSettingPageController {
         model.addAttribute("totalItems", rowPage.getTotalElements());
 
         return "owner/price-settings";
+    }
+
+    /**
+     * Data behind the "Chi tiết giá &amp; thuế" modal, for one product. Fetched on click rather than
+     * rendered with the list: the list shows 10 products a page and most visits never open the
+     * panel, so pre-loading each one's batches would be 10 wasted queries per page view.
+     *
+     * <p>Same {@code @ResponseBody}-on-the-page-controller shape as
+     * {@code PurchaseInvoicePageController.getProcurementPlanDetails} and
+     * {@code CustomerController.checkDuplicate} — the generated {@code @RestController}s stay
+     * untouched.</p>
+     */
+    @GetMapping("/{productId}/detail")
+    @ResponseBody
+    public PriceSettingDetailResponse detail(@PathVariable Integer productId) {
+        return pricesettingService.getDetail(productId);
     }
 
     @PostMapping("/cell")

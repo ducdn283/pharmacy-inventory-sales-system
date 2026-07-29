@@ -8,10 +8,12 @@ import com.example.project.dto.response.IncomeReferenceOptionResponse;
 import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.ReturnPurchaseDetailPageResponse;
+import com.example.project.dto.response.ShiftReportDetailPageResponse;
 import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
 import com.example.project.service.IncomeService;
 import com.example.project.service.InvoiceService;
 import com.example.project.service.ReturnPurchaseService;
+import com.example.project.service.ShiftreportService;
 import com.example.project.service.StockadjustmentService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.propertyeditors.CustomNumberEditor;
@@ -44,17 +46,20 @@ public class IncomeController {
     private final InvoiceService invoiceService;
     private final ReturnPurchaseService returnPurchaseService;
     private final StockadjustmentService stockadjustmentService;
+    private final ShiftreportService shiftreportService;
     private final CurrentUserContext currentUserContext;
 
     public IncomeController(IncomeService incomeService,
                             InvoiceService invoiceService,
                             ReturnPurchaseService returnPurchaseService,
                             StockadjustmentService stockadjustmentService,
+                            ShiftreportService shiftreportService,
                             CurrentUserContext currentUserContext) {
         this.incomeService = incomeService;
         this.invoiceService = invoiceService;
         this.returnPurchaseService = returnPurchaseService;
         this.stockadjustmentService = stockadjustmentService;
+        this.shiftreportService = shiftreportService;
         this.currentUserContext = currentUserContext;
     }
 
@@ -122,9 +127,14 @@ public class IncomeController {
 
         model.addAttribute("detail", detail);
         model.addAttribute("basePath", basePath);
+        if (detail.getShiftReportOfAccountId() != null) {
+            model.addAttribute("shiftReportDetail",
+                    shiftreportService.getDetail(detail.getShiftReportOfAccountId()));
+        }
         model.addAttribute("invoiceBasePath", resolveInvoiceBasePath(basePath));
         model.addAttribute("returnBasePath", "/owner/return-purchases");
         model.addAttribute("stockAdjustmentBasePath", resolveStockAdjustmentBasePath(basePath));
+        model.addAttribute("shiftReportBasePath", resolveShiftReportBasePath(basePath));
         model.addAttribute("pageTitle", "Chi tiết phiếu thu");
         return "income/income-detail";
     }
@@ -153,6 +163,15 @@ public class IncomeController {
         return incomeService.listStockAdjustments(accountId);
     }
 
+    @GetMapping(value = {OWNER_BASE + "/references/shift-reports", PHARMACIST_BASE + "/references/shift-reports",
+            ACCOUNTANT_BASE + "/references/shift-reports"},
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public List<IncomeReferenceOptionResponse> shiftReportsWithShortage(
+            @RequestParam(name = "accountId") Integer accountId) {
+        return incomeService.listShiftReportsWithShortage(accountId);
+    }
+
     @GetMapping(value = {OWNER_BASE + "/references/invoices/{id}/detail",
             PHARMACIST_BASE + "/references/invoices/{id}/detail",
             ACCOUNTANT_BASE + "/references/invoices/{id}/detail"},
@@ -178,6 +197,15 @@ public class IncomeController {
     @ResponseBody
     public StockAdjustmentDetailPageResponse stockAdjustmentReferenceDetail(@PathVariable("id") Integer id) {
         return stockadjustmentService.getDetail(id);
+    }
+
+    @GetMapping(value = {OWNER_BASE + "/references/shift-reports/{id}/detail",
+            PHARMACIST_BASE + "/references/shift-reports/{id}/detail",
+            ACCOUNTANT_BASE + "/references/shift-reports/{id}/detail"},
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ShiftReportDetailPageResponse shiftReportReferenceDetail(@PathVariable("id") Integer id) {
+        return shiftreportService.getDetail(id);
     }
 
     @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
@@ -247,7 +275,13 @@ public class IncomeController {
         model.addAttribute("supplierReturns", form != null && form.getSupplierId() != null
                 ? incomeService.listSupplierReturns(form.getSupplierId()) : List.of());
         model.addAttribute("stockAdjustments", form != null && form.getAccountId() != null
+                && IncomeTypeOptionResponse.EMPLOYEE.equals(
+                        form.getIncomeType() != null ? IncomeTypeOptionResponse.codeOf(form.getIncomeType()) : "")
                 ? incomeService.listStockAdjustments(form.getAccountId()) : List.of());
+        model.addAttribute("shiftReportsWithShortage", form != null && form.getAccountId() != null
+                && IncomeTypeOptionResponse.SHIFT_SHORTAGE.equals(
+                        form.getIncomeType() != null ? IncomeTypeOptionResponse.codeOf(form.getIncomeType()) : "")
+                ? incomeService.listShiftReportsWithShortage(form.getAccountId()) : List.of());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
         model.addAttribute("basePath", resolveBasePath(request));
         model.addAttribute("pageTitle", "Tạo phiếu thu");
@@ -279,5 +313,15 @@ public class IncomeController {
             return "/pharmacist/stock-adjustments";
         }
         return "/owner/stock-adjustments";
+    }
+
+    private String resolveShiftReportBasePath(String basePath) {
+        if (basePath.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/shift-reports";
+        }
+        if (basePath.startsWith(ACCOUNTANT_BASE)) {
+            return "/accountant/shift-reports";
+        }
+        return "/owner/shift-reports";
     }
 }

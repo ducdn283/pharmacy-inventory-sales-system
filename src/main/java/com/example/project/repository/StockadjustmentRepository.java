@@ -12,9 +12,10 @@ public interface StockadjustmentRepository extends JpaRepository<Stockadjustment
     @Query("""
            select s
            from Stockadjustment s
-           left join fetch s.createdBy
-           left join fetch s.approvedBy
-           left join fetch s.expenseID
+           left join fetch s.expenseID e
+           left join fetch e.accountID
+           left join fetch s.stockCountID sc
+           left join fetch sc.createdBy
            order by s.date desc
            """)
     List<Stockadjustment> findAllWithRelations();
@@ -22,9 +23,10 @@ public interface StockadjustmentRepository extends JpaRepository<Stockadjustment
     @Query("""
            select s
            from Stockadjustment s
-           left join fetch s.createdBy
-           left join fetch s.approvedBy
-           left join fetch s.expenseID
+           left join fetch s.expenseID e
+           left join fetch e.accountID
+           left join fetch s.stockCountID sc
+           left join fetch sc.createdBy
            where s.id = :id
            """)
     Optional<Stockadjustment> findByIdWithRelations(Integer id);
