@@ -92,7 +92,6 @@ public class StockadjustmentController {
         model.addAttribute("candidates", stockadjustmentService.listAvailableBatches(keyword));
         model.addAttribute("creatableTypeLabels", stockadjustmentService.creatableTypeLabels());
         model.addAttribute("approvedStockCounts", stockadjustmentService.listApprovedStockCounts());
-        model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
         // Mã dự kiến, chỉ để xem — mã thật sinh lúc lưu (xem previewNextCode).
         model.addAttribute("nextCode", stockadjustmentService.previewNextCode());
         model.addAttribute("keyword", keyword);
@@ -118,10 +117,7 @@ public class StockadjustmentController {
         String basePath = resolveBasePath(request);
         boolean asDraft = "draft".equals(action);
         try {
-            Integer adjustmentId = stockadjustmentService.createAdjustment(
-                    form,
-                    currentUserContext.getCurrentAccountId(),
-                    asDraft);
+            Integer adjustmentId = stockadjustmentService.createAdjustment(form, asDraft);
 
             redirectAttributes.addFlashAttribute("successMessage", asDraft
                     ? "Đã lưu nháp phiếu điều chỉnh kho"
@@ -133,8 +129,7 @@ public class StockadjustmentController {
             model.addAttribute("candidates", stockadjustmentService.listAvailableBatches(null));
             model.addAttribute("creatableTypeLabels", stockadjustmentService.creatableTypeLabels());
             model.addAttribute("approvedStockCounts", stockadjustmentService.listApprovedStockCounts());
-            model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-            model.addAttribute("nextCode", stockadjustmentService.previewNextCode());
+                model.addAttribute("nextCode", stockadjustmentService.previewNextCode());
             model.addAttribute("keyword", null);
             model.addAttribute("basePath", basePath);
             return "stock-adjustment/create";
@@ -146,7 +141,7 @@ public class StockadjustmentController {
     public String complete(@PathVariable Integer adjustmentId,
                            RedirectAttributes redirectAttributes) {
         try {
-            stockadjustmentService.complete(adjustmentId, currentUserContext.getCurrentAccountId());
+            stockadjustmentService.complete(adjustmentId);
             redirectAttributes.addFlashAttribute("successMessage",
                     "Đã thực hiện phiếu điều chỉnh kho (tồn kho đã cập nhật)");
         } catch (IllegalArgumentException exception) {
@@ -174,7 +169,7 @@ public class StockadjustmentController {
                          @RequestParam(name = "cancelReason", required = false) String reason,
                          RedirectAttributes redirectAttributes) {
         try {
-            stockadjustmentService.cancel(adjustmentId, currentUserContext.getCurrentAccountId(), reason);
+            stockadjustmentService.cancel(adjustmentId, reason);
             redirectAttributes.addFlashAttribute("successMessage",
                     "Đã hủy phiếu điều chỉnh kho (tồn kho đã được đảo lại)");
         } catch (IllegalArgumentException exception) {

@@ -20,9 +20,8 @@ public class StockAdjustmentDetailPageResponse {
     private String adjustmentType;
     private String adjustmentTypeDisplay;
 
-    private String createdByName;
-    private String approvedByName;
-    private String approvedAtDisplay;
+    // Không còn người lập / người thực hiện / thời điểm thực hiện: DB đã bỏ 3 cột createdBy,
+    // approvedBy, approvedAt (28/07/2026) vì chỉ Owner thao tác được màn này.
 
     private String reason;
     private String note;

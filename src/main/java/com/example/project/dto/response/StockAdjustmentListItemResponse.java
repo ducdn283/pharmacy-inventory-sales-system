@@ -18,7 +18,7 @@ public class StockAdjustmentListItemResponse {
     private String adjustmentType;
     private String adjustmentTypeDisplay;
 
-    private String createdByName;
+    // Bỏ createdByName cùng lúc DB bỏ cột createdBy (28/07/2026) — chỉ Owner thao tác màn này.
 
     private long totalItems;
     private BigDecimal estimatedValue;
