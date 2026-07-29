@@ -65,6 +65,29 @@
         .status-rejected { background: #fee2e2; color: #dc2626; }
         .status-default { background: #f3f4f6; color: #4b5563; }
 
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+
+        .reference-table thead th {
+            background: #f9fafb;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .reference-table tbody td {
+            font-size: 14px;
+        }
+
         .btn-income-primary {
             background: #059669;
             border-color: #059669;
@@ -217,8 +240,132 @@
                                 <span th:if="${detail.stockAdjustmentId != null and #strings.startsWith(basePath, '/accountant')}"
                                       class="fw-semibold"
                                       th:text="${detail.referenceCode}">PDC-001</span>
+                                <a th:if="${detail.shiftReportOfAccountId != null and !#strings.startsWith(basePath, '/accountant')}"
+                                   th:href="${shiftReportBasePath + '/' + detail.shiftReportOfAccountId}"
+                                   class="fw-semibold text-success text-decoration-none"
+                                   th:text="${detail.referenceCode}">BC-001</a>
+                                <span th:if="${detail.shiftReportOfAccountId != null and #strings.startsWith(basePath, '/accountant')}"
+                                      class="fw-semibold"
+                                      th:text="${detail.referenceCode}">BC-001</span>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="income-card mb-4" th:if="${shiftReportDetail != null}">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-info-circle text-success me-1"></i>
+                            Thông tin báo cáo ca
+                        </div>
+                    </div>
+
+                    <div class="p-4">
+                        <div class="info-row">
+                            <div class="info-label">Mã ca</div>
+                            <div>
+                                <a th:if="${!#strings.startsWith(basePath, '/accountant')}"
+                                   th:href="${shiftReportBasePath + '/' + shiftReportDetail.id}"
+                                   class="fw-semibold text-success text-decoration-none"
+                                   th:text="${shiftReportDetail.shiftReportCode}">BC-001</a>
+                                <span th:if="${#strings.startsWith(basePath, '/accountant')}"
+                                      class="fw-semibold text-success"
+                                      th:text="${shiftReportDetail.shiftReportCode}">BC-001</span>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Người chịu trách nhiệm trực ca</div>
+                            <div th:text="${shiftReportDetail.cashierName}">Nguyễn Văn A</div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Ngày ca</div>
+                            <div th:text="${shiftReportDetail.shiftDateDisplay}">01/07/2026</div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Ca</div>
+                            <div th:text="${shiftReportDetail.shiftType}">Sáng</div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Bắt đầu</div>
+                            <div th:text="${shiftReportDetail.startTimeDisplay}">08:00</div>
+                        </div>
+                        <div class="info-row"
+                             th:if="${shiftReportDetail.endTimeDisplay != null and !shiftReportDetail.endTimeDisplay.isBlank()}">
+                            <div class="info-label">Kết thúc</div>
+                            <div th:text="${shiftReportDetail.endTimeDisplay}">12:00</div>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-label">Trạng thái</div>
+                            <div>
+                                <span class="status-badge"
+                                      th:classappend="${' ' + shiftReportDetail.statusCssClass}"
+                                      th:text="${shiftReportDetail.status}">Hoàn thành</span>
+                            </div>
+                        </div>
+                        <div class="info-row"
+                             th:if="${shiftReportDetail.noteDiscrepancy != null and !shiftReportDetail.noteDiscrepancy.isBlank()}">
+                            <div class="info-label">Ghi chú chênh lệch</div>
+                            <div th:text="${shiftReportDetail.noteDiscrepancy}">Ghi chú</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="income-card mb-4"
+                     th:if="${shiftReportDetail != null}"
+                     th:with="shortage=${shiftReportDetail.cashDiscrepancy != null and shiftReportDetail.cashDiscrepancy.signum() < 0 ? shiftReportDetail.cashDiscrepancy.negate() : T(java.math.BigDecimal).ZERO}">
+                    <div class="p-4 border-bottom">
+                        <div class="section-title">
+                            <i class="ti ti-calculator text-success me-1"></i>
+                            Đối chiếu tiền mặt
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 reference-table">
+                            <thead>
+                            <tr>
+                                <th>Hạng mục</th>
+                                <th class="text-end">Giá trị</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td>Tiền mặt đầu ca</td>
+                                <td class="text-end"
+                                    th:text="${#numbers.formatDecimal(shiftReportDetail.openingCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr>
+                                <td>Tiền mặt thu trong ca</td>
+                                <td class="text-end"
+                                    th:text="${#numbers.formatDecimal(shiftReportDetail.totalCashIn, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr>
+                                <td>Tiền mặt chi trong ca</td>
+                                <td class="text-end"
+                                    th:text="${#numbers.formatDecimal(shiftReportDetail.totalCashOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            <tr>
+                                <td>Tiền mặt cuối ca (dự kiến)</td>
+                                <td class="text-end"
+                                    th:text="${shiftReportDetail.expectedClosingCash != null ? #numbers.formatDecimal(shiftReportDetail.expectedClosingCash, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">0đ</td>
+                            </tr>
+                            <tr>
+                                <td>Tiền mặt thực đếm</td>
+                                <td class="text-end"
+                                    th:text="${shiftReportDetail.actualClosingCash != null ? #numbers.formatDecimal(shiftReportDetail.actualClosingCash, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">—</td>
+                            </tr>
+                            <tr class="fw-semibold">
+                                <td>Chênh lệch tiền mặt</td>
+                                <td class="text-end text-danger"
+                                    th:text="${shiftReportDetail.cashDiscrepancy != null ? #numbers.formatDecimal(shiftReportDetail.cashDiscrepancy, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">0đ</td>
+                            </tr>
+                            <tr class="fw-semibold">
+                                <td>Số tiền thiếu cần thu</td>
+                                <td class="text-end text-warning"
+                                    th:text="${#numbers.formatDecimal(shortage, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                            </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 

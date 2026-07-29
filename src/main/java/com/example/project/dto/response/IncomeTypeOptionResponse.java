@@ -13,6 +13,7 @@ public class IncomeTypeOptionResponse {
 
     public static final String SUPPLIER = "SUPPLIER";
     public static final String EMPLOYEE = "EMPLOYEE";
+    public static final String SHIFT_SHORTAGE = "SHIFT_SHORTAGE";
     public static final String CUSTOMER = "CUSTOMER";
     public static final String TAX_REFUND = "TAX_REFUND";
     public static final String SUPPLIER_COMMISSION = "SUPPLIER_COMMISSION";
@@ -25,6 +26,7 @@ public class IncomeTypeOptionResponse {
         return List.of(
                 new IncomeTypeOptionResponse(SUPPLIER, "Thu nợ nhà cung cấp"),
                 new IncomeTypeOptionResponse(EMPLOYEE, "Thu tiền người chịu trách nhiệm đền bù"),
+                new IncomeTypeOptionResponse(SHIFT_SHORTAGE, "Thu tiền người chịu trách nhiệm làm thất thoát"),
                 new IncomeTypeOptionResponse(CUSTOMER, "Thu nợ khách hàng"),
                 new IncomeTypeOptionResponse(TAX_REFUND, "Thu hoàn thuế"),
                 new IncomeTypeOptionResponse(SUPPLIER_COMMISSION, "Thu hoa hồng NCC"),
@@ -93,6 +95,7 @@ public class IncomeTypeOptionResponse {
             case SUPPLIER -> "Nhà cung cấp".equalsIgnoreCase(value);
             case EMPLOYEE -> "Nhân viên".equalsIgnoreCase(value)
                     || "Thu tiền nhân viên đền bù".equalsIgnoreCase(value);
+            case SHIFT_SHORTAGE -> "Thu tiền nhân viên làm thất thoát".equalsIgnoreCase(value);
             default -> false;
         };
     }
