@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Shift reports are created lazily (see {@link #ensureOpenShiftFor}) at the moment a real
@@ -127,7 +128,7 @@ public class ShiftreportService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
         Shiftreport shift = new Shiftreport();
-        shift.setShiftReportCode(generateCode());
+        shift.setShiftReportCode(temporaryCode());
         shift.setCashierID(cashier);
         shift.setShiftDate(LocalDate.now(VN_ZONE));
         shift.setShiftType(resolveShiftType());
@@ -145,7 +146,10 @@ public class ShiftreportService {
         shift.setStatus(ShiftReportStatus.DRAFT);
         shift.setCreatedAt(nowVn());
 
-        return shiftreportRepository.save(shift);
+        Shiftreport saved = shiftreportRepository.save(shift);
+        // Mã thật = CA- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
+        saved.setShiftReportCode(formatCode(saved.getId()));
+        return saved;
     }
 
     /** Chỉ Owner và Dược sĩ trực quầy (có két) mới có báo cáo ca; Kế toán không. */
@@ -584,15 +588,22 @@ public class ShiftreportService {
         return "status-default";
     }
 
-    private String generateCode() {
-        int nextId = shiftreportRepository.findAll()
-                .stream()
-                .map(Shiftreport::getId)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
+    /**
+     * Mã tạm dùng đúng một lần, chỉ để qua được ràng buộc {@code NOT NULL UNIQUE} của
+     * {@code shiftReportCode} tại thời điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật.
+     * Ngay sau khi lưu, mã được ghi lại theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước
+     * nằm trong cùng một transaction.
+     *
+     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
+     * người phát sinh giao dịch đầu ca cùng lúc nhận cùng một số; cột mã có UNIQUE nên người thứ hai ăn
+     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     */
+    private String temporaryCode() {
+        return "TMP-" + UUID.randomUUID();
+    }
 
-        return "CA-" + String.format("%06d", nextId);
+    private String formatCode(Integer id) {
+        return id == null ? "CA-000000" : "CA-" + String.format("%06d", id);
     }
 
     private Instant nowVn() {
