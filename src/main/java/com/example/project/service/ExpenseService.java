@@ -669,11 +669,28 @@ public class ExpenseService {
         return resolved.atStartOfDay(ZoneId.systemDefault()).toInstant();
     }
 
+    /**
+     * How much actually left the pharmacy at creation time.
+     *
+     * <p>Ticking "Đã chi đủ" means the whole obligation. Otherwise the creator states the figure two
+     * ways, and either alone is enough: directly in "Số tiền đã chi thực tế", or implicitly by
+     * filling in only the tiền mặt / chuyển khoản breakdown. <strong>When the total is left blank
+     * the breakdown is the more specific statement, so it wins</strong> — before this, a slip with
+     * tiền mặt 5.000 + chuyển khoản 10.000 and an empty total saved as {@code paid = 0} with both
+     * portions silently zeroed by {@link #resolveSplit}'s zero short-circuit, losing money the user
+     * had entered without a word of warning.</p>
+     *
+     * <p>A total that <em>is</em> typed still governs: {@link #resolveSplit} then insists the two
+     * portions add up to it rather than quietly re-deriving one from the other.</p>
+     */
     private BigDecimal resolvePaid(ExpenseCreateRequest request, BigDecimal amount) {
         if (request.isFullyPaid()) {
             return amount;
         }
-        BigDecimal paid = request.getPaid() != null ? request.getPaid() : BigDecimal.ZERO;
+        BigDecimal paid = nullToZero(request.getPaid());
+        if (paid.compareTo(BigDecimal.ZERO) == 0) {
+            paid = nullToZero(request.getPaidByCash()).add(nullToZero(request.getPaidByBanking()));
+        }
         if (paid.compareTo(BigDecimal.ZERO) < 0 || paid.compareTo(amount) > 0) {
             throw new IllegalArgumentException("Số tiền đã chi phải nằm trong khoảng 0 đến tổng số tiền cần chi");
         }

@@ -20,6 +20,7 @@
             border-radius: 16px;
             background: #ffffff;
             box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            overflow: hidden;
         }
 
         .section-title {
@@ -29,7 +30,7 @@
 
         .info-row {
             display: grid;
-            grid-template-columns: 180px 1fr;
+            grid-template-columns: 180px minmax(0, 1fr);
             padding: 12px 0;
             border-bottom: 1px solid #f1f5f9;
             font-size: 14px;
@@ -37,6 +38,13 @@
 
         .info-label {
             color: #6b7280;
+        }
+
+        /* Lý do chi là text tự do, không có ô này thì một chuỗi dài làm vỡ lưới. */
+        .info-row > div:last-child {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            min-width: 0;
         }
 
         .status-badge {
@@ -194,28 +202,6 @@
                         </div>
 
                         <div class="info-row">
-                            <div class="info-label">Số tiền cần chi</div>
-                            <div class="fw-semibold"
-                                 th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                650.000đ
-                            </div>
-                        </div>
-
-                        <div class="info-row">
-                            <div class="info-label">Đã chi</div>
-                            <div>
-                                <span class="fw-semibold"
-                                      th:text="${#numbers.formatDecimal(detail.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    650.000đ
-                                </span>
-                                <span class="text-secondary small">
-                                    (tiền mặt <span th:text="${#numbers.formatDecimal(detail.paidByCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>,
-                                    chuyển khoản <span th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>)
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="info-row">
                             <div class="info-label">Trạng thái</div>
                             <div>
                                 <span class="status-badge"
@@ -246,6 +232,55 @@
             </div>
 
             <div class="col-12 col-xl-4">
+
+                <!-- Tiền tách khỏi khối thông tin bên trái, cùng chỗ với phiếu thu. "Còn lại" là
+                     phần nghĩa vụ chưa chi: amount không co lại khi chi thiếu, paid mới là số đã ra. -->
+                <div class="expense-card p-4 mb-4"
+                     th:with="remaining=${detail.amount.subtract(detail.paid)}">
+                    <div class="section-title mb-4">
+                        <i class="ti ti-calculator text-success me-1"></i>
+                        Thanh toán
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Số tiền cần chi</span>
+                        <strong class="text-success"
+                                th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Đã chi</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3" th:if="${remaining.signum() > 0}">
+                        <span class="text-secondary">Còn phải chi</span>
+                        <strong class="text-warning"
+                                th:text="${#numbers.formatDecimal(remaining, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Tiền mặt</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span class="text-secondary">Chuyển khoản</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+                </div>
 
                 <div class="expense-card p-4 mb-4">
 
