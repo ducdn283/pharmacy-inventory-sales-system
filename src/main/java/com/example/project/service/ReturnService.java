@@ -336,7 +336,7 @@ public class ReturnService {
         boolean approvedNow = ReturnStatus.DEBT.equals(status);
 
         Return ret = new Return();
-        ret.setReturnCode(generateCode());
+        ret.setReturnCode(temporaryCode());
         ret.setInvoiceID(invoice);
         ret.setPurchaseID(null);
         ret.setReturnedBy(creator);
@@ -359,6 +359,8 @@ public class ReturnService {
         }
 
         Return savedReturn = returnRepository.save(ret);
+        // Mã thật = TH- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
+        savedReturn.setReturnCode(formatCode(savedReturn.getId()));
 
         List<Returndetail> details = new ArrayList<>();
         for (PreparedLine line : prepared.values()) {
@@ -1328,13 +1330,17 @@ public class ReturnService {
         return product != null && product.getName() != null ? product.getName() : "Sản phẩm";
     }
 
-    private String generateCode() {
-        int nextId = returnRepository.findAll().stream()
-                .map(Return::getId)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-        return "TH-" + String.format("%06d", nextId);
+    /**
+     * Mã tạm dùng đúng một lần, chỉ để qua được ràng buộc {@code NOT NULL UNIQUE} của cột mã tại thời
+     * điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật. Ngay sau khi lưu, mã được ghi lại
+     * theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước nằm trong cùng một transaction.
+     *
+     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
+     * người tạo phiếu cùng lúc nhận cùng một số; cột {@code returnCode} có UNIQUE nên người thứ hai ăn
+     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     */
+    private String temporaryCode() {
+        return "TMP-" + UUID.randomUUID();
     }
 
     private String formatCode(Integer id) {
