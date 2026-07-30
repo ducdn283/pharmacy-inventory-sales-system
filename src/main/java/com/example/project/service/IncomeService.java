@@ -79,6 +79,7 @@ public class IncomeService {
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_BANKING = "BANKING";
     private static final String PAYMENT_MIXED = "MIXED";
+    private static final String PAYMENT_CREDIT = "CREDIT";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final IncomeRepository incomeRepository;
@@ -185,6 +186,7 @@ public class IncomeService {
         labels.put(PAYMENT_CASH, "Tiền mặt");
         labels.put(PAYMENT_BANKING, "Chuyển khoản");
         labels.put(PAYMENT_MIXED, "TM + CK");
+        labels.put(PAYMENT_CREDIT, "Cấn trừ công nợ");
         return labels;
     }
 
@@ -474,7 +476,7 @@ public class IncomeService {
                 displayReason(income),
                 income.getApplicantID() != null ? income.getApplicantID().getName() : "Không rõ",
                 income.getAmount(),
-                paymentDisplay(income.getPaidByCash(), income.getPaidByBanking()),
+                paymentDisplay(income.getPaidByCash(), income.getPaidByBanking(), income.getPaidByCredit()),
                 statusName,
                 statusCssClass(statusName));
     }
@@ -528,7 +530,8 @@ public class IncomeService {
                 income.getAmount(),
                 income.getPaidByCash(),
                 income.getPaidByBanking(),
-                paymentDisplay(income.getPaidByCash(), income.getPaidByBanking()),
+                income.getPaidByCredit(),
+                paymentDisplay(income.getPaidByCash(), income.getPaidByBanking(), income.getPaidByCredit()),
                 statusName,
                 statusCssClass(statusName),
                 partyTypeDisplay,
@@ -590,19 +593,40 @@ public class IncomeService {
         return "—";
     }
 
-    private String paymentDisplay(BigDecimal paidByCash, BigDecimal paidByBanking) {
-        boolean hasCash = paidByCash != null && paidByCash.compareTo(BigDecimal.ZERO) > 0;
-        boolean hasBanking = paidByBanking != null && paidByBanking.compareTo(BigDecimal.ZERO) > 0;
-        if (hasCash && hasBanking) {
-            return "TM + CK";
+    private String paymentDisplay(BigDecimal paidByCash, BigDecimal paidByBanking, BigDecimal paidByCredit) {
+        boolean hasCash = isPositive(paidByCash);
+        boolean hasBanking = isPositive(paidByBanking);
+        boolean hasCredit = isPositive(paidByCredit);
+        if (hasCredit && !hasCash && !hasBanking) {
+            return paymentTypeLabels().get(PAYMENT_CREDIT);
+        }
+        if (hasCash && hasBanking && !hasCredit) {
+            return paymentTypeLabels().get(PAYMENT_MIXED);
+        }
+        if (hasBanking && !hasCash && !hasCredit) {
+            return paymentTypeLabels().get(PAYMENT_BANKING);
+        }
+        if (hasCash && !hasBanking && !hasCredit) {
+            return paymentTypeLabels().get(PAYMENT_CASH);
+        }
+        StringBuilder parts = new StringBuilder();
+        if (hasCash) {
+            parts.append(paymentTypeLabels().get(PAYMENT_CASH));
         }
         if (hasBanking) {
-            return "Chuyển khoản";
+            appendPaymentPart(parts, paymentTypeLabels().get(PAYMENT_BANKING));
         }
-        if (hasCash) {
-            return "Tiền mặt";
+        if (hasCredit) {
+            appendPaymentPart(parts, paymentTypeLabels().get(PAYMENT_CREDIT));
         }
-        return "—";
+        return parts.isEmpty() ? "—" : parts.toString();
+    }
+
+    private void appendPaymentPart(StringBuilder parts, String label) {
+        if (!parts.isEmpty()) {
+            parts.append(" + ");
+        }
+        parts.append(label);
     }
 
     private boolean matchesKeyword(Income income, String normalizedKeyword) {
@@ -640,10 +664,12 @@ public class IncomeService {
         }
         boolean cash = isPositive(income.getPaidByCash());
         boolean banking = isPositive(income.getPaidByBanking());
+        boolean credit = isPositive(income.getPaidByCredit());
         return switch (paymentType.toUpperCase(Locale.ROOT)) {
-            case PAYMENT_CASH -> cash && !banking;
-            case PAYMENT_BANKING -> banking && !cash;
-            case PAYMENT_MIXED -> cash && banking;
+            case PAYMENT_CASH -> cash && !banking && !credit;
+            case PAYMENT_BANKING -> banking && !cash && !credit;
+            case PAYMENT_MIXED -> cash && banking && !credit;
+            case PAYMENT_CREDIT -> credit && !cash && !banking;
             default -> true;
         };
     }

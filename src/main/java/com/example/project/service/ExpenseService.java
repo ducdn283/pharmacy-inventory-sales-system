@@ -94,6 +94,11 @@ import java.util.stream.Collectors;
 @Service
 public class ExpenseService {
 
+    private static final String PAYMENT_CASH = "CASH";
+    private static final String PAYMENT_BANKING = "BANKING";
+    private static final String PAYMENT_MIXED = "MIXED";
+    private static final String PAYMENT_CREDIT = "CREDIT";
+
     private final ExpenseRepository expenseRepository;
     private final AccountRepository accountRepository;
     private final ReturnRepository returnRepository;
@@ -485,29 +490,63 @@ public class ExpenseService {
                 expense.getApplicantID() != null ? expense.getApplicantID().getName() : "Không rõ",
                 expense.getAmount(),
                 expense.getPaid(),
-                paymentDisplay(expense.getPaidByCash(), expense.getPaidByBanking()),
+                paymentDisplay(expense.getPaidByCash(), expense.getPaidByBanking(), expense.getPaidByCredit()),
                 expense.getStatus(),
                 statusCssClass(expense.getStatus())
         );
     }
 
     /**
-     * Hình thức chi, suy ra từ hai cột tiền chứ không có cột riêng — cùng cách với
-     * {@code IncomeService.paymentDisplay} để hai màn danh sách đọc giống nhau.
+     * Hình thức chi, suy ra từ ba cột tiền — cùng cách với {@code IncomeService#paymentDisplay}.
      */
-    private String paymentDisplay(BigDecimal paidByCash, BigDecimal paidByBanking) {
-        boolean hasCash = nullToZero(paidByCash).compareTo(BigDecimal.ZERO) > 0;
-        boolean hasBanking = nullToZero(paidByBanking).compareTo(BigDecimal.ZERO) > 0;
-        if (hasCash && hasBanking) {
-            return "TM + CK";
+    private String paymentDisplay(BigDecimal paidByCash, BigDecimal paidByBanking, BigDecimal paidByCredit) {
+        boolean hasCash = isPositive(paidByCash);
+        boolean hasBanking = isPositive(paidByBanking);
+        boolean hasCredit = isPositive(paidByCredit);
+        if (hasCredit && !hasCash && !hasBanking) {
+            return paymentTypeLabel(PAYMENT_CREDIT);
+        }
+        if (hasCash && hasBanking && !hasCredit) {
+            return paymentTypeLabel(PAYMENT_MIXED);
+        }
+        if (hasBanking && !hasCash && !hasCredit) {
+            return paymentTypeLabel(PAYMENT_BANKING);
+        }
+        if (hasCash && !hasBanking && !hasCredit) {
+            return paymentTypeLabel(PAYMENT_CASH);
+        }
+        StringBuilder parts = new StringBuilder();
+        if (hasCash) {
+            parts.append(paymentTypeLabel(PAYMENT_CASH));
         }
         if (hasBanking) {
-            return "Chuyển khoản";
+            appendPaymentPart(parts, paymentTypeLabel(PAYMENT_BANKING));
         }
-        if (hasCash) {
-            return "Tiền mặt";
+        if (hasCredit) {
+            appendPaymentPart(parts, paymentTypeLabel(PAYMENT_CREDIT));
         }
-        return "—";
+        return parts.isEmpty() ? "—" : parts.toString();
+    }
+
+    private String paymentTypeLabel(String code) {
+        return switch (code) {
+            case PAYMENT_CASH -> "Tiền mặt";
+            case PAYMENT_BANKING -> "Chuyển khoản";
+            case PAYMENT_MIXED -> "TM + CK";
+            case PAYMENT_CREDIT -> "Cấn trừ công nợ";
+            default -> code;
+        };
+    }
+
+    private void appendPaymentPart(StringBuilder parts, String label) {
+        if (!parts.isEmpty()) {
+            parts.append(" + ");
+        }
+        parts.append(label);
+    }
+
+    private boolean isPositive(BigDecimal value) {
+        return nullToZero(value).compareTo(BigDecimal.ZERO) > 0;
     }
 
     private ExpenseDetailResponse toDetail(Expense expense) {
@@ -529,6 +568,8 @@ public class ExpenseService {
                 expense.getPaid(),
                 expense.getPaidByCash(),
                 expense.getPaidByBanking(),
+                expense.getPaidByCredit(),
+                paymentDisplay(expense.getPaidByCash(), expense.getPaidByBanking(), expense.getPaidByCredit()),
                 expense.getStatus(),
                 statusCssClass(expense.getStatus()),
                 approverName(expense),
