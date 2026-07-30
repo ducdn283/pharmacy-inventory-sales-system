@@ -188,7 +188,7 @@ public class StockadjustmentService {
 
     public Map<String, String> adjustmentTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
-        labels.put(TYPE_DESTROY, "Hủy hàng (nguyên nhân khách quan)");
+        labels.put(TYPE_DESTROY, "Hủy hàng");
         labels.put(TYPE_DESTROY_EMPLOYEE_FAULT, "Hủy hàng (lỗi nhân viên)");
         labels.put("INTERNAL_USE", "Sử dụng nội bộ");
         labels.put("SAMPLE", "Hàng mẫu");
@@ -613,7 +613,7 @@ public class StockadjustmentService {
         boolean approvedNow = StockAdjustmentStatus.COMPLETED.equals(status);
 
         Stockadjustment adjustment = new Stockadjustment();
-        adjustment.setStockAdjustmentCode(generateCode());
+        adjustment.setStockAdjustmentCode(temporaryCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(request.getReason().trim());
@@ -621,7 +621,7 @@ public class StockadjustmentService {
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
-        Stockadjustment savedAdjustment = stockadjustmentRepository.save(adjustment);
+        Stockadjustment savedAdjustment = assignCode(stockadjustmentRepository.save(adjustment));
 
         List<Stockadjustmentdetail> savedDetails = new ArrayList<>();
         for (Batch batch : selectedBatches) {
@@ -731,7 +731,7 @@ public class StockadjustmentService {
         boolean approvedNow = StockAdjustmentStatus.COMPLETED.equals(status);
 
         Stockadjustment adjustment = new Stockadjustment();
-        adjustment.setStockAdjustmentCode(generateCode());
+        adjustment.setStockAdjustmentCode(temporaryCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(reason);
@@ -740,7 +740,7 @@ public class StockadjustmentService {
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
-        Stockadjustment savedAdjustment = stockadjustmentRepository.save(adjustment);
+        Stockadjustment savedAdjustment = assignCode(stockadjustmentRepository.save(adjustment));
 
         List<Stockadjustmentdetail> savedDetails = new ArrayList<>();
         Set<Integer> unknownOrigin = request.getUnknownOriginBatchIds() == null
@@ -1307,13 +1307,31 @@ public class StockadjustmentService {
         return "PDC-" + String.format("%06d", id);
     }
 
-    private String generateCode() {
-        int nextId = stockadjustmentRepository.findAll().stream()
-                .map(Stockadjustment::getId)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-        return "PDC-" + String.format("%06d", nextId);
+    /**
+     * Mã tạm dùng đúng một lần, chỉ để qua được ràng buộc {@code NOT NULL UNIQUE} của cột mã tại thời
+     * điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật. Ngay sau khi lưu, mã được ghi lại
+     * theo id do DB cấp (xem {@link #assignCode}).
+     *
+     * <p>Không bao giờ commit ra ngoài: cả hai bước nằm trong cùng một transaction.</p>
+     */
+    private String temporaryCode() {
+        return "TMP-" + UUID.randomUUID();
+    }
+
+    /**
+     * Đặt mã thật cho phiếu vừa lưu: {@code PDC-} + id do DB cấp.
+     *
+     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
+     * người tạo phiếu cùng lúc nhận cùng một số; cột mã có UNIQUE nên người thứ hai ăn lỗi 500 thay vì
+     * được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     *
+     * <p>Còn sửa luôn một lệch lâu nay: màn hình hiển thị mã bằng {@link #formatCode(Integer)} (suy từ
+     * id) trong khi DB lưu {@code stockAdjustmentCode} (suy từ max+1) — xoá một phiếu là hai con số lệch
+     * nhau. Nay cả hai đều lấy từ id nên luôn bằng nhau.</p>
+     */
+    private Stockadjustment assignCode(Stockadjustment saved) {
+        saved.setStockAdjustmentCode(formatCode(saved.getId()));
+        return saved;
     }
 
     /**
@@ -1328,7 +1346,12 @@ public class StockadjustmentService {
      */
     @Transactional(readOnly = true)
     public String previewNextCode() {
-        return generateCode();
+        int nextId = stockadjustmentRepository.findAll().stream()
+                .map(Stockadjustment::getId)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
+        return formatCode(nextId);
     }
 
     private String displayBatch(Batch batch) {

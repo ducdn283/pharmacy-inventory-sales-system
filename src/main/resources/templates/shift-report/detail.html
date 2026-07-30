@@ -386,11 +386,20 @@
 
                         <div class="mb-3">
                             <label class="form-label">Tiền mặt cuối ca (thực đếm)</label>
-                            <input type="text" inputmode="numeric" data-money
+                            <!-- Cho phép số ÂM: nếu trong ca chi ra nhiều hơn tiền đầu ca cộng tiền thu vào
+                                 thì két bị hụt, và người trực phải ghi được đúng con số âm đó thay vì bị ô
+                                 nhập ép về số dương. Ô tiền đầu ca KHÔNG bật vì khoản quỹ được cấp không
+                                 bao giờ âm. -->
+                            <!-- Điền lại số đã lưu: form này còn hiện với ca bị Từ chối ("Sửa và nộp lại"),
+                                 trước đây ô luôn trống nên người trực phải gõ lại từ đầu. -->
+                            <input type="text" inputmode="numeric" data-money data-money-allow-negative
                                    class="form-control"
                                    id="inputActualClosingCash"
                                    name="actualClosingCash"
+                                   th:value="${detail.actualClosingCash}"
                                    required>
+                            <div class="form-text">Nhập đúng số đã kiểm đếm. Được nhập số âm (gõ dấu trừ ở
+                                đầu) nếu tiền chi ra trong ca vượt quá tiền đầu ca cộng tiền thu vào.</div>
                         </div>
 
                         <div class="mb-3">
@@ -480,7 +489,9 @@
             reconOpening.textContent = fmt(opening);
             reconExpected.textContent = fmt(expected);
 
-            if (actualInput.value === '') {
+            // "-" trơ trọi = người dùng mới gõ dấu trừ, chưa có con số nào để đối chiếu.
+            const typed = actualInput.value.trim();
+            if (typed === '' || typed === '-') {
                 reconActual.textContent = '—';
                 banner.style.display = 'none';
                 return;

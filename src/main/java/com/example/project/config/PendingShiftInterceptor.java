@@ -81,6 +81,12 @@ public class PendingShiftInterceptor implements HandlerInterceptor {
         if (uri.startsWith("/assets/") || uri.startsWith("/error")) {
             return true;
         }
+        // Endpoint JSON: không bao giờ là điều hướng trang. Riêng /api/session/check bị topbar gọi
+        // 30 giây một lần — chặn nó chính là nguyên nhân trang tự nạp lại giữa lúc người dùng đang gõ
+        // số chốt ca (topbar thấy response bị redirect nên gọi window.location.replace).
+        if (uri.startsWith("/api/")) {
+            return true;
+        }
         if (uri.equals("/logout") || uri.equals("/logout-guard")
                 || uri.equals("/signin") || uri.equals("/403")
                 || uri.startsWith("/forgot-password") || uri.startsWith("/reset-password")) {
@@ -94,7 +100,24 @@ public class PendingShiftInterceptor implements HandlerInterceptor {
         return isAjax(request);
     }
 
+    /**
+     * Request KHÔNG phải điều hướng trang thì không được chặn: đá một lời gọi {@code fetch}/XHR sang
+     * trang khác chỉ làm client nhận HTML thay vì JSON, hoặc tệ hơn là tự nạp lại cả trang.
+     *
+     * <p>Mốc tin cậy nhất là {@code Sec-Fetch-Dest}: trình duyệt gửi {@code document} cho mọi điều
+     * hướng thật (gõ URL, bấm link, submit form) và giá trị khác cho fetch/XHR/ảnh/script. Dựa vào
+     * header này thay vì {@code X-Requested-With} vì <strong>{@code fetch()} không tự gửi
+     * {@code X-Requested-With}</strong> — đúng cái bẫy đã làm topbar tự nạp lại trang: nó gọi
+     * {@code fetch('/api/session/check')} không kèm header nào, {@code Accept} mặc định là
+     * {@code *&#47;*} nên hai điều kiện cũ đều không khớp.</p>
+     *
+     * <p>Client cũ / curl không gửi {@code Sec-Fetch-Dest} thì rơi về 2 cách nhận diện cũ.</p>
+     */
     private boolean isAjax(HttpServletRequest request) {
+        String fetchDest = request.getHeader("Sec-Fetch-Dest");
+        if (fetchDest != null && !fetchDest.isBlank()) {
+            return !"document".equalsIgnoreCase(fetchDest);
+        }
         String requestedWith = request.getHeader("X-Requested-With");
         if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
             return true;

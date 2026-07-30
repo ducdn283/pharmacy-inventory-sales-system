@@ -12,31 +12,61 @@
       <div th:replace="~{fragments/money-input :: moneyInputs}"></div>   (đặt cuối <body>)
 
   Đọc giá trị số trong JS của trang: pmMoneyValue(document.getElementById('amountInput'))
+
+  ------------------------------------------------------------------------------------------------
+  data-money-allow-negative — cho ô nhận số ÂM
+
+  Mặc định ô tiền chỉ nhận chữ số: tuyệt đại đa số ô tiền trong app (số tiền chi, tiền thu, giá nhập)
+  không bao giờ âm, và để lọt dấu trừ vào đó chỉ sinh dữ liệu sai. Ô nào thật sự có thể âm thì khai
+  thêm:
+
+      <input type="text" inputmode="numeric" data-money data-money-allow-negative ...>
+
+  Khi bật, ô nhận một dấu trừ ở ĐẦU (gõ, dán, và cả giá trị âm do server render — trước đây giá trị
+  âm bị hiển thị thành ô TRỐNG, nhìn như mất dữ liệu). pmMoneyValue() trả về số âm tương ứng.
 -->
 <th:block th:fragment="moneyInputs">
     <script>
         (function () {
-            /** Digits only — dùng cho chuỗi người dùng đang gõ, nơi dấu chấm là dấu phân cách. */
-            function separatorDigits(value) {
-                return String(value == null ? '' : value).replace(/[^\d]/g, '');
+            function allowsNegative(input) {
+                return !!(input && input.hasAttribute && input.hasAttribute('data-money-allow-negative'));
+            }
+
+            /**
+             * Chuỗi người dùng đang gõ, nơi dấu chấm là dấu phân cách: giữ lại chữ số, và giữ một dấu
+             * trừ ở ĐẦU nếu ô cho phép số âm. Trả về "-" đơn lẻ khi người dùng mới gõ dấu trừ — chưa
+             * phải số, nhưng phải để nguyên trong ô cho họ gõ tiếp.
+             */
+            function separatorDigits(input, value) {
+                var raw = String(value == null ? '' : value);
+                var negative = allowsNegative(input) && raw.trim().charAt(0) === '-';
+                return (negative ? '-' : '') + raw.replace(/[^\d]/g, '');
             }
 
             /**
              * Digits của giá trị do server render. Ở đây dấu chấm là dấu thập phân của BigDecimal
              * ("500000.00"), không phải dấu phân cách — bóc thẳng ký tự sẽ ra "50000000".
              */
-            function initialDigits(value) {
+            function initialDigits(input, value) {
                 var raw = String(value == null ? '' : value).trim();
                 if (!raw) return '';
                 var num = Number(raw.replace(/\s/g, ''));
                 if (Number.isFinite(num)) {
-                    return num > 0 ? String(Math.round(num)) : (num === 0 ? '0' : '');
+                    if (num === 0) return '0';
+                    // Số âm chỉ giữ được ở ô đã bật data-money-allow-negative; ô thường vẫn bỏ như cũ
+                    // để một giá trị âm bất thường không âm thầm biến thành số dương.
+                    if (num < 0) return allowsNegative(input) ? String(Math.round(num)) : '';
+                    return String(Math.round(num));
                 }
-                return separatorDigits(raw);
+                return separatorDigits(input, raw);
             }
 
-            function group(digits) {
-                return digits ? Number(digits).toLocaleString('vi-VN') : '';
+            function group(signedDigits) {
+                if (!signedDigits || signedDigits === '-') return signedDigits || '';
+                var negative = signedDigits.charAt(0) === '-';
+                var digits = negative ? signedDigits.slice(1) : signedDigits;
+                if (!digits) return negative ? '-' : '';
+                return (negative ? '-' : '') + Number(digits).toLocaleString('vi-VN');
             }
 
             function reformat(input, digits) {
@@ -48,24 +78,26 @@
                 }
             }
 
-            /** Numeric value of a money input, ignoring the separators. */
+            /** Numeric value of a money input, ignoring the separators. Âm nếu ô cho phép và đang âm. */
             window.pmMoneyValue = function (input) {
-                var digits = separatorDigits(input && input.value);
-                return digits ? Number(digits) : 0;
+                var signed = separatorDigits(input, input && input.value);
+                // "" hoặc "-" (mới gõ dấu trừ, chưa có số) đều chưa là một con số.
+                if (!signed || signed === '-') return 0;
+                return Number(signed);
             };
 
             function initInput(input) {
                 // type=number refuses a value containing dots, so these must be plain text fields.
                 input.setAttribute('type', 'text');
-                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('inputmode', allowsNegative(input) ? 'text' : 'numeric');
                 input.setAttribute('autocomplete', 'off');
-                reformat(input, initialDigits(input.value));
+                reformat(input, initialDigits(input, input.value));
 
                 input.addEventListener('input', function () {
-                    reformat(input, separatorDigits(input.value));
+                    reformat(input, separatorDigits(input, input.value));
                 });
                 input.addEventListener('blur', function () {
-                    reformat(input, separatorDigits(input.value));
+                    reformat(input, separatorDigits(input, input.value));
                 });
             }
 
@@ -77,7 +109,10 @@
                         return;
                     }
                     form.querySelectorAll('input[data-money]').forEach(function (input) {
-                        input.value = separatorDigits(input.value);
+                        var signed = separatorDigits(input, input.value);
+                        // Dấu trừ trơ trọi không phải số — gửi rỗng để @NotNull/required báo lỗi tử tế
+                        // thay vì Spring nổ NumberFormatException khi bind BigDecimal.
+                        input.value = signed === '-' ? '' : signed;
                     });
                 });
             }
