@@ -65,6 +65,22 @@ public final class DashboardView {
 
     @Getter
     @AllArgsConstructor
+    public static class ChartSeries {
+        private String name;
+        private List<BigDecimal> data;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class DashboardChart {
+        private String title;
+        private String type;
+        private List<String> labels;
+        private List<ChartSeries> series;
+    }
+
+    @Getter
+    @AllArgsConstructor
     public static class RoleDashboard {
         private String roleCode;
         private String pageTitle;
@@ -74,10 +90,7 @@ public final class DashboardView {
         private List<QuickAction> quickActions;
         private List<MetricCard> metrics;
 
-        private String chartTitle;
-        private String chartType;
-        private List<String> chartLabels;
-        private List<BigDecimal> chartData;
+        private List<DashboardChart> charts;
 
         private String todoTitle;
         private List<TodoItem> todoItems;

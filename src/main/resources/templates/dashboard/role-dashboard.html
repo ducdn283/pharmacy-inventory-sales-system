@@ -168,51 +168,97 @@
         }
 
         .chart-box {
-            min-height: 320px;
-            padding: 20px 20px 12px;
+            min-height: 360px;
+            padding: 20px 20px 14px;
         }
 
         .chart-wrap {
-            height: 260px;
+            min-height: 285px;
             width: 100%;
             position: relative;
         }
 
-        .bar-chart {
-            height: 240px;
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .chart-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .chart-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        /* Grouped bar chart */
+
+        .grouped-bar-chart {
+            height: 270px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bar-groups {
+            flex: 1;
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            padding: 10px 6px 0;
+        }
+
+        .bar-group {
+            flex: 1;
+            min-width: 42px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        .bar-cluster {
+            width: 100%;
+            height: 210px;
             display: flex;
             align-items: flex-end;
-            gap: 18px;
-            padding: 18px 8px 0;
+            justify-content: center;
+            gap: 5px;
             border-bottom: 1px solid #cbd5e1;
         }
 
-        .bar-item {
-            flex: 1;
-            min-width: 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-end;
-            height: 100%;
+        .grouped-bar {
+            width: 18px;
+            min-height: 4px;
+            border-radius: 6px 6px 0 0;
+            transition: opacity 0.15s ease;
         }
 
-        .bar {
-            width: 28px;
-            min-height: 4px;
-            background: #059669;
-            border-radius: 7px 7px 0 0;
+        .grouped-bar:hover {
+            opacity: 0.78;
         }
 
         .bar-label {
             margin-top: 10px;
             color: #6b7280;
             font-size: 11px;
+            text-align: center;
         }
+
+        /* Line chart */
 
         .line-chart svg {
             width: 100%;
-            height: 240px;
+            height: 270px;
             overflow: visible;
         }
 
@@ -223,19 +269,85 @@
 
         .line-chart .line {
             fill: none;
-            stroke: #6b7280;
             stroke-width: 3;
             stroke-linecap: round;
             stroke-linejoin: round;
         }
 
-        .line-chart .dot {
-            fill: #6b7280;
-        }
-
         .line-chart .label {
             fill: #6b7280;
             font-size: 11px;
+        }
+
+        /* Donut chart */
+
+        .donut-layout {
+            min-height: 270px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 36px;
+            flex-wrap: wrap;
+        }
+
+        .donut-ring {
+            width: 190px;
+            height: 190px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            flex-shrink: 0;
+        }
+
+        .donut-hole {
+            width: 118px;
+            height: 118px;
+            border-radius: 50%;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 0 1px #eef0f3;
+        }
+
+        .donut-total-label {
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .donut-total-value {
+            color: #111827;
+            font-size: 20px;
+            font-weight: 800;
+            margin-top: 3px;
+        }
+
+        .donut-details {
+            min-width: 190px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .donut-detail-row {
+            display: grid;
+            grid-template-columns: 12px 1fr auto;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .donut-detail-label {
+            color: #6b7280;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .donut-detail-value {
+            color: #111827;
+            font-size: 13px;
+            font-weight: 800;
         }
 
         .todo-list {
@@ -378,49 +490,129 @@
         </div>
 
         <div class="row g-4 mb-4">
-            <div class="col-12 col-xl-8">
-                <div class="dash-card chart-box">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h2 class="section-title" th:text="${dashboard.chartTitle}">
+
+            <!-- Danh sách biểu đồ -->
+            <div th:each="chart, chartStat : ${dashboard.charts}"
+                 class="col-12"
+                 th:classappend="${
+            #lists.size(dashboard.charts) > 1
+            ? ' col-xl-6'
+            : ' col-xl-8'
+         }">
+
+                <div class="dash-card chart-box h-100">
+
+                    <div class="d-flex justify-content-between
+                        align-items-center mb-3">
+
+                        <h2 class="section-title"
+                            th:text="${chart.title}">
                             Biểu đồ
                         </h2>
+
                     </div>
 
-                    <div id="dashboardChart" class="chart-wrap"></div>
+                    <div class="chart-wrap dashboard-chart"
+                         th:id="${'dashboardChart-' + chartStat.index}">
+                    </div>
+
                 </div>
             </div>
 
-            <div class="col-12 col-xl-4">
+            <!-- Khi chỉ có một biểu đồ thì todo nằm bên phải -->
+            <div class="col-12 col-xl-4"
+                 th:if="${#lists.size(dashboard.charts) == 1}">
+
                 <div class="dash-card p-4 h-100">
-                    <h2 class="section-title mb-3" th:text="${dashboard.todoTitle}">
+
+                    <h2 class="section-title mb-3"
+                        th:text="${dashboard.todoTitle}">
                         Việc cần xử lý
                     </h2>
 
                     <div class="todo-list">
+
                         <a th:each="item : ${dashboard.todoItems}"
                            th:href="${item.url}"
                            class="todo-item">
-                            <span class="todo-icon">
-                                <i class="ti ti-alert-circle"></i>
-                            </span>
+
+                    <span class="todo-icon">
+                        <i class="ti ti-alert-circle"></i>
+                    </span>
 
                             <span class="flex-grow-1">
-                                <span class="todo-title d-block" th:text="${item.title}">
-                                    Việc cần xử lý
-                                </span>
-                                <span class="todo-desc d-block" th:text="${item.description}">
-                                    Mô tả
-                                </span>
-                            </span>
+
+                        <span class="todo-title d-block"
+                              th:text="${item.title}">
+                            Việc cần xử lý
+                        </span>
+
+                        <span class="todo-desc d-block"
+                              th:text="${item.description}">
+                            Mô tả
+                        </span>
+
+                    </span>
 
                             <span class="soft-badge"
-                                  th:classappend="${' badge-' + item.tone + '-soft'}"
+                                  th:classappend="${
+                              ' badge-' + item.tone + '-soft'
+                          }"
                                   th:text="${item.badge}">
-                                Chờ xử lý
-                            </span>
+                        Chờ xử lý
+                    </span>
+
                         </a>
+
                     </div>
                 </div>
+            </div>
+
+        </div>
+
+        <!-- Khi có hai biểu đồ thì todo hiển thị phía dưới -->
+        <div class="dash-card p-4 mb-4"
+             th:if="${#lists.size(dashboard.charts) > 1}">
+
+            <h2 class="section-title mb-3"
+                th:text="${dashboard.todoTitle}">
+                Việc cần xử lý
+            </h2>
+
+            <div class="todo-list">
+
+                <a th:each="item : ${dashboard.todoItems}"
+                   th:href="${item.url}"
+                   class="todo-item">
+
+            <span class="todo-icon">
+                <i class="ti ti-alert-circle"></i>
+            </span>
+
+                    <span class="flex-grow-1">
+
+                <span class="todo-title d-block"
+                      th:text="${item.title}">
+                    Việc cần xử lý
+                </span>
+
+                <span class="todo-desc d-block"
+                      th:text="${item.description}">
+                    Mô tả
+                </span>
+
+            </span>
+
+                    <span class="soft-badge"
+                          th:classappend="${
+                      ' badge-' + item.tone + '-soft'
+                  }"
+                          th:text="${item.badge}">
+                Chờ xử lý
+            </span>
+
+                </a>
+
             </div>
         </div>
 
@@ -568,117 +760,445 @@
 </main>
 
 <script th:inline="javascript">
-    const chartLabels = /*[[${dashboard.chartLabels}]]*/ [];
-    const chartDataRaw = /*[[${dashboard.chartData}]]*/ [];
-    const chartType = /*[[${dashboard.chartType}]]*/ 'line';
+    const dashboardCharts = /*[[${dashboard.charts}]]*/ [];
 
-    const chartData = Array.isArray(chartDataRaw)
-        ? chartDataRaw.map(function (value) {
-            return Number(value || 0);
-        })
-        : [];
+    const chartPalette = [
+        '#059669',
+        '#2563eb',
+        '#d97706',
+        '#7c3aed'
+    ];
 
     function formatMoneyShort(value) {
         const numberValue = Number(value || 0);
+        const absValue = Math.abs(numberValue);
 
-        if (numberValue >= 1000000) {
-            return (numberValue / 1000000)
+        if (absValue >= 1000000000) {
+            return (numberValue / 1000000000)
                 .toFixed(1)
-                .replace('.0', '') + 'Mđ';
+                .replace('.0', '') + ' Tỷ';
         }
 
-        return new Intl.NumberFormat('vi-VN').format(numberValue) + 'đ';
+        if (absValue >= 1000000) {
+            return (numberValue / 1000000)
+                .toFixed(1)
+                .replace('.0', '') + ' Tr';
+        }
+
+        return new Intl.NumberFormat('vi-VN')
+            .format(numberValue) + 'đ';
     }
 
-    function renderBarChart(container, labels, data) {
-        const max = Math.max.apply(null, data.concat([1]));
-        let html = '';
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
 
-        labels.forEach(function (label, index) {
-            const value = data[index] || 0;
-            const barHeight = Math.max(4, Math.round(value / max * 210));
-            const title = label + ': ' + formatMoneyShort(value);
+    function normalizeChart(chart) {
+        return {
+            title:
+                chart && chart.title
+                    ? chart.title
+                    : '',
 
-            html += '<div class="bar-item" title="' + title + '">';
-            html += '<div class="bar" style="height:' + barHeight + 'px"></div>';
-            html += '<div class="bar-label">' + label + '</div>';
+            type:
+                chart && chart.type
+                    ? chart.type
+                    : 'line',
+
+            labels:
+                Array.isArray(chart && chart.labels)
+                    ? chart.labels
+                    : [],
+
+            series:
+                Array.isArray(chart && chart.series)
+                    ? chart.series.map(function (series) {
+                        return {
+                            name:
+                                series && series.name
+                                    ? series.name
+                                    : 'Dữ liệu',
+
+                            data:
+                                Array.isArray(series && series.data)
+                                    ? series.data.map(function (value) {
+                                        return Number(value || 0);
+                                    })
+                                    : []
+                        };
+                    })
+                    : []
+        };
+    }
+
+    function renderLegend(series) {
+        if (!series || series.length === 0) {
+            return '';
+        }
+
+        let html = '<div class="chart-legend">';
+
+        series.forEach(function (item, index) {
+            const color =
+                chartPalette[index % chartPalette.length];
+
+            html += '<span class="chart-legend-item">';
+
+            html += '<span class="chart-legend-dot" '
+                + 'style="background:' + color + '">'
+                + '</span>';
+
+            html += escapeHtml(item.name);
+
+            html += '</span>';
+        });
+
+        html += '</div>';
+
+        return html;
+    }
+
+    /*
+     * Biểu đồ cột:
+     * Invoice và Income theo từng ngày.
+     */
+    function renderGroupedBarChart(container, chart) {
+        const allValues = chart.series.flatMap(
+            function (series) {
+                return series.data;
+            }
+        );
+
+        const max = Math.max.apply(
+            null,
+            allValues.concat([1])
+        );
+
+        let html = renderLegend(chart.series);
+
+        html += '<div class="grouped-bar-chart">';
+        html += '<div class="bar-groups">';
+
+        chart.labels.forEach(function (label, labelIndex) {
+            html += '<div class="bar-group">';
+            html += '<div class="bar-cluster">';
+
+            chart.series.forEach(
+                function (series, seriesIndex) {
+                    const value = Number(
+                        series.data[labelIndex] || 0
+                    );
+
+                    const barHeight = Math.max(
+                        4,
+                        Math.round(value / max * 200)
+                    );
+
+                    const color =
+                        chartPalette[
+                        seriesIndex % chartPalette.length
+                            ];
+
+                    const title = escapeHtml(
+                        series.name
+                        + ' - '
+                        + label
+                        + ': '
+                        + formatMoneyShort(value)
+                    );
+
+                    html += '<div class="grouped-bar" '
+                        + 'title="' + title + '" '
+                        + 'style="height:' + barHeight + 'px;'
+                        + 'background:' + color + '">'
+                        + '</div>';
+                }
+            );
+
+            html += '</div>';
+
+            html += '<div class="bar-label">'
+                + escapeHtml(label)
+                + '</div>';
+
             html += '</div>';
         });
 
-        container.className = 'chart-wrap bar-chart';
+        html += '</div>';
+        html += '</div>';
+
         container.innerHTML = html;
     }
 
-    function renderLineChart(container, labels, data) {
+    /*
+     * Biểu đồ đường được giữ lại để dashboard Owner
+     * vẫn hiển thị doanh thu 7 ngày.
+     */
+    function renderLineChart(container, chart) {
         const width = 760;
-        const height = 230;
-        const paddingX = 36;
-        const paddingY = 24;
-        const max = Math.max.apply(null, data.concat([1]));
-        const stepX = labels.length > 1 ? (width - paddingX * 2) / (labels.length - 1) : 0;
+        const height = 250;
+        const paddingX = 38;
+        const paddingY = 25;
 
-        const points = data.map(function (value, index) {
-            const x = paddingX + stepX * index;
-            const y = height - paddingY - (value / max) * (height - paddingY * 2);
+        const allValues = chart.series.flatMap(
+            function (series) {
+                return series.data;
+            }
+        );
 
-            return {
-                x: x,
-                y: y,
-                value: value
-            };
-        });
+        const max = Math.max.apply(
+            null,
+            allValues.concat([1])
+        );
 
-        let path = '';
-
-        points.forEach(function (point, index) {
-            path += (index === 0 ? 'M ' : ' L ') + point.x + ' ' + point.y;
-        });
+        const stepX = chart.labels.length > 1
+            ? (width - paddingX * 2)
+            / (chart.labels.length - 1)
+            : 0;
 
         let gridLines = '';
 
         [0, 1, 2, 3].forEach(function (item) {
-            const y = paddingY + item * ((height - paddingY * 2) / 3);
-            gridLines += '<line class="axis" x1="' + paddingX + '" y1="' + y + '" x2="' + (width - paddingX) + '" y2="' + y + '"></line>';
+            const y = paddingY
+                + item
+                * ((height - paddingY * 2) / 3);
+
+            gridLines += '<line class="axis" '
+                + 'x1="' + paddingX + '" '
+                + 'y1="' + y + '" '
+                + 'x2="' + (width - paddingX) + '" '
+                + 'y2="' + y + '">'
+                + '</line>';
         });
 
-        let dots = '';
+        let seriesSvg = '';
 
-        points.forEach(function (point) {
-            dots += '<circle class="dot" cx="' + point.x + '" cy="' + point.y + '" r="4">';
-            dots += '<title>' + formatMoneyShort(point.value) + '</title>';
-            dots += '</circle>';
-        });
+        chart.series.forEach(
+            function (series, seriesIndex) {
+                const color =
+                    chartPalette[
+                    seriesIndex % chartPalette.length
+                        ];
+
+                const points = series.data.map(
+                    function (value, index) {
+                        return {
+                            x:
+                                paddingX
+                                + stepX * index,
+
+                            y:
+                                height
+                                - paddingY
+                                - (value / max)
+                                * (height - paddingY * 2),
+
+                            value: value
+                        };
+                    }
+                );
+
+                const path = points.map(
+                    function (point, index) {
+                        return (
+                            index === 0
+                                ? 'M '
+                                : ' L '
+                        ) + point.x + ' ' + point.y;
+                    }
+                ).join('');
+
+                seriesSvg += '<path class="line" '
+                    + 'stroke="' + color + '" '
+                    + 'd="' + path + '">'
+                    + '</path>';
+
+                points.forEach(function (point, index) {
+                    const label =
+                        chart.labels[index] || '';
+
+                    seriesSvg += '<circle '
+                        + 'cx="' + point.x + '" '
+                        + 'cy="' + point.y + '" '
+                        + 'r="4" '
+                        + 'fill="' + color + '">';
+
+                    seriesSvg += '<title>'
+                        + escapeHtml(
+                            series.name
+                            + ' - '
+                            + label
+                            + ': '
+                            + formatMoneyShort(point.value)
+                        )
+                        + '</title>';
+
+                    seriesSvg += '</circle>';
+                });
+            }
+        );
 
         let xLabels = '';
 
-        labels.forEach(function (label, index) {
+        chart.labels.forEach(function (label, index) {
             const x = paddingX + stepX * index;
-            xLabels += '<text class="label" x="' + x + '" y="' + (height - 2) + '" text-anchor="middle">' + label + '</text>';
+
+            xLabels += '<text class="label" '
+                + 'x="' + x + '" '
+                + 'y="' + (height - 2) + '" '
+                + 'text-anchor="middle">'
+                + escapeHtml(label)
+                + '</text>';
         });
 
-        container.className = 'chart-wrap line-chart';
+        container.classList.add('line-chart');
+
         container.innerHTML =
-            '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none">' +
-            gridLines +
-            '<path class="line" d="' + path + '"></path>' +
-            dots +
-            xLabels +
-            '</svg>';
+            renderLegend(chart.series)
+            + '<svg '
+            + 'viewBox="0 0 '
+            + width
+            + ' '
+            + height
+            + '" '
+            + 'preserveAspectRatio="none">'
+            + gridLines
+            + seriesSvg
+            + xLabels
+            + '</svg>';
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        const container = document.getElementById('dashboardChart');
+    /*
+     * Biểu đồ donut:
+     * Tiền mặt và chuyển khoản.
+     */
+    function renderDonutChart(container, chart) {
+        const data =
+            chart.series.length > 0
+                ? chart.series[0].data
+                : [];
 
-        if (!container || !chartLabels || chartLabels.length === 0) {
-            return;
-        }
+        const cashValue = Number(data[0] || 0);
+        const bankingValue = Number(data[1] || 0);
 
-        if (chartType === 'bar') {
-            renderBarChart(container, chartLabels, chartData);
-        } else {
-            renderLineChart(container, chartLabels, chartData);
+        const total = cashValue + bankingValue;
+
+        const cashPercent = total > 0
+            ? cashValue / total * 100
+            : 0;
+
+        const gradient = total > 0
+            ? 'conic-gradient('
+            + chartPalette[0]
+            + ' 0 '
+            + cashPercent
+            + '%, '
+            + chartPalette[1]
+            + ' '
+            + cashPercent
+            + '% 100%)'
+            : 'conic-gradient(#e5e7eb 0 100%)';
+
+        let details = '';
+
+        chart.labels.forEach(function (label, index) {
+            const value = Number(data[index] || 0);
+
+            const color =
+                chartPalette[index % chartPalette.length];
+
+            details += '<div class="donut-detail-row">';
+
+            details += '<span class="chart-legend-dot" '
+                + 'style="background:' + color + '">'
+                + '</span>';
+
+            details += '<span class="donut-detail-label">'
+                + escapeHtml(label)
+                + '</span>';
+
+            details += '<span class="donut-detail-value">'
+                + formatMoneyShort(value)
+                + '</span>';
+
+            details += '</div>';
+        });
+
+        container.innerHTML =
+            '<div class="donut-layout">'
+
+            + '<div class="donut-ring" '
+            + 'style="background:' + gradient + '">'
+
+            + '<div class="donut-hole">'
+
+            + '<span class="donut-total-label">'
+            + 'Tổng thu'
+            + '</span>'
+
+            + '<span class="donut-total-value">'
+            + formatMoneyShort(total)
+            + '</span>'
+
+            + '</div>'
+            + '</div>'
+
+            + '<div class="donut-details">'
+            + details
+            + '</div>'
+
+            + '</div>';
+    }
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        function () {
+            if (!Array.isArray(dashboardCharts)) {
+                return;
+            }
+
+            dashboardCharts.forEach(
+                function (rawChart, index) {
+                    const container =
+                        document.getElementById(
+                            'dashboardChart-' + index
+                        );
+
+                    const chart =
+                        normalizeChart(rawChart);
+
+                    if (
+                        !container
+                        || chart.labels.length === 0
+                    ) {
+                        return;
+                    }
+
+                    if (chart.type === 'grouped-bar') {
+                        renderGroupedBarChart(
+                            container,
+                            chart
+                        );
+                    } else if (chart.type === 'donut') {
+                        renderDonutChart(
+                            container,
+                            chart
+                        );
+                    } else {
+                        renderLineChart(
+                            container,
+                            chart
+                        );
+                    }
+                }
+            );
         }
-    });
+    );
 </script>
 
 </body>

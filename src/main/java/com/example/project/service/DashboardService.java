@@ -12,6 +12,10 @@ import com.example.project.dto.response.DashboardView.QuickAction;
 import com.example.project.dto.response.DashboardView.RecentInvoice;
 import com.example.project.dto.response.DashboardView.RoleDashboard;
 import com.example.project.dto.response.DashboardView.TodoItem;
+import com.example.project.dto.response.DashboardView.ChartSeries;
+import com.example.project.dto.response.DashboardView.DashboardChart;
+import com.example.project.entity.Income;
+import com.example.project.repository.IncomeRepository;
 import com.example.project.entity.Account;
 import com.example.project.entity.Batch;
 import com.example.project.entity.Customer;
@@ -54,6 +58,7 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.time.Instant;
 
 @Service
 public class DashboardService {
@@ -62,9 +67,12 @@ public class DashboardService {
     private static final DateTimeFormatter DATE_DISPLAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_TIME_DISPLAY = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final DateTimeFormatter TIME_DISPLAY = DateTimeFormatter.ofPattern("HH:mm");
+    private static final String INCOME_STATUS_DRAFT = "Nháp";
+    private static final String INCOME_STATUS_REJECTED = "Từ chối";
 
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
+    private final IncomeRepository incomeRepository;
     private final ReturnRepository returnRepository;
     private final ProductRepository productRepository;
     private final BatchRepository batchRepository;
@@ -77,6 +85,7 @@ public class DashboardService {
 
     public DashboardService(InvoiceRepository invoiceRepository,
                             InvoicedetailRepository invoicedetailRepository,
+                            IncomeRepository incomeRepository,
                             ReturnRepository returnRepository,
                             ProductRepository productRepository,
                             BatchRepository batchRepository,
@@ -87,6 +96,7 @@ public class DashboardService {
                             ShiftreportRepository shiftreportRepository,
                             ApprovalService approvalService) {
         this.invoiceRepository = invoiceRepository;
+        this.incomeRepository = incomeRepository;
         this.invoicedetailRepository = invoicedetailRepository;
         this.returnRepository = returnRepository;
         this.productRepository = productRepository;
@@ -137,18 +147,38 @@ public class DashboardService {
                 "OWNER",
                 "Tổng quan",
                 currentAccountName,
-                "Tổng quan vận hành nhà thuốc hôm nay • Ngày " + today.format(DATE_DISPLAY),
+                "Tổng quan vận hành nhà thuốc hôm nay • Ngày "
+                        + today.format(DATE_DISPLAY),
+
                 List.of(
-                        new QuickAction("Xem phê duyệt", "/owner/approvals", true),
-                        new QuickAction("Xem công nợ", "/owner/debts", false),
-                        new QuickAction("Xem tồn kho", "/owner/stock-counts", false),
-                        new QuickAction("Xem hóa đơn VAT", "/owner/invoices", false)
+                        new QuickAction(
+                                "Xem phê duyệt",
+                                "/owner/approvals",
+                                true
+                        ),
+                        new QuickAction(
+                                "Xem công nợ",
+                                "/owner/debts",
+                                false
+                        ),
+                        new QuickAction(
+                                "Xem tồn kho",
+                                "/owner/stock-counts",
+                                false
+                        ),
+                        new QuickAction(
+                                "Xem hóa đơn VAT",
+                                "/owner/invoices",
+                                false
+                        )
                 ),
+
                 List.of(
                         new MetricCard(
                                 "Doanh thu hôm nay",
                                 moneyShort(todayRevenue),
-                                compareRevenue(todayRevenue, yesterdayRevenue) + " so với hôm qua",
+                                compareRevenue(todayRevenue, yesterdayRevenue)
+                                        + " so với hôm qua",
                                 "ti ti-trending-up",
                                 "success",
                                 "/owner/invoices"
@@ -194,90 +224,233 @@ public class DashboardService {
                                 "/owner/products"
                         )
                 ),
-                "Doanh thu 7 ngày gần nhất",
-                "line",
-                lastSevenDayLabels(today),
-                lastSevenDayRevenue(invoices, today),
+
+                List.of(
+                        new DashboardChart(
+                                "Doanh thu 7 ngày gần nhất",
+                                "line",
+                                lastSevenDayLabels(today),
+                                List.of(
+                                        new ChartSeries(
+                                                "Doanh thu",
+                                                lastSevenDayRevenue(invoices, today)
+                                        )
+                                )
+                        )
+                ),
+
                 "Việc cần xử lý",
                 ownerTodoItems(pendingApprovalItems),
+
                 "Hóa đơn gần đây",
                 recentInvoices(invoices, null, "/owner/invoices"),
+
                 "Hiệu suất nhân viên hôm nay",
                 ownerPerformanceRows(invoices, today),
+
                 "Phê duyệt gần đây",
                 pendingApprovalItems
         );
     }
 
     @Transactional(readOnly = true)
-    public RoleDashboard pharmacistDashboard(Integer accountId, String currentAccountName) {
+    public RoleDashboard pharmacistDashboard(
+            Integer accountId,
+            String currentAccountName
+    ) {
         LocalDate today = LocalDate.now(VN_ZONE);
 
         List<Invoice> invoices = invoiceRepository.findAllWithRelations();
-        List<Invoicedetail> invoiceDetails = invoicedetailRepository.findAll();
-        List<Customer> customers = customerRepository.findAll();
-        List<Product> products = productRepository.findAllWithRelations();
-        List<Shiftreport> shiftReports = shiftreportRepository.findAllWithRelations();
-        List<Stockcount> stockCounts = stockcountRepository.findAllWithRelations();
-        List<Return> returns = returnRepository.findAllWithRelations();
+        List<Income> incomes = incomeRepository.findAllWithRelations();
+        List<Shiftreport> shiftReports =
+                shiftreportRepository.findAllWithRelations();
+        List<Stockcount> stockCounts =
+                stockcountRepository.findAllWithRelations();
+        List<Return> returns =
+                returnRepository.findAllWithRelations();
 
-        Predicate<Invoice> ownedByCurrentUser = invoice -> sameAccount(invoice.getEmployeeID(), accountId);
-        List<Invoice> myInvoices = invoices.stream()
-                .filter(ownedByCurrentUser)
+        /*
+         * Tất cả phiếu thu có hiệu lực.
+         *
+         * Nháp và Từ chối không được tính vì chưa phải khoản tiền thu
+         * hợp lệ tại quầy.
+         */
+        List<Income> effectiveIncomes = incomes.stream()
+                .filter(this::isEffectiveIncome)
                 .toList();
 
-        BigDecimal todayRevenue = sumInvoiceTotal(myInvoices, invoice -> isDate(invoice.getDate(), today));
+        /*
+         * Các hóa đơn được tạo bởi pharmacist đang đăng nhập.
+         */
+        List<Invoice> myInvoices = invoices.stream()
+                .filter(invoice ->
+                        sameAccount(invoice.getEmployeeID(), accountId))
+                .toList();
+
+        /*
+         * Các phiếu thu do pharmacist đang đăng nhập lập.
+         */
+        List<Income> myEffectiveIncomes = effectiveIncomes.stream()
+                .filter(income ->
+                        sameAccount(income.getApplicantID(), accountId))
+                .toList();
+
+        /*
+         * BÁN ĐƯỢC:
+         * Tổng giá trị hóa đơn phát sinh trong ngày.
+         */
+        BigDecimal todayInvoiceSales = sumInvoiceTotal(
+                myInvoices,
+                invoice -> isDate(invoice.getDate(), today)
+        );
+
+        /*
+         * Tiền nhận trực tiếp khi tạo hóa đơn.
+         *
+         * Phải trừ các Income thu nợ đã cập nhật ngược vào
+         * Invoice.paidByCash và Invoice.paidByBanking để tránh cộng trùng.
+         */
+        BigDecimal todayInvoiceCash = sumInitialInvoicePayment(
+                myInvoices,
+                effectiveIncomes,
+                invoice -> isDate(invoice.getDate(), today),
+                true
+        );
+
+        BigDecimal todayInvoiceBanking = sumInitialInvoicePayment(
+                myInvoices,
+                effectiveIncomes,
+                invoice -> isDate(invoice.getDate(), today),
+                false
+        );
+
+        /*
+         * Tiền thu từ các phiếu Income do pharmacist hiện tại lập.
+         */
+        BigDecimal todayIncomeCash = sumIncomePayment(
+                myEffectiveIncomes,
+                income -> isDate(income.getDate(), today),
+                true
+        );
+
+        BigDecimal todayIncomeBanking = sumIncomePayment(
+                myEffectiveIncomes,
+                income -> isDate(income.getDate(), today),
+                false
+        );
+
+        /*
+         * THU ĐƯỢC:
+         * Tiền thanh toán trực tiếp từ Invoice
+         * cộng với tiền thu từ Income.
+         */
+        BigDecimal todayCashCollected =
+                todayInvoiceCash.add(todayIncomeCash);
+
+        BigDecimal todayBankingCollected =
+                todayInvoiceBanking.add(todayIncomeBanking);
+
+        BigDecimal todayCollected =
+                todayCashCollected.add(todayBankingCollected);
+
         long todayInvoiceCount = myInvoices.stream()
                 .filter(invoice -> isDate(invoice.getDate(), today))
                 .count();
 
-        BigDecimal debtFromMyInvoices = myInvoices.stream()
-                .map(Invoice::getDebtAmount)
-                .map(this::safe)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        String shiftStatus =
+                latestShiftStatus(shiftReports, accountId);
 
-        String shiftStatus = latestShiftStatus(shiftReports, accountId);
-        String topProductName = topSellingProductName(invoiceDetails, accountId, today);
-        long needCheckProducts = countLowStockProducts(products);
+        List<String> lastSevenDays =
+                lastSevenDayLabels(today);
 
         return new RoleDashboard(
                 "PHARMACIST",
                 "Tổng quan",
                 currentAccountName,
-                "Tổng quan hoạt động tư vấn và bán hàng tại Nhà thuốc Hằng Ngọc hôm nay • "
+
+                "Tổng quan bán hàng và thu tiền tại Nhà thuốc Hằng Ngọc hôm nay • "
                         + today.format(DATE_DISPLAY),
+
+                /*
+                 * Quick actions
+                 */
                 List.of(
-                        new QuickAction("Bán hàng", "/pharmacist/selling", true),
-                        new QuickAction("Tạo khách hàng", "/customer/create", false),
-                        new QuickAction("Xem hóa đơn", "/pharmacist/invoices", false),
-                        new QuickAction("Xem hàng hóa", "/pharmacist/products", false),
-                        new QuickAction("Tạo báo cáo ca", "/pharmacist/shift-reports", false)
+                        new QuickAction(
+                                "Bán hàng",
+                                "/pharmacist/selling",
+                                true
+                        ),
+                        new QuickAction(
+                                "Tạo phiếu thu",
+                                "/pharmacist/incomes/create",
+                                false
+                        ),
+                        new QuickAction(
+                                "Xem hóa đơn",
+                                "/pharmacist/invoices",
+                                false
+                        ),
+                        new QuickAction(
+                                "Xem phiếu thu",
+                                "/pharmacist/incomes",
+                                false
+                        ),
+                        new QuickAction(
+                                "Tạo báo cáo ca",
+                                "/pharmacist/shift-reports",
+                                false
+                        )
                 ),
+
+                /*
+                 * Metric cards
+                 */
                 List.of(
                         new MetricCard(
-                                "Doanh thu hôm nay",
-                                money(todayRevenue),
-                                "Doanh thu của bạn trong ngày",
-                                "ti ti-shield-check",
+                                "Bán được hôm nay",
+                                money(todayInvoiceSales),
+                                "Tổng giá trị hóa đơn đã bán",
+                                "ti ti-shopping-cart",
                                 "success",
                                 "/pharmacist/invoices"
                         ),
+
+                        new MetricCard(
+                                "Thu được hôm nay",
+                                money(todayCollected),
+                                "Tiền thực thu từ Invoice và Income",
+                                "ti ti-cash",
+                                "info",
+                                "/pharmacist/incomes"
+                        ),
+
                         new MetricCard(
                                 "Hóa đơn hôm nay",
                                 String.valueOf(todayInvoiceCount),
-                                "Số hóa đơn đã tạo",
+                                "Số hóa đơn đã tạo trong ngày",
                                 "ti ti-file-invoice",
-                                "info",
+                                "warning",
                                 "/pharmacist/invoices"
                         ),
+
                         new MetricCard(
-                                "Khách hàng hiện có",
-                                String.valueOf(customers.size()),
-                                "Có thể tạo khách hàng mới",
-                                "ti ti-users",
+                                "Tiền mặt hôm nay",
+                                money(todayCashCollected),
+                                "Tổng tiền thực thu bằng tiền mặt",
+                                "ti ti-cash-banknote",
                                 "success",
-                                "/customer"
+                                "/pharmacist/shift-reports"
                         ),
+
+                        new MetricCard(
+                                "Chuyển khoản hôm nay",
+                                money(todayBankingCollected),
+                                "Tổng tiền thực thu qua chuyển khoản",
+                                "ti ti-building-bank",
+                                "info",
+                                "/pharmacist/shift-reports"
+                        ),
+
                         new MetricCard(
                                 "Báo cáo ca hiện tại",
                                 shiftStatus,
@@ -285,34 +458,81 @@ public class DashboardService {
                                 "ti ti-report",
                                 "orange",
                                 "/pharmacist/shift-reports"
-                        ),
-                        new MetricCard(
-                                "Sản phẩm bán nhiều",
-                                topProductName,
-                                "Trong ca hôm nay",
-                                "ti ti-activity",
-                                "success",
-                                "/pharmacist/products"
-                        ),
-                        new MetricCard(
-                                "Cần kiểm tra tồn",
-                                String.valueOf(needCheckProducts),
-                                "Sản phẩm dưới mức tồn tối thiểu",
-                                "ti ti-alert-triangle",
-                                "danger",
-                                "/pharmacist/stock-counts"
                         )
                 ),
-                "Doanh thu theo giờ trong ngày",
-                "bar",
-                workingHourLabels(),
-                hourlyRevenue(myInvoices),
+
+                /*
+                 * Hai biểu đồ
+                 */
+                List.of(
+                        /*
+                         * Biểu đồ 1:
+                         * Invoice và Income trong 7 ngày gần nhất.
+                         */
+                        new DashboardChart(
+                                "Invoice và Income trong 7 ngày gần nhất",
+                                "grouped-bar",
+                                lastSevenDays,
+                                List.of(
+                                        new ChartSeries(
+                                                "Invoice",
+                                                lastSevenDayRevenue(
+                                                        myInvoices,
+                                                        today
+                                                )
+                                        ),
+                                        new ChartSeries(
+                                                "Income",
+                                                lastSevenDayIncome(
+                                                        myEffectiveIncomes,
+                                                        today
+                                                )
+                                        )
+                                )
+                        ),
+
+                        /*
+                         * Biểu đồ 2:
+                         * Tiền mặt và chuyển khoản hôm nay.
+                         */
+                        new DashboardChart(
+                                "Cơ cấu tiền thu hôm nay",
+                                "donut",
+                                List.of(
+                                        "Tiền mặt",
+                                        "Chuyển khoản"
+                                ),
+                                List.of(
+                                        new ChartSeries(
+                                                "Thực thu",
+                                                List.of(
+                                                        todayCashCollected,
+                                                        todayBankingCollected
+                                                )
+                                        )
+                                )
+                        )
+                ),
+
                 "Việc cần xử lý",
-                pharmacistTodoItems(shiftReports, myInvoices, stockCounts, returns, accountId),
+                pharmacistTodoItems(
+                        shiftReports,
+                        myInvoices,
+                        stockCounts,
+                        returns,
+                        accountId
+                ),
+
                 "Hóa đơn gần đây",
-                recentInvoices(myInvoices, accountId, "/pharmacist/invoices"),
+                recentInvoices(
+                        myInvoices,
+                        accountId,
+                        "/pharmacist/invoices"
+                ),
+
                 "",
                 List.of(),
+
                 "",
                 List.of()
         );
@@ -485,6 +705,130 @@ public class DashboardService {
                 .mapToObj(offset -> today.minusDays(6L - offset))
                 .map(date -> sumInvoiceTotal(invoices, invoice -> isDate(invoice.getDate(), date)))
                 .toList();
+    }
+
+    private List<BigDecimal> lastSevenDayIncome(
+            List<Income> incomes,
+            LocalDate today
+    ) {
+        return IntStream.rangeClosed(0, 6)
+                .mapToObj(offset ->
+                        today.minusDays(6L - offset))
+                .map(date -> incomes.stream()
+                        .filter(income ->
+                                isDate(income.getDate(), date))
+                        .map(Income::getAmount)
+                        .map(this::safe)
+                        .reduce(
+                                BigDecimal.ZERO,
+                                BigDecimal::add
+                        ))
+                .toList();
+    }
+
+    private BigDecimal sumInitialInvoicePayment(
+            List<Invoice> invoices,
+            List<Income> effectiveIncomes,
+            Predicate<Invoice> filter,
+            boolean cash
+    ) {
+        /*
+         * Invoice.paidByCash và Invoice.paidByBanking có thể đã được
+         * tăng lên khi lập phiếu thu nợ khách hàng.
+         *
+         * Vì vậy cần tổng hợp các Income liên kết với từng Invoice rồi
+         * trừ ra để lấy số tiền khách đã trả trực tiếp lúc bán hàng.
+         */
+        Map<Integer, BigDecimal> incomePaymentByInvoice =
+                effectiveIncomes.stream()
+                        .filter(income ->
+                                income.getInvoiceID() != null)
+                        .filter(income ->
+                                income.getInvoiceID().getId() != null)
+                        .collect(Collectors.groupingBy(
+                                income ->
+                                        income.getInvoiceID().getId(),
+
+                                Collectors.reducing(
+                                        BigDecimal.ZERO,
+
+                                        income -> safe(
+                                                cash
+                                                        ? income.getPaidByCash()
+                                                        : income.getPaidByBanking()
+                                        ),
+
+                                        BigDecimal::add
+                                )
+                        ));
+
+        return invoices.stream()
+                .filter(filter)
+                .map(invoice -> {
+                    BigDecimal cumulativePayment = safe(
+                            cash
+                                    ? invoice.getPaidByCash()
+                                    : invoice.getPaidByBanking()
+                    );
+
+                    BigDecimal laterIncomePayment =
+                            incomePaymentByInvoice.getOrDefault(
+                                    invoice.getId(),
+                                    BigDecimal.ZERO
+                            );
+
+                    /*
+                     * Không cho kết quả âm trong trường hợp dữ liệu cũ
+                     * không đồng nhất.
+                     */
+                    return cumulativePayment
+                            .subtract(laterIncomePayment)
+                            .max(BigDecimal.ZERO);
+                })
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add
+                );
+    }
+
+    private BigDecimal sumIncomePayment(
+            List<Income> incomes,
+            Predicate<Income> filter,
+            boolean cash
+    ) {
+        return incomes.stream()
+                .filter(filter)
+                .map(income ->
+                        cash
+                                ? income.getPaidByCash()
+                                : income.getPaidByBanking())
+                .map(this::safe)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add
+                );
+    }
+
+    private boolean isEffectiveIncome(Income income) {
+        return income != null
+                && !isStatus(
+                income.getStatus(),
+                INCOME_STATUS_DRAFT
+        )
+                && !isStatus(
+                income.getStatus(),
+                INCOME_STATUS_REJECTED
+        );
+    }
+
+    private boolean isDate(
+            Instant instant,
+            LocalDate date
+    ) {
+        return instant != null
+                && instant.atZone(VN_ZONE)
+                .toLocalDate()
+                .equals(date);
     }
 
     private String vnDayLabel(LocalDate date) {
