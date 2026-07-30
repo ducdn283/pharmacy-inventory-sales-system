@@ -10,6 +10,7 @@ import com.example.project.entity.Supplierproduct;
 import com.example.project.repository.ProductRepository;
 import com.example.project.repository.SupplierRepository;
 import com.example.project.repository.SupplierproductRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -170,7 +171,7 @@ public class SupplierService {
         supplier.setAddress(request.getAddress().trim());
         supplier.setTaxCode(request.getTaxCode().trim());
 
-        return supplierRepository.save(supplier).getId();
+        return saveGuardingUniqueRace(supplier).getId();
     }
 
     // ------------------------------------------------------------------ update
@@ -188,7 +189,7 @@ public class SupplierService {
         supplier.setAddress(request.getAddress().trim());
         supplier.setTaxCode(request.getTaxCode().trim());
 
-        supplierRepository.save(supplier);
+        saveGuardingUniqueRace(supplier);
     }
 
     // ------------------------------------------------------------------ legacy
@@ -215,12 +216,14 @@ public class SupplierService {
     }
 
     /**
-     * Ba trường định danh một nhà cung cấp phải là DUY NHẤT. Bảng {@code supplier} không có ràng buộc
-     * UNIQUE nào ngoài khoá chính nên tầng service là chỗ chặn duy nhất — thiếu một trường ở đây là
-     * dữ liệu trùng lọt thẳng vào DB.
+     * Ba trường định danh một nhà cung cấp phải là DUY NHẤT. Đây là tầng kiểm chính: nó phân biệt được
+     * lỗi định dạng với lỗi trùng và cho câu thông báo gắn đúng ô nhập.
      *
      * <p>MST quan trọng nhất: nó là căn cứ đối chiếu hóa đơn GTGT đầu vào với cơ quan thuế, hai NCC
      * cùng MST thì không phân định được hóa đơn thuộc về ai.</p>
+     *
+     * <p>Bảng {@code supplier} nay CÓ UNIQUE index trên cả 3 cột — xem
+     * {@link #saveGuardingUniqueRace(Supplier)} để biết vì sao vẫn cần cả hai tầng.</p>
      */
     private void validateUnique(SupplierRequest request, Integer excludeId) {
         if (isPhoneTaken(request.getPhone(), excludeId)) {
@@ -260,5 +263,51 @@ public class SupplierService {
         return excludeId == null
                 ? supplierRepository.existsByTaxCode(value)
                 : supplierRepository.existsByTaxCodeAndIdNot(value, excludeId);
+    }
+
+    /**
+     * Lưới an toàn cuối cùng cho tính duy nhất: bảng {@code supplier} nay có UNIQUE index trên
+     * {@code phone}, {@code email} và {@code taxCode}, và <strong>chỉ DB mới phân xử được</strong> khi
+     * hai người nhập cùng lúc — kiểu "hỏi rồi mới ghi" của {@link #validateUnique} luôn có khe hở giữa
+     * lúc hỏi và lúc ghi, cả hai đều đọc thấy "chưa ai dùng" rồi cùng ghi.
+     *
+     * <p>Hàm này chỉ dịch lỗi DB của ca đua hiếm sang <em>đúng câu thông báo</em> mà
+     * {@code validateUnique} vẫn dùng, để người dùng không bao giờ thấy trang 500 thô.
+     *
+     * <p>{@code saveAndFlush} chứ không phải {@code save}: khi sửa (UPDATE) thì {@code save} chỉ đưa vào
+     * session, câu lệnh thật chạy lúc commit — tức là sau khi ra khỏi khối {@code try} này.
+     */
+    private Supplier saveGuardingUniqueRace(Supplier supplier) {
+        try {
+            return supplierRepository.saveAndFlush(supplier);
+        } catch (DataIntegrityViolationException exception) {
+            throw new IllegalArgumentException(duplicateMessage(exception), exception);
+        }
+    }
+
+    /**
+     * Suy ra ô nào bị trùng từ tên UNIQUE index bị vi phạm, lấy từ câu lỗi MySQL
+     * {@code Duplicate entry '<giá trị>' for key '<bảng>.<index>'}. Tên index trùng tên cột nên đọc
+     * thẳng được. Không nhận ra thì trả câu chung — thà chung chung còn hơn chỉ sai ô.
+     *
+     * <p>Phải cắt lấy đúng phần sau {@code for key}, KHÔNG được dò cả câu: chính <em>giá trị</em> bị
+     * trùng cũng nằm trong câu đó, nên một MST trùng của NCC có email {@code phone@example.com} sẽ khớp
+     * nhầm sang "số điện thoại" và chỉ sai ô (đã thử thật, đúng là khớp nhầm).
+     */
+    private String duplicateMessage(DataIntegrityViolationException exception) {
+        String detail = exception.getMostSpecificCause().getMessage();
+        int marker = detail == null ? -1 : detail.lastIndexOf("for key");
+        String key = (marker < 0 ? "" : detail.substring(marker + "for key".length()))
+                .toLowerCase(Locale.ROOT);
+        if (key.contains("phone")) {
+            return "Số điện thoại đã được sử dụng bởi nhà cung cấp khác";
+        }
+        if (key.contains("email")) {
+            return "Email đã được sử dụng bởi nhà cung cấp khác";
+        }
+        if (key.contains("taxcode")) {
+            return "Mã số thuế đã được sử dụng bởi nhà cung cấp khác";
+        }
+        return "Thông tin nhà cung cấp bị trùng với một nhà cung cấp khác, vui lòng kiểm tra lại";
     }
 }

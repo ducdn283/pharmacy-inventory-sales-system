@@ -9,6 +9,7 @@ import com.example.project.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -311,7 +312,32 @@ public class StockadjustmentService {
                 }
                 batch.setStorageQuantity(current - qty);
             }
-            batchRepository.save(batch);
+            saveBatchGuardingConcurrentEdit(batch);
+        }
+    }
+
+    /**
+     * Ghi tồn kho của một lô, dịch lỗi khoá lạc quan thành câu tiếng Việt hiểu được.
+     *
+     * <p>{@code Batch} có {@code @Version} nên Hibernate đưa version vào {@code WHERE} của lệnh update.
+     * Nếu người khác đã ghi vào lô này kể từ lúc mình đọc nó ra, update khớp 0 dòng và Spring ném
+     * {@link ObjectOptimisticLockingFailureException} — đây chính là cơ chế chống mất dấu cập nhật
+     * (hai người cùng trừ tồn thì người sau không được âm thầm ghi đè số của người trước).
+     *
+     * <p>Phải {@code saveAndFlush} chứ không phải {@code save}: {@code save} chỉ đưa vào session, lệnh
+     * UPDATE thật chạy lúc commit — tức là SAU khi ra khỏi khối {@code try} này, nên không bắt được.
+     * Flush đẩy UPDATE xuống DB ngay tại đây.
+     *
+     * <p>Ném {@link IllegalArgumentException} (không phải {@code IllegalStateException}) vì controller
+     * chỉ bắt loại đó — dùng loại khác là người dùng nhận trang lỗi 500 thô thay vì câu thông báo.
+     */
+    private void saveBatchGuardingConcurrentEdit(Batch batch) {
+        try {
+            batchRepository.saveAndFlush(batch);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new IllegalArgumentException("Lô " + displayBatch(batch)
+                    + " vừa được người khác cập nhật (bán hàng, nhập hàng hoặc phiếu điều chỉnh khác)."
+                    + " Vui lòng tải lại trang để xem tồn kho mới nhất rồi thực hiện lại.", exception);
         }
     }
 
@@ -442,7 +468,7 @@ public class StockadjustmentService {
             } else {
                 batch.setStorageQuantity(current + qty);
             }
-            batchRepository.save(batch);
+            saveBatchGuardingConcurrentEdit(batch);
         }
     }
 

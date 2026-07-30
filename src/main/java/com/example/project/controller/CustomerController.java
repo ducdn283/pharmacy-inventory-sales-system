@@ -120,7 +120,7 @@ public class CustomerController {
     /**
      * Kiểm trùng cho màn tạo/sửa, gọi lúc rời ô nhập. Chỉ là lớp báo SỚM cho người dùng — chặn thật
      * vẫn nằm ở {@code CustomerService.validate}, vì màn hình có thể bị bỏ qua (gọi thẳng POST, JS
-     * lỗi, hai người nhập cùng lúc) và bảng {@code customer} không có ràng buộc UNIQUE nào ở DB.
+     * lỗi), và ca hai người nhập cùng lúc thì do UNIQUE index ở DB chặn.
      *
      * @param field    {@code phoneNumber} hoặc {@code taxCode}
      * @param id       id bản ghi đang sửa — bỏ qua chính nó (null khi tạo mới)

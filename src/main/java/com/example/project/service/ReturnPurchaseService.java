@@ -9,6 +9,7 @@ import com.example.project.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -508,10 +509,34 @@ public class ReturnPurchaseService {
                         + (detail.getProductID() != null ? detail.getProductID().getName() : "") + "\"");
             }
             batch.setStorageQuantity(available - qty);
-            batchRepository.save(batch);
+            saveBatchGuardingConcurrentEdit(batch, detail);
         }
         applyDebtOffset(ret, ret.getPurchaseID());
         recomputeReturnPurchaseStatus(ret.getPurchaseID());
+    }
+
+    /**
+     * Ghi tồn kho của một lô, dịch lỗi khoá lạc quan thành câu tiếng Việt hiểu được.
+     *
+     * <p>{@code Batch} có {@code @Version} nên Hibernate đưa version vào {@code WHERE} của lệnh update.
+     * Nếu người khác đã ghi vào lô này kể từ lúc mình đọc nó ra, update khớp 0 dòng và Spring ném
+     * {@link ObjectOptimisticLockingFailureException} — chính là cơ chế chặn mất dấu cập nhật tồn kho.
+     *
+     * <p>Phải {@code saveAndFlush} chứ không phải {@code save}: {@code save} chỉ đưa vào session, lệnh
+     * UPDATE thật chạy lúc commit — tức là SAU khi ra khỏi khối {@code try}, nên không bắt được.
+     *
+     * <p>Ném {@link IllegalArgumentException} vì controller chỉ bắt loại đó; loại khác là người dùng
+     * nhận trang lỗi 500 thô thay vì câu thông báo.
+     */
+    private void saveBatchGuardingConcurrentEdit(Batch batch, Returndetail detail) {
+        try {
+            batchRepository.saveAndFlush(batch);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            String product = detail.getProductID() != null ? detail.getProductID().getName() : "";
+            throw new IllegalArgumentException("Lô hàng của sản phẩm \"" + product
+                    + "\" vừa được người khác cập nhật."
+                    + " Vui lòng tải lại trang để xem tồn kho mới nhất rồi thực hiện lại.", exception);
+        }
     }
 
     // ------------------------------------------------------------------ bù trừ công nợ (netting)

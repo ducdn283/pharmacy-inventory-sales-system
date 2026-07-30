@@ -184,7 +184,8 @@
         <div th:replace="~{fragments/toast :: flash}"></div>
         <div th:replace="~{fragments/confirm :: confirm}"></div>
 
-        <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="adjustmentForm">
+        <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="adjustmentForm"
+              data-validate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
             <div class="row g-4">
@@ -220,7 +221,8 @@
 
                             <div class="col-12 col-md-6" id="typeField">
                                 <label class="form-label">Loại / Nguồn điều chỉnh <span class="text-danger">*</span></label>
-                                <select class="form-select" th:field="*{adjustmentType}" id="adjustmentTypeSelect" required>
+                                <select class="form-select" th:field="*{adjustmentType}" id="adjustmentTypeSelect" required
+                                        data-required-message="Vui lòng chọn loại hoặc nguồn điều chỉnh">
                                     <option value="">-- Chọn loại điều chỉnh --</option>
                                     <optgroup label="Điều chỉnh thủ công">
                                         <option th:each="entry : ${creatableTypeLabels}"
@@ -260,6 +262,7 @@
                                     <span class="text-danger" id="reasonRequiredMark">*</span></label>
                                 <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
                                        required
+                                       data-required-message="Vui lòng nhập lý do điều chỉnh"
                                        placeholder="VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…">
                             </div>
 
@@ -1259,6 +1262,11 @@
      âm hay ký hiệu khoa học. Dòng hàng được thêm bằng JS nên fragment phải bind ở mức document —
      đúng như nó đang làm; không cần gọi lại sau mỗi lần addBatchRow(). -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- Loại điều chỉnh + Lý do là 2 ô bắt buộc: báo ngay dưới ô thay cho bong bóng mặc định của trình
+     duyệt. Ô Lý do được JS bật/tắt `required` theo nguồn (kiểm kê thì server tự điền) — fragment đọc
+     lại `required` đúng lúc submit nên không cần đồng bộ gì thêm. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
 </body>
 </html>
