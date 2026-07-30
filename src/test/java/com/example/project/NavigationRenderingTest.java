@@ -142,12 +142,20 @@ class NavigationRenderingTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * Covers the placeholder view + the "title comes from the menu config" lookup.
+     *
+     * <p>Was {@code /pharmacist/customers} until 2026-07-30; that route was deleted along with the
+     * other seven dead placeholders once every menu item got a real screen. Retargeted rather than
+     * dropped, because {@code /accountant/dashboard} is now the only route the placeholder serves —
+     * so this is the last test standing between it and an unnoticed regression.</p>
+     */
     @Test
-    void pharmacistSeesOwnRolePageWithVietnameseLabel() throws Exception {
-        mvc.perform(get("/pharmacist/customers").with(as("PHARMACIST", "Phong Pharmacist")))
+    void accountantSeesPlaceholderPageWithVietnameseLabel() throws Exception {
+        mvc.perform(get("/accountant/dashboard").with(as("ACCOUNTANT", "An Accountant")))
                 .andExpect(status().isOk())
                 .andExpect(view().name("placeholder"))
-                .andExpect(content().string(containsString("Khách hàng")));  // translated menu label
+                .andExpect(content().string(containsString("Tổng quan")));  // translated menu label
     }
 
     @Test

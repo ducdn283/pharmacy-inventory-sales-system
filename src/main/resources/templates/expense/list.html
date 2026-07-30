@@ -10,41 +10,189 @@
     <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
 
     <style>
-        .expense-page-content {
-            padding-top: 96px !important;
-            padding-bottom: 48px;
+        :root {
+            --sup-green:      #059669;
+            --sup-green-dark: #047857;
+            --sup-green-bg:   #e8f7f1;
+            --sup-border:     #e5e7eb;
+            --sup-bg:         #f6f7f9;
+            --sup-muted:      #6b7280;
         }
 
-        .expense-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 16px;
-            background: #ffffff;
-            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
-        }
+        body { background: var(--sup-bg); }
 
-        .stat-icon {
-            width: 44px;
-            height: 44px;
+        .kpi-card {
+            background: #fff;
+            border: 1px solid var(--sup-border);
             border-radius: 14px;
-            background: #dcfce7;
-            color: #059669;
+            padding: 20px 22px 18px;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            position: relative;
+            min-height: 110px;
+        }
+        .kpi-label {
+            font-size: 12.5px;
+            color: var(--sup-muted);
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+        .kpi-number {
+            font-size: 2.4rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #111827;
+            letter-spacing: -.02em;
+            font-variant-numeric: tabular-nums;
+        }
+        /* Một số tiền dài hơn hẳn một con số đếm, nên hạ cỡ chữ để không tràn thẻ. */
+        .kpi-number.kpi-money { font-size: 1.7rem; }
+        .kpi-sub {
+            font-size: 11.5px;
+            font-weight: 500;
+            margin-top: 5px;
+            color: var(--sup-green);
+        }
+        .kpi-icon {
+            position: absolute;
+            top: 18px; right: 18px;
+            width: 38px; height: 38px;
+            border-radius: 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 1.2rem;
+            background: var(--sup-green-bg);
+            color: var(--sup-green);
+        }
+        .kpi-card.kpi-pending .kpi-icon {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .kpi-card.kpi-pending .kpi-sub { color: #d97706; }
+        .kpi-card.kpi-awaiting .kpi-icon {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        .kpi-card.kpi-awaiting .kpi-sub { color: #2563eb; }
+
+        .main-card {
+            background: #fff;
+            border: 1px solid var(--sup-border);
+            border-radius: 14px;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            padding: 24px;
         }
 
-        .btn-expense-primary {
-            background: #059669;
-            border-color: #059669;
-            color: #fff;
-            border-radius: 12px;
+        .filter-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .filter-input {
+            flex: 1 1 260px;
+            height: 40px;
+            border: 1px solid var(--sup-border);
+            border-radius: 10px;
+            padding: 0 14px;
+            font-size: 13px;
+            color: #374151;
+            outline: none;
+            transition: border-color .15s;
+        }
+        .filter-input:focus,
+        .filter-select:focus {
+            border-color: #6ee7b7;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .1);
+        }
+        .filter-select {
+            flex: 0 1 180px;
+            height: 40px;
+            border: 1px solid var(--sup-border);
+            border-radius: 10px;
+            padding: 0 14px;
+            font-size: 13px;
+            color: #374151;
+            outline: none;
+            transition: border-color .15s;
+            background: #fff;
+        }
+        .filter-date {
+            flex: 0 1 160px;
+        }
+        .btn-search {
+            height: 40px;
+            padding: 0 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-search.primary { background: var(--sup-green); color: #fff; }
+        .btn-search.primary:hover { background: var(--sup-green-dark); color: #fff; }
+        .btn-search.reset {
+            background: transparent;
+            color: #374151;
+            border: 1px solid var(--sup-border);
+            text-decoration: none;
+        }
+        .btn-search.reset:hover { background: #f9fafb; color: #111827; }
+
+        /* Khác bản của phiếu thu một chỗ: bảng 8 cột bị bóp còn ~285px trên điện thoại thì mọi ô
+           đều cụt. Bản cũ của phiếu chi có .table-responsive nên cho cuộn ngang — giữ lại, và trên
+           desktop container rộng hơn min-width nên không đổi gì. */
+        .sup-table-wrap { overflow-x: auto; }
+        .sup-table { width: 100%; min-width: 880px; border-collapse: collapse; table-layout: fixed; }
+        .sup-table th {
+            padding: 10px 10px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--sup-muted);
+            background: #f9fafb;
+            border-bottom: 1px solid var(--sup-border);
+            white-space: nowrap;
+        }
+        .sup-table td {
+            padding: 13px 10px;
+            font-size: 13px;
+            color: #374151;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sup-table tr:last-child td { border-bottom: none; }
+        .sup-table tr:hover td { background: #fafafa; }
+        .sup-name { font-weight: 600; color: #111827; }
+
+        .sup-table .col-code { width: 11%; }
+        .sup-table .col-date { width: 15%; }
+        .sup-table .col-type { width: 13%; }
+        .sup-table .col-applicant { width: 15%; }
+        .sup-table .col-amount { width: 14%; }
+        .sup-table .col-paid { width: 12%; }
+        .sup-table .col-status { width: 13%; }
+        /* 7% chứ không phải 5% như bản phiếu thu: ô này để overflow visible, mà tiêu đề "Thao tác"
+           rộng ~59px — ở 5% nó thò ra ngoài và làm khung cuộn ngang thừa 12px. */
+        .sup-table .col-action { width: 7%; text-align: center; }
+
+        .sup-table th.col-action,
+        .sup-table td.col-action {
+            white-space: nowrap;
+            overflow: visible;
+            text-overflow: clip;
         }
 
-        .btn-expense-primary:hover {
-            background: #047857;
-            border-color: #047857;
-            color: #fff;
+        .btn-outline-success:hover,
+        .btn-outline-success:active {
+            color: #fff !important;
         }
 
         .status-badge {
@@ -55,43 +203,26 @@
             font-size: 12px;
             font-weight: 600;
             white-space: nowrap;
+            background: #f3f4f6;
+            color: #4b5563;
         }
+        /* Tên lớp do ExpenseService.statusCssClass() sinh ra — đừng đổi sang bộ của phiếu thu. */
+        .status-badge.status-draft { background: #f3f4f6; color: #4b5563; }
+        .status-badge.status-pending { background: #fef3c7; color: #d97706; }
+        .status-badge.status-awaiting { background: #dbeafe; color: #2563eb; }
+        .status-badge.status-approved { background: #e8f7f1; color: #059669; }
+        .status-badge.status-rejected { background: #fee2e2; color: #dc2626; }
+        .status-badge.status-default { background: #f3f4f6; color: #6b7280; }
 
-        .status-draft { background: #f3f4f6; color: #4b5563; }
-        .status-pending { background: #fef3c7; color: #d97706; }
-        .status-awaiting { background: #dbeafe; color: #2563eb; }
-        .status-approved { background: #d1fae5; color: #059669; }
-        .status-rejected { background: #fee2e2; color: #dc2626; }
-        .status-default { background: #f3f4f6; color: #4b5563; }
+        .pagination .page-link { color: var(--sup-green); border-color: var(--sup-border); font-size: 13px; }
+        .pagination .page-item.active .page-link { background: var(--sup-green); border-color: var(--sup-green); color: #fff; }
+        .pagination .page-item.disabled .page-link { color: #d1d5db; }
 
-        .table thead th {
-            font-size: 12px;
-            color: #6b7280;
-            background: #f9fafb;
-            font-weight: 600;
-        }
+        .empty-row td { color: var(--sup-muted); font-size: 13px; padding: 40px 0; }
 
-        .table tbody td {
-            font-size: 13px;
-            vertical-align: middle;
-        }
-
-        .pagination .page-link {
-            color: #059669;
-            border-color: #e5e7eb;
-            font-size: 13px;
-        }
-
-        .pagination .page-item.active .page-link {
-            background: #059669;
-            border-color: #059669;
-            color: #fff;
-        }
-
-        @media (max-width: 991.98px) {
-            .expense-page-content {
-                padding-top: 84px !important;
-            }
+        @media (max-width: 767px) {
+            .filter-row { flex-direction: column; align-items: stretch; }
+            .filter-input { width: 100%; }
         }
     </style>
 </head>
@@ -100,235 +231,185 @@
 <div th:replace="~{fragments/topbar :: topbar}"></div>
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 
-<main id="content" class="content expense-page-content">
+<main id="content" class="content py-8">
     <div class="container-fluid">
-
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-            <div>
-                <h1 class="fs-4 mb-1">Danh sách khoản chi</h1>
-                <p class="text-secondary mb-0">Kiểm soát các khoản tiền chi ra khỏi quỹ (vận hành, trả nợ, hoàn tiền trả hàng, ứng lương…)</p>
-            </div>
-            <a th:href="${basePath + '/create'}" class="btn btn-expense-primary">
-                <i class="ti ti-plus me-1"></i>
-                Tạo phiếu chi
-            </a>
-        </div>
 
         <div th:replace="~{fragments/toast :: flash}"></div>
 
         <div class="row g-3 mb-4">
-            <div class="col-12 col-md-6 col-xl-4">
-                <div class="expense-card p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="text-secondary small">Trong tháng</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.monthlyCount}">0</div>
-                            <div class="text-secondary small">phiếu chi</div>
-                        </div>
-                        <div class="stat-icon">
-                            <i class="ti ti-cash"></i>
-                        </div>
-                    </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="kpi-card">
+                    <span class="kpi-icon"><i class="ti ti-cash"></i></span>
+                    <div class="kpi-label">Phiếu chi trong tháng</div>
+                    <div class="kpi-number" th:text="${stats.monthlyCount}">0</div>
+                    <div class="kpi-sub">Tất cả khoản chi</div>
                 </div>
             </div>
-
-            <div class="col-12 col-md-6 col-xl-4">
-                <div class="expense-card p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="text-secondary small">Đã chi trong tháng</div>
-                            <div class="fs-4 fw-bold"
-                                 th:text="${#numbers.formatDecimal(stats.monthlyPaidTotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
-                        </div>
-                        <div class="stat-icon">
-                            <i class="ti ti-report-money"></i>
-                        </div>
-                    </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="kpi-card">
+                    <span class="kpi-icon"><i class="ti ti-report-money"></i></span>
+                    <div class="kpi-label">Đã chi trong tháng</div>
+                    <div class="kpi-number kpi-money"
+                         th:text="${#numbers.formatDecimal(stats.monthlyPaidTotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
+                    <div class="kpi-sub">Tiền đã ra khỏi quỹ</div>
                 </div>
             </div>
-
-            <div class="col-12 col-md-6 col-xl-4">
-                <div class="expense-card p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="text-secondary small">Chờ duyệt / Chờ thanh toán</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.pendingCount + stats.awaitingPaymentCount}">0</div>
-                            <div class="text-warning small">Cần xử lý sớm</div>
-                        </div>
-                        <div class="stat-icon">
-                            <i class="ti ti-clock"></i>
-                        </div>
-                    </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="kpi-card kpi-pending">
+                    <span class="kpi-icon"><i class="ti ti-clock"></i></span>
+                    <div class="kpi-label">Chờ duyệt</div>
+                    <div class="kpi-number" th:text="${stats.pendingCount}">0</div>
+                    <div class="kpi-sub">Cần xử lý sớm</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="kpi-card kpi-awaiting">
+                    <span class="kpi-icon"><i class="ti ti-cash-banknote"></i></span>
+                    <div class="kpi-label">Chờ thanh toán</div>
+                    <div class="kpi-number" th:text="${stats.awaitingPaymentCount}">0</div>
+                    <div class="kpi-sub">Đã duyệt, chưa chi đủ</div>
                 </div>
             </div>
         </div>
 
-        <div class="expense-card p-4 mb-4">
-            <form th:action="${basePath}" method="get">
-                <input type="hidden" name="page" value="0">
-                <input type="hidden" name="size" th:value="${pageSize}">
-
-                <div class="row g-3">
-                    <div class="col-12 col-xl-4">
-                        <input type="text"
-                               class="form-control"
-                               name="keyword"
-                               th:value="${keyword}"
-                               placeholder="Tìm theo mã phiếu, lý do hoặc người lập">
-                    </div>
-
-                    <div class="col-6 col-xl-2">
-                        <input type="date" class="form-control" name="fromDate" th:value="${fromDate}">
-                    </div>
-
-                    <div class="col-6 col-xl-2">
-                        <input type="date" class="form-control" name="toDate" th:value="${toDate}">
-                    </div>
-
-                    <div class="col-12 col-xl-2">
-                        <select class="form-select" name="expenseType">
-                            <option value="">Loại phiếu chi</option>
-                            <option th:each="entry : ${expenseTypeLabels}"
-                                    th:value="${entry.key}"
-                                    th:text="${entry.value}"
-                                    th:selected="${filterExpenseType == entry.key}">
-                            </option>
-                        </select>
-                    </div>
-
-                    <div class="col-12 col-xl-2">
-                        <select class="form-select" name="status">
-                            <option value="">Trạng thái</option>
-                            <option th:each="status : ${statuses}"
-                                    th:value="${status}"
-                                    th:text="${status}"
-                                    th:selected="${filterStatus == status}">
-                            </option>
-                        </select>
-                    </div>
-
-                    <div class="col-12 col-xl-2">
-                        <button type="submit" class="btn btn-expense-primary w-100">
-                            <i class="ti ti-search me-1"></i>
-                            Tìm kiếm
-                        </button>
-                    </div>
-
-                    <div class="col-12 col-xl-2">
-                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
-                            <i class="ti ti-refresh me-1"></i>
-                            Đặt lại
-                        </a>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        <div class="expense-card p-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2 class="fs-6 mb-0">
-                    Danh sách phiếu chi
+        <div class="main-card">
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+                <h2 class="fs-5 fw-semibold mb-0" style="color:#111827;">
+                    Danh sách khoản chi
                     <span class="badge bg-success-subtle text-success ms-2"
                           th:text="${totalItems + ' phiếu'}">0 phiếu</span>
                 </h2>
+                <a th:href="${basePath + '/create'}" class="btn btn-search primary">
+                    <i class="ti ti-plus"></i>Tạo phiếu chi
+                </a>
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead>
-                    <tr>
-                        <th>Mã phiếu</th>
-                        <th>Ngày chi</th>
-                        <th>Loại phiếu chi</th>
-                        <th>Người lập</th>
-                        <th>Số tiền</th>
-                        <th>Đã chi</th>
-                        <th>Trạng thái</th>
-                        <th class="text-end">Thao tác</th>
-                    </tr>
-                    </thead>
+            <form th:action="${basePath}" method="get">
+                <input type="hidden" name="page" value="0">
+                <input type="hidden" name="size" th:value="${pageSize}">
+                <div class="filter-row">
+                    <input type="text"
+                           class="filter-input"
+                           name="keyword"
+                           th:value="${keyword}"
+                           placeholder="Tìm theo mã phiếu, lý do hoặc người lập">
+                    <input type="date"
+                           class="filter-input filter-date"
+                           name="fromDate"
+                           th:value="${fromDate}"
+                           title="Từ ngày">
+                    <input type="date"
+                           class="filter-input filter-date"
+                           name="toDate"
+                           th:value="${toDate}"
+                           title="Đến ngày">
+                    <select class="filter-select" name="expenseType">
+                        <option value="">Loại phiếu chi</option>
+                        <option th:each="entry : ${expenseTypeLabels}"
+                                th:value="${entry.key}"
+                                th:text="${entry.value}"
+                                th:selected="${filterExpenseType == entry.key}">
+                        </option>
+                    </select>
+                    <select class="filter-select" name="status">
+                        <option value="">Trạng thái</option>
+                        <option th:each="status : ${statuses}"
+                                th:value="${status}"
+                                th:text="${status}"
+                                th:selected="${filterStatus == status}">
+                        </option>
+                    </select>
+                    <button type="submit" class="btn-search primary">
+                        <i class="ti ti-search"></i>Tìm kiếm
+                    </button>
+                    <a th:href="${basePath}" class="btn-search reset">
+                        <i class="ti ti-refresh"></i>Đặt lại
+                    </a>
+                </div>
+            </form>
 
-                    <tbody>
-                    <tr th:each="item : ${expenses}">
-                        <td class="fw-semibold text-success" th:text="${item.code}">PC-000001</td>
-                        <td th:text="${item.dateDisplay}">01/06/2026 14:10</td>
-                        <td>
-                            <span class="badge bg-secondary-subtle text-secondary"
-                                  th:text="${item.expenseTypeDisplay}">Chi phí vận hành</span>
-                        </td>
-                        <td th:text="${item.applicantName}">Nguyễn Văn Minh</td>
-                        <td class="fw-semibold"
-                            th:text="${#numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                            650.000đ
-                        </td>
-                        <td th:text="${#numbers.formatDecimal(item.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                            650.000đ
-                        </td>
-                        <td>
-                            <span class="status-badge"
-                                  th:classappend="${' ' + item.statusCssClass}"
-                                  th:text="${item.statusName}">
-                                Chờ duyệt
-                            </span>
-                        </td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-secondary"
-                               th:href="${basePath + '/' + item.id}">
-                                <i class="ti ti-eye me-1"></i>
-                                Xem
-                            </a>
-                        </td>
-                    </tr>
+            <div class="sup-table-wrap">
+            <table class="sup-table">
+                <thead>
+                <tr>
+                    <th class="col-code">Mã phiếu</th>
+                    <th class="col-date">Ngày chi</th>
+                    <th class="col-type">Loại phiếu chi</th>
+                    <th class="col-applicant">Người lập</th>
+                    <th class="col-amount">Số tiền</th>
+                    <th class="col-paid">Đã chi</th>
+                    <th class="col-status">Trạng thái</th>
+                    <th class="col-action">Thao tác</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="item : ${expenses}">
+                    <td>
+                        <a th:href="${basePath + '/' + item.id}"
+                           class="sup-name text-success text-decoration-none"
+                           th:text="${item.code}">PC-000001</a>
+                    </td>
+                    <td th:text="${item.dateDisplay}">01/06/2026 14:10</td>
+                    <td th:text="${item.expenseTypeDisplay}">Chi phí vận hành</td>
+                    <td th:text="${item.applicantName}">Nguyễn Văn Minh</td>
+                    <td class="sup-name"
+                        th:text="${#numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                        650.000đ
+                    </td>
+                    <td th:text="${#numbers.formatDecimal(item.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                        650.000đ
+                    </td>
+                    <td>
+                        <span class="status-badge"
+                              th:classappend="${' ' + item.statusCssClass}"
+                              th:text="${item.statusName}">Chờ duyệt</span>
+                    </td>
+                    <td class="col-action">
+                        <a class="btn btn-sm btn-outline-success"
+                           th:href="${basePath + '/' + item.id}"
+                           title="Xem chi tiết">
+                            <i class="ti ti-eye"></i>
+                        </a>
+                    </td>
+                </tr>
 
-                    <tr th:if="${#lists.isEmpty(expenses)}">
-                        <td colspan="8" class="text-center text-secondary py-4">
-                            Không tìm thấy phiếu chi nào.
-                        </td>
-                    </tr>
-                    </tbody>
-                </table>
+                <tr th:if="${#lists.isEmpty(expenses)}" class="empty-row">
+                    <td colspan="8" style="text-align:center;">
+                        Không tìm thấy phiếu chi nào.
+                    </td>
+                </tr>
+                </tbody>
+            </table>
             </div>
 
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
                  th:if="${totalItems > 0}">
-                <div class="text-secondary small">
+                <div class="text-secondary" style="font-size:13px;">
                     Hiển thị
-                    <span th:text="${currentPage * pageSize + 1}">1</span>
-                    -
-                    <span th:text="${currentPage * pageSize + expenses.size()}">5</span>
-                    trong tổng số
-                    <span th:text="${totalItems}">0</span>
-                    phiếu
+                    <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + expenses.size()}">5</span>
+                    trong tổng số <span th:text="${totalItems}" class="fw-semibold">0</span> phiếu chi
                 </div>
-
                 <nav th:if="${totalPages > 1}">
                     <ul class="pagination mb-0">
                         <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, expenseType=${filterExpenseType}, status=${filterStatus}, page=${currentPage - 1}, size=${pageSize})}">
-                                Trước
-                            </a>
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, expenseType=${filterExpenseType}, status=${filterStatus}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
                         </li>
-
                         <li class="page-item"
-                            th:each="pageNumber : ${#numbers.sequence(0, totalPages - 1)}"
-                            th:classappend="${pageNumber == currentPage} ? ' active'">
+                            th:each="p : ${#numbers.sequence(0, totalPages - 1)}"
+                            th:classappend="${p == currentPage} ? ' active'">
                             <a class="page-link"
-                               th:text="${pageNumber + 1}"
-                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, expenseType=${filterExpenseType}, status=${filterStatus}, page=${pageNumber}, size=${pageSize})}">
-                                1
-                            </a>
+                               th:text="${p + 1}"
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, expenseType=${filterExpenseType}, status=${filterStatus}, page=${p}, size=${pageSize})}">1</a>
                         </li>
-
                         <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, expenseType=${filterExpenseType}, status=${filterStatus}, page=${currentPage + 1}, size=${pageSize})}">
-                                Sau
-                            </a>
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, expenseType=${filterExpenseType}, status=${filterStatus}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
                         </li>
                     </ul>
                 </nav>
             </div>
+
         </div>
 
     </div>
