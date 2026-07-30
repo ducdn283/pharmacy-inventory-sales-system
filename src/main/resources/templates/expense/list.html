@@ -336,8 +336,8 @@
                     <th class="col-date">Ngày chi</th>
                     <th class="col-type">Loại phiếu chi</th>
                     <th class="col-applicant">Người lập</th>
-                    <th class="col-amount">Số tiền</th>
-                    <th class="col-paid">Đã chi</th>
+                    <th class="col-amount">Số tiền đã chi</th>
+                    <th class="col-paid">Hình thức</th>
                     <th class="col-status">Trạng thái</th>
                     <th class="col-action">Thao tác</th>
                 </tr>
@@ -353,12 +353,10 @@
                     <td th:text="${item.expenseTypeDisplay}">Chi phí vận hành</td>
                     <td th:text="${item.applicantName}">Nguyễn Văn Minh</td>
                     <td class="sup-name"
-                        th:text="${#numbers.formatDecimal(item.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                        th:text="${#numbers.formatDecimal(item.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                         650.000đ
                     </td>
-                    <td th:text="${#numbers.formatDecimal(item.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                        650.000đ
-                    </td>
+                    <td th:text="${item.paymentDisplay}">Tiền mặt</td>
                     <td>
                         <span class="status-badge"
                               th:classappend="${' ' + item.statusCssClass}"

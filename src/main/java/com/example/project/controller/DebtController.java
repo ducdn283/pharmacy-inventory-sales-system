@@ -98,7 +98,9 @@ public class DebtController {
         model.addAttribute("basePath", basePath);
         model.addAttribute("expenseBasePath", expenseBasePath);
         model.addAttribute("returnRefundExpenseType", ExpenseType.RETURN_REFUND_PAYOUT);
-        model.addAttribute("operationalExpenseType", ExpenseType.OPERATIONAL);
+        // Tiền hàng tách khỏi "Chi phí vận hành" 2026-07-30: nút "Chi trả" phải chọn sẵn loại gắn
+        // được phiếu nhập, nếu không màn tạo phiếu chi sẽ ẩn luôn ô chọn phiếu nhập.
+        model.addAttribute("goodsPaymentExpenseType", ExpenseType.GOODS_PAYMENT);
         model.addAttribute("pageTitle", "Chi tiết nợ — " + detail.getName());
         return "debt/payable-detail";
     }

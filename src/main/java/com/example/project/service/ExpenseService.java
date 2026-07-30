@@ -72,7 +72,7 @@ import java.util.stream.Collectors;
  * gateway to paying a customer back. {@code ShiftreportService} relies on the same thing: since
  * those columns went away, an Expense slip is its <em>only</em> source of cash-out for a shift.</p>
  *
- * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#OPERATIONAL} slip can point at a
+ * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#GOODS_PAYMENT} slip can point at a
  * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
  * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE} for the BA's
  * reasoning). Approving or paying the slip pushes the money onto {@code Purchaseinvoice.paid} via
@@ -146,14 +146,11 @@ public class ExpenseService {
                 .filter(expense -> expenseType == null || expenseType.isBlank()
                         || expenseType.equals(expense.getExpenseType()))
                 .filter(expense -> status == null || status.isBlank() || status.equals(expense.getStatus()))
-                .sorted((a, b) -> {
-                    Instant da = a.getDate();
-                    Instant db = b.getDate();
-                    if (da == null || db == null) {
-                        return 0;
-                    }
-                    return db.compareTo(da);
-                })
+                // Mới nhất lên đầu. Phải có mốc phụ theo id vì resolveDate() cắt về đầu ngày, nên MỌI
+                // phiếu trong cùng một ngày có date y hệt nhau: chỉ so date thôi thì các phiếu hôm nay
+                // hoà nhau và giữ nguyên thứ tự findAll() trả về, tức là phiếu cũ nhất nằm trên cùng.
+                .sorted(Comparator.comparing(Expense::getDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Expense::getId, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(this::toListItem)
                 .toList();
 
@@ -224,20 +221,21 @@ public class ExpenseService {
      */
     @Transactional(readOnly = true)
     public List<ExpenseReferenceOptionResponse> listCustomerReturns() {
-        Set<Integer> linked = linkedReturnIds();
+        Map<Integer, BigDecimal> committed = committedByReturnId();
 
         return returnRepository.findAllWithRelations().stream()
                 .filter(ret -> ret.getInvoiceID() != null)
                 .filter(ret -> ReturnStatus.DEBT.equals(ret.getStatus()))
-                .filter(ret -> cashRefundAmount(ret).compareTo(BigDecimal.ZERO) > 0)
-                .filter(ret -> !linked.contains(ret.getId()))
+                // Còn tiền hoàn chưa ai nhận, chứ không phải "chưa có phiếu chi nào" — hoàn tiền
+                // chia được nhiều lần, xem committedByReturnId().
+                .filter(ret -> availableToRefund(ret, committed).compareTo(BigDecimal.ZERO) > 0)
                 .sorted(Comparator.comparing(Return::getReturnDate, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Return::getId, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(ret -> new ExpenseReferenceOptionResponse(
                         ret.getId(),
                         ret.getReturnCode(),
                         formatInstant(ret.getReturnDate()),
-                        cashRefundAmount(ret),
+                        availableToRefund(ret, committed),
                         referenceDetail(ret)))
                 .toList();
     }
@@ -348,9 +346,10 @@ public class ExpenseService {
             expense.setSupplierID(linkedPurchase.getSupplierID());
         }
 
-        BigDecimal paid = resolvePaid(request, amount);
-        BigDecimal[] split = resolveSplit(request, paid, isOwner);
-        expense.setPaid(paid);
+        // Một phiếu là một lần chi: tiền đã chi luôn đúng bằng số tiền của phiếu, không có phiếu
+        // "chi thiếu so với chính nó". Chi thiếu so với CHỨNG TỪ thì nằm ở chỗ khác — chứng từ còn nợ.
+        BigDecimal[] split = resolveSplit(request, amount, isOwner);
+        expense.setPaid(amount);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
         // NOT NULL-safe and consistent with the two columns above: Expense has no @DynamicInsert, so
@@ -432,72 +431,21 @@ public class ExpenseService {
     }
 
     /**
-     * Records an additional payment against an {@link ExpenseStatus#AWAITING_PAYMENT} slip.
-     * {@code cashPortion}/{@code bankingPortion} are the amount being paid <em>now</em> (not the
-     * cumulative total) — they're added to whatever was already paid. Moves to
-     * {@link ExpenseStatus#COMPLETED} once {@code paid >= amount}.
-     *
-     * <p>Takes no actor id: the shift stamped here is the <em>creator's</em>, read off the slip, not
-     * whoever happens to be recording the payment (see {@link #attachOpenShift}).</p>
-     */
-    @Transactional
-    public void markPaid(Integer expenseId, BigDecimal cashPortion, BigDecimal bankingPortion) {
-        Expense expense = expenseRepository.findById(expenseId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
-
-        if (!ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())) {
-            throw new IllegalArgumentException("Chỉ có thể ghi nhận thanh toán cho phiếu đang chờ thanh toán");
-        }
-
-        BigDecimal cash = cashPortion != null ? cashPortion : BigDecimal.ZERO;
-        BigDecimal banking = bankingPortion != null ? bankingPortion : BigDecimal.ZERO;
-        BigDecimal portion = cash.add(banking);
-
-        if (portion.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Số tiền thanh toán phải lớn hơn 0");
-        }
-
-        // Keyed on who raised the slip, not on who is paying: otherwise an Accountant's slip could
-        // be topped up in cash here and slip past the rule enforced at create time.
-        assertCashAllowed(cash, raisedByOwner(expense));
-
-        BigDecimal previouslyPaid = expense.getPaid() != null ? expense.getPaid() : BigDecimal.ZERO;
-        BigDecimal newPaid = previouslyPaid.add(portion);
-
-        if (newPaid.compareTo(expense.getAmount()) > 0) {
-            throw new IllegalArgumentException("Số tiền thanh toán vượt quá số tiền cần chi còn lại");
-        }
-
-        expense.setPaid(newPaid);
-        expense.setPaidByCash(nullToZero(expense.getPaidByCash()).add(cash));
-        expense.setPaidByBanking(nullToZero(expense.getPaidByBanking()).add(banking));
-        expense.setPaidByCredit(nullToZero(expense.getPaidByCredit()));
-
-        if (newPaid.compareTo(expense.getAmount()) >= 0) {
-            expense.setStatus(ExpenseStatus.COMPLETED);
-        }
-
-        // Only the increment: the slip was already approved, so everything before this was pushed
-        // onto the invoice at approval time.
-        settlePurchaseInvoice(expense, portion);
-        attachOpenShift(expense, applicantIdOf(expense));
-
-        expenseRepository.save(expense);
-    }
-
-    /**
      * Internal correction for a wrongly-entered slip — same spirit as
      * {@code PurchaseinvoiceService.cancelPurchaseInvoice()}: not a real accounting reversal, just
-     * marks the record void. Only allowed before it's fully paid.
+     * marks the record void and gives the money back to the linked document.
+     *
+     * <p><strong>Một phiếu đã hoàn thành vẫn hủy được</strong> (đổi 2026-07-30). Trước đây trạng thái
+     * đó bị chặn, vì phiếu chỉ "hoàn thành" khi đã chi đủ và người ta còn sửa được nó bằng
+     * {@code markPaid}. Nay duyệt phát là hoàn thành ngay, nên giữ rào cũ đồng nghĩa với việc không
+     * còn đường nào sửa một phiếu lập sai. Không sửa được thì phải hủy được: phần tiền đã đẩy sang
+     * phiếu nhập được trả lại đúng bằng {@link #disbursedAmount}, rồi lập phiếu mới cho đúng.</p>
      */
     @Transactional
     public void cancel(Integer expenseId, String reason) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
 
-        if (ExpenseStatus.COMPLETED.equals(expense.getStatus())) {
-            throw new IllegalArgumentException("Không thể hủy phiếu chi đã hoàn thành");
-        }
         if (ExpenseStatus.CANCELLED.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Phiếu chi này đã bị hủy trước đó");
         }
@@ -521,6 +469,12 @@ public class ExpenseService {
 
     // ------------------------------------------------------------------ mapping
 
+    /**
+     * Cố tình KHÔNG có cột "tình trạng công nợ" ở đây. Một phiếu chi là một lần chi tiền, không mang
+     * khái niệm nợ: nợ là thuộc tính của CHỨNG TỪ (phiếu nhập còn phải trả bao nhiêu, phiếu trả hàng
+     * còn phải hoàn bao nhiêu), và việc theo dõi nó là của màn Công nợ. Phiếu thu cũng đúng như vậy —
+     * {@code IncomeService} không có trường nợ nào trên phiếu, chỉ hiện số còn nợ ở ô chọn chứng từ.
+     */
     private ExpenseListItemResponse toListItem(Expense expense) {
         return new ExpenseListItemResponse(
                 expense.getId(),
@@ -531,9 +485,29 @@ public class ExpenseService {
                 expense.getApplicantID() != null ? expense.getApplicantID().getName() : "Không rõ",
                 expense.getAmount(),
                 expense.getPaid(),
+                paymentDisplay(expense.getPaidByCash(), expense.getPaidByBanking()),
                 expense.getStatus(),
                 statusCssClass(expense.getStatus())
         );
+    }
+
+    /**
+     * Hình thức chi, suy ra từ hai cột tiền chứ không có cột riêng — cùng cách với
+     * {@code IncomeService.paymentDisplay} để hai màn danh sách đọc giống nhau.
+     */
+    private String paymentDisplay(BigDecimal paidByCash, BigDecimal paidByBanking) {
+        boolean hasCash = nullToZero(paidByCash).compareTo(BigDecimal.ZERO) > 0;
+        boolean hasBanking = nullToZero(paidByBanking).compareTo(BigDecimal.ZERO) > 0;
+        if (hasCash && hasBanking) {
+            return "TM + CK";
+        }
+        if (hasBanking) {
+            return "Chuyển khoản";
+        }
+        if (hasCash) {
+            return "Tiền mặt";
+        }
+        return "—";
     }
 
     private ExpenseDetailResponse toDetail(Expense expense) {
@@ -584,12 +558,16 @@ public class ExpenseService {
      * a linked purchase invoice: before this the slip's {@code paid} is just a figure the creator
      * typed, after it the cash has really left.
      */
+    /**
+     * Duyệt là lúc tiền được coi như đã ra khỏi quỹ, nên phiếu đi thẳng tới
+     * {@link ExpenseStatus#COMPLETED}. {@link ExpenseStatus#AWAITING_PAYMENT} không còn được sinh ra
+     * từ 2026-07-30 — một phiếu là một lần chi, không có phiếu chi thiếu so với chính nó. Hằng số đó
+     * vẫn giữ để hiển thị các phiếu cũ lưu trước khi đổi luật (theo lệ "màn hình đọc đúng cột trong DB").
+     */
     private void applyApproval(Expense expense, Account approver) {
         expense.setApprovedAt(Instant.now());
-        BigDecimal paid = expense.getPaid() != null ? expense.getPaid() : BigDecimal.ZERO;
-        expense.setStatus(paid.compareTo(expense.getAmount()) >= 0
-                ? ExpenseStatus.COMPLETED
-                : ExpenseStatus.AWAITING_PAYMENT);
+        BigDecimal paid = nullToZero(expense.getPaid());
+        expense.setStatus(ExpenseStatus.COMPLETED);
         settlePurchaseInvoice(expense, paid);
         attachOpenShift(expense, applicantIdOf(expense));
     }
@@ -670,34 +648,6 @@ public class ExpenseService {
     }
 
     /**
-     * How much actually left the pharmacy at creation time.
-     *
-     * <p>Ticking "Đã chi đủ" means the whole obligation. Otherwise the creator states the figure two
-     * ways, and either alone is enough: directly in "Số tiền đã chi thực tế", or implicitly by
-     * filling in only the tiền mặt / chuyển khoản breakdown. <strong>When the total is left blank
-     * the breakdown is the more specific statement, so it wins</strong> — before this, a slip with
-     * tiền mặt 5.000 + chuyển khoản 10.000 and an empty total saved as {@code paid = 0} with both
-     * portions silently zeroed by {@link #resolveSplit}'s zero short-circuit, losing money the user
-     * had entered without a word of warning.</p>
-     *
-     * <p>A total that <em>is</em> typed still governs: {@link #resolveSplit} then insists the two
-     * portions add up to it rather than quietly re-deriving one from the other.</p>
-     */
-    private BigDecimal resolvePaid(ExpenseCreateRequest request, BigDecimal amount) {
-        if (request.isFullyPaid()) {
-            return amount;
-        }
-        BigDecimal paid = nullToZero(request.getPaid());
-        if (paid.compareTo(BigDecimal.ZERO) == 0) {
-            paid = nullToZero(request.getPaidByCash()).add(nullToZero(request.getPaidByBanking()));
-        }
-        if (paid.compareTo(BigDecimal.ZERO) < 0 || paid.compareTo(amount) > 0) {
-            throw new IllegalArgumentException("Số tiền đã chi phải nằm trong khoảng 0 đến tổng số tiền cần chi");
-        }
-        return paid;
-    }
-
-    /**
      * Resolves and fully validates the customer return a {@link ExpenseType#RETURN_REFUND_PAYOUT}
      * slip pays out, or {@code null} for every other type (a {@code returnId} left over in the form
      * from a type the user switched away from is ignored rather than silently linked).
@@ -724,8 +674,8 @@ public class ExpenseService {
             throw new IllegalArgumentException(
                     "Phiếu trả hàng này không phát sinh tiền hoàn (toàn bộ đã cấn trừ vào công nợ)");
         }
-        if (linkedReturnIds().contains(ret.getId())) {
-            throw new IllegalArgumentException("Phiếu trả hàng này đã có phiếu chi hoàn tiền");
+        if (availableToRefund(ret, committedByReturnId()).compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Phiếu trả hàng này đã được hoàn đủ tiền");
         }
         return ret;
     }
@@ -754,19 +704,34 @@ public class ExpenseService {
     }
 
     /**
-     * Returns already claimed by a live Expense. Rejected and cancelled slips are excluded so a
-     * voided payout releases its return back into the picker — a deliberate difference from
-     * {@code IncomeService.linkedReturnIds()}, whose looser guard would strand the return forever.
-     * Since {@code 38515f8} dropped {@code Return.expenseID} this is the only link direction left,
-     * so this set is the sole duplicate guard.
+     * {@code returnID -> tổng tiền các phiếu chi còn sống đã nhận hoàn cho phiếu trả đó}.
+     *
+     * <p>Trước đây chỗ này chỉ là một {@code Set} id: mỗi phiếu trả chỉ được một phiếu chi. Từ khi
+     * mỗi phiếu chi là một lần chi (xem {@link #createExpense}) thì hoàn tiền cũng chia được nhiều
+     * lần, nên rào chặn đổi từ "đã có phiếu chi chưa" sang "còn lại bao nhiêu".</p>
+     *
+     * <p>Cộng cả phiếu chưa duyệt lẫn phiếu đã chi: phiếu chưa duyệt là tiền đã hứa, không được để
+     * hai phiếu cùng nhận trọn phần hoàn rồi cả hai cùng được duyệt. Phiếu bị từ chối / bị hủy thì
+     * không tính, nên hủy một phiếu là trả phần hoàn đó về cho phiếu sau — cố ý khác
+     * {@code IncomeService.linkedReturnIds()}, nơi rào lỏng hơn sẽ kẹt phiếu trả lại vĩnh viễn.</p>
      */
-    private Set<Integer> linkedReturnIds() {
-        return liveExpenses().stream()
-                .map(Expense::getReturnID)
-                .filter(Objects::nonNull)
-                .map(Return::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+    private Map<Integer, BigDecimal> committedByReturnId() {
+        Map<Integer, BigDecimal> committed = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            Return ret = expense.getReturnID();
+            if (ret == null || ret.getId() == null) {
+                continue;
+            }
+            committed.merge(ret.getId(), nullToZero(expense.getAmount()), BigDecimal::add);
+        }
+        return committed;
+    }
+
+    /** Phần tiền hoàn của một phiếu trả chưa được phiếu chi nào nhận. */
+    private BigDecimal availableToRefund(Return ret, Map<Integer, BigDecimal> committed) {
+        return cashRefundAmount(ret)
+                .subtract(committed.getOrDefault(ret.getId(), BigDecimal.ZERO))
+                .max(BigDecimal.ZERO);
     }
 
     private Customer customerOf(Return ret) {
@@ -811,16 +776,44 @@ public class ExpenseService {
      * is still owed, and would let two slips each claim part of the same invoice with nothing
      * recording the whole.</p>
      */
+    /**
+     * Số tiền của phiếu = số tiền chi lần này, do người lập nhập.
+     *
+     * <p>Đổi từ 2026-07-30: trước đây chỗ này <em>ghi đè</em> số người dùng nhập bằng trọn nghĩa vụ
+     * của chứng từ ("amount là nghĩa vụ, không phải con số gõ vào"), và trả thiếu thì để phiếu treo
+     * ở "Chờ thanh toán" rồi bù dần bằng {@code markPaid}. Nay một phiếu là một lần chi và không sửa
+     * được, nên số người dùng nhập chính là số tiền của phiếu — chỉ bị chặn trần ở phần chứng từ còn
+     * thiếu, để hai phiếu cùng lúc không trả vượt.</p>
+     */
     private BigDecimal resolveAmount(ExpenseCreateRequest request,
                                      Return linkedReturn,
                                      Purchaseinvoice linkedPurchase) {
+        BigDecimal posted = request.getAmount();
         if (linkedReturn != null) {
-            return cashRefundAmount(linkedReturn);
+            return cappedByDocument(posted, availableToRefund(linkedReturn, committedByReturnId()),
+                    "Số tiền hoàn vượt quá phần còn phải hoàn của phiếu trả hàng");
         }
         if (linkedPurchase != null) {
-            return availableToPay(linkedPurchase, committedByPurchaseId());
+            return cappedByDocument(posted, availableToPay(linkedPurchase, committedByPurchaseId()),
+                    "Số tiền chi vượt quá phần còn phải trả của phiếu nhập");
         }
-        return request.getAmount();
+        return posted;
+    }
+
+    /**
+     * Bỏ trống ô tiền trên một phiếu có gắn chứng từ = "trả nốt", nên mặc định là toàn bộ phần còn
+     * lại. Nhập vượt phần còn lại thì báo lỗi chứ không tự cắt bớt: người lập cần biết con số họ gõ
+     * không được ghi nhận, thay vì thấy phiếu lưu xong với một số khác.
+     */
+    private BigDecimal cappedByDocument(BigDecimal posted, BigDecimal available, String overLimitMessage) {
+        if (posted == null || posted.compareTo(BigDecimal.ZERO) <= 0) {
+            return available;
+        }
+        if (posted.compareTo(available) > 0) {
+            throw new IllegalArgumentException(overLimitMessage
+                    + " (" + String.format(Locale.forLanguageTag("vi-VN"), "%,.0fđ", available) + ")");
+        }
+        return posted;
     }
 
     /**
@@ -913,23 +906,23 @@ public class ExpenseService {
      * default therefore flips with the role — an unsplit amount is all cash for the Owner and all
      * banking for anyone else, rather than silently landing in the drawer.</p>
      */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal paid, boolean isOwner) {
-        if (paid.compareTo(BigDecimal.ZERO) == 0) {
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean isOwner) {
+        if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
         BigDecimal cash = request.getPaidByCash();
         BigDecimal banking = request.getPaidByBanking();
         if (cash == null && banking == null) {
             return isOwner
-                    ? new BigDecimal[]{paid, BigDecimal.ZERO}
-                    : new BigDecimal[]{BigDecimal.ZERO, paid};
+                    ? new BigDecimal[]{amount, BigDecimal.ZERO}
+                    : new BigDecimal[]{BigDecimal.ZERO, amount};
         }
         cash = nullToZero(cash);
         banking = nullToZero(banking);
         assertCashAllowed(cash, isOwner);
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
-                .compareTo(paid.setScale(2, RoundingMode.HALF_UP)) != 0) {
-            throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền đã chi");
+                .compareTo(amount.setScale(2, RoundingMode.HALF_UP)) != 0) {
+            throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền chi");
         }
         return new BigDecimal[]{cash, banking};
     }

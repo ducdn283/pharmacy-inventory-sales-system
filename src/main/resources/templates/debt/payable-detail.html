@@ -200,7 +200,7 @@
                 </a>
                 <a class="btn btn-sm btn-pay"
                    th:if="${detail.partyType == 'SUPPLIER'}"
-                   th:href="@{${expenseBasePath + '/create'}(expenseType=${operationalExpenseType}, purchaseId=${line.id}, supplierId=${detail.entityId})}">
+                   th:href="@{${expenseBasePath + '/create'}(expenseType=${goodsPaymentExpenseType}, purchaseId=${line.id}, supplierId=${detail.entityId})}">
                   <i class="ti ti-cash me-1"></i>Chi trả
                 </a>
               </td>
