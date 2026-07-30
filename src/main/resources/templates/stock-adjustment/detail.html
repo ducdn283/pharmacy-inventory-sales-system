@@ -200,6 +200,11 @@
                             <i class="ti ti-package text-success me-1"></i>
                             Hàng hóa điều chỉnh
                         </div>
+                        <p class="text-secondary small mb-0 mt-1">
+                            <i class="ti ti-info-circle me-1"></i>
+                            <strong>Giá vốn</strong> = giá nhập của đúng lô đó
+                            (<code>Batch.importPricePerBase</code>) × số lượng điều chỉnh — không phải giá bán.
+                        </p>
                     </div>
 
                     <div class="table-responsive">
@@ -213,7 +218,7 @@
                                 <th>Đơn vị</th>
                                 <th>Tồn hiện tại</th>
                                 <th>Chênh lệch</th>
-                                <th>Giá trị ước tính</th>
+                                <th>Giá vốn</th>
                                 <th th:if="${detail.showOutputVat}">Thuế GTGT đầu ra</th>
                                 <th th:if="${detail.employeeLiable}">Ước tính đền bù (giá bán)</th>
                                 <th>Ghi chú</th>
@@ -306,7 +311,7 @@
                         </div>
 
                         <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Tổng giá trị ước tính</span>
+                            <span class="text-secondary">Tổng giá vốn</span>
                             <strong class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.estimatedValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                 650.000đ
