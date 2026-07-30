@@ -40,14 +40,15 @@ public class ExpenseCreateRequest {
 
     private String reason;
 
-    /** Tổng số tiền cần chi. */
+    /**
+     * Số tiền chi lần này — <strong>không phải</strong> tổng nghĩa vụ của chứng từ được gắn.
+     *
+     * <p>Một phiếu chi là một lần chi tiền và không sửa được: nợ 50.000 mà hôm nay trả 30.000 thì
+     * phiếu này là 30.000, hôm sau trả nốt là một phiếu khác. Nghĩa vụ còn lại nằm ở chứng từ
+     * (phiếu nhập / phiếu trả hàng), không nằm ở đây. Vì vậy không còn {@code fullyPaid} lẫn
+     * {@code paid}: {@code paid} luôn bằng {@code amount}.</p>
+     */
     private BigDecimal amount;
-
-    /** Whether the full amount was already paid out at creation time. */
-    private boolean fullyPaid = true;
-
-    /** Only read when {@code fullyPaid} is false; must be between 0 and {@code amount}. */
-    private BigDecimal paid;
 
     private BigDecimal paidByCash;
 

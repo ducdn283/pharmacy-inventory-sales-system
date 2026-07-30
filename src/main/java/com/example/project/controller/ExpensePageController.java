@@ -20,8 +20,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 
 /**
- * Expense ("Phiếu chi") screens (list / detail / create / submit / approve / reject / mark-paid /
- * cancel). Reachable by the Owner and the Accountant (both share the same templates; there is no
+ * Expense ("Phiếu chi") screens (list / detail / create / submit / approve / reject / cancel).
+ * Reachable by the Owner and the Accountant (both share the same templates; there is no
  * Pharmacist route — matches {@code SidebarMenuService}, which only lists this under those two
  * roles). Approve/reject are Owner-only, same as Stock Adjustment.
  */
@@ -208,21 +208,8 @@ public class ExpensePageController {
         return "redirect:" + (redirectTo != null && !redirectTo.isBlank() ? redirectTo : OWNER_BASE + "/" + expenseId);
     }
 
-    @PostMapping({OWNER_BASE + "/{expenseId}/mark-paid", ACCOUNTANT_BASE + "/{expenseId}/mark-paid"})
-    public String markPaid(@PathVariable Integer expenseId,
-                            @RequestParam(name = "cashPortion", required = false) BigDecimal cashPortion,
-                            @RequestParam(name = "bankingPortion", required = false) BigDecimal bankingPortion,
-                            HttpServletRequest request,
-                            RedirectAttributes redirectAttributes) {
-        String basePath = resolveBasePath(request);
-        try {
-            expenseService.markPaid(expenseId, cashPortion, bankingPortion);
-            redirectAttributes.addFlashAttribute("successMessage", "Đã ghi nhận thanh toán");
-        } catch (IllegalArgumentException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
-        }
-        return "redirect:" + basePath + "/" + expenseId;
-    }
+    // Không còn endpoint "mark-paid": một phiếu chi là một lần chi và không sửa được. Trả thêm cho
+    // cùng một phiếu nhập / phiếu trả hàng thì lập phiếu chi mới — xem ExpenseService.resolveAmount.
 
     @PostMapping({OWNER_BASE + "/{expenseId}/cancel", ACCOUNTANT_BASE + "/{expenseId}/cancel"})
     public String cancel(@PathVariable Integer expenseId,
