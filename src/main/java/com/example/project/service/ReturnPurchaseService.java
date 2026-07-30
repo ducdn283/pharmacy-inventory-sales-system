@@ -75,6 +75,7 @@ public class ReturnPurchaseService {
     private final PurchasedetailRepository purchasedetailRepository;
     // Read-only: current tax revenue group (Nhóm 2/3) — Nhóm 3 records the reversed input VAT.
     private final FinancialsettingRepository financialsettingRepository;
+    private final DebtService debtService;
 
     public ReturnPurchaseService(ReturnRepository returnRepository,
                                  ReturndetailRepository returndetailRepository,
@@ -83,7 +84,8 @@ public class ReturnPurchaseService {
                                  ProductunitRepository productunitRepository,
                                  PurchaseinvoiceRepository purchaseinvoiceRepository,
                                  PurchasedetailRepository purchasedetailRepository,
-                                 FinancialsettingRepository financialsettingRepository) {
+                                 FinancialsettingRepository financialsettingRepository,
+                                 DebtService debtService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -92,6 +94,7 @@ public class ReturnPurchaseService {
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.purchasedetailRepository = purchasedetailRepository;
         this.financialsettingRepository = financialsettingRepository;
+        this.debtService = debtService;
     }
 
     /** Current tax revenue group of the household (1/2/3/4), read from the financial setting singleton. */
@@ -556,7 +559,8 @@ public class ReturnPurchaseService {
 
     /**
      * Thực hiện bù trừ khi duyệt phiếu: chốt {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM DUYỆT rồi
-     * ghi tăng {@code PurchaseInvoice.paid} đúng số đó — nợ NCC giảm ngay trong cùng transaction (mục 3.3
+     * ghi tăng {@code PurchaseInvoice.paid} và đồng bộ {@code status} qua
+     * {@link DebtService#recordPurchaseDebtOffset} — nợ NCC giảm ngay trong cùng transaction (mục 3.3
      * bước 1, mục 3.4 "cập nhật trực tiếp").
      *
      * <p><strong>⚠️ ĐỔI NGHĨA CỘT {@code offsetDebtAmount} (28/07) — cần báo chủ module Thu/Chi.</strong>
@@ -571,12 +575,10 @@ public class ReturnPurchaseService {
         BigDecimal offset = computeDebtOffset(purchase, ret.getTotalRefund());
         ret.setOffsetDebtAmount(offset);
         returnRepository.save(ret);
-        if (offset.signum() <= 0 || purchase == null) {
+        if (offset.signum() <= 0 || purchase == null || purchase.getId() == null) {
             return;
         }
-        BigDecimal paid = purchase.getPaid() != null ? purchase.getPaid() : BigDecimal.ZERO;
-        purchase.setPaid(paid.add(offset));
-        purchaseinvoiceRepository.save(purchase);
+        debtService.recordPurchaseDebtOffset(purchase.getId(), offset);
     }
 
     private void recomputeReturnPurchaseStatus(Purchaseinvoice purchase) {

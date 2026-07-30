@@ -274,11 +274,24 @@
                         </strong>
                     </div>
 
-                    <div class="d-flex justify-content-between">
+                    <div class="d-flex justify-content-between mb-3">
                         <span class="text-secondary">Chuyển khoản</span>
                         <strong th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                             0đ
                         </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3"
+                         th:if="${detail.paidByCredit != null and detail.paidByCredit.signum() > 0}">
+                        <span class="text-secondary">Cấn trừ công nợ</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByCredit, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span class="text-secondary">Hình thức</span>
+                        <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
                     </div>
                 </div>
 

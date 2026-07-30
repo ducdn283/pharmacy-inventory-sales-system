@@ -1,20 +1,31 @@
 package com.example.project.controller;
 
 import com.example.project.constant.ExpenseType;
+import com.example.project.context.CurrentUserContext;
+import com.example.project.dto.request.DebtOffsetRequest;
 import com.example.project.dto.response.DebtListItemResponse;
 import com.example.project.dto.response.DebtSummaryResponse;
 import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.dto.response.PayableDetailResponse;
 import com.example.project.dto.response.ReceivableDetailResponse;
+import com.example.project.service.DebtOffsetService;
 import com.example.project.service.DebtService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.propertyeditors.CustomNumberEditor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.math.BigDecimal;
 
 /**
  * Debt ("Công nợ") list for Owner and Accountant. Receivable (cho nợ) comes from customer debt
@@ -28,9 +39,21 @@ public class DebtController {
     private static final String ACCOUNTANT_BASE = "/accountant/debts";
 
     private final DebtService debtService;
+    private final DebtOffsetService debtOffsetService;
+    private final CurrentUserContext currentUserContext;
 
-    public DebtController(DebtService debtService) {
+    public DebtController(DebtService debtService,
+                          DebtOffsetService debtOffsetService,
+                          CurrentUserContext currentUserContext) {
         this.debtService = debtService;
+        this.debtOffsetService = debtOffsetService;
+        this.currentUserContext = currentUserContext;
+    }
+
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.registerCustomEditor(BigDecimal.class, new CustomNumberEditor(BigDecimal.class, true));
+        binder.registerCustomEditor(Integer.class, new CustomNumberEditor(Integer.class, true));
     }
 
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
@@ -103,6 +126,44 @@ public class DebtController {
         model.addAttribute("goodsPaymentExpenseType", ExpenseType.GOODS_PAYMENT);
         model.addAttribute("pageTitle", "Chi tiết nợ — " + detail.getName());
         return "debt/payable-detail";
+    }
+
+    @GetMapping({OWNER_BASE + "/offset/{partyType}/{entityId}",
+            ACCOUNTANT_BASE + "/offset/{partyType}/{entityId}"})
+    public String offsetPage(@PathVariable String partyType,
+                             @PathVariable Integer entityId,
+                             HttpServletRequest request,
+                             Model model,
+                             RedirectAttributes redirectAttributes) {
+        try {
+            model.addAttribute("page", debtOffsetService.getOffsetPage(partyType, entityId));
+            model.addAttribute("basePath", resolveBasePath(request));
+            model.addAttribute("pageTitle", "Bù trừ công nợ");
+            DebtOffsetRequest form = new DebtOffsetRequest();
+            form.setPartyType(partyType);
+            form.setEntityId(entityId);
+            model.addAttribute("form", form);
+            return "debt/debt-offset";
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:" + resolveBasePath(request);
+        }
+    }
+
+    @PostMapping({OWNER_BASE + "/offset", ACCOUNTANT_BASE + "/offset"})
+    public String applyOffset(@ModelAttribute("form") DebtOffsetRequest form,
+                              HttpServletRequest request,
+                              RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+        try {
+            debtOffsetService.applyOffset(form, currentUserContext.getCurrentAccountId());
+            redirectAttributes.addFlashAttribute("successMessage", "Bù trừ công nợ thành công");
+            return "redirect:" + basePath;
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            redirectAttributes.addFlashAttribute("form", form);
+            return "redirect:" + basePath + "/offset/" + form.getPartyType() + "/" + form.getEntityId();
+        }
     }
 
     private String resolveBasePath(HttpServletRequest request) {

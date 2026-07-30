@@ -5,6 +5,7 @@ import com.example.project.constant.ReturnPurchaseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.dto.response.DebtListItemResponse;
 import com.example.project.dto.response.DebtSummaryResponse;
+import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.dto.response.PayableDetailResponse;
 import com.example.project.dto.response.PayableLineResponse;
 import com.example.project.dto.response.ReceivableDetailResponse;
@@ -87,6 +88,20 @@ public class DebtService {
         labels.put(PARTY_CUSTOMER, "Khách hàng");
         labels.put(PARTY_SUPPLIER, "Nhà cung cấp");
         return labels;
+    }
+
+    /**
+     * Ghi nhận phần bù trừ công nợ lên phiếu nhập khi duyệt phiếu trả NCC
+     * ({@code ReturnPurchaseService#applyDebtOffset}). Dùng {@link PurchaseinvoiceService#applyPayment}
+     * để {@code paid} và {@code status} luôn đồng bộ — mọi chỗ ghi {@code paid} sau khi tạo phiếu đều
+     * phải cập nhật {@code status} trong cùng transaction (xem javadoc {@code resolveDisplayStatus}).
+     */
+    @Transactional
+    public void recordPurchaseDebtOffset(Integer purchaseId, BigDecimal offset) {
+        if (purchaseId == null || offset == null || offset.signum() <= 0) {
+            return;
+        }
+        purchaseinvoiceService.applyPayment(purchaseId, offset);
     }
 
     @Transactional(readOnly = true)
@@ -499,11 +514,14 @@ public class DebtService {
     private Map<Integer, BigDecimal> supplierReturnAccountedByReturnId() {
         Map<Integer, BigDecimal> accounted = new LinkedHashMap<>();
         for (Income income : liveIncomes()) {
-            if (income.getReturnID() == null || income.getReturnID().getId() == null
-                    || income.getSupplierID() == null) {
+            if (!IncomeTypeOptionResponse.SUPPLIER.equals(resolveIncomeType(income))) {
                 continue;
             }
-            accounted.merge(income.getReturnID().getId(), nullToZero(income.getAmount()), BigDecimal::add);
+            Return ret = income.getReturnID();
+            if (ret == null || ret.getId() == null) {
+                continue;
+            }
+            accounted.merge(ret.getId(), nullToZero(income.getAmount()), BigDecimal::add);
         }
         return accounted;
     }
@@ -608,6 +626,30 @@ public class DebtService {
 
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    /** Internal type code; DB may store the Vietnamese label or a legacy English code. */
+    private String resolveIncomeType(Income income) {
+        String stored = income.getIncomeType();
+        if (stored != null && IncomeTypeOptionResponse.isValid(stored)) {
+            return IncomeTypeOptionResponse.codeOf(stored);
+        }
+        if (income.getSupplierID() != null) {
+            return IncomeTypeOptionResponse.SUPPLIER;
+        }
+        if (income.getCustomerID() != null) {
+            return IncomeTypeOptionResponse.CUSTOMER;
+        }
+        if (income.getShiftReportOfAccountID() != null) {
+            return IncomeTypeOptionResponse.SHIFT_SHORTAGE;
+        }
+        if (income.getAccountID() != null && income.getStockAdjustmentID() != null) {
+            return IncomeTypeOptionResponse.EMPLOYEE;
+        }
+        if (income.getAccountID() != null) {
+            return IncomeTypeOptionResponse.EMPLOYEE;
+        }
+        return IncomeTypeOptionResponse.OTHER;
     }
 
     private BigDecimal nullToZero(BigDecimal value) {

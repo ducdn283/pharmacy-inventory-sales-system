@@ -24,6 +24,8 @@ public class ExpenseDetailResponse {
     private BigDecimal paid;
     private BigDecimal paidByCash;
     private BigDecimal paidByBanking;
+    private BigDecimal paidByCredit;
+    private String paymentDisplay;
 
     private String statusName;
     private String statusCssClass;

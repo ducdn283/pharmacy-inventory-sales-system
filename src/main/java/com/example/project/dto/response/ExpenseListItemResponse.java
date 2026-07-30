@@ -21,7 +21,7 @@ public class ExpenseListItemResponse {
     private BigDecimal amount;
     private BigDecimal paid;
 
-    /** "Tiền mặt" / "Chuyển khoản" / "TM + CK" / "—", suy ra từ paidByCash + paidByBanking. */
+    /** "Tiền mặt" / "Chuyển khoản" / "TM + CK" / "Cấn trừ công nợ" / "—", suy ra từ paidByCash + paidByBanking + paidByCredit. */
     private String paymentDisplay;
 
     private String statusName;

@@ -21,6 +21,7 @@ public class IncomeDetailResponse {
     private BigDecimal amount;
     private BigDecimal paidByCash;
     private BigDecimal paidByBanking;
+    private BigDecimal paidByCredit;
     private String paymentDisplay;
 
     private String statusName;
