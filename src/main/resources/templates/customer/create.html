@@ -76,7 +76,10 @@
       <h1 class="fs-4 mb-0">Tạo khách hàng mới</h1>
     </div>
 
-    <form th:action="@{/customer/create}" th:object="${form}" method="post" novalidate id="customerForm">
+    <!-- data-validate thay cho novalidate: fragment field-validation tự tắt bong bóng mặc định của
+         trình duyệt rồi hiện thông báo ngay dưới ô, cùng style với lỗi do server render. Nếu JS lỗi
+         thì `required`/`pattern` của trình duyệt vẫn còn chặn. -->
+    <form th:action="@{/customer/create}" th:object="${form}" method="post" data-validate id="customerForm">
       <div class="row g-4">
 
         <!-- Form thông tin -->
@@ -118,6 +121,7 @@
               <input id="cusName" type="text" class="form-control"
                      th:field="*{name}"
                      th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
+                     required
                      placeholder="Nhập tên khách hàng">
               <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
             </div>
@@ -134,6 +138,7 @@
                        data-unique-message="Số điện thoại đã tồn tại trong hệ thống"
                        pattern="0(2|3|5|7|8|9)[0-9]{8}"
                        title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
+                       required
                        placeholder="0900000000">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}"></div>
               </div>
@@ -250,8 +255,13 @@
      pattern="..." sẵn có chỉ báo lỗi lúc submit — người dùng vẫn gõ được chữ cái vào rồi mới biết sai. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
-<!-- Báo trùng SĐT / MST-CCCD ngay lúc rời ô. Bảng customer không có UNIQUE nào ở DB nên chặn thật
-     vẫn là CustomerService.validate — đây chỉ là lớp báo sớm. -->
+<!-- Báo trùng SĐT / MST-CCCD ngay lúc rời ô. Chặn thật vẫn là CustomerService.validate (và UNIQUE
+     index ở DB cho ca hai người nhập cùng lúc) — đây chỉ là lớp báo sớm. -->
 <div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
+
+<!-- Ô bắt buộc để trống / sai định dạng: báo ngay dưới ô, không dùng bong bóng của trình duyệt.
+     Ô "Mã số thuế / CCCD" nằm trong khối chỉ hiện với khách doanh nghiệp — fragment bỏ qua ô đang
+     bị ẩn, nên không có chuyện bị chặn bởi một ô không nhìn thấy. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 </body>
 </html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Thông báo lỗi nhập liệu GẮN NGAY DƯỚI Ô, thay cho bong bóng mặc định của trình duyệt.
+
+  Vì sao cần: ô có `required` mà để trống thì trình duyệt hiện bong bóng riêng của nó — chữ theo ngôn
+  ngữ hệ điều hành (có máy ra tiếng Anh), style không giống hệ thống, tự tắt sau vài giây, và mỗi lần
+  chỉ báo được ĐÚNG MỘT ô nên người dùng phải bấm Lưu nhiều lần mới biết còn thiếu gì. Fragment này
+  đánh dấu mọi ô sai cùng lúc, dùng đúng cặp `is-invalid` + `.invalid-feedback` mà server đang dùng
+  khi render lỗi từ `BindingResult` — nên lỗi client và lỗi server nhìn y như nhau.
+
+  Cách dùng — đánh dấu ở thẻ <form>:
+
+      <form ... data-validate>
+
+  Giữ nguyên `required` / `pattern` / `min` / `maxlength`… trên ô nhập như bình thường: fragment đọc
+  lại chính các ràng buộc đó qua Constraint Validation API của trình duyệt, không cần khai lại lần hai.
+
+  Muốn tự viết câu thông báo thì thêm vào Ô NHẬP (không bắt buộc — mặc định suy từ nhãn của ô):
+
+      data-required-message="Vui lòng nhập số tiền đã kiểm đếm"
+      data-invalid-message="Số điện thoại phải có 10 chữ số"
+
+  Rồi đặt cuối <body>:
+
+      <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
+
+  ⚠ Đây KHÔNG thay thế kiểm tra ở backend. Mọi ô gắn ở đây phải có `@NotBlank`/`@Pattern` tương ứng
+  trong DTO hoặc một lượt kiểm trong service — màn hình luôn có thể bị bỏ qua (gọi thẳng POST, JS lỗi).
+-->
+<th:block th:fragment="fieldValidation">
+    <script>
+        (function () {
+            var FEEDBACK_MARK = 'data-field-feedback';
+
+            function guardedForms() {
+                return document.querySelectorAll('form[data-validate]');
+            }
+
+            /**
+             * Nhãn của ô, để dựng câu "Vui lòng nhập <nhãn>". Ưu tiên <label for="..."> vì đó là liên
+             * kết tường minh; không có thì lấy .form-label gần nhất trong cùng khối.
+             */
+            function labelOf(control) {
+                var label = null;
+                if (control.id) {
+                    label = document.querySelector('label[for="' + control.id + '"]');
+                }
+                if (!label) {
+                    var block = control.closest('.mb-3, .mb-0, .col-12, .form-group');
+                    if (block) label = block.querySelector('.form-label, label');
+                }
+                if (!label) return '';
+                // Bỏ dấu * đánh dấu bắt buộc và khoảng trắng thừa của nhãn nhiều dòng.
+                return label.textContent.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+            }
+
+            /** "Tiền mặt cuối ca" → "tiền mặt cuối ca", để nối vào giữa câu cho tự nhiên. */
+            function lowerFirst(text) {
+                return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+            }
+
+            function picksFromList(control) {
+                return control.tagName === 'SELECT'
+                    || control.type === 'radio'
+                    || control.type === 'checkbox';
+            }
+
+            /**
+             * Ô tiền dùng type=text (vì type=number không nhận dấu chấm phân cách) nên trình duyệt coi
+             * dấu trừ trơ trọi là "đã có giá trị". Nó chưa phải một con số — money-input cũng gửi rỗng
+             * cho trường hợp này — nên phải tự tính là còn trống.
+             */
+            function isMissing(control) {
+                if (control.validity.valueMissing) return true;
+                if (control.hasAttribute('required') && control.hasAttribute('data-money')) {
+                    return !/[0-9]/.test(control.value || '');
+                }
+                return false;
+            }
+
+            function messageFor(control) {
+                if (isMissing(control)) {
+                    var custom = control.getAttribute('data-required-message');
+                    if (custom) return custom;
+                    var label = lowerFirst(labelOf(control));
+                    if (picksFromList(control)) {
+                        return label ? 'Vui lòng chọn ' + label : 'Vui lòng chọn một giá trị';
+                    }
+                    return label ? 'Vui lòng nhập ' + label : 'Vui lòng nhập thông tin này';
+                }
+
+                var invalid = control.getAttribute('data-invalid-message');
+                if (invalid) return invalid;
+
+                var validity = control.validity;
+                // `title` trên các ô có pattern đang chứa sẵn câu hướng dẫn đọc được
+                // (vd "10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09") — dùng lại luôn.
+                if (validity.patternMismatch || validity.typeMismatch) {
+                    return control.getAttribute('title') || 'Giá trị không đúng định dạng';
+                }
+                if (validity.rangeUnderflow) {
+                    return 'Giá trị không được nhỏ hơn ' + control.getAttribute('min');
+                }
+                if (validity.rangeOverflow) {
+                    return 'Giá trị không được lớn hơn ' + control.getAttribute('max');
+                }
+                if (validity.tooShort) {
+                    return 'Phải có ít nhất ' + control.getAttribute('minlength') + ' ký tự';
+                }
+                if (validity.tooLong) {
+                    return 'Không được vượt quá ' + control.getAttribute('maxlength') + ' ký tự';
+                }
+                if (validity.badInput || validity.stepMismatch) {
+                    return 'Giá trị không hợp lệ';
+                }
+                // Còn lại thì để câu của trình duyệt — vẫn hơn là không nói gì.
+                return control.validationMessage || 'Giá trị không hợp lệ';
+            }
+
+            function feedbackFor(control) {
+                var next = control.nextElementSibling;
+                while (next) {
+                    if (next.hasAttribute && next.hasAttribute(FEEDBACK_MARK)) return next;
+                    next = next.nextElementSibling;
+                }
+                var box = document.createElement('div');
+                box.className = 'invalid-feedback';
+                box.setAttribute(FEEDBACK_MARK, '');
+                // Ô nằm trong .input-group thì thông báo phải ra NGOÀI group mới hiện được.
+                var anchor = control.closest('.input-group') || control;
+                anchor.parentNode.insertBefore(box, anchor.nextSibling);
+                return box;
+            }
+
+            function showError(control, message) {
+                var box = feedbackFor(control);
+                box.textContent = message;
+                box.style.display = 'block';
+                control.classList.add('is-invalid');
+                control.setAttribute('aria-invalid', 'true');
+            }
+
+            function clearError(control) {
+                var box = control.nextElementSibling;
+                while (box) {
+                    if (box.hasAttribute && box.hasAttribute(FEEDBACK_MARK)) break;
+                    box = box.nextElementSibling;
+                }
+                // Chỉ gỡ is-invalid khi CHÍNH fragment này đặt nó: lỗi do server render (cùng dùng
+                // class này) phải giữ nguyên cho tới lượt submit sau, không được xoá hộ.
+                if (!box || !box.textContent) return;
+                box.textContent = '';
+                box.style.display = 'none';
+                control.classList.remove('is-invalid');
+                control.removeAttribute('aria-invalid');
+            }
+
+            /**
+             * Ô đang bị ẩn (khối chỉ hiện với khách doanh nghiệp, ô chỉ hiện khi chọn nguồn kiểm kê…)
+             * thì bỏ qua: người dùng không thấy nó nên không sửa được, mà chặn submit vì một ô vô hình
+             * là bế tắc hoàn toàn. Chính trình duyệt cũng gãy ở ca này ("not focusable").
+             *
+             * <p>Kiểm bằng `display`/`visibility` chứ KHÔNG bằng offsetWidth/getClientRects: các khối
+             * ẩn/hiện trên màn của mình đều bật tắt bằng `style.display`, mà kích thước còn phụ thuộc
+             * layout — cửa sổ rộng 0px (pane xem trước, tab ẩn) sẽ làm MỌI ô trông như đang bị ẩn và
+             * validate bỏ qua sạch.
+             */
+            function isVisible(control) {
+                for (var node = control; node && node !== document; node = node.parentElement) {
+                    var style = window.getComputedStyle(node);
+                    if (!style) break;
+                    if (style.display === 'none' || style.visibility === 'hidden') return false;
+                }
+                return true;
+            }
+
+            function checkable(form) {
+                return Array.prototype.filter.call(
+                    form.querySelectorAll('input, select, textarea'),
+                    function (control) {
+                        if (control.disabled || control.type === 'hidden') return false;
+                        if (control.hasAttribute('data-validate-skip')) return false;
+                        return isVisible(control);
+                    });
+            }
+
+            function validate(form) {
+                var invalid = [];
+                checkable(form).forEach(function (control) {
+                    if (control.checkValidity() && !isMissing(control)) {
+                        clearError(control);
+                        return;
+                    }
+                    showError(control, messageFor(control));
+                    invalid.push(control);
+                });
+                return invalid;
+            }
+
+            guardedForms().forEach(function (form) {
+                // Tắt bong bóng mặc định bằng JS chứ không viết novalidate sẵn trong HTML: nếu JS lỗi
+                // hoặc bị tắt thì trình duyệt vẫn còn chặn giúp — thà bong bóng xấu còn hơn không chặn.
+                form.noValidate = true;
+
+                // Capture phase: chạy TRƯỚC các listener submit khác của trang, và stopPropagation để
+                // chúng không chạy tiếp khi form còn lỗi (vd handler xoá bản nháp đang lưu tạm).
+                form.addEventListener('submit', function (event) {
+                    var invalid = validate(form);
+                    if (!invalid.length) return;
+
+                    event.preventDefault();
+                    event.stopPropagation();
+                    invalid[0].focus();
+                    invalid[0].scrollIntoView({block: 'center', behavior: 'smooth'});
+                }, true);
+
+                // Gỡ lỗi ngay khi người dùng bắt đầu sửa — để thông báo đứng lại trong khi đang gõ thì
+                // vừa gây hiểu nhầm là chưa sửa được, vừa làm ô đỏ mãi không hết.
+                form.addEventListener('input', function (event) {
+                    clearError(event.target);
+                });
+                form.addEventListener('change', function (event) {
+                    clearError(event.target);
+                });
+            });
+        })();
+    </script>
+</th:block>
+</body>
+</html>

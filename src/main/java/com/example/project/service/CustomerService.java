@@ -7,6 +7,7 @@ import com.example.project.entity.Customer;
 import com.example.project.entity.Invoice;
 import com.example.project.repository.CustomerRepository;
 import com.example.project.repository.InvoiceRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -109,7 +110,7 @@ public class CustomerService {
         validate(req, null);
         Customer c = new Customer();
         apply(c, req);
-        return customerRepository.save(c).getId();
+        return saveGuardingUniqueRace(c, req).getId();
     }
 
     // ------------------------------------------------------------------ update
@@ -119,7 +120,7 @@ public class CustomerService {
         Customer c = findOrThrow(id);
         validate(req, id);
         apply(c, req);
-        customerRepository.save(c);
+        saveGuardingUniqueRace(c, req);
     }
 
     // ------------------------------------------------------------------ legacy
@@ -140,13 +141,74 @@ public class CustomerService {
     }
 
     /**
+     * Lưới an toàn cuối cùng cho tính duy nhất: bảng {@code customer} nay có UNIQUE index trên
+     * {@code phoneNumber} và {@code taxCode}, và <strong>chỉ DB mới phân xử được</strong> khi hai người
+     * nhập cùng lúc — kiểu "hỏi rồi mới ghi" của {@link #validate} luôn có khe hở giữa lúc hỏi và lúc
+     * ghi, người thứ hai đọc thấy "chưa ai dùng" rồi cả hai cùng ghi.
+     *
+     * <p>{@link #validate} vẫn giữ nguyên và vẫn là nơi lo 99% ca thường (nó phân biệt được lỗi định
+     * dạng với lỗi trùng, và cho câu thông báo gắn đúng ô nhập). Hàm này chỉ dịch lỗi DB của ca đua
+     * hiếm sang <em>đúng câu thông báo đó</em>, để người dùng không bao giờ thấy trang 500 thô.
+     *
+     * <p>{@code saveAndFlush} chứ không phải {@code save}: khi sửa (UPDATE) thì {@code save} chỉ đưa vào
+     * session, câu lệnh thật chạy lúc commit — tức là sau khi ra khỏi khối {@code try} này.
+     *
+     * <p>MySQL cho phép NHIỀU dòng NULL trong UNIQUE index, nên khách lẻ không khai CCCD vẫn tạo được
+     * bao nhiêu bản ghi cũng được — đúng như nghiệp vụ cần.
+     */
+    private Customer saveGuardingUniqueRace(Customer c, CustomerRequest req) {
+        try {
+            return customerRepository.saveAndFlush(c);
+        } catch (DataIntegrityViolationException exception) {
+            throw new IllegalArgumentException(duplicateMessage(exception,
+                    "COMPANY".equals(req.getCustomerType())), exception);
+        }
+    }
+
+    /**
+     * Suy ra ô nào bị trùng từ tên UNIQUE index trong thông báo lỗi của MySQL. Tên index trùng tên cột
+     * nên đọc thẳng được. Không nhận ra thì trả câu chung — thà chung chung còn hơn chỉ sai ô.
+     */
+    private String duplicateMessage(DataIntegrityViolationException exception, boolean company) {
+        String key = violatedIndexName(exception);
+        if (key.contains("phonenumber")) {
+            return "Số điện thoại đã tồn tại trong hệ thống";
+        }
+        if (key.contains("taxcode")) {
+            return company
+                    ? "Mã số thuế đã tồn tại trong hệ thống"
+                    : "Số CCCD/CMND đã tồn tại trong hệ thống";
+        }
+        return "Thông tin khách hàng bị trùng với một khách hàng khác, vui lòng kiểm tra lại";
+    }
+
+    /**
+     * Tên UNIQUE index bị vi phạm, lấy từ câu lỗi MySQL
+     * {@code Duplicate entry '<giá trị>' for key '<bảng>.<index>'}.
+     *
+     * <p>Phải cắt lấy đúng phần sau {@code for key}, KHÔNG được dò cả câu: chính
+     * <em>giá trị</em> bị trùng cũng nằm trong câu đó, nên một CCCD trùng của khách tên
+     * {@code "phoneNumber"}, hay email {@code phone@...} bên NCC, sẽ khớp nhầm tên cột khác và chỉ sai ô.
+     */
+    private String violatedIndexName(DataIntegrityViolationException exception) {
+        String detail = exception.getMostSpecificCause().getMessage();
+        if (detail == null) {
+            return "";
+        }
+        int marker = detail.lastIndexOf("for key");
+        return (marker < 0 ? "" : detail.substring(marker + "for key".length())).toLowerCase(Locale.ROOT);
+    }
+
+    /**
      * Toàn bộ kiểm tra chạy TRƯỚC khi ghi bất cứ thứ gì vào entity — định dạng rồi mới tới trùng lặp,
      * để người dùng thấy lỗi định dạng ("CCCD phải 12 số") thay vì lỗi trùng của một giá trị vốn đã sai.
      *
-     * <p><strong>Vì sao phải tự kiểm ở đây:</strong> bảng {@code customer} KHÔNG có ràng buộc UNIQUE
-     * nào ngoài khoá chính, nên không có lưới an toàn ở tầng DB. Thiếu một dòng ở đây là dữ liệu bẩn
-     * lọt thẳng vào hệ thống — đúng như ca đã gặp: số điện thoại được chặn nhưng CCCD thì không, nên
-     * cứ đổi số điện thoại là tạo được khách trùng CCCD.</p>
+     * <p><strong>Vì sao phải tự kiểm ở đây dù DB đã có UNIQUE:</strong> tầng này phân biệt được lỗi
+     * định dạng với lỗi trùng và cho câu thông báo gắn đúng ô nhập, còn DB chỉ trả một câu lỗi kỹ thuật
+     * chung. Thiếu một dòng ở đây là người dùng nhận thông báo khó hiểu — đúng như ca đã gặp: số điện
+     * thoại được chặn nhưng CCCD thì không, nên cứ đổi số điện thoại là tạo được khách trùng CCCD.
+     * Ca hai người nhập cùng lúc thì chỉ DB phân xử được, xem
+     * {@link #saveGuardingUniqueRace(Customer, CustomerRequest)}.</p>
      *
      * @param excludeId id của bản ghi đang sửa (null khi tạo mới) — bản ghi luôn "trùng với chính nó"
      */
@@ -198,7 +260,7 @@ public class CustomerService {
     private void validatePhoneUnique(String phone, Integer excludeId) {
         if (phone == null || phone.isBlank()) return;
         if (isPhoneTaken(phone.trim(), excludeId)) {
-            throw new IllegalArgumentException("Số điện thoại đã tồn tại trong hệ thống (MSG-44)");
+            throw new IllegalArgumentException("Số điện thoại đã tồn tại trong hệ thống");
         }
     }
 

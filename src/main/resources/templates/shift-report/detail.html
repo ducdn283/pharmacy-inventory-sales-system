@@ -371,7 +371,8 @@
                           id="closeShiftForm"
                           th:action="${basePath + '/' + detail.id + '/close'}"
                           method="post"
-                          class="mb-3">
+                          class="mb-3"
+                          data-validate>
                         <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
                         <div class="mb-3">
@@ -397,7 +398,8 @@
                                    id="inputActualClosingCash"
                                    name="actualClosingCash"
                                    th:value="${detail.actualClosingCash}"
-                                   required>
+                                   required
+                                   data-required-message="Vui lòng nhập số tiền mặt đã kiểm đếm khi kết thúc ca">
                             <div class="form-text">Nhập đúng số đã kiểm đếm. Được nhập số âm (gõ dấu trừ ở
                                 đầu) nếu tiền chi ra trong ca vượt quá tiền đầu ca cộng tiền thu vào.</div>
                         </div>
@@ -459,6 +461,10 @@
 </main>
 
 <div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+<!-- Ô "Tiền mặt cuối ca" bắt buộc: báo ngay dưới ô thay cho bong bóng mặc định của trình duyệt.
+     Dấu trừ trơ trọi cũng bị tính là chưa nhập — money-input gửi rỗng cho ca đó. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
 <script>
     (function () {

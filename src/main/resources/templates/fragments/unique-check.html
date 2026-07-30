@@ -4,13 +4,12 @@
 <!--
   Kiểm trùng LIVE cho những ô phải là duy nhất (số điện thoại, mã số thuế, CCCD, email…).
 
-  Vì sao cần: các bảng như `customer`, `supplier` KHÔNG có ràng buộc UNIQUE nào ngoài khoá chính, nên
-  DB nhận bừa hai bản ghi trùng nhau. Tầng service là chỗ chặn thật; fragment này chỉ báo SỚM để
-  người dùng biết ngay lúc rời ô, thay vì điền xong cả form mới bị đá về.
+  Vì sao cần: người dùng biết ngay lúc rời ô là ô đó đã có người dùng rồi, thay vì điền xong cả form
+  mới bị đá về.
 
   ⚠ Đây KHÔNG thay thế kiểm tra ở backend. Màn hình luôn có thể bị bỏ qua — gọi thẳng POST, JS lỗi,
   hoặc hai người nhập cùng lúc rồi bấm lưu cách nhau vài mili giây. Mọi ô gắn ở đây BẮT BUỘC phải có
-  một lượt kiểm tương ứng trong service.
+  một lượt kiểm tương ứng trong service (và nên có UNIQUE index ở DB — chỉ DB phân xử được ca đua).
 
   Cách dùng — đánh dấu ngay trên ô nhập:
 

@@ -169,8 +169,9 @@
         <button type="button" class="btn-close" id="btnCloseEdit" aria-label="Đóng"></button>
       </div>
 
+      <!-- data-validate thay cho novalidate — xem fragments/field-validation. -->
       <form th:action="@{/supplier/{id}(id=${supplier.id})}"
-            th:object="${form}" method="post" novalidate>
+            th:object="${form}" method="post" data-validate>
 
         <div class="mb-3">
           <label class="form-label">Mã nhà cung cấp</label>
@@ -184,6 +185,7 @@
           <input id="editName" type="text" class="form-control"
                  th:field="*{name}"
                  th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
+                 required
                  placeholder="Nhập tên nhà cung cấp">
           <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
         </div>
@@ -201,7 +203,9 @@
                  data-unique-field="taxCode"
                  th:attr="data-unique-id=${supplier.id}"
                  data-unique-message="Mã số thuế đã được sử dụng bởi nhà cung cấp khác"
-                 maxlength="20"
+                 maxlength="20" required
+                 pattern="[0-9]{10}(-[0-9]{3})?"
+                 title="10 chữ số, hoặc 10 chữ số kèm 3 số chi nhánh (vd 0101234567-001)"
                  placeholder="VD: 0101234567 hoặc 0101234567-001">
           <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
         </div>
@@ -221,6 +225,7 @@
                    data-unique-message="Số điện thoại đã được sử dụng bởi nhà cung cấp khác"
                    pattern="0(2|3|5|7|8|9)[0-9]{8}"
                    title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
+                   required
                    placeholder="0900000000">
             <div class="invalid-feedback" th:if="${#fields.hasErrors('phone')}" th:errors="*{phone}"></div>
           </div>
@@ -238,6 +243,7 @@
                    maxlength="100"
                    pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                    title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
+                   required
                    placeholder="supplier@example.com">
             <div class="invalid-feedback" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
           </div>
@@ -250,7 +256,7 @@
           <textarea id="editAddress" class="form-control"
                     th:field="*{address}"
                     th:classappend="${#fields.hasErrors('address')} ? ' is-invalid'"
-                    rows="3"
+                    rows="3" required
                     placeholder="Nhập địa chỉ nhà cung cấp"></textarea>
           <div class="invalid-feedback" th:if="${#fields.hasErrors('address')}" th:errors="*{address}"></div>
         </div>
@@ -649,5 +655,8 @@
 
 <!-- data-unique-id = id NCC đang sửa, để nó không tự báo trùng với chính mình. -->
 <div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
+
+<!-- Ô bắt buộc để trống / sai định dạng: báo ngay dưới ô, không dùng bong bóng của trình duyệt. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 </body>
 </html>
