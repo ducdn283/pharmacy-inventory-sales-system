@@ -142,8 +142,16 @@ public class CustomerController {
     // ------------------------------------------------------------------ detail / update
 
     @GetMapping("/{id}")
-    public String detail(@PathVariable Integer id, Model model) {
-        CustomerResponse customer = customerService.getById(id);
+    public String detail(@PathVariable Integer id, Model model,
+                         RedirectAttributes redirectAttributes) {
+        CustomerResponse customer;
+        try {
+            customer = customerService.getById(id);
+        } catch (IllegalArgumentException exception) {
+            // Gõ tay id không tồn tại: về danh sách kèm thông báo thay vì rơi vào trang lỗi chung.
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:/customer";
+        }
         model.addAttribute("customer", customer);
 
         if (!model.containsAttribute("form")) {
