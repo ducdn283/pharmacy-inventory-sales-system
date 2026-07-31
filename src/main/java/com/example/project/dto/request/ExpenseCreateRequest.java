@@ -6,10 +6,10 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * Form backing the "create expense" screen. {@code applicantID} is always the current user. The
- * optional {@code PurchaseInvoice}/{@code ShiftReport}/{@code Supplier}/{@code Account} links on
- * the entity are still left unset; {@code returnID} is now wired (see {@link #returnId}) and
- * {@code customerID} is derived from it server-side.
+ * Form backing the "create expense" screen. {@code applicantID} is always the current user.
+ * {@code returnID} (see {@link #returnId}) and {@code purchaseID} (see {@link #purchaseId}) are
+ * both wired here; {@code customerID}/{@code supplierID} are derived server-side from whichever is
+ * linked. {@code shiftReportID} and {@code accountID} are never posted by this form.
  */
 @Getter
 @Setter
