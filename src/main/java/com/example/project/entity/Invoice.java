@@ -108,4 +108,8 @@ public class Invoice {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rootInvoiceID")
     private Invoice rootInvoiceID;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
 }
