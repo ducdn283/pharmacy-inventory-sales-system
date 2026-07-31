@@ -191,8 +191,8 @@
             <div class="row g-4">
                 <div class="col-12 col-xl-9">
 
-                    <!-- Source is folded into the "Loại / Nguồn điều chỉnh" dropdown; these hidden fields
-                         carry the resolved source (and chosen count) to the server. -->
+                    <!-- Nguồn gộp vào dropdown "Loại / Nguồn điều chỉnh"; 2 hidden field này mang
+                         nguồn đã chọn (và phiếu kiểm kê) sang server. -->
                     <input type="hidden" name="sourceMode" id="sourceModeInput"
                            th:value="${form.sourceMode != null ? form.sourceMode : 'MANUAL'}" value="MANUAL">
                     <input type="hidden" name="stockCountId" id="stockCountIdInput" th:value="${form.stockCountId}">
@@ -856,9 +856,8 @@
     }
 
     /**
-     * Lý do: CHỈ nguồn "theo phiếu kiểm kê" mới được để trống (server tự điền theo mã phiếu kiểm kê).
-     * Mọi loại thủ công (hủy hàng / nội bộ / hàng mẫu / quà tặng) vẫn bắt buộc người lập tự nhập —
-     * server chặn bằng validateRequest, đây chỉ là để form báo sớm và không hiện dấu * sai chỗ.
+     * Lý do CHỈ được để trống với nguồn "theo phiếu kiểm kê" (server tự điền theo mã phiếu); mọi loại
+     * thủ công vẫn bắt buộc nhập — server chặn bằng validateRequest, đây chỉ là báo sớm.
      */
     function applyReasonRequirement(isCount) {
         const input = document.getElementById('reasonInput');
@@ -1258,14 +1257,11 @@
     });
 </script>
 
-<!-- Ô "Số lượng" (min=1) và ô "Thuế suất GTGT đầu ra" (min=0, step=0.01) đều không bao giờ nhận số
-     âm hay ký hiệu khoa học. Dòng hàng được thêm bằng JS nên fragment phải bind ở mức document —
-     đúng như nó đang làm; không cần gọi lại sau mỗi lần addBatchRow(). -->
+<!-- Ô "Số lượng" và "Thuế suất GTGT đầu ra" không bao giờ nhận số âm hay ký hiệu. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
-<!-- Loại điều chỉnh + Lý do là 2 ô bắt buộc: báo ngay dưới ô thay cho bong bóng mặc định của trình
-     duyệt. Ô Lý do được JS bật/tắt `required` theo nguồn (kiểm kê thì server tự điền) — fragment đọc
-     lại `required` đúng lúc submit nên không cần đồng bộ gì thêm. -->
+<!-- Ô Lý do được JS bật/tắt `required` theo nguồn; fragment đọc lại đúng lúc submit nên không cần
+     đồng bộ gì thêm. -->
 <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
 </body>

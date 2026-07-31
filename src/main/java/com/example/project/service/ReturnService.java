@@ -29,12 +29,10 @@ import java.util.stream.Collectors;
  * not-yet-paid refund. A Pharmacist submits to {@code Chờ duyệt}; the Owner approves to {@code Nợ}
  * (and Owner-created slips auto-approve straight to {@code Nợ}).</p>
  *
- * <p><strong>Approval changes stock</strong> (unlike the stock-adjustment slip): each restockable
- * line is returned into a brand-new batch cloned from the one it was sold from — returned goods are
- * kept in their own batch for traceability (there is no "returned" flag on {@code batch}). The
- * original invoice's {@code returnStatus} and each line's {@code returnedQty} are updated in the same
- * transaction. The cash payout itself lives on a separate Expense (phiếu chi), handled later; this
- * service only records the refund amounts on the slip.</p>
+ * <p><strong>Approval changes stock:</strong> each restockable line goes into a brand-new batch cloned
+ * from the one it was sold from — returned goods are kept in their own batch for traceability (there is
+ * no "returned" flag on {@code batch}). The cash payout itself lives on a separate Expense; this service
+ * only records the refund amounts on the slip.</p>
  */
 @Service
 public class ReturnService {
@@ -64,10 +62,6 @@ public class ReturnService {
     // A signed invoice ("Đã ký") has been pushed to the tax authority — it must NOT be edited, so a
     // return against it emits an adjustment invoice (TH2) instead of touching the original.
     private static final String INVOICE_STATUS_SIGNED = "Đã ký";
-    // ⚠️ CHỈ CÒN DÙNG ĐỂ ĐỌC DỮ LIỆU CŨ. Từ 14/07 đến 27/07 bảng invoice không có cột returnStatus nên
-    // trạng thái trả hàng bị ghi đè vào invoice.status bằng 2 giá trị này. Cột riêng đã có lại từ 28/07
-    // (xem updateInvoiceReturnStatus) nên code KHÔNG còn ghi ra 2 giá trị này nữa — chỉ nhận diện những
-    // hóa đơn đã lỡ mang chúng, để chúng vẫn trả hàng tiếp được.
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String INVOICE_STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
 
@@ -375,10 +369,8 @@ public class ReturnService {
             detail.setBaseQtyRestored(line.baseQtyRestored());
             detail.setUnitSellPrice(line.unitSellPrice());
             detail.setLineRefund(line.lineRefund());
-            // originalLineValue = giá trị GỐC 100% của dòng trả (TRƯỚC khi áp tỷ lệ hoàn), lineRefund là
-            // số thực hoàn = originalLineValue × appliedRefundRate. Chênh lệch giữa 2 cột chính là phần
-            // nhà thuốc giữ lại — vẫn là doanh thu chịu thuế bình thường, không sinh bút toán riêng
-            // (đặc tả bổ sung 27/07 mục 1.2).
+            // originalLineValue = giá trị GỐC 100%, lineRefund = số thực hoàn (gốc × tỷ lệ hoàn).
+            // Chênh lệch 2 cột là phần nhà thuốc giữ lại — vẫn là doanh thu chịu thuế bình thường.
             detail.setOriginalLineValue(line.originalLineValue());
             detail.setVatRate(line.vatRate());
             detail.setPreTaxAmount(line.preTaxAmount());
@@ -453,22 +445,15 @@ public class ReturnService {
      *       {@code subtotal/total/paidBy*} are left untouched (already pushed to the tax authority).</li>
      * </ul>
      *
-     * <p><strong>Bù trừ công nợ (netting)</strong> runs first, before either invoice is emitted: the refund
-     * is offset against whatever the customer still owes on the original invoice and that debt is reduced
-     * on the spot, in this same transaction (see {@link #applyDebtOffset}). Only the remainder
-     * ({@code totalRefund − offsetDebtAmount}) is real money still owed back to the customer.</p>
+     * <p><strong>Bù trừ công nợ (netting)</strong> chạy TRƯỚC khi phát hành hóa đơn nào (xem
+     * {@link #applyDebtOffset}) — chạy sau thì hóa đơn thay thế ôm nguyên số nợ chưa trừ. Chỉ phần dư
+     * ({@code totalRefund − offsetDebtAmount}) mới là tiền thật còn phải trả khách.</p>
      *
-     * <p><strong>No cash moves here</strong>: re-issuing/adjusting invoices, carrying their debt across and
-     * netting it are all invoice bookkeeping, but the register (quỹ) is never touched — the slip only
-     * computes and stores the amounts. Paying the customer back is the Expense module's job — the
-     * Expense slip is what records the actual payout and its cash/banking split.</p>
+     * <p><strong>Không đụng quỹ:</strong> phiếu chỉ tính và lưu số tiền; việc chi trả thật là của phiếu chi.</p>
      *
-     * <p>Also lazily opens/reuses the <strong>creator's</strong> (not the approver's) shift report right
-     * here — the physical counter transaction with the customer happens when the slip is created, even
-     * if an Owner reviews/approves it asynchronously later from elsewhere. Using the approver's account
-     * here would misattach the return to whichever shift the Owner happens to be in at review time (or
-     * spawn a stray extra shift for the Owner), instead of the shift the sale itself is already sitting
-     * in. A return is a real transaction the moment it is approved ("phát sinh giao dịch là tạo báo cáo ca").</p>
+     * <p>Ca làm việc lấy theo <strong>người TẠO phiếu</strong>, không phải người duyệt: giao dịch thật với
+     * khách xảy ra lúc lập phiếu, còn Owner có thể duyệt sau ở ca khác — lấy theo người duyệt là gắn phiếu
+     * nhầm ca (hoặc đẻ thêm một ca lạ cho Owner).</p>
      */
     private void applyReturnEffect(Return ret, List<Returndetail> details) {
         Shiftreport shift = shiftreportService.ensureOpenShiftFor(ret.getReturnedBy().getId());
@@ -500,25 +485,19 @@ public class ReturnService {
             createReplacementInvoice(ret, original, details);
         }
 
-        // Trạng thái trả hàng nay nằm ở CỘT RIÊNG invoice.returnStatus (cột mới 28/07) nên ghi được cho
-        // CẢ hóa đơn đã ký lẫn chưa ký — trước đây phải mượn invoice.status nên hóa đơn đã ký đành bỏ qua.
+        // Cột riêng invoice.returnStatus nên ghi được cho CẢ hóa đơn đã ký lẫn chưa ký.
         updateInvoiceReturnStatus(original);
 
         returnRepository.save(ret);
     }
 
     /**
-     * Emits an ADJUSTMENT invoice for a return against a SIGNED original (TH2 — HĐ đã ký, đã gửi thuế): a
-     * negative-line delta that reduces the customer's original invoice without ever touching or re-issuing
-     * it (legally frozen once signed — {@code subtotal/total/paidBy*} are left exactly as they were). It
-     * does NOT deduct stock (the returned goods were already restocked into a fresh batch in
-     * {@link #applyReturnEffect}). Linked both ways via {@code originalInvoiceID} + {@code returnID}.
+     * TH2 — hóa đơn gốc ĐÃ KÝ (đã gửi thuế): phát hành hóa đơn ĐIỀU CHỈNH gồm các dòng ÂM, KHÔNG đụng
+     * vào hóa đơn gốc ({@code subtotal/total/paidBy*} bị đóng băng về mặt pháp lý sau khi ký).
+     * Không trừ kho (hàng trả đã được nhập vào lô mới ở {@link #applyReturnEffect}).
      *
-     * <p>The adjustment slip itself carries no debt of its own: any netting against the customer's unpaid
-     * balance was already applied to the ORIGINAL invoice by {@link #applyDebtOffset} before this runs
-     * (the signed original's debt is the one live figure that may still move — its
-     * {@code subtotal/total/paidBy*} stay frozen). Paying out whatever is left is the Expense module's
-     * job.</p>
+     * <p>Hóa đơn điều chỉnh không mang nợ riêng: phần bù trừ đã được {@link #applyDebtOffset} áp vào
+     * hóa đơn GỐC trước đó — {@code debtAmount} là số duy nhất của HĐ đã ký còn được phép thay đổi.</p>
      */
     private void createAdjustmentInvoice(Return ret, Invoice original, List<Returndetail> details) {
         BigDecimal refund = nz(ret.getTotalRefund());
@@ -579,28 +558,23 @@ public class ReturnService {
     }
 
     /**
-     * Emits a REPLACEMENT invoice for a return against an UNSIGNED original (TH1 — HĐ chưa ký, chưa gửi
-     * thuế). The original is invalidated outright ("hóa đơn gốc đã vô hiệu hoàn toàn"), so
-     * — unlike the adjustment path — this clones the original's FULL remaining state (every still-
-     * unreturned line, not just a negative delta) into a brand-new invoice that becomes the current, live
-     * version of the sale. The original's debt is wiped to 0 and the (refund-reduced) remainder moves onto
-     * the replacement's own {@code debtAmount}; later corrections must target the replacement, never the
-     * original (enforced by {@link #isInvalidatedByReplacement}, which every return-eligibility check
-     * consults).
+     * TH1 — hóa đơn gốc CHƯA KÝ: gốc bị vô hiệu hoàn toàn nên clone TOÀN BỘ phần còn lại sang một hóa
+     * đơn THAY THẾ mới (không phải dòng âm như TH2). Nợ của gốc xoá về 0 và chuyển sang hóa đơn mới;
+     * sai sót về sau phải tham chiếu bản thay thế, không phải bản gốc (chặn bởi
+     * {@link #isInvalidatedByReplacement}).
      *
-     * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ (ví dụ của BA ở
-     * mục 1.2: mua 500.000, hoàn 400.000 ⇒ hóa đơn thay thế 100.000) — nên một dòng đã trả HẾT số lượng
-     * vẫn được giữ lại với {@code quantity = 0} và {@code subtotal} = phần giữ lại, thay vì biến mất. Nhờ
-     * vậy tổng hóa đơn luôn bằng tổng các dòng của chính nó, và phần doanh thu giữ lại không bốc hơi khỏi
-     * sổ. Chỉ khi KHÔNG còn gì (trả hết + hoàn 100%) thì mới không phát hành hóa đơn nào.</p>
+     * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ (ví dụ BA mục
+     * 1.2: mua 500.000, hoàn 400.000 ⇒ thay thế 100.000) — nên dòng đã trả HẾT số lượng vẫn được giữ
+     * với {@code quantity = 0} và {@code subtotal} = phần giữ lại, để tổng hóa đơn luôn bằng tổng các
+     * dòng. Chỉ khi trả hết + hoàn 100% mới không phát hành gì.</p>
      */
     private void createReplacementInvoice(Return ret, Invoice original, List<Returndetail> details) {
         Map<Integer, Returndetail> returnedByLine = details.stream()
                 .collect(Collectors.toMap(d -> d.getInvoiceDetailID().getId(), d -> d, (a, b) -> a));
 
-        // Giữ lại dòng còn hàng, HOẶC dòng đã trả hết nhưng còn phần tiền nhà thuốc giữ lại (hoàn < 100%).
-        // Trả hết + hoàn đủ 100% ⇒ không còn dòng nào ⇒ không phát hành hóa đơn "Thay thế" rỗng (0đ, không
-        // dòng nào): vừa rác danh sách hóa đơn, vừa lọt lại vào danh sách chọn để trả tiếp.
+        // Giữ dòng còn hàng, HOẶC dòng đã trả hết nhưng còn phần tiền giữ lại (hoàn < 100%). Trả hết +
+        // hoàn 100% ⇒ không còn dòng nào ⇒ không phát hành hóa đơn "Thay thế" rỗng (vừa rác danh sách,
+        // vừa lọt lại vào danh sách chọn để trả tiếp).
         List<Invoicedetail> remainingLines = invoiceLinesOf(original.getId()).stream()
                 .filter(line -> remainingQtyOf(line) > 0 || retainedValueOf(line, returnedByLine).signum() > 0)
                 .toList();
@@ -704,12 +678,10 @@ public class ReturnService {
      * {@code Invoice.debtAmount} ngay trong cùng transaction — đặc tả bổ sung 27/07 mục 3.4: cập nhật trực
      * tiếp, không suy ra bằng cách SUM lại; lỗi ở bất kỳ bước nào thì rollback cả cụm.
      *
-     * <p>Phần còn lại ({@code totalRefund − offsetDebtAmount}) là tiền thật nhà thuốc còn phải hoàn cho
-     * khách — phiếu chi bên Kế toán chi ra. <strong>CHƯA sinh cặp Income/Expense</strong> mà mục 3.2 yêu
-     * cầu (Income "thu bù trừ" + Expense "chi hoàn trả", cả hai {@code paidByCredit = offsetDebtAmount}):
-     * hai bảng đó thuộc module Thu/Chi của thành viên khác, phải chốt mã phiếu / trạng thái / gắn ca với
-     * chủ module trước khi tự insert. Công nợ đã được trừ đúng ở đây nên số liệu không sai, chỉ thiếu 2
-     * chứng từ đối ứng.</p>
+     * <p>Phần còn lại ({@code totalRefund − offsetDebtAmount}) là tiền thật còn phải hoàn khách, do phiếu
+     * chi bên Kế toán chi ra. <strong>TODO:</strong> mục 3.2 còn đòi sinh cặp Income/Expense đối ứng
+     * ({@code paidByCredit = offsetDebtAmount}) — chưa làm vì 2 bảng đó thuộc module Thu/Chi của thành
+     * viên khác. Công nợ đã trừ đúng, chỉ thiếu 2 chứng từ.</p>
      */
     private void applyDebtOffset(Return ret, Invoice invoice) {
         BigDecimal offset = computeDebtOffset(invoice, ret.getTotalRefund());
@@ -746,24 +718,15 @@ public class ReturnService {
     }
 
     /**
-     * Caches the invoice's return state into the dedicated {@code invoice.returnStatus} column
-     * (NONE / PARTIAL / FULL — cột MỚI do chủ DB thêm 28/07, đối xứng với
-     * {@code PurchaseInvoice.returnStatus}), and refreshes {@code status} so it once again means only
-     * "nợ / vòng đời".
+     * Ghi trạng thái trả hàng vào cột riêng {@code invoice.returnStatus} (NONE/PARTIAL/FULL) và trả
+     * {@code status} về thuần nợ/vòng đời ("Còn nợ" / "Hoàn thành").
      *
-     * <p>Đây là mục 2 của đặc tả bổ sung 27/07. Trước đó cột này không tồn tại (bị gỡ ở merge 14/07) nên
-     * trạng thái trả hàng phải mượn chính {@code invoice.status} — mà một hóa đơn hoàn toàn có thể VỪA
-     * còn nợ VỪA đã trả hàng 1 phần, một cột không chứa nổi 2 nghĩa. Nay tách hẳn:</p>
-     * <ul>
-     *   <li>{@code returnStatus} — NONE / PARTIAL / FULL, suy từ {@code Σ InvoiceDetail.returnedQty} so
-     *       với {@code Σ quantity} (mục 2.3). Cột chỉ là bản CACHE: {@link #invoiceReturnCode} vẫn tính
-     *       động và là nguồn đúng, nên dữ liệu cũ chưa backfill cũng không sai.</li>
-     *   <li>{@code status} — quay về thuần nợ/vòng đời: còn nợ thì "Còn nợ", hết nợ thì "Hoàn thành".
-     *       KHÔNG còn ghi "Đã trả hàng 1 phần / toàn bộ" vào đây nữa.</li>
-     * </ul>
+     * <p>Hai cột tách riêng vì một hóa đơn có thể VỪA còn nợ VỪA đã trả hàng 1 phần — một cột không
+     * chứa nổi 2 nghĩa. {@code returnStatus} chỉ là bản CACHE, nguồn đúng vẫn là
+     * {@link #invoiceReturnCode} tính động, nên dữ liệu cũ chưa backfill cũng không sai.</p>
      *
-     * <p>Hóa đơn ĐÃ KÝ giữ nguyên {@code status = "Đã ký"} — đã đẩy lên cơ quan thuế, không được đổi;
-     * nhưng {@code returnStatus} của nó thì vẫn ghi được, vì đó là cột riêng.</p>
+     * <p>Hóa đơn ĐÃ KÝ giữ nguyên {@code status = "Đã ký"} (đã gửi cơ quan thuế), nhưng
+     * {@code returnStatus} thì vẫn ghi được vì là cột riêng.</p>
      */
     private void updateInvoiceReturnStatus(Invoice invoice) {
         if (invoice == null) {
@@ -986,12 +949,9 @@ public class ReturnService {
      * thu chịu thuế bình thường (ví dụ của BA: bán 1.000.000 hoàn 80% ⇒ VAT giảm trừ tính trên 800.000,
      * KHÔNG phải 1.000.000).</p>
      *
-     * <p><b>VAT mirrors the original invoice line</b>: the return/adjustment invoice is the
-     * negative counterpart of the original, so it must reverse the exact VAT that was snapshotted onto the sale
-     * line (F-12), regardless of the current revenue group. If the sale line carried {@code vatRate > 0} the
-     * refund is split into net/VAT (vatAmount feeds {@code Return.totalVATRefund}); if the line had no VAT the
-     * whole refund is a revenue reduction (vatRate/vatAmount = 0). Gating again on the household's current
-     * revenue group would desync the credit from the invoice it reverses.</p>
+     * <p><b>Thuế lấy đúng theo dòng hóa đơn GỐC</b> (snapshot lúc bán, F-12) chứ không theo nhóm doanh
+     * thu hiện tại: phiếu trả là bản đối ứng âm của hóa đơn đó nên phải đảo lại đúng con số đã thu.
+     * Gate lại theo nhóm hiện tại sẽ làm phần giảm trừ lệch khỏi hóa đơn mà nó đang đảo.</p>
      */
     private PreparedLine preparedLineOf(Invoicedetail line, int qty, boolean restockable, BigDecimal refundRate) {
         BigDecimal saleRate = line.getVatRate() != null ? line.getVatRate() : BigDecimal.ZERO;
@@ -1144,12 +1104,9 @@ public class ReturnService {
     }
 
     /**
-     * The configured return window, from {@code Financialsetting.returnPolicyMaxDays} — the policy the
-     * pharmacy sets on the financial-settings screen, not a constant. Blank (NULL, or no setting row at
-     * all) means NO limit ({@link #RETURN_WINDOW_UNLIMITED}), per the BA's definition of the column; a
-     * negative stored value is read the same way. {@code 0} is a real value and means "same day only".
-     *
-     * <p>Public so the create screen can state the real policy instead of a hard-coded number.</p>
+     * Hạn trả hàng lấy từ {@code Financialsetting.returnPolicyMaxDays} (cấu hình được, không hardcode).
+     * Để trống / NULL / số âm ⇒ KHÔNG giới hạn; {@code 0} là giá trị thật, nghĩa là chỉ trả trong ngày.
+     * Public để màn tạo hiện đúng chính sách thay vì một con số cứng.
      */
     @Transactional(readOnly = true)
     public int getReturnWindowDays() {
@@ -1331,13 +1288,9 @@ public class ReturnService {
     }
 
     /**
-     * Mã tạm dùng đúng một lần, chỉ để qua được ràng buộc {@code NOT NULL UNIQUE} của cột mã tại thời
-     * điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật. Ngay sau khi lưu, mã được ghi lại
-     * theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước nằm trong cùng một transaction.
-     *
-     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
-     * người tạo phiếu cùng lúc nhận cùng một số; cột {@code returnCode} có UNIQUE nên người thứ hai ăn
-     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     * Mã tạm chỉ để qua ràng buộc {@code NOT NULL UNIQUE} lúc INSERT (chưa biết id nên chưa dựng được
+     * mã thật); lưu xong ghi lại theo id DB cấp, và không bao giờ commit ra ngoài vì cùng transaction.
+     * Cách cũ {@code max(id)+1} là đọc-rồi-ghi: hai người tạo cùng lúc nhận cùng số, người sau ăn lỗi.
      */
     private String temporaryCode() {
         return "TMP-" + UUID.randomUUID();
@@ -1366,14 +1319,11 @@ public class ReturnService {
     }
 
     /**
-     * Nội dung hóa đơn điều chỉnh / thay thế theo NĐ 70/2025 (người mua trả lại hàng). Ghi rõ mẫu số + ký hiệu
-     * + số + ngày của hóa đơn gốc, và trả toàn bộ hay một phần. Cụm động từ đầu câu khác nhau theo tình huống:
-     * <ul>
-     *   <li>{@code signed=true} (HĐ đã ký) → "Điều chỉnh giảm cho...";</li>
-     *   <li>{@code signed=false} (HĐ chưa ký) → "Thay thế cho...".</li>
-     * </ul>
-     * VD: "Thay thế cho hóa đơn Mẫu số 2, ký hiệu K26MYY, số HD000001, ngày 16 tháng 07 năm 2026,
-     * do người mua trả lại hàng một phần (phiếu trả TH-000002)".
+     * Nội dung hóa đơn điều chỉnh / thay thế theo NĐ 70/2025: ghi rõ mẫu số, ký hiệu, số, ngày của hóa
+     * đơn gốc và trả toàn bộ hay một phần. HĐ đã ký → "Điều chỉnh giảm cho…", chưa ký → "Thay thế cho…".
+     *
+     * <p>VD: "Thay thế cho hóa đơn Mẫu số 2, ký hiệu K26MYY, số HD000001, ngày 16 tháng 07 năm 2026,
+     * do người mua trả lại hàng một phần (phiếu trả TH-000002)".</p>
      */
     private String buildAdjustmentNote(Return ret, Invoice original, boolean signed) {
         String pattern = safeStr(original.getInvoicePattern());

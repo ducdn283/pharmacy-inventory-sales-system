@@ -13,17 +13,9 @@
 
   Đọc giá trị số trong JS của trang: pmMoneyValue(document.getElementById('amountInput'))
 
-  ------------------------------------------------------------------------------------------------
-  data-money-allow-negative — cho ô nhận số ÂM
-
-  Mặc định ô tiền chỉ nhận chữ số: tuyệt đại đa số ô tiền trong app (số tiền chi, tiền thu, giá nhập)
-  không bao giờ âm, và để lọt dấu trừ vào đó chỉ sinh dữ liệu sai. Ô nào thật sự có thể âm thì khai
-  thêm:
-
-      <input type="text" inputmode="numeric" data-money data-money-allow-negative ...>
-
-  Khi bật, ô nhận một dấu trừ ở ĐẦU (gõ, dán, và cả giá trị âm do server render — trước đây giá trị
-  âm bị hiển thị thành ô TRỐNG, nhìn như mất dữ liệu). pmMoneyValue() trả về số âm tương ứng.
+  data-money-allow-negative — cho ô nhận số ÂM. Mặc định ô tiền chỉ nhận chữ số vì hầu hết ô tiền
+  (chi, thu, giá nhập) không bao giờ âm. Khi bật, ô nhận một dấu trừ ở ĐẦU (gõ, dán, và cả giá trị
+  âm do server render) và pmMoneyValue() trả số âm tương ứng.
 -->
 <th:block th:fragment="moneyInputs">
     <script>

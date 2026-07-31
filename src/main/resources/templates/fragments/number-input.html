@@ -5,7 +5,7 @@
   Reusable hardening cho <input type="number">.
 
   Trình duyệt vẫn cho gõ 'e', 'E', '+', '-' vào ô type=number kể cả khi ô đó không bao giờ nhận số
-  âm hay ký hiệu khoa học: value trở thành chuỗi rỗng (validity.badInput) nhưng ký tự vẫn nằm trong
+  âm hay ký hiệu: value trở thành chuỗi rỗng (validity.badInput) nhưng ký tự vẫn nằm trong
   ô, và mọi hàm cộng tổng đọc ra NaN. Fragment này chặn ngay lúc gõ.
 
   Quy tắc suy ra từ chính thuộc tính của ô, không hardcode danh sách id:
@@ -13,8 +13,7 @@
       - cho gõ '.' khi step là số thập phân (step="0.01") hoặc step="any";
       - 'e' / 'E' / '+' / ',' luôn bị chặn — type=number chỉ hiểu dấu chấm thập phân.
 
-  Bind ở mức document nên dòng thêm bằng JS (dòng hàng của phiếu nhập, dòng đơn vị tính của hàng
-  hóa) tự động được bảo vệ, không phải gọi lại sau mỗi lần render.
+  Bind ở mức document nên dòng thêm bằng JS tự động được bảo vệ, không phải gọi lại sau mỗi lần render.
 
   Cách dùng: đặt cuối <body>
       <div th:replace="~{fragments/number-input :: numberInputs}"></div>
@@ -24,10 +23,9 @@
   ------------------------------------------------------------------------------------------------
   data-digits — cho ô CHỮ chỉ được chứa chữ số
 
-  Số điện thoại, mã số thuế, CCCD, số tài khoản đều là "trường nhập số" nhưng KHÔNG được dùng
-  type=number: số 0 đứng đầu bị mất, nút tăng/giảm vô nghĩa, và cuộn chuột làm đổi giá trị. Chúng
-  vẫn là ô text/tel, nên thuộc tính pattern="..." của HTML chỉ báo lỗi LÚC SUBMIT — người dùng vẫn
-  gõ được chữ cái vào ô rồi mới biết sai.
+  Số điện thoại, mã số thuế, CCCD, số tài khoản là "trường nhập số" nhưng KHÔNG được dùng type=number
+  (mất số 0 đứng đầu, có spinner, cuộn chuột đổi giá trị). Chúng là ô text/tel nên pattern="..." chỉ
+  báo lỗi LÚC SUBMIT — người dùng vẫn gõ được chữ cái vào rồi mới biết sai.
 
       <input type="tel" data-digits maxlength="10">          chỉ 0-9
       <input type="text" data-digits="-" maxlength="20">     0-9 và dấu gạch ngang (MST 10 số-3 số)

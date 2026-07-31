@@ -14,25 +14,14 @@ import java.util.Optional;
 /**
  * Bắt người dùng chốt ca còn dở từ ngày trước rồi mới cho làm việc tiếp.
  *
- * <p>Ca chỉ được tạo khi phát sinh giao dịch và chỉ đóng khi người trực tự chốt, nên một ca có thể
- * kẹt ở {@code Nháp} qua đêm (mất điện, máy sập, về đột xuất). Hôm sau
- * {@code ShiftreportService.ensureOpenShiftFor} tìm thấy đúng ca Nháp đó và dùng lại, khiến mọi hóa
- * đơn/phiếu trả/phiếu thu của hôm nay bị dồn vào ca hôm qua — sai {@code shiftDate}, sai luôn số liệu
- * báo cáo ngày. Không thể tự chốt hộ vì ca đó không có số tiền thực đếm nào đáng tin: người trực đã
- * không đếm két, và két thì có thể đã bị ca sau động vào.</p>
+ * <p>Ca có thể kẹt ở {@code Nháp} qua đêm (lý do bất đắc dĩ). Hôm sau
+ * {@code ShiftreportService.ensureOpenShiftFor} dùng lại đúng ca đó, khiến mọi giao dịch hôm nay bị
+ * dồn vào ca hôm qua — sai {@code shiftDate} lẫn số liệu. Không tự chốt hộ được vì ca đó không có số
+ * tiền thực đếm nào đáng tin.</p>
  *
- * <p>Cách chặn: <strong>vẫn cho đăng nhập</strong>, nhưng sau đó mọi thao tác khác bị
- * đá về màn chi tiết ca cũ kèm cảnh báo bắt buộc chốt. Chặn ở tầng interceptor chứ không ở trang đích
- * sau đăng nhập, để người dùng không lách được bằng cách gõ thẳng URL khác.</p>
- *
- * <p>Chỉ chặn điều hướng trang (GET trả HTML). Các đường dưới đây luôn được đi qua, nếu không người
- * dùng sẽ bị khoá cứng không thoát ra được:</p>
- * <ul>
- *   <li>chính màn ca đó và endpoint chốt ca — đích đến của việc chặn;</li>
- *   <li>đăng xuất ({@code /logout}, {@code /logout-guard}) và các màn xác thực;</li>
- *   <li>tài nguyên tĩnh, trang lỗi, và mọi request AJAX/JSON (redirect một lời gọi fetch chỉ tạo ra
- *       lỗi khó hiểu ở phía client thay vì điều hướng trình duyệt).</li>
- * </ul>
+ * <p><strong>Vẫn cho đăng nhập</strong>, nhưng mọi thao tác khác bị đá về màn ca cũ kèm cảnh báo.
+ * Chặn ở interceptor để không lách được bằng cách gõ thẳng URL. Chỉ chặn điều hướng trang — xem
+ * {@link #isAlwaysAllowed} cho các đường luôn phải thông.</p>
  */
 public class PendingShiftInterceptor implements HandlerInterceptor {
 
@@ -101,17 +90,13 @@ public class PendingShiftInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * Request KHÔNG phải điều hướng trang thì không được chặn: đá một lời gọi {@code fetch}/XHR sang
-     * trang khác chỉ làm client nhận HTML thay vì JSON, hoặc tệ hơn là tự nạp lại cả trang.
+     * Nhận diện request KHÔNG phải điều hướng trang, dựa vào {@code Sec-Fetch-Dest}: trình duyệt gửi
+     * {@code document} cho mọi điều hướng thật và giá trị khác cho fetch/XHR/ảnh/script.
      *
-     * <p>Mốc tin cậy nhất là {@code Sec-Fetch-Dest}: trình duyệt gửi {@code document} cho mọi điều
-     * hướng thật (gõ URL, bấm link, submit form) và giá trị khác cho fetch/XHR/ảnh/script. Dựa vào
-     * header này thay vì {@code X-Requested-With} vì <strong>{@code fetch()} không tự gửi
-     * {@code X-Requested-With}</strong> — đúng cái bẫy đã làm topbar tự nạp lại trang: nó gọi
-     * {@code fetch('/api/session/check')} không kèm header nào, {@code Accept} mặc định là
-     * {@code *&#47;*} nên hai điều kiện cũ đều không khớp.</p>
-     *
-     * <p>Client cũ / curl không gửi {@code Sec-Fetch-Dest} thì rơi về 2 cách nhận diện cũ.</p>
+     * <p>Dùng header này chứ không phải {@code X-Requested-With} vì <strong>{@code fetch()} không tự
+     * gửi {@code X-Requested-With}</strong>, và {@code Accept} mặc định của nó là {@code *&#47;*} —
+     * đúng cái bẫy đã làm topbar tự nạp lại trang giữa lúc đang gõ số chốt ca. Client cũ / curl không
+     * gửi {@code Sec-Fetch-Dest} thì rơi về 2 cách nhận diện cũ.</p>
      */
     private boolean isAjax(HttpServletRequest request) {
         String fetchDest = request.getHeader("Sec-Fetch-Dest");
