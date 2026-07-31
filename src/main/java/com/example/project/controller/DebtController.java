@@ -30,7 +30,7 @@ import java.math.BigDecimal;
 /**
  * Debt ("Công nợ") list for Owner and Accountant. Receivable (cho nợ) comes from customer debt
  * invoices and approved supplier-return offset debt; payable (nợ) from customer return refunds and
- * purchase-invoice debt.
+ * purchase-invoice debt. Manual debt offset (bù trừ) is Owner-only.
  */
 @Controller
 public class DebtController {
@@ -84,6 +84,7 @@ public class DebtController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", debtPage.getTotalElements());
         model.addAttribute("basePath", basePath);
+        model.addAttribute("canOffsetDebt", currentUserContext.isOwner());
         model.addAttribute("pageTitle", "Danh sách công nợ");
         return "debt/debt-list";
     }
@@ -128,8 +129,7 @@ public class DebtController {
         return "debt/payable-detail";
     }
 
-    @GetMapping({OWNER_BASE + "/offset/{partyType}/{entityId}",
-            ACCOUNTANT_BASE + "/offset/{partyType}/{entityId}"})
+    @GetMapping(OWNER_BASE + "/offset/{partyType}/{entityId}")
     public String offsetPage(@PathVariable String partyType,
                              @PathVariable Integer entityId,
                              HttpServletRequest request,
@@ -150,7 +150,7 @@ public class DebtController {
         }
     }
 
-    @PostMapping({OWNER_BASE + "/offset", ACCOUNTANT_BASE + "/offset"})
+    @PostMapping(OWNER_BASE + "/offset")
     public String applyOffset(@ModelAttribute("form") DebtOffsetRequest form,
                               HttpServletRequest request,
                               RedirectAttributes redirectAttributes) {

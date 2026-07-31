@@ -501,7 +501,7 @@
               <th style="width:140px;">Đối tượng</th>
               <th class="col-amount">Nợ</th>
               <th class="col-amount">Cho nợ</th>
-              <th style="width:110px;text-align:center;">Bù trừ</th>
+              <th th:if="${canOffsetDebt}" style="width:110px;text-align:center;">Bù trừ</th>
             </tr>
           </thead>
           <tbody>
@@ -540,7 +540,7 @@
                 <span th:unless="${item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
                       class="amount-zero">—</span>
               </td>
-              <td style="text-align:center;">
+              <td th:if="${canOffsetDebt}" style="text-align:center;">
                 <a th:if="${item.payableAmount != null && item.payableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0
                               && item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
                    class="btn-offset"
@@ -555,7 +555,7 @@
             </tr>
 
             <tr th:if="${#lists.isEmpty(debts)}" class="empty-row">
-              <td colspan="5">Không có công nợ nào phù hợp.</td>
+              <td th:colspan="${canOffsetDebt ? 5 : 4}">Không có công nợ nào phù hợp.</td>
             </tr>
           </tbody>
         </table>
