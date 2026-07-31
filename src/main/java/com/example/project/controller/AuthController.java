@@ -101,7 +101,9 @@ public class AuthController {
             case "Current password is required." -> "Vui lòng nhập mật khẩu hiện tại.";
             case "Current password is incorrect." -> "Mật khẩu hiện tại không chính xác.";
             case "New password is required." -> "Vui lòng nhập mật khẩu mới.";
-            case "New password must be at least 6 characters." -> "Mật khẩu mới phải có ít nhất 6 ký tự.";
+            case "New password must be at least 8 characters." -> "Mật khẩu mới phải có ít nhất 8 ký tự.";
+            case "New password must contain both letters and digits." ->
+                    "Mật khẩu mới phải có cả chữ và số.";
             case "Password confirmation is required." -> "Vui lòng xác nhận mật khẩu mới.";
             case "Password confirmation does not match." -> "Mật khẩu xác nhận không trùng khớp.";
             case "Password reset link is invalid or expired." -> "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.";

@@ -457,16 +457,15 @@
 
         const modal = document.getElementById('invoiceModal');
 
-        // Số lượng người dùng đã nhập ở lần submit vừa bị validate lỗi (vd quên nhập lý do). Dòng hóa đơn
-        // được nạp lại bằng AJAX nên nếu không giữ lại thì mọi ô SL bị đặt về tối đa, mất công gõ lại.
-        // Chỉ dùng cho LẦN render đầu tiên; chọn lại hóa đơn khác thì quay về mặc định trả toàn bộ.
+        // SL người dùng đã nhập ở lần submit bị lỗi: dòng hóa đơn nạp lại bằng AJAX nên không giữ lại
+        // thì mọi ô SL bị đặt về tối đa. Chỉ dùng cho LẦN render đầu; chọn hóa đơn khác thì về mặc định.
         let postedQty = new Map((/*[[${form.items}]]*/ []).
             filter(it => it && it.invoiceDetailId != null)
             .map(it => [String(it.invoiceDetailId), it.returnQty]));
 
         function formatMoney(value) {
-            // Làm tròn về đồng TRƯỚC khi format: phần net/thuế tách ra từ tiền hoàn là số lẻ
-            // (199.000 ÷ 1,08 = 184.259,259…), để nguyên thì toLocaleString in ra cả 3 số thập phân.
+            // Làm tròn về đồng TRƯỚC khi format: net/thuế tách từ tiền hoàn là số lẻ
+            // (199.000 ÷ 1,08 = 184.259,259…), để nguyên thì in ra cả 3 số thập phân.
             return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';
         }
 
@@ -536,8 +535,7 @@
                 return;
             }
             lines.forEach((line, i) => {
-                // Default to a FULL return (the whole returnable quantity); the user lowers it for a partial
-                // return, or removes the whole row for items the customer keeps.
+                // Mặc định trả TOÀN BỘ; người dùng giảm SL để trả một phần, hoặc xoá hẳn dòng.
                 const full = line.returnableQty;
                 const qty = restoring
                     ? Math.min(Math.max(postedQty.get(String(line.invoiceDetailId)) || 0, 0), full)

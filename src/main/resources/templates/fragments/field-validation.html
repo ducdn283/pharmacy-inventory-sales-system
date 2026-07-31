@@ -2,32 +2,19 @@
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  Thông báo lỗi nhập liệu GẮN NGAY DƯỚI Ô, thay cho bong bóng mặc định của trình duyệt.
+  Thông báo lỗi nhập liệu GẮN NGAY DƯỚI Ô, thay cho bong bóng mặc định của trình duyệt (bong bóng đó
+  theo ngôn ngữ hệ điều hành, khác style hệ thống, và mỗi lần chỉ báo được ĐÚNG MỘT ô). Dùng đúng cặp
+  `is-invalid` + `.invalid-feedback` mà server dùng cho BindingResult nên lỗi client/server nhìn y nhau.
 
-  Vì sao cần: ô có `required` mà để trống thì trình duyệt hiện bong bóng riêng của nó — chữ theo ngôn
-  ngữ hệ điều hành (có máy ra tiếng Anh), style không giống hệ thống, tự tắt sau vài giây, và mỗi lần
-  chỉ báo được ĐÚNG MỘT ô nên người dùng phải bấm Lưu nhiều lần mới biết còn thiếu gì. Fragment này
-  đánh dấu mọi ô sai cùng lúc, dùng đúng cặp `is-invalid` + `.invalid-feedback` mà server đang dùng
-  khi render lỗi từ `BindingResult` — nên lỗi client và lỗi server nhìn y như nhau.
-
-  Cách dùng — đánh dấu ở thẻ <form>:
-
-      <form ... data-validate>
-
-  Giữ nguyên `required` / `pattern` / `min` / `maxlength`… trên ô nhập như bình thường: fragment đọc
-  lại chính các ràng buộc đó qua Constraint Validation API của trình duyệt, không cần khai lại lần hai.
-
-  Muốn tự viết câu thông báo thì thêm vào Ô NHẬP (không bắt buộc — mặc định suy từ nhãn của ô):
-
-      data-required-message="Vui lòng nhập số tiền đã kiểm đếm"
-      data-invalid-message="Số điện thoại phải có 10 chữ số"
-
-  Rồi đặt cuối <body>:
+  Cách dùng: thêm `data-validate` vào thẻ <form>, giữ nguyên `required`/`pattern`/`min`… trên ô nhập
+  (fragment đọc lại chính các ràng buộc đó), rồi đặt cuối <body>:
 
       <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
-  ⚠ Đây KHÔNG thay thế kiểm tra ở backend. Mọi ô gắn ở đây phải có `@NotBlank`/`@Pattern` tương ứng
-  trong DTO hoặc một lượt kiểm trong service — màn hình luôn có thể bị bỏ qua (gọi thẳng POST, JS lỗi).
+  Câu thông báo mặc định suy từ nhãn của ô; muốn tự viết thì thêm vào Ô NHẬP:
+  `data-required-message` / `data-invalid-message`. Bỏ qua một ô: `data-validate-skip`.
+
+  KHÔNG thay thế kiểm tra ở backend — màn hình luôn có thể bị bỏ qua (POST thẳng, JS lỗi).
 -->
 <th:block th:fragment="fieldValidation">
     <script>
@@ -38,10 +25,7 @@
                 return document.querySelectorAll('form[data-validate]');
             }
 
-            /**
-             * Nhãn của ô, để dựng câu "Vui lòng nhập <nhãn>". Ưu tiên <label for="..."> vì đó là liên
-             * kết tường minh; không có thì lấy .form-label gần nhất trong cùng khối.
-             */
+            /** Nhãn của ô, để dựng câu "Vui lòng nhập <nhãn>". */
             function labelOf(control) {
                 var label = null;
                 if (control.id) {
@@ -56,7 +40,6 @@
                 return label.textContent.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
             }
 
-            /** "Tiền mặt cuối ca" → "tiền mặt cuối ca", để nối vào giữa câu cho tự nhiên. */
             function lowerFirst(text) {
                 return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
             }
@@ -68,9 +51,8 @@
             }
 
             /**
-             * Ô tiền dùng type=text (vì type=number không nhận dấu chấm phân cách) nên trình duyệt coi
-             * dấu trừ trơ trọi là "đã có giá trị". Nó chưa phải một con số — money-input cũng gửi rỗng
-             * cho trường hợp này — nên phải tự tính là còn trống.
+             * Ô tiền dùng type=text nên trình duyệt coi dấu trừ trơ trọi là "đã có giá trị" — nó chưa
+             * phải một con số (money-input cũng gửi rỗng cho ca này) nên phải tự tính là còn trống.
              */
             function isMissing(control) {
                 if (control.validity.valueMissing) return true;
@@ -95,8 +77,7 @@
                 if (invalid) return invalid;
 
                 var validity = control.validity;
-                // `title` trên các ô có pattern đang chứa sẵn câu hướng dẫn đọc được
-                // (vd "10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09") — dùng lại luôn.
+                // `title` của ô có pattern vốn đã chứa câu hướng dẫn đọc được — dùng lại luôn.
                 if (validity.patternMismatch || validity.typeMismatch) {
                     return control.getAttribute('title') || 'Giá trị không đúng định dạng';
                 }
@@ -115,7 +96,6 @@
                 if (validity.badInput || validity.stepMismatch) {
                     return 'Giá trị không hợp lệ';
                 }
-                // Còn lại thì để câu của trình duyệt — vẫn hơn là không nói gì.
                 return control.validationMessage || 'Giá trị không hợp lệ';
             }
 
@@ -158,14 +138,11 @@
             }
 
             /**
-             * Ô đang bị ẩn (khối chỉ hiện với khách doanh nghiệp, ô chỉ hiện khi chọn nguồn kiểm kê…)
-             * thì bỏ qua: người dùng không thấy nó nên không sửa được, mà chặn submit vì một ô vô hình
-             * là bế tắc hoàn toàn. Chính trình duyệt cũng gãy ở ca này ("not focusable").
+             * Ô đang bị ẩn thì BỎ QUA: người dùng không thấy nên không sửa được, chặn submit vì một ô
+             * vô hình là bế tắc hoàn toàn.
              *
-             * <p>Kiểm bằng `display`/`visibility` chứ KHÔNG bằng offsetWidth/getClientRects: các khối
-             * ẩn/hiện trên màn của mình đều bật tắt bằng `style.display`, mà kích thước còn phụ thuộc
-             * layout — cửa sổ rộng 0px (pane xem trước, tab ẩn) sẽ làm MỌI ô trông như đang bị ẩn và
-             * validate bỏ qua sạch.
+             * Kiểm bằng `display`/`visibility` chứ KHÔNG bằng offsetWidth: kích thước phụ thuộc layout
+             * nên cửa sổ rộng 0px sẽ làm MỌI ô trông như bị ẩn và validate bỏ qua sạch.
              */
             function isVisible(control) {
                 for (var node = control; node && node !== document; node = node.parentElement) {
