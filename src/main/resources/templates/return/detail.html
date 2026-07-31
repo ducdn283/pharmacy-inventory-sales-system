@@ -266,6 +266,22 @@
                                 <td th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                                 <td></td>
                             </tr>
+
+                            <!-- Bù trừ là số của cả PHIẾU. Chỉ hiện khi có cấn trừ thật: không có nợ
+                                 thì "Tiền hoàn" đã chính là tiền phải trả. -->
+                            <tr th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
+                                <td colspan="8" class="text-secondary">Đã cấn trừ công nợ hóa đơn</td>
+                                <td class="text-danger"
+                                    th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</td>
+                                <td colspan="4"></td>
+                            </tr>
+                            <tr class="fw-semibold"
+                                th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
+                                <td colspan="8">Còn phải hoàn khách (tiền thật)</td>
+                                <td class="text-warning"
+                                    th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</td>
+                                <td colspan="4"></td>
+                            </tr>
                             </tbody>
                         </table>
                     </div>

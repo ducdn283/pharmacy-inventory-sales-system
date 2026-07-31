@@ -883,6 +883,9 @@ public class ReturnService {
                 ret.getReturnedBy() != null ? ret.getReturnedBy().getName() : "Không rõ",
                 details.size(),
                 ret.getTotalRefund(),
+                ret.getOffsetDebtAmount(),
+                // Cùng công thức với màn chi tiết để hai màn không bao giờ lệch số.
+                nz(ret.getTotalRefund()).subtract(nz(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
                 ret.getReturnType(),
                 returnTypeDisplay(ret.getReturnType()),
                 statusName,

@@ -77,6 +77,8 @@ public class ReturnController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", returnPage.getTotalElements());
 
+        // Tắt bù trừ thì 2 cột cấn trừ luôn bằng 0 ⇒ ẩn hẳn cột thay vì để một cột toàn số 0.
+        model.addAttribute("autoOffsetDebt", returnService.isAutoOffsetDebt());
         model.addAttribute("basePath", resolveBasePath(request));
         return "return/list";
     }
