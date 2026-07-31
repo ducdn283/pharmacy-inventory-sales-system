@@ -41,8 +41,8 @@ public class CustomerService {
         List<CustomerResponse> filtered = customerRepository.findAll().stream()
                 .filter(c -> matchesKeyword(c, kw))
                 .filter(c -> typeFilter == null || typeFilter.equals(c.getCustomerType()))
-                // Sắp theo MÃ (= customerID) cho khớp cột mã người dùng đọc đầu tiên, giống màn NCC.
-                // Sắp theo tên thì mã nhảy lung tung giữa danh sách, và khách vừa tạo không biết ở đâu.
+                // Sắp theo MÃ (= customerID) cho khớp cột mã người dùng đọc đầu tiên: sắp theo tên
+                // thì mã nhảy lung tung và khách vừa tạo không biết nằm đâu.
                 .sorted(Comparator.comparing(Customer::getId,
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(CustomerResponse::from)
@@ -141,20 +141,11 @@ public class CustomerService {
     }
 
     /**
-     * Lưới an toàn cuối cùng cho tính duy nhất: bảng {@code customer} nay có UNIQUE index trên
-     * {@code phoneNumber} và {@code taxCode}, và <strong>chỉ DB mới phân xử được</strong> khi hai người
-     * nhập cùng lúc — kiểu "hỏi rồi mới ghi" của {@link #validate} luôn có khe hở giữa lúc hỏi và lúc
-     * ghi, người thứ hai đọc thấy "chưa ai dùng" rồi cả hai cùng ghi.
+     * Chặn trùng cho ca hai người nhập cùng lúc: {@link #validate} hỏi-rồi-ghi nên luôn có khe hở,
+     * chỉ UNIQUE index ở DB phân xử được. Dịch lỗi DB sang đúng câu mà {@code validate} vẫn dùng.
      *
-     * <p>{@link #validate} vẫn giữ nguyên và vẫn là nơi lo 99% ca thường (nó phân biệt được lỗi định
-     * dạng với lỗi trùng, và cho câu thông báo gắn đúng ô nhập). Hàm này chỉ dịch lỗi DB của ca đua
-     * hiếm sang <em>đúng câu thông báo đó</em>, để người dùng không bao giờ thấy trang 500 thô.
-     *
-     * <p>{@code saveAndFlush} chứ không phải {@code save}: khi sửa (UPDATE) thì {@code save} chỉ đưa vào
-     * session, câu lệnh thật chạy lúc commit — tức là sau khi ra khỏi khối {@code try} này.
-     *
-     * <p>MySQL cho phép NHIỀU dòng NULL trong UNIQUE index, nên khách lẻ không khai CCCD vẫn tạo được
-     * bao nhiêu bản ghi cũng được — đúng như nghiệp vụ cần.
+     * <p>Phải {@code saveAndFlush}: {@code save} chỉ đưa vào session, UPDATE thật chạy lúc commit —
+     * tức là sau khi đã ra khỏi khối {@code try} này.
      */
     private Customer saveGuardingUniqueRace(Customer c, CustomerRequest req) {
         try {
@@ -165,10 +156,7 @@ public class CustomerService {
         }
     }
 
-    /**
-     * Suy ra ô nào bị trùng từ tên UNIQUE index trong thông báo lỗi của MySQL. Tên index trùng tên cột
-     * nên đọc thẳng được. Không nhận ra thì trả câu chung — thà chung chung còn hơn chỉ sai ô.
-     */
+    /** Không nhận ra index thì trả câu chung — thà chung chung còn hơn chỉ sai ô. */
     private String duplicateMessage(DataIntegrityViolationException exception, boolean company) {
         String key = violatedIndexName(exception);
         if (key.contains("phonenumber")) {
@@ -183,12 +171,9 @@ public class CustomerService {
     }
 
     /**
-     * Tên UNIQUE index bị vi phạm, lấy từ câu lỗi MySQL
-     * {@code Duplicate entry '<giá trị>' for key '<bảng>.<index>'}.
-     *
-     * <p>Phải cắt lấy đúng phần sau {@code for key}, KHÔNG được dò cả câu: chính
-     * <em>giá trị</em> bị trùng cũng nằm trong câu đó, nên một CCCD trùng của khách tên
-     * {@code "phoneNumber"}, hay email {@code phone@...} bên NCC, sẽ khớp nhầm tên cột khác và chỉ sai ô.
+     * Tên index bị vi phạm, cắt từ câu lỗi MySQL {@code Duplicate entry '<giá trị>' for key
+     * '<bảng>.<index>'}. Phải cắt phần sau {@code for key}, KHÔNG dò cả câu: giá trị bị trùng cũng
+     * nằm trong câu đó nên dễ khớp nhầm tên cột khác (vd email {@code phone@...}).
      */
     private String violatedIndexName(DataIntegrityViolationException exception) {
         String detail = exception.getMostSpecificCause().getMessage();
@@ -200,17 +185,10 @@ public class CustomerService {
     }
 
     /**
-     * Toàn bộ kiểm tra chạy TRƯỚC khi ghi bất cứ thứ gì vào entity — định dạng rồi mới tới trùng lặp,
-     * để người dùng thấy lỗi định dạng ("CCCD phải 12 số") thay vì lỗi trùng của một giá trị vốn đã sai.
+     * Chạy TRƯỚC khi ghi vào entity, và kiểm định dạng trước rồi mới tới trùng lặp — để không báo
+     * "CCCD đã tồn tại" cho một chuỗi vốn không phải CCCD.
      *
-     * <p><strong>Vì sao phải tự kiểm ở đây dù DB đã có UNIQUE:</strong> tầng này phân biệt được lỗi
-     * định dạng với lỗi trùng và cho câu thông báo gắn đúng ô nhập, còn DB chỉ trả một câu lỗi kỹ thuật
-     * chung. Thiếu một dòng ở đây là người dùng nhận thông báo khó hiểu — đúng như ca đã gặp: số điện
-     * thoại được chặn nhưng CCCD thì không, nên cứ đổi số điện thoại là tạo được khách trùng CCCD.
-     * Ca hai người nhập cùng lúc thì chỉ DB phân xử được, xem
-     * {@link #saveGuardingUniqueRace(Customer, CustomerRequest)}.</p>
-     *
-     * @param excludeId id của bản ghi đang sửa (null khi tạo mới) — bản ghi luôn "trùng với chính nó"
+     * @param excludeId id bản ghi đang sửa (null khi tạo mới) — bản ghi luôn "trùng với chính nó"
      */
     private void validate(CustomerRequest req, Integer excludeId) {
         boolean company = "COMPANY".equals(req.getCustomerType());
@@ -229,20 +207,14 @@ public class CustomerService {
         c.setPhoneNumber(trimToNull(req.getPhoneNumber()));
         c.setAddress(trimToNull(req.getAddress()));
         c.setNote(trimToNull(req.getNote()));
-        // taxCode dùng cho CẢ 2 loại doanh nghiệp = Mã số thuế (MST),
-        // cá nhân = số CCCD/CMND — cần để xuất hóa đơn/hóa đơn điều chỉnh cho khách.
-        String taxCode = trimToNull(req.getTaxCode());
-        c.setTaxCode(taxCode);
+        // taxCode dùng cho CẢ 2 loại: doanh nghiệp = MST, cá nhân = CCCD/CMND.
+        c.setTaxCode(trimToNull(req.getTaxCode()));
         // Thông tin ngân hàng chỉ áp dụng cho khách doanh nghiệp.
         c.setBankAccountNumber(company ? trimToNull(req.getBankAccountNumber()) : null);
         c.setBankName(company ? trimToNull(req.getBankName()) : null);
     }
 
-    /**
-     * Định dạng {@code taxCode} theo loại khách (bỏ qua khi để trống — không bắt buộc):
-     * doanh nghiệp = Mã số thuế {@code 10} chữ số (tùy chọn {@code -3} chữ số chi nhánh, mirror Supplier);
-     * cá nhân = số CCCD {@code 12} chữ số hoặc CMND {@code 9} chữ số.
-     */
+    /** Doanh nghiệp = MST 10 số (kèm "-3 số" chi nhánh); cá nhân = CCCD 12 số hoặc CMND 9 số. */
     private void validateTaxCode(boolean company, String taxCode) {
         if (taxCode == null) {
             return;
@@ -265,9 +237,8 @@ public class CustomerService {
     }
 
     /**
-     * CCCD/CMND (khách cá nhân) và MST (khách doanh nghiệp) đều định danh duy nhất một pháp nhân —
-     * hai khách hàng không thể dùng chung. Bỏ qua khi để trống: trường này KHÔNG bắt buộc, khách lẻ
-     * mua thuốc thường không cần xuất hóa đơn nên không phải khai.
+     * CCCD/MST định danh duy nhất một pháp nhân nên không thể dùng chung. Bỏ qua khi để trống:
+     * trường này không bắt buộc, khách lẻ không cần xuất hóa đơn thì không phải khai.
      */
     private void validateTaxCodeUnique(boolean company, String taxCode, Integer excludeId) {
         if (taxCode == null || taxCode.isBlank()) return;

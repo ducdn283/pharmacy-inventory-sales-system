@@ -166,7 +166,7 @@
         <div th:replace="~{fragments/toast :: flash}"></div>
 
         <!-- Ca dở dang từ ngày trước — PendingShiftInterceptor đang chặn mọi thao tác khác cho tới
-             khi ca này được chốt. Giải thích rõ để người dùng không tưởng là lỗi điều hướng. -->
+             khi ca này được chốt. -->
         <div th:if="${mustCloseNow}" class="alert alert-warning d-flex gap-3 align-items-start mb-4">
             <i class="ti ti-alert-triangle fs-4 mt-1"></i>
             <div>
@@ -175,7 +175,7 @@
                     Ca ngày <strong th:text="${detail.shiftDateDisplay}">01/07/2026</strong> chưa được chốt
                     trên hệ thống. Mọi thao tác khác đang tạm bị khoá.
                     Hãy nhập <strong>đúng số tiền bạn đã kiểm đếm khi kết thúc ca hôm đó</strong> rồi nộp báo cáo
-                    ở phần <strong>Chốt ca</strong> bên dưới. Nếu ca bị bỏ dở do sự cố (ví dụ: mất điện, máy hỏng,...),
+                    ở phần <strong>Chốt ca</strong> bên dưới. Nếu ca bị bỏ dở do sự cố,
                     ghi rõ vào ô <strong>Ghi chú chênh lệch</strong> để chủ nhà thuốc nắm khi duyệt.
                 </div>
             </div>

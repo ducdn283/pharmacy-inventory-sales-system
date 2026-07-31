@@ -150,8 +150,8 @@
                         <th>Người tạo</th>
                         <th>Số mặt hàng</th>
                         <th>Tiền hoàn</th>
-                        <th>Đã cấn trừ nợ</th>
-                        <th>NCC còn phải hoàn</th>
+                        <th th:if="${autoOffsetDebt}">Đã cấn trừ nợ</th>
+                        <th th:if="${autoOffsetDebt}">NCC còn phải hoàn</th>
                         <th>Đối tượng</th>
                         <th>Trạng thái</th>
                         <th class="text-end">Thao tác</th>
@@ -175,7 +175,7 @@
                             th:text="${#numbers.formatDecimal(item.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
                         <!-- Phần giá trị hàng trả đã cấn trừ vào nợ phải trả NCC (số cố định, chốt lúc duyệt).
                              Phiếu Nháp/Từ chối chưa trả hàng nên chưa phát sinh bù trừ. -->
-                        <td>
+                        <td th:if="${autoOffsetDebt}">
                             <span th:if="${item.status == 'Nháp' or item.status == 'Từ chối'}"
                                   class="text-secondary">—</span>
                             <span th:unless="${item.status == 'Nháp' or item.status == 'Từ chối'}"
@@ -183,7 +183,7 @@
                                           : ${#numbers.formatDecimal(item.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">50.000đ</span>
                         </td>
                         <!-- Tiền thật NCC còn phải hoàn sau bù trừ — đây mới là số phiếu thu đi thu. -->
-                        <td>
+                        <td th:if="${autoOffsetDebt}">
                             <span th:if="${item.status == 'Nháp' or item.status == 'Từ chối'}"
                                   class="text-secondary">—</span>
                             <span th:unless="${item.status == 'Nháp' or item.status == 'Từ chối'}">
@@ -208,7 +208,7 @@
                     </tr>
 
                     <tr th:if="${#lists.isEmpty(returns)}">
-                        <td colspan="12" class="text-center text-secondary py-4">
+                        <td th:colspan="${autoOffsetDebt} ? 12 : 10" class="text-center text-secondary py-4">
                             Không tìm thấy phiếu trả hàng nào.
                         </td>
                     </tr>

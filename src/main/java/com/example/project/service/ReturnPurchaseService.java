@@ -30,17 +30,14 @@ import java.util.stream.Collectors;
  * or approves; there is no "Chờ duyệt" hand-off. Statuses: {@link ReturnPurchaseStatus} —
  * Nháp → Đã duyệt / Từ chối.</p>
  *
- * <p><strong>Approval deducts stock</strong> (goods physically leave for the supplier): each line's
- * quantity is removed from the batches that were imported on the original purchase line
- * ({@code batch.purchaseDetailID}), FIFO by expiry, blocking negative stock. The purchase invoice's
- * {@code returnStatus} / {@code returnQty} are recomputed in the same transaction, and the value returned
- * is netted against whatever the pharmacy still owes on that purchase ({@code PurchaseInvoice.paid} goes
- * up by {@code offsetDebtAmount} — see {@code applyDebtOffset}). Only the remainder is real money the
- * supplier still has to hand back, which the Income module collects.</p>
+ * <p><strong>Approval deducts stock</strong> (goods physically leave for the supplier): each line is
+ * removed from the batches imported on the original purchase line ({@code batch.purchaseDetailID}),
+ * FIFO by expiry, blocking negative stock. The value returned is netted against what the pharmacy
+ * still owes on that purchase (see {@code applyDebtOffset}); only the remainder is real money the
+ * supplier hands back, which the Income module collects.</p>
  *
- * <p>Per-line "already returned" is derived on the fly from {@code returndetail} (there is no
- * {@code returnedQty} column on {@code purchasedetail}); see
- * {@link ReturndetailRepository#sumReturnedQtyByPurchaseDetail}.</p>
+ * <p>Per-line "already returned" is derived on the fly from {@code returndetail} — there is no
+ * {@code returnedQty} column on {@code purchasedetail}.</p>
  */
 @Service
 public class ReturnPurchaseService {
@@ -522,17 +519,8 @@ public class ReturnPurchaseService {
     }
 
     /**
-     * Ghi tồn kho của một lô, dịch lỗi khoá lạc quan thành câu tiếng Việt hiểu được.
-     *
-     * <p>{@code Batch} có {@code @Version} nên Hibernate đưa version vào {@code WHERE} của lệnh update.
-     * Nếu người khác đã ghi vào lô này kể từ lúc mình đọc nó ra, update khớp 0 dòng và Spring ném
-     * {@link ObjectOptimisticLockingFailureException} — chính là cơ chế chặn mất dấu cập nhật tồn kho.
-     *
-     * <p>Phải {@code saveAndFlush} chứ không phải {@code save}: {@code save} chỉ đưa vào session, lệnh
-     * UPDATE thật chạy lúc commit — tức là SAU khi ra khỏi khối {@code try}, nên không bắt được.
-     *
-     * <p>Ném {@link IllegalArgumentException} vì controller chỉ bắt loại đó; loại khác là người dùng
-     * nhận trang lỗi 500 thô thay vì câu thông báo.
+     * Ghi tồn kho một lô, dịch lỗi khoá lạc quan thành câu người dùng đọc được — xem
+     * {@code StockadjustmentService.saveBatchGuardingConcurrentEdit} để biết cơ chế.
      */
     private void saveBatchGuardingConcurrentEdit(Batch batch, Returndetail detail) {
         try {
@@ -566,13 +554,11 @@ public class ReturnPurchaseService {
      * {@link DebtService#recordPurchaseDebtOffset} — nợ NCC giảm ngay trong cùng transaction (mục 3.3
      * bước 1, mục 3.4 "cập nhật trực tiếp").
      *
-     * <p><strong>⚠️ ĐỔI NGHĨA CỘT {@code offsetDebtAmount} (28/07) — cần báo chủ module Thu/Chi.</strong>
-     * Trước đây cột này mang nghĩa "NCC CÒN phải hoàn": lúc duyệt = {@code totalRefund}, rồi
-     * {@code IncomeService.applySupplierOffsetDebtPayment} trừ dần mỗi lần NCC hoàn tiền. Theo đặc tả mới
-     * nó là SỐ ĐÃ BÙ TRỪ (cố định, không phải số dư động). Vì vậy phần NCC còn phải hoàn bằng tiền thật
-     * nay là {@code totalRefund − offsetDebtAmount} — {@code IncomeService.collectibleOffsetDebt} phải
-     * đổi theo (và trừ dần theo tổng Income đã lập, không trừ vào cột này nữa), nếu không màn thu tiền
-     * NCC sẽ hiểu sai số còn thu được.</p>
+     * <p><strong> {@code offsetDebtAmount} nay là SỐ ĐÃ BÙ TRỪ (cố định)</strong>
+     * (số dư động do {@code IncomeService.applySupplierOffsetDebtPayment} trừ dần). Phần
+     * NCC còn phải hoàn bằng tiền thật nay là {@code totalRefund − offsetDebtAmount} ⇒
+     * {@code IncomeService.collectibleOffsetDebt} phải đổi theo, nếu không màn thu tiền NCC hiểu sai
+     * số còn thu được.</p>
      */
     private void applyDebtOffset(Return ret, Purchaseinvoice purchase) {
         BigDecimal offset = computeDebtOffset(purchase, ret.getTotalRefund());

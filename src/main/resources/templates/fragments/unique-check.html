@@ -2,14 +2,11 @@
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  Kiểm trùng LIVE cho những ô phải là duy nhất (số điện thoại, mã số thuế, CCCD, email…).
+  Kiểm trùng LIVE cho những ô phải là duy nhất (số điện thoại, mã số thuế, CCCD, email…), để người
+  dùng biết ngay lúc rời ô thay vì điền xong cả form mới bị đá về.
 
-  Vì sao cần: người dùng biết ngay lúc rời ô là ô đó đã có người dùng rồi, thay vì điền xong cả form
-  mới bị đá về.
-
-  ⚠ Đây KHÔNG thay thế kiểm tra ở backend. Màn hình luôn có thể bị bỏ qua — gọi thẳng POST, JS lỗi,
-  hoặc hai người nhập cùng lúc rồi bấm lưu cách nhau vài mili giây. Mọi ô gắn ở đây BẮT BUỘC phải có
-  một lượt kiểm tương ứng trong service (và nên có UNIQUE index ở DB — chỉ DB phân xử được ca đua).
+  KHÔNG thay thế kiểm tra ở backend: màn hình luôn có thể bị bỏ qua (POST thẳng, JS lỗi), và ca hai
+  người nhập cùng lúc thì chỉ UNIQUE index ở DB phân xử được.
 
   Cách dùng — đánh dấu ngay trên ô nhập:
 
@@ -108,8 +105,8 @@
                         markDuplicate(input, !!(data && data.duplicate));
                     })
                     .catch(function () {
-                        // Mạng lỗi / hết phiên: im lặng bỏ qua. Không được chặn người dùng lưu chỉ vì
-                        // lớp báo sớm không gọi được — backend vẫn kiểm khi bấm lưu.
+                        // Mạng lỗi / hết phiên: im lặng bỏ qua — không chặn người dùng lưu chỉ vì
+                        // lớp báo sớm không gọi được (backend vẫn kiểm).
                         if (input.getAttribute('data-unique-token') !== token) return;
                         markDuplicate(input, false);
                     });
@@ -123,8 +120,7 @@
                     runCheck(input);
                 });
 
-                // Kiểm cả trong lúc gõ để cờ trùng thường đã sẵn sàng trước khi người dùng bấm Lưu —
-                // bấm Lưu không phải lúc nào cũng sinh sự kiện blur cho ô đang nhập.
+                // Kiểm cả trong lúc gõ vì bấm Lưu không phải lúc nào cũng sinh blur cho ô đang nhập.
                 input.addEventListener('input', function () {
                     markDuplicate(input, false);
                     if (timer) clearTimeout(timer);

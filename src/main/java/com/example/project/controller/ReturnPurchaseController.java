@@ -71,6 +71,8 @@ public class ReturnPurchaseController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", returnPage.getTotalElements());
 
+        // Tắt bù trừ thì 2 cột cấn trừ luôn bằng 0 ⇒ ẩn hẳn cột thay vì để một cột toàn số 0.
+        model.addAttribute("autoOffsetDebt", returnPurchaseService.isAutoOffsetDebt());
         model.addAttribute("basePath", BASE);
         return "return-purchase/list";
     }
@@ -125,8 +127,15 @@ public class ReturnPurchaseController {
     }
 
     @GetMapping("/{returnId}")
-    public String detail(@PathVariable Integer returnId, Model model) {
-        model.addAttribute("detail", returnPurchaseService.getDetail(returnId));
+    public String detail(@PathVariable Integer returnId, Model model,
+                         RedirectAttributes redirectAttributes) {
+        try {
+            model.addAttribute("detail", returnPurchaseService.getDetail(returnId));
+        } catch (IllegalArgumentException exception) {
+            // Gõ tay id không tồn tại: về danh sách kèm thông báo thay vì rơi vào trang lỗi chung.
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:" + BASE;
+        }
         model.addAttribute("basePath", BASE);
         return "return-purchase/detail";
     }

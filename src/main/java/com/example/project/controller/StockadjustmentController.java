@@ -153,11 +153,22 @@ public class StockadjustmentController {
     @GetMapping(OWNER_BASE + "/{adjustmentId}")
     public String detail(@PathVariable Integer adjustmentId,
                          HttpServletRequest request,
-                         Model model) {
-        StockAdjustmentDetailPageResponse detail = stockadjustmentService.getDetail(adjustmentId);
+                         Model model,
+                         RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+
+        StockAdjustmentDetailPageResponse detail;
+        try {
+            detail = stockadjustmentService.getDetail(adjustmentId);
+        } catch (IllegalArgumentException exception) {
+            // Gõ tay id không tồn tại (hoặc phiếu đã bị xóa): đưa về danh sách kèm thông báo thay vì
+            // để rơi vào trang lỗi chung — danh sách mới là chỗ người dùng chọn được phiếu đúng.
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:" + basePath;
+        }
 
         model.addAttribute("detail", detail);
-        model.addAttribute("basePath", resolveBasePath(request));
+        model.addAttribute("basePath", basePath);
 
         return "stock-adjustment/detail";
     }

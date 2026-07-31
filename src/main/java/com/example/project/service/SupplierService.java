@@ -47,9 +47,8 @@ public class SupplierService {
         List<SupplierResponse> filtered = supplierRepository.findAll()
                 .stream()
                 .filter(s -> matchesKeyword(s, kw))
-                // Sắp theo MÃ (= supplierID, vì NCC-xxxxx suy thẳng từ khoá chính) chứ không theo tên.
-                // Trước đây sắp theo tên nên mã nhảy lung tung giữa danh sách — người dùng đọc cột mã
-                // đầu tiên nên thứ tự phải khớp với nó, và NCC mới tạo luôn nằm ở cuối, tìm được ngay.
+                // Sắp theo MÃ (= supplierID, vì NCC-xxxxx suy thẳng từ khoá chính): sắp theo tên thì
+                // mã nhảy lung tung và NCC vừa tạo không biết nằm đâu.
                 .sorted(Comparator.comparing(Supplier::getId,
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(s -> {
@@ -216,14 +215,8 @@ public class SupplierService {
     }
 
     /**
-     * Ba trường định danh một nhà cung cấp phải là DUY NHẤT. Đây là tầng kiểm chính: nó phân biệt được
-     * lỗi định dạng với lỗi trùng và cho câu thông báo gắn đúng ô nhập.
-     *
-     * <p>MST quan trọng nhất: nó là căn cứ đối chiếu hóa đơn GTGT đầu vào với cơ quan thuế, hai NCC
-     * cùng MST thì không phân định được hóa đơn thuộc về ai.</p>
-     *
-     * <p>Bảng {@code supplier} nay CÓ UNIQUE index trên cả 3 cột — xem
-     * {@link #saveGuardingUniqueRace(Supplier)} để biết vì sao vẫn cần cả hai tầng.</p>
+     * Ba trường định danh một NCC phải là DUY NHẤT. MST quan trọng nhất: nó là căn cứ đối chiếu hóa
+     * đơn GTGT đầu vào với cơ quan thuế, hai NCC cùng MST thì không phân định được hóa đơn của ai.
      */
     private void validateUnique(SupplierRequest request, Integer excludeId) {
         if (isPhoneTaken(request.getPhone(), excludeId)) {
@@ -266,16 +259,11 @@ public class SupplierService {
     }
 
     /**
-     * Lưới an toàn cuối cùng cho tính duy nhất: bảng {@code supplier} nay có UNIQUE index trên
-     * {@code phone}, {@code email} và {@code taxCode}, và <strong>chỉ DB mới phân xử được</strong> khi
-     * hai người nhập cùng lúc — kiểu "hỏi rồi mới ghi" của {@link #validateUnique} luôn có khe hở giữa
-     * lúc hỏi và lúc ghi, cả hai đều đọc thấy "chưa ai dùng" rồi cùng ghi.
+     * Chặn trùng cho ca hai người nhập cùng lúc: {@link #validateUnique} hỏi-rồi-ghi nên luôn có khe
+     * hở, chỉ UNIQUE index ở DB phân xử được. Dịch lỗi DB sang đúng câu {@code validateUnique} dùng.
      *
-     * <p>Hàm này chỉ dịch lỗi DB của ca đua hiếm sang <em>đúng câu thông báo</em> mà
-     * {@code validateUnique} vẫn dùng, để người dùng không bao giờ thấy trang 500 thô.
-     *
-     * <p>{@code saveAndFlush} chứ không phải {@code save}: khi sửa (UPDATE) thì {@code save} chỉ đưa vào
-     * session, câu lệnh thật chạy lúc commit — tức là sau khi ra khỏi khối {@code try} này.
+     * <p>Phải {@code saveAndFlush}: {@code save} chỉ đưa vào session, UPDATE thật chạy lúc commit —
+     * tức là sau khi đã ra khỏi khối {@code try} này.
      */
     private Supplier saveGuardingUniqueRace(Supplier supplier) {
         try {
@@ -286,13 +274,10 @@ public class SupplierService {
     }
 
     /**
-     * Suy ra ô nào bị trùng từ tên UNIQUE index bị vi phạm, lấy từ câu lỗi MySQL
-     * {@code Duplicate entry '<giá trị>' for key '<bảng>.<index>'}. Tên index trùng tên cột nên đọc
-     * thẳng được. Không nhận ra thì trả câu chung — thà chung chung còn hơn chỉ sai ô.
-     *
-     * <p>Phải cắt lấy đúng phần sau {@code for key}, KHÔNG được dò cả câu: chính <em>giá trị</em> bị
-     * trùng cũng nằm trong câu đó, nên một MST trùng của NCC có email {@code phone@example.com} sẽ khớp
-     * nhầm sang "số điện thoại" và chỉ sai ô (đã thử thật, đúng là khớp nhầm).
+     * Tên index bị vi phạm, cắt từ câu lỗi MySQL {@code Duplicate entry '<giá trị>' for key
+     * '<bảng>.<index>'}. Phải cắt phần sau {@code for key}, KHÔNG dò cả câu: giá trị bị trùng cũng
+     * nằm trong câu đó nên MST trùng của NCC có email {@code phone@...} sẽ khớp nhầm sang "số điện
+     * thoại". Không nhận ra index thì trả câu chung.
      */
     private String duplicateMessage(DataIntegrityViolationException exception) {
         String detail = exception.getMostSpecificCause().getMessage();

@@ -23,7 +23,15 @@ public class ReturnListItemResponse {
     private String createdByName;
 
     private long totalItems;
+
+    /** Tiền hoàn ĐÃ áp tỷ lệ hoàn (Σ lineRefund), không phải giá trị gốc 100%. */
     private BigDecimal totalRefund;
+
+    /** Phần tiền hoàn đã cấn trừ vào công nợ của chính hóa đơn gốc; chốt lúc duyệt. */
+    private BigDecimal offsetDebtAmount;
+
+    /** {@code totalRefund − offsetDebtAmount} — tiền thật còn phải trả khách, phần phiếu chi chi ra. */
+    private BigDecimal cashRefundDue;
 
     private String returnType;
     private String returnTypeDisplay;

@@ -340,11 +340,11 @@ public class PurchaseinvoiceService {
             throw new IllegalArgumentException("Tổng tiền phiếu nhập không hợp lệ");
         }
 
-        // A new import invoice always starts unpaid, i.e. "Nợ" (BA 2026-07-27). Receiving goods and
-        // paying for them are separate events: the money only moves when an Expense slip is raised
-        // against this invoice, and {@link #applyPayment} is the single door it comes through. That
-        // keeps one path to `paid`/`status` instead of two that could disagree, and it is why the
-        // create form no longer asks for an amount already paid.
+        // A new import invoice always starts unpaid, i.e. "Nợ". Receiving goods and paying for them
+        // are separate events: the money only moves when an Expense slip is raised against this
+        // invoice, and applyPayment() is the single door it comes through — one path to
+        // paid/status instead of two that could disagree, and why the create form asks for no
+        // amount already paid.
         BigDecimal paid = BigDecimal.ZERO;
 
         Purchaseinvoice invoice = new Purchaseinvoice();
@@ -956,20 +956,16 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Trạng thái hiển thị cho danh sách/chi tiết — <strong>lấy đúng giá trị đang lưu trong DB</strong>.
+     * Trạng thái hiển thị cho danh sách/chi tiết — <strong>lấy đúng giá trị đang lưu trong DB</strong>,
+     * không suy lại từ {@code paid}/{@code totalAmount}. Đọc thẳng cột giúp màn hình phản ánh đúng dữ
+     * liệu thật nếu ai đó sửa {@code status} trực tiếp trong DB, thay vì luôn tự suy ra "Nợ"/"Hoàn
+     * thành" và che giấu sai lệch.
      *
-     * <p>Trước đây hàm này suy lại trạng thái từ {@code paid}/{@code totalAmount} và chỉ đọc cột
-     * {@code status} cho mỗi trường hợp "Đã hủy". Hậu quả: sửa {@code status} thẳng trong DB thành
-     * một giá trị bất kỳ (kể cả rác như {@code "aaa"}) thì màn hình vẫn hiển thị "Nợ" như cũ — web
-     * nói dối về dữ liệu thật. Với dữ liệu hợp lệ, giá trị lưu và giá trị suy lại luôn trùng nhau —
-     * đọc thẳng từ DB không đổi hành vi, chỉ thôi che giấu sai lệch.</p>
-     *
-     * <p><strong>Bất biến này giờ được duy trì chủ động, không còn tự nhiên mà có.</strong> Trước
-     * đây nó đúng vì {@code paid} không bao giờ đổi sau khi tạo. Từ khi phiếu chi trả nợ nhà cung
-     * cấp được nối vào ({@link #applyPayment}), {@code paid} có thể tăng/giảm sau khi tạo — nên
+     * <p><strong>Bất biến này phải được chủ động duy trì</strong>: từ khi phiếu chi trả nợ nhà cung
+     * cấp được nối vào ({@link #applyPayment}), {@code paid} có thể tăng/giảm sau khi tạo, nên
      * <em>mọi</em> chỗ ghi {@code paid} bắt buộc phải ghi lại {@code status} bằng
-     * {@link #resolveInvoiceStatus} trong cùng một transaction. Quên một chỗ là màn hình lại hiển
-     * thị "Nợ" trên phiếu đã trả đủ, tái phát đúng con bug mà hàm này sinh ra để sửa.</p>
+     * {@link #resolveInvoiceStatus} trong cùng một transaction — quên một chỗ là màn hình lại hiển
+     * thị "Nợ" trên một phiếu đã trả đủ.</p>
      *
      * <p>Chỉ khi cột rỗng (dòng cũ/thiếu dữ liệu) mới suy lại từ tiền để còn có gì đó mà hiển thị.
      * Giá trị lạ được trả về nguyên văn và {@link #statusCssClass(String)} sẽ tô nó thành
@@ -1023,11 +1019,6 @@ public class PurchaseinvoiceService {
         return dueDate == null || !dueDate.isBefore(LocalDate.now());
     }
 
-    /**
-     * Computes the {@code Purchaseinvoice.status} value from the paid-vs-total thresholds — used
-     * both to persist the status on creation and to render it (as {@code paymentStatus}) on the
-     * list/detail screens, so the two never drift apart.
-     */
     // ------------------------------------------------------------------ payment from an Expense
 
     /**
@@ -1103,6 +1094,11 @@ public class PurchaseinvoiceService {
         }
     }
 
+    /**
+     * Computes the {@code Purchaseinvoice.status} value from the paid-vs-total thresholds — used
+     * both to persist the status on creation and to render it (as {@code paymentStatus}) on the
+     * list/detail screens, so the two never drift apart.
+     */
     private String resolveInvoiceStatus(BigDecimal totalAmount, BigDecimal paid) {
         if (paid.compareTo(BigDecimal.ZERO) <= 0) {
             return PurchaseInvoiceStatus.DEBT;
