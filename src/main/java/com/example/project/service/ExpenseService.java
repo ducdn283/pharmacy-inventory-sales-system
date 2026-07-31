@@ -46,10 +46,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Expense ("Phiếu chi") — the pharmacy's cash-outflow control screen. Most slips are still plain
- * manual entry, but a {@link ExpenseType#RETURN_REFUND_PAYOUT} slip is now the real payout leg of a
- * <em>customer</em> return: {@code ReturnStatus}'s own javadoc has always said "the actual cash
- * payout lives on a separate Expense, handled in a later phase" — this is that phase.
+ * Expense ("Phiếu chi") — the pharmacy's cash-outflow control screen. Most slips are plain manual
+ * entry, but a {@link ExpenseType#RETURN_REFUND_PAYOUT} slip is the real payout leg of a
+ * <em>customer</em> return, and a {@link ExpenseType#GOODS_PAYMENT} slip is the real payment leg of
+ * a purchase invoice.
  *
  * <p><strong>Customer vs. supplier returns.</strong> The discriminator used consistently across
  * {@code ReturnService}, {@code ApprovalService}, {@code IncomeService} and
@@ -60,36 +60,32 @@ import java.util.stream.Collectors;
  * {@link #listCustomerReturns()}. Returning goods to a supplier costs no cash, so it is out of
  * scope here by design.</p>
  *
- * <p><em>{@code Return.returnType} changed meaning on 2026-07-27</em> and now also answers this
- * question — it holds {@code CUSTOMER}/{@code SUPPLIER} again, no longer the payment method
- * ({@code CASH}/{@code BANKING}/{@code MIXED}/{@code DEBT}) it briefly derived from the amounts.
- * The FK check above is kept because it is what every other service uses; the two agree.</p>
- *
- * <p><strong>A return slip computes, it does not pay.</strong> {@code b81e80b} dropped
- * {@code refundCash}/{@code refundBanking}/{@code refundCredit} from the table, leaving only
- * {@code totalRefund}. Deciding how the money physically leaves — and recording that it did — is
- * now entirely this module's job, which is what makes {@link #listCustomerReturns()} the single
- * gateway to paying a customer back. {@code ShiftreportService} relies on the same thing: since
- * those columns went away, an Expense slip is its <em>only</em> source of cash-out for a shift.</p>
+ * <p><strong>A return slip computes, it does not pay.</strong> A {@code Return} row only carries
+ * {@code totalRefund} — no cash/banking/credit split. Deciding how the money physically leaves —
+ * and recording that it did — is entirely this module's job, which is what makes
+ * {@link #listCustomerReturns()} the single gateway to paying a customer back.
+ * {@code ShiftreportService} relies on the same thing: an Expense slip is a shift's <em>only</em>
+ * source of cash-out.</p>
  *
  * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#GOODS_PAYMENT} slip can point at a
  * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
- * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE} for the BA's
- * reasoning). Approving or paying the slip pushes the money onto {@code Purchaseinvoice.paid} via
+ * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE}). Approving or
+ * paying the slip pushes the money onto {@code Purchaseinvoice.paid} via
  * {@link PurchaseinvoiceService#applyPayment(Integer, java.math.BigDecimal)}, which re-derives and
  * stores the invoice's status in the same transaction. Cancelling an already-approved slip reverses
  * it. Money is only ever considered disbursed once the slip is approved — see
  * {@link #disbursedAmount}.</p>
  *
  * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
- * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. As of
- * {@code 451b4d5}, {@code ShiftreportService.computeTransactionTotals()} reads those slips and a
- * shift's whole {@code totalCashOut} is the sum of their {@code paidByCash}, so this stamp is now
+ * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. A
+ * shift's whole {@code totalCashOut} is the sum of its slips' {@code paidByCash}, so this stamp is
  * load-bearing: a slip left unstamped is cash the register can never account for.</p>
  *
  * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
  * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
- * Expense tracks real cash leaving the register, not just an approval.</p>
+ * Expense tracks real cash leaving the register, not just an approval. In practice a slip is always
+ * paid in full at creation (see {@link #createExpense}), so {@code AWAITING_PAYMENT} is legacy
+ * display-only for slips saved before that rule.</p>
  */
 @Service
 public class ExpenseService {
@@ -440,11 +436,10 @@ public class ExpenseService {
      * {@code PurchaseinvoiceService.cancelPurchaseInvoice()}: not a real accounting reversal, just
      * marks the record void and gives the money back to the linked document.
      *
-     * <p><strong>Một phiếu đã hoàn thành vẫn hủy được</strong> (đổi 2026-07-30). Trước đây trạng thái
-     * đó bị chặn, vì phiếu chỉ "hoàn thành" khi đã chi đủ và người ta còn sửa được nó bằng
-     * {@code markPaid}. Nay duyệt phát là hoàn thành ngay, nên giữ rào cũ đồng nghĩa với việc không
-     * còn đường nào sửa một phiếu lập sai. Không sửa được thì phải hủy được: phần tiền đã đẩy sang
-     * phiếu nhập được trả lại đúng bằng {@link #disbursedAmount}, rồi lập phiếu mới cho đúng.</p>
+     * <p><strong>A completed slip can still be cancelled.</strong> A phiếu chi cannot be edited or
+     * topped up after creation, so if a completed one also couldn't be cancelled, a mis-keyed slip
+     * would have no correction path at all. The money already pushed onto the linked document is
+     * reversed via {@link #disbursedAmount}, then a new slip is raised with the right figure.</p>
      */
     @Transactional
     public void cancel(Integer expenseId, String reason) {
@@ -595,15 +590,10 @@ public class ExpenseService {
 
     /**
      * The single choke point where a slip becomes authorised — reached from create-as-Owner,
-     * submit-as-Owner and approve. That makes it the right (and only) place to push the money onto
-     * a linked purchase invoice: before this the slip's {@code paid} is just a figure the creator
-     * typed, after it the cash has really left.
-     */
-    /**
-     * Duyệt là lúc tiền được coi như đã ra khỏi quỹ, nên phiếu đi thẳng tới
-     * {@link ExpenseStatus#COMPLETED}. {@link ExpenseStatus#AWAITING_PAYMENT} không còn được sinh ra
-     * từ 2026-07-30 — một phiếu là một lần chi, không có phiếu chi thiếu so với chính nó. Hằng số đó
-     * vẫn giữ để hiển thị các phiếu cũ lưu trước khi đổi luật (theo lệ "màn hình đọc đúng cột trong DB").
+     * submit-as-Owner and approve. Pushes the money onto a linked purchase invoice and jumps
+     * straight to {@link ExpenseStatus#COMPLETED}, since a slip is always paid in full at creation.
+     * {@link ExpenseStatus#AWAITING_PAYMENT} is never produced here — the constant only remains so
+     * the screen can still display slips saved under the old rules.
      */
     private void applyApproval(Expense expense, Account approver) {
         expense.setApprovedAt(Instant.now());
@@ -623,26 +613,16 @@ public class ExpenseService {
      * can be reconciled against that person's register. Keeps an existing stamp — a slip belongs to
      * the shift it was raised in, not to whichever shift is open when it is topped up later.
      *
-     * <p><strong>Creator, never approver or payer</strong> (BA 2026-07-27): the person who raised the
-     * slip is the one who handled the money; approving it only authorises counting it, and paying it
-     * out later does not move it to the payer's shift. An Owner approving an Accountant's slip must
-     * not drag it onto the Owner's shift.</p>
+     * <p><strong>Creator, never approver or payer.</strong> The person who raised the slip is the one
+     * who handled the money; approving it only authorises counting it, and paying it out later does
+     * not move it to the payer's shift.</p>
      *
-     * <p><strong>Cash always belongs to a shift; a transfer never opens one.</strong> Paying out of
-     * the drawer is exactly the moment a register session exists, so a cash slip
-     * {@code ensureOpenShiftFor} — opening one if the Owner has not sold anything yet — while a
-     * banking-only slip merely looks up an already-open shift. Without this, an Owner who paid cash
-     * before the day's first sale produced a slip with no {@code shiftReportID}: money out of the
-     * drawer that no shift could ever reconcile, since {@code ShiftreportService.totalCashOut} is the
-     * sum of {@code paidByCash} over the slips carrying that shift.</p>
-     *
-     * <p><em>Calling {@code ensureOpenShiftFor} here used to be forbidden</em>, because it created a
-     * shift for whoever asked and an Accountant holding one could never log out again
-     * ({@code ShiftreportController.logoutGuard} redirects to {@code /accountant/shift-reports/…},
-     * which does not exist). That hazard is gone: the method now checks the role at the single place
-     * shifts are created and returns {@code null} for anyone who does not run a register. Combined
-     * with {@link #resolveSplit} refusing cash from a non-Owner, the cash branch below is only ever
-     * reached by someone who is allowed a shift.</p>
+     * <p><strong>Cash always belongs to a shift; a transfer never opens one.</strong> A cash slip
+     * calls {@code ensureOpenShiftFor} — opening a shift if the Owner has not sold anything yet —
+     * while a banking-only slip only looks up an already-open one. {@code ensureOpenShiftFor} itself
+     * returns {@code null} for a role that does not run a register, and {@link #resolveSplit} refuses
+     * cash from anyone but the Owner, so the cash branch here is only ever reached by someone allowed
+     * a shift.</p>
      */
     private void attachOpenShift(Expense expense, Integer accountId) {
         if (expense.getShiftReportID() != null || accountId == null) {
@@ -662,8 +642,8 @@ public class ExpenseService {
     }
 
     /**
-     * Whether the slip was raised by an Owner — the only role allowed to pay cash, so the rule
-     * survives a later top-up through {@link #markPaid} as well as the original create.
+     * Whether the slip was raised by an Owner — the only role allowed to pay cash (see
+     * {@link #resolveSplit}).
      */
     private boolean raisedByOwner(Expense expense) {
         Integer applicantId = applicantIdOf(expense);
@@ -722,16 +702,9 @@ public class ExpenseService {
     }
 
     /**
-     * The part of a return that is real money leaving the register: what the pharmacy owes, less
-     * anything already settled by writing down the original invoice's debt (paying that out again
-     * would refund the customer twice).
-     *
-     * <p>Confirmed 2026-07-27 — this replaces {@code 17e606f}'s "temporary repair". It used to read
-     * {@code refundCash + refundBanking}, but {@code b81e80b} dropped those columns along with
-     * {@code refundCredit}: a return slip now only <em>computes</em> the obligation
-     * ({@code totalRefund}), and how the money physically leaves is this module's business, not the
-     * return's. {@code totalRefund − offsetDebtAmount} is the faithful translation of the old
-     * expression, since the two used to be the two halves of {@code totalRefund}.</p>
+     * The part of a return that is real money leaving the register: what the pharmacy owes
+     * ({@code totalRefund}), less anything already settled by writing down the original invoice's
+     * debt ({@code offsetDebtAmount}) — paying that out again would refund the customer twice.
      *
      * <p>In practice {@code offsetDebtAmount} is always zero on a customer return —
      * {@code ReturnService.assertReturnable} makes the customer clear the invoice's debt before
@@ -745,11 +718,9 @@ public class ExpenseService {
     }
 
     /**
-     * {@code returnID -> tổng tiền các phiếu chi còn sống đã nhận hoàn cho phiếu trả đó}.
-     *
-     * <p>Trước đây chỗ này chỉ là một {@code Set} id: mỗi phiếu trả chỉ được một phiếu chi. Từ khi
-     * mỗi phiếu chi là một lần chi (xem {@link #createExpense}) thì hoàn tiền cũng chia được nhiều
-     * lần, nên rào chặn đổi từ "đã có phiếu chi chưa" sang "còn lại bao nhiêu".</p>
+     * {@code returnID -> tổng tiền các phiếu chi còn sống đã nhận hoàn cho phiếu trả đó}. Một phiếu
+     * trả có thể được hoàn nhiều lần (xem {@link #createExpense}), nên đây là một tổng chứ không
+     * phải cờ một-phiếu-một-lần.
      *
      * <p>Cộng cả phiếu chưa duyệt lẫn phiếu đã chi: phiếu chưa duyệt là tiền đã hứa, không được để
      * hai phiếu cùng nhận trọn phần hoàn rồi cả hai cùng được duyệt. Phiếu bị từ chối / bị hủy thì
@@ -805,26 +776,9 @@ public class ExpenseService {
     }
 
     /**
-     * "Số tiền cần chi" is the <em>obligation</em>, so a slip that points at a document takes the
-     * figure from that document and ignores whatever was posted: a refund owes what the return
-     * computed, a supplier payment owes what is still outstanding on the invoice. Only a slip with
-     * nothing to point at — điện, nước, lương, trả nợ, chi khác — is a number somebody types.
-     *
-     * <p>Paying less than the obligation is <strong>not</strong> expressed by shrinking this figure.
-     * That is what the "Đã chi đủ số tiền trên" checkbox and {@link #resolvePaid} are for: the slip
-     * keeps owing the full amount and sits in {@link ExpenseStatus#AWAITING_PAYMENT} until
-     * {@link #markPaid} finishes it. Shrinking the amount instead would lose the fact that the rest
-     * is still owed, and would let two slips each claim part of the same invoice with nothing
-     * recording the whole.</p>
-     */
-    /**
-     * Số tiền của phiếu = số tiền chi lần này, do người lập nhập.
-     *
-     * <p>Đổi từ 2026-07-30: trước đây chỗ này <em>ghi đè</em> số người dùng nhập bằng trọn nghĩa vụ
-     * của chứng từ ("amount là nghĩa vụ, không phải con số gõ vào"), và trả thiếu thì để phiếu treo
-     * ở "Chờ thanh toán" rồi bù dần bằng {@code markPaid}. Nay một phiếu là một lần chi và không sửa
-     * được, nên số người dùng nhập chính là số tiền của phiếu — chỉ bị chặn trần ở phần chứng từ còn
-     * thiếu, để hai phiếu cùng lúc không trả vượt.</p>
+     * Số tiền của phiếu = số tiền người lập nhập cho lần chi này — không có khái niệm "chi thiếu so
+     * với chính nó" (một phiếu là một lần chi). Chỉ bị chặn trần ở phần chứng từ còn thiếu (xem
+     * {@link #cappedByDocument}), để hai phiếu chi cùng lúc không cùng trả vượt phần còn nợ.
      */
     private BigDecimal resolveAmount(ExpenseCreateRequest request,
                                      Return linkedReturn,
@@ -940,8 +894,8 @@ public class ExpenseService {
     /**
      * Returns {@code [paidByCash, paidByBanking]}.
      *
-     * <p><strong>Only the Owner may pay in cash</strong> (BA 2026-07-27): an Accountant settles by
-     * transfer and never opens the drawer — which is also why they have no shift. Enforcing it here
+     * <p><strong>Only the Owner may pay in cash</strong>: an Accountant settles by transfer and never
+     * opens the drawer — which is also why they have no shift. Enforcing it here
      * is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe: an Accountant's
      * slip has no shift, so any cash on it would be money no register could ever account for. The
      * default therefore flips with the role — an unsplit amount is all cash for the Owner and all

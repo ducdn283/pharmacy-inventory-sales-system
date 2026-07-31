@@ -33,16 +33,15 @@ import java.util.stream.Collectors;
 
 /**
  * "Cài đặt giá bán" (Price Settings) — lets the Owner change any product's sell price directly
- * from one screen instead of opening each product's own edit page. Per the user's own framing
- * (2026-07-23): "cho phép thay đổi giá bán của các sản phẩm ... thay vì phải mở chi tiết của từng
- * sản phẩm". Deliberately NOT a markup/cost-based price calculator — it edits
- * {@code Productunit.sellPrice} directly; the import price shown per row is read-only reference
- * info only, never written back or used in a formula. No schema change: reuses the existing
- * {@code Productunit}/{@code Product}/{@code Batch} tables.
+ * from one screen instead of opening each product's own edit page: "cho phép thay đổi giá bán của
+ * các sản phẩm ... thay vì phải mở chi tiết của từng sản phẩm". Deliberately NOT a markup/cost-based
+ * price calculator — it edits {@code Productunit.sellPrice} directly; the import price shown per
+ * row is read-only reference info only, never written back or used in a formula. No schema change:
+ * reuses the existing {@code Productunit}/{@code Product}/{@code Batch} tables.
  *
- * <p>The screen lists <strong>products</strong>, each expanding to its unit rows (2026-07-25) — the
- * flat one-row-per-unit table got long and repetitive once products carried several units. Paging
- * therefore counts products, not units.</p>
+ * <p>The screen lists <strong>products</strong>, each expanding to its unit rows — the flat
+ * one-row-per-unit table got long and repetitive once products carried several units, so paging
+ * counts products, not units.</p>
  */
 @Service
 public class PricesettingService {
@@ -471,9 +470,9 @@ public class PricesettingService {
 
     /**
      * Money on this screen carries no decimals — every amount is rounded to a whole đồng with
-     * HALF_UP (…,3 → down; …,5 → up), per the user's 2026-07-25 call. The DB columns stay
-     * {@code decimal(15,2)}; the fractional part is simply always zero from here on. Rows written
-     * before this change keep their stored decimals until the next save, but are displayed rounded.
+     * HALF_UP (…,3 → down; …,5 → up). The DB columns stay {@code decimal(15,2)}; the fractional
+     * part is simply always zero from here on. Rows written before this rounding rule keep their
+     * stored decimals until the next save, but are displayed rounded.
      */
     private BigDecimal roundMoney(BigDecimal value) {
         return value.setScale(0, RoundingMode.HALF_UP);

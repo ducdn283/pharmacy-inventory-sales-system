@@ -224,10 +224,10 @@
                                 </div>
                             </div>
 
-                            <!-- Hiện với các loại trong ExpenseType.PURCHASE_LINKABLE — từ 2026-07-30
-                                 chỉ còn "Thanh toán hàng"; "Chi phí vận hành" nay thuần điện/nước/lương
-                                 và không gắn phiếu nhập nữa. Khác ô hoàn tiền ở trên: không bắt buộc
-                                 chọn (trả tiền NCC không gắn hóa đơn cụ thể là hợp lệ). -->
+                            <!-- Hiện với các loại trong ExpenseType.PURCHASE_LINKABLE (chỉ "Thanh toán
+                                 hàng"; "Chi phí vận hành" thuần điện/nước/lương, không gắn phiếu nhập).
+                                 Khác ô hoàn tiền ở trên: không bắt buộc chọn (trả tiền NCC không gắn
+                                 hóa đơn cụ thể là hợp lệ). -->
                             <div class="col-12" id="purchaseLinkFields" style="display: none;">
                                 <label class="form-label">Thanh toán cho phiếu nhập</label>
                                 <select class="form-select" th:field="*{purchaseId}" id="purchaseIdInput">

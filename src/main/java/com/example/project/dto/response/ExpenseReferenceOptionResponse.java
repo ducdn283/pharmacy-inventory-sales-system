@@ -21,7 +21,7 @@ public class ExpenseReferenceOptionResponse {
     private String code;
     private String dateDisplay;
 
-    /** The part of the refund that is real money out — {@code refundCash + refundBanking}. */
+    /** How much is still available to commit against this document — never the raw obligation. */
     private BigDecimal amount;
 
     private String detail;
