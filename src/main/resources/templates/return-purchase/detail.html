@@ -181,6 +181,22 @@
                                 <td class="text-end" th:if="${detail.deductionGroup}"
                                     th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                             </tr>
+
+                            <!-- Bù trừ là số của cả PHIẾU, không chia được về từng dòng hàng, nên nó là dòng
+                                 chân bảng chứ không phải một cột. Chỉ hiện khi có cấn trừ thật. -->
+                            <tr th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
+                                <td colspan="8" class="text-secondary">Đã cấn trừ nợ phải trả NCC</td>
+                                <td class="text-end text-danger"
+                                    th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</td>
+                                <td colspan="3" th:if="${detail.deductionGroup}"></td>
+                            </tr>
+                            <tr class="fw-semibold"
+                                th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
+                                <td colspan="8">NCC còn phải hoàn (tiền thật)</td>
+                                <td class="text-end text-warning"
+                                    th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</td>
+                                <td colspan="3" th:if="${detail.deductionGroup}"></td>
+                            </tr>
                             </tbody>
                         </table>
                     </div>
