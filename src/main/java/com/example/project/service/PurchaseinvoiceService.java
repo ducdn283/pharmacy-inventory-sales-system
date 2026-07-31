@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -365,7 +366,7 @@ public class PurchaseinvoiceService {
         invoice.setDueDate(request.getDueDate());
         invoice.setIsValidForDeduction(isValidForDeduction(totalAmount, paid, request.getDueDate()));
 
-        Purchaseinvoice savedInvoice = purchaseinvoiceRepository.save(invoice);
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
 
         for (PreparedPurchaseLine line : lines) {
             PurchaseInvoiceDetailCreateRequest item = line.item();
@@ -438,7 +439,7 @@ public class PurchaseinvoiceService {
         invoice.setStatus(PurchaseInvoiceStatus.CANCELLED);
         invoice.setNote(appendNote(invoice.getNote(), "Đã hủy" + (trimToNull(reason) != null ? ": " + reason.trim() : "")));
 
-        purchaseinvoiceRepository.save(invoice);
+        savePurchaseInvoiceGuardingConcurrentEdit(invoice);
     }
 
     /** True if a batch's current stock no longer matches what was originally imported for it. */
@@ -1084,7 +1085,22 @@ public class PurchaseinvoiceService {
 
         invoice.setPaid(newPaid);
         invoice.setStatus(resolveInvoiceStatus(totalAmount, newPaid));
-        purchaseinvoiceRepository.save(invoice);
+        savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+    }
+
+    /** Entry point cho service khác cập nhật phiếu nhập đã tồn tại. */
+    public Purchaseinvoice persistPurchaseInvoice(Purchaseinvoice invoice) {
+        return savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+    }
+
+    private Purchaseinvoice savePurchaseInvoiceGuardingConcurrentEdit(Purchaseinvoice invoice) {
+        try {
+            return purchaseinvoiceRepository.saveAndFlush(invoice);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new IllegalArgumentException("Phiếu nhập \"" + formatPurchaseCode(invoice.getId())
+                    + "\" vừa được người khác cập nhật (chi trả, trả hàng hoặc cấn trừ công nợ)."
+                    + " Vui lòng tải lại trang để xem dữ liệu mới nhất rồi thực hiện lại.", exception);
+        }
     }
 
     private String resolveInvoiceStatus(BigDecimal totalAmount, BigDecimal paid) {

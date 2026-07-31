@@ -97,6 +97,7 @@ public class IncomeService {
     // only creatable by Owner/Pharmacist (see IncomeController routes), so this never opens a shift
     // for an Accountant.
     private final ShiftreportService shiftreportService;
+    private final InvoiceService invoiceService;
 
     public IncomeService(IncomeRepository incomeRepository,
                          AccountRepository accountRepository,
@@ -108,7 +109,8 @@ public class IncomeService {
                          StockadjustmentRepository stockadjustmentRepository,
                          StockadjustmentdetailRepository stockadjustmentdetailRepository,
                          ShiftreportRepository shiftreportRepository,
-                         ShiftreportService shiftreportService) {
+                         ShiftreportService shiftreportService,
+                         InvoiceService invoiceService) {
         this.incomeRepository = incomeRepository;
         this.accountRepository = accountRepository;
         this.customerRepository = customerRepository;
@@ -120,6 +122,7 @@ public class IncomeService {
         this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
         this.shiftreportRepository = shiftreportRepository;
         this.shiftreportService = shiftreportService;
+        this.invoiceService = invoiceService;
     }
 
     @Transactional(readOnly = true)
@@ -1217,7 +1220,7 @@ public class IncomeService {
         invoice.setPaidByBanking(nullToZero(invoice.getPaidByBanking()).add(nullToZero(paidByBanking)));
         invoice.setDebtAmount(newDebt);
         invoice.setStatus(newDebt.compareTo(BigDecimal.ZERO) > 0 ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
-        invoiceRepository.save(invoice);
+        invoiceService.persistInvoice(invoice);
     }
 
     private String formatInvoiceDate(LocalDateTime dateTime) {

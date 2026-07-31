@@ -114,6 +114,7 @@ public class ReturnService {
     // Lazily opens/reuses the acting account's shift the moment a return is actually approved
     // (becomes Nợ) — mirrors the same hook on the Invoice side (see ShiftreportService).
     private final ShiftreportService shiftreportService;
+    private final InvoiceService invoiceService;
 
     public ReturnService(ReturnRepository returnRepository,
                          ReturndetailRepository returndetailRepository,
@@ -122,7 +123,8 @@ public class ReturnService {
                          InvoiceRepository invoiceRepository,
                          InvoicedetailRepository invoicedetailRepository,
                          FinancialsettingRepository financialsettingRepository,
-                         ShiftreportService shiftreportService) {
+                         ShiftreportService shiftreportService,
+                         InvoiceService invoiceService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -131,6 +133,7 @@ public class ReturnService {
         this.invoicedetailRepository = invoicedetailRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.shiftreportService = shiftreportService;
+        this.invoiceService = invoiceService;
     }
 
     // ------------------------------------------------------------------ list / search
@@ -549,7 +552,7 @@ public class ReturnService {
         adj.setDebtAmount(BigDecimal.ZERO);
         adj.setNote(buildAdjustmentNote(ret, original, true));
 
-        Invoice savedAdj = invoiceRepository.save(adj);
+        Invoice savedAdj = invoiceService.persistInvoice(adj);
         saveNegativeLines(savedAdj, details);
     }
 
@@ -621,7 +624,7 @@ public class ReturnService {
         BigDecimal newDebt = nz(original.getDebtAmount());
 
         original.setDebtAmount(BigDecimal.ZERO);
-        invoiceRepository.save(original);
+        invoiceService.persistInvoice(original);
 
         Invoice repl = new Invoice();
         repl.setInvoicePattern(original.getInvoicePattern());
@@ -649,7 +652,7 @@ public class ReturnService {
         repl.setReturnStatus(INVOICE_RETURN_NONE);
         repl.setNote(buildAdjustmentNote(ret, original, false));
 
-        Invoice savedRepl = invoiceRepository.save(repl);
+        Invoice savedRepl = invoiceService.persistInvoice(repl);
 
         for (Invoicedetail line : remainingLines) {
             int remainingQty = remainingQtyOf(line);
@@ -718,7 +721,7 @@ public class ReturnService {
             return;
         }
         invoice.setDebtAmount(nz(invoice.getDebtAmount()).subtract(offset).max(BigDecimal.ZERO));
-        invoiceRepository.save(invoice);
+        invoiceService.persistInvoice(invoice);
     }
 
     /** Số lượng của dòng hóa đơn còn CHƯA trả (đã trừ mọi lần trả trước đó). */
@@ -774,7 +777,7 @@ public class ReturnService {
             invoice.setStatus(nz(invoice.getDebtAmount()).signum() > 0
                     ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
         }
-        invoiceRepository.save(invoice);
+        invoiceService.persistInvoice(invoice);
     }
 
     private Batch cloneReturnBatch(Batch original, int quantity, Return ret) {

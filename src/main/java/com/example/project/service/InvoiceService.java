@@ -33,6 +33,7 @@ import com.example.project.repository.ReturnRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -370,7 +371,7 @@ public class InvoiceService {
         invoice.setDebtAmount(BigDecimal.ZERO);
         invoice.setStatus(STATUS_COMPLETED);
 
-        Invoice savedInvoice = invoiceRepository.save(invoice);
+        Invoice savedInvoice = saveInvoiceGuardingConcurrentEdit(invoice);
 
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal totalVATOutput = BigDecimal.ZERO;
@@ -414,7 +415,7 @@ public class InvoiceService {
         // open/reuse the seller's shift and attach it (no amount-based condition).
         savedInvoice.setShiftReportID(shiftreportService.ensureOpenShiftFor(currentAccountId));
 
-        invoiceRepository.save(savedInvoice);
+        saveInvoiceGuardingConcurrentEdit(savedInvoice);
 
         return savedInvoice.getId();
     }
@@ -721,7 +722,7 @@ public class InvoiceService {
         }
         invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
         invoice.setStatus(STATUS_SIGNED);
-        invoiceRepository.save(invoice);
+        saveInvoiceGuardingConcurrentEdit(invoice);
     }
 
     /** Signs multiple sale invoices. Skips ones already signed; returns how many were updated. */
@@ -739,7 +740,7 @@ public class InvoiceService {
             }
             invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
             invoice.setStatus(STATUS_SIGNED);
-            invoiceRepository.save(invoice);
+            saveInvoiceGuardingConcurrentEdit(invoice);
             signed++;
         }
 
@@ -1149,5 +1150,23 @@ public class InvoiceService {
         normalized = normalized.replaceAll("\\p{M}", "");
         normalized = normalized.replace("Đ", "D").replace("đ", "d");
         return normalized.toLowerCase(Locale.ROOT).trim();
+    }
+
+    /** Entry point cho service khác cập nhật hóa đơn đã tồn tại. */
+    public Invoice persistInvoice(Invoice invoice) {
+        return saveInvoiceGuardingConcurrentEdit(invoice);
+    }
+
+    private Invoice saveInvoiceGuardingConcurrentEdit(Invoice invoice) {
+        try {
+            return invoiceRepository.saveAndFlush(invoice);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            String number = invoice.getInvoiceNumber() != null
+                    ? invoice.getInvoiceNumber()
+                    : String.valueOf(invoice.getId());
+            throw new IllegalArgumentException("Hóa đơn \"" + number
+                    + "\" vừa được người khác cập nhật (thu nợ, trả hàng hoặc bù trừ công nợ)."
+                    + " Vui lòng tải lại trang để xem dữ liệu mới nhất rồi thực hiện lại.", exception);
+        }
     }
 }

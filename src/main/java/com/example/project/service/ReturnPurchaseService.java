@@ -76,6 +76,7 @@ public class ReturnPurchaseService {
     // Read-only: current tax revenue group (Nhóm 2/3) — Nhóm 3 records the reversed input VAT.
     private final FinancialsettingRepository financialsettingRepository;
     private final DebtService debtService;
+    private final PurchaseinvoiceService purchaseinvoiceService;
 
     public ReturnPurchaseService(ReturnRepository returnRepository,
                                  ReturndetailRepository returndetailRepository,
@@ -85,7 +86,8 @@ public class ReturnPurchaseService {
                                  PurchaseinvoiceRepository purchaseinvoiceRepository,
                                  PurchasedetailRepository purchasedetailRepository,
                                  FinancialsettingRepository financialsettingRepository,
-                                 DebtService debtService) {
+                                 DebtService debtService,
+                                 PurchaseinvoiceService purchaseinvoiceService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -95,6 +97,7 @@ public class ReturnPurchaseService {
         this.purchasedetailRepository = purchasedetailRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.debtService = debtService;
+        this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
     /** Current tax revenue group of the household (1/2/3/4), read from the financial setting singleton. */
@@ -607,7 +610,7 @@ public class ReturnPurchaseService {
         String status = totalReturnedBase == 0 ? PURCHASE_RETURN_NONE
                 : (totalOnHand == 0 ? PURCHASE_RETURN_FULL : PURCHASE_RETURN_PARTIAL);
         purchase.setReturnStatus(status);
-        purchaseinvoiceRepository.save(purchase);
+        purchaseinvoiceService.persistPurchaseInvoice(purchase);
     }
 
     /** Tỉ lệ quy đổi (base / đơn vị nhập) cho mỗi dòng nhập — lấy từ BẤT KỲ lô nào của dòng (kể cả đã hết

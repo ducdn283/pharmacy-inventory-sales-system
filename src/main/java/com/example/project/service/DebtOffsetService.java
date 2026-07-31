@@ -67,6 +67,7 @@ public class DebtOffsetService {
     private final ReturnRepository returnRepository;
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final InvoiceService invoiceService;
 
     public DebtOffsetService(DebtService debtService,
                              AccountRepository accountRepository,
@@ -77,7 +78,8 @@ public class DebtOffsetService {
                              InvoiceRepository invoiceRepository,
                              ReturnRepository returnRepository,
                              PurchaseinvoiceRepository purchaseinvoiceRepository,
-                             PurchaseinvoiceService purchaseinvoiceService) {
+                             PurchaseinvoiceService purchaseinvoiceService,
+                             InvoiceService invoiceService) {
         this.debtService = debtService;
         this.accountRepository = accountRepository;
         this.customerRepository = customerRepository;
@@ -88,6 +90,7 @@ public class DebtOffsetService {
         this.returnRepository = returnRepository;
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.invoiceService = invoiceService;
     }
 
     @Transactional(readOnly = true)
@@ -315,7 +318,7 @@ public class DebtOffsetService {
         BigDecimal newDebt = currentDebt.subtract(payment).max(BigDecimal.ZERO);
         invoice.setDebtAmount(newDebt);
         invoice.setStatus(newDebt.compareTo(BigDecimal.ZERO) > 0 ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
-        invoiceRepository.save(invoice);
+        invoiceService.persistInvoice(invoice);
     }
 
     private void validateCustomerInvoiceOffset(Invoice invoice, Customer customer, BigDecimal amount) {
