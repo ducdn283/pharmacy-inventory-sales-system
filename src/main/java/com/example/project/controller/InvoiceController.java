@@ -4,6 +4,7 @@ import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.InvoiceLineResponse;
+import com.example.project.dto.response.InvoicePrintPageResponse;
 import com.example.project.dto.response.InvoiceListItemResponse;
 import com.example.project.dto.response.InvoiceResponse;
 import com.example.project.service.InvoiceService;
@@ -114,6 +115,18 @@ public class InvoiceController {
         model.addAttribute("returnBasePath", resolveReturnBasePath(request));
         model.addAttribute("pageTitle", "Chi tiết hóa đơn " + detail.getInvoiceCode());
         return "invoice/invoice-detail";
+    }
+
+    @GetMapping({"/owner/invoices/{invoiceId}/print",
+            "/pharmacist/invoices/{invoiceId}/print",
+            "/accountant/invoices/{invoiceId}/print"})
+    public String printPage(@PathVariable Integer invoiceId,
+                            HttpServletRequest request,
+                            Model model) {
+        InvoicePrintPageResponse printData = invoiceService.getPrintPage(invoiceId);
+        model.addAttribute("printData", printData);
+        model.addAttribute("basePath", resolveBasePath(request));
+        return "invoice/print";
     }
 
     @PostMapping({"/owner/invoices/{invoiceId}/sign", "/accountant/invoices/{invoiceId}/sign"})

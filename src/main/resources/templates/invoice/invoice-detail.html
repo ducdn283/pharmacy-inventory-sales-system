@@ -259,6 +259,18 @@
             padding: 32px 16px;
         }
 
+        .actions-card .btn-outline-invoice {
+            border-radius: 12px;
+            border-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .actions-card .btn-outline-invoice:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #111827;
+        }
+
         @media (max-width: 991.98px) {
             .invoice-page-content {
                 padding-top: 84px !important;
@@ -279,19 +291,12 @@
 <main id="content" class="content invoice-page-content">
     <div class="container-fluid">
 
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-            <div>
-                <h1 class="fs-4 mb-1">
-                    Chi tiết hóa đơn –
-                    <span class="text-success" th:text="${detail.invoiceCode}">HD000046</span>
-                    <span class="rx-badge ms-2" th:if="${detail.prescriptionRequired}">Rx</span>
-                </h1>
-            </div>
-
-            <a th:href="${basePath}" class="btn btn-outline-secondary">
-                <i class="ti ti-arrow-left me-1"></i>
-                Quay lại danh sách
-            </a>
+        <div class="mb-4">
+            <h1 class="fs-4 mb-0">
+                Chi tiết hóa đơn –
+                <span class="text-success" th:text="${detail.invoiceCode}">HD000046</span>
+                <span class="rx-badge ms-2" th:if="${detail.prescriptionRequired}">Rx</span>
+            </h1>
         </div>
 
         <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
@@ -621,17 +626,30 @@
                     </div>
                 </div>
 
-                <div class="invoice-card p-4"
-                     th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}">
-                    <form th:action="${basePath + '/' + detail.id + '/sign'}"
-                          method="post">
-                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                        <button type="submit" class="btn btn-invoice-primary w-100"
-                                data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
-                            <i class="ti ti-writing-sign me-1"></i>
-                            Ký hóa đơn
+                <div class="invoice-card actions-card p-4">
+                        <button type="button" id="printInvoiceBtn"
+                                th:data-print-url="${basePath + '/' + detail.id + '/print'}"
+                                class="btn btn-invoice-primary w-100 mb-3">
+                            <i class="ti ti-printer me-1"></i>
+                            In hóa đơn
                         </button>
-                    </form>
+
+                        <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}"
+                              th:action="${basePath + '/' + detail.id + '/sign'}"
+                              method="post"
+                              class="mb-3">
+                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" class="btn btn-invoice-primary w-100"
+                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
+                                <i class="ti ti-writing-sign me-1"></i>
+                                Ký hóa đơn
+                            </button>
+                        </form>
+
+                        <a th:href="${basePath}" class="btn btn-outline-invoice w-100">
+                            <i class="ti ti-arrow-left me-1"></i>
+                            Quay lại danh sách
+                        </a>
                 </div>
 
             </div>
@@ -639,5 +657,25 @@
 
     </div>
 </main>
+
+<script th:inline="none">
+    document.getElementById('printInvoiceBtn').addEventListener('click', function () {
+        var printUrl = this.dataset.printUrl;
+
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+
+        iframe.addEventListener('load', function () {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            iframe.contentWindow.addEventListener('afterprint', function () {
+                document.body.removeChild(iframe);
+            });
+        });
+
+        iframe.src = printUrl;
+        document.body.appendChild(iframe);
+    });
+</script>
 </body>
 </html>

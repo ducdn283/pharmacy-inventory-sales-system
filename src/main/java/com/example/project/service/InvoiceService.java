@@ -9,6 +9,8 @@ import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.InvoiceDetailProductGroupResponse;
 import com.example.project.dto.response.InvoiceDetailUnitLineResponse;
 import com.example.project.dto.response.InvoiceLineResponse;
+import com.example.project.dto.response.InvoicePrintLineResponse;
+import com.example.project.dto.response.InvoicePrintPageResponse;
 import com.example.project.dto.response.InvoiceListItemResponse;
 import com.example.project.dto.response.InvoiceResponse;
 import com.example.project.dto.response.SellBatchOptionResponse;
@@ -872,6 +874,88 @@ public class InvoiceService {
                 totalQuantity,
                 items,
                 productGroups);
+    }
+
+    @Transactional(readOnly = true)
+    public InvoicePrintPageResponse getPrintPage(Integer invoiceId) {
+        Invoice invoice = invoiceRepository.findByIdWithRelations(invoiceId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
+
+        List<Invoicedetail> lines = invoicedetailRepository.findByInvoiceIdWithRelations(invoiceId);
+
+        BigDecimal totalVATOutput = invoice.getTotalVATOutput();
+        if (totalVATOutput == null) {
+            totalVATOutput = lines.stream()
+                    .map(Invoicedetail::getVatAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+        BigDecimal totalPreTaxAmount = lines.stream()
+                .map(Invoicedetail::getPreTaxAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        int totalQuantity = lines.stream()
+                .map(Invoicedetail::getQuantity)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        boolean showVatBreakdown = isVatSaleInvoice(invoice);
+        String statusName = invoice.getStatus() != null ? invoice.getStatus() : "";
+        String taxCode = isStatus(statusName, STATUS_SIGNED)
+                ? financialsettingRepository.findFirstByOrderByIdAsc()
+                        .map(setting -> trimToNull(setting.getTaxCode()))
+                        .orElse(null)
+                : null;
+
+        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
+        Customer customer = invoice.getCustomerID();
+
+        List<InvoicePrintLineResponse> printLines = lines.stream()
+                .map(this::toPrintLine)
+                .toList();
+
+        return new InvoicePrintPageResponse(
+                invoice.getId(),
+                invoiceCode(invoice),
+                invoice.getInvoicePattern(),
+                invoiceTypeDisplay(invoice.getInvoiceType()),
+                showVatBreakdown,
+                formatDate(invoice.getDate()),
+                setting != null ? setting.getLocationName() : "",
+                setting != null ? setting.getTaxCode() : "",
+                setting != null ? setting.getPhoneNumber() : "",
+                customer != null ? customer.getName() : "Khách lẻ",
+                customer != null ? customer.getPhoneNumber() : null,
+                invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
+                taxCode,
+                totalQuantity,
+                invoice.getSubtotal(),
+                invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
+                totalPreTaxAmount,
+                totalVATOutput,
+                invoice.getTotal(),
+                invoice.getPaidByCash(),
+                invoice.getPaidByBanking(),
+                invoice.getDebtAmount() != null ? invoice.getDebtAmount() : BigDecimal.ZERO,
+                paymentDisplay(invoice),
+                invoice.getNote(),
+                printLines);
+    }
+
+    private InvoicePrintLineResponse toPrintLine(Invoicedetail line) {
+        Product product = line.getProductID();
+        return new InvoicePrintLineResponse(
+                product != null ? product.getCode() : "",
+                product != null ? product.getName() : "Không rõ",
+                line.getUnitName(),
+                line.getQuantity(),
+                line.getUnitSellPrice(),
+                line.getSubtotal(),
+                line.getVatRate(),
+                line.getPreTaxAmount(),
+                line.getVatAmount());
     }
 
     private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines) {
