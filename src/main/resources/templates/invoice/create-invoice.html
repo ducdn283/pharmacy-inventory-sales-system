@@ -2007,28 +2007,27 @@
     let activeSearchIndex = -1;
     let lastSearchItems = [];
 
+    function productMatchesPrefixSearch(product, normalized) {
+        if (!product || !normalized) return false;
+        const code = (product.code || '').toLowerCase();
+        const name = (product.name || '').toLowerCase();
+        const barcode = (product.barcode || '').toLowerCase();
+        return code.startsWith(normalized)
+                || name.startsWith(normalized)
+                || barcode.startsWith(normalized);
+    }
+
     function searchProducts(keyword) {
         const normalized = keyword.trim().toLowerCase();
         if (!normalized) return [];
-        return products.filter(p => {
-            const code = (p.code || '').toLowerCase();
-            const name = (p.name || '').toLowerCase();
-            const barcode = (p.barcode || '').toLowerCase();
-            const matched = name.includes(normalized) || code.includes(normalized) || barcode.includes(normalized);
-            return matched && isSellableProduct(p);
-        }).slice(0, 12);
+        return products.filter(p => productMatchesPrefixSearch(p, normalized) && isSellableProduct(p))
+                .slice(0, 12);
     }
 
     function searchHasHiddenPrescriptionProducts(keyword) {
         const normalized = keyword.trim().toLowerCase();
         if (!normalized || canSellPrescriptionProducts()) return false;
-        return products.some(p => {
-            if (!p.requiresPrescription) return false;
-            const code = (p.code || '').toLowerCase();
-            const name = (p.name || '').toLowerCase();
-            const barcode = (p.barcode || '').toLowerCase();
-            return name.includes(normalized) || code.includes(normalized) || barcode.includes(normalized);
-        });
+        return products.some(p => p.requiresPrescription && productMatchesPrefixSearch(p, normalized));
     }
 
     function renderSearchResults(items, emptyMessage) {

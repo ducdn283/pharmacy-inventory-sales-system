@@ -350,12 +350,15 @@ public class ProcurementplanService {
         );
     }
 
-    /*kiểm tra xem một sản phẩm (Product) có khớp với từ khóa tìm kiếm hay không.
-      Nếu mã sản phẩm, tên sản phẩm hoặc mã vạch chứa từ khóa thì trả về true.*/
+    /* Kiểm tra sản phẩm khớp từ khóa prefix (mã, tên hoặc barcode bắt đầu bằng keyword). */
     private boolean matchesKeyword(Product product, String normalizedKeyword) {
-        return containsNormalized(product.getCode(), normalizedKeyword)
-                || containsNormalized(product.getName(), normalizedKeyword)
-                || containsNormalized(product.getBarcode(), normalizedKeyword);
+        return startsWithNormalized(product.getCode(), normalizedKeyword)
+                || startsWithNormalized(product.getName(), normalizedKeyword)
+                || startsWithNormalized(product.getBarcode(), normalizedKeyword);
+    }
+
+    private boolean startsWithNormalized(String value, String normalizedKeyword) {
+        return value != null && normalize(value).startsWith(normalizedKeyword);
     }
 
     // kiểm tra xem một chuỗi có chứa từ khóa sau khi đã được chuẩn hóa (normalize) hay không.
