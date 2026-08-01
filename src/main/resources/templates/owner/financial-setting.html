@@ -99,20 +99,20 @@
               </div>
               <div class="col-12 col-md-4">
                 <label for="fsThreshold1" class="form-label">Ngưỡng doanh thu miễn thuế (nhóm 1) <span class="text-danger">*</span></label>
-                <input id="fsThreshold1" type="number" class="form-control"
+                <input id="fsThreshold1" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{annualRevenueThreshold1}"
                        th:classappend="${#fields.hasErrors('annualRevenueThreshold1')} ? ' is-invalid'"
                        th:disabled="${!editable}"
-                       min="0" step="1000000">
+                       placeholder="0">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('annualRevenueThreshold1')}" th:errors="*{annualRevenueThreshold1}"></div>
               </div>
               <div class="col-12 col-md-4">
                 <label for="fsThreshold2" class="form-label">Ngưỡng doanh thu bắt buộc theo lợi nhuận (nhóm 3) <span class="text-danger">*</span></label>
-                <input id="fsThreshold2" type="number" class="form-control"
+                <input id="fsThreshold2" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{annualRevenueThreshold2}"
                        th:classappend="${#fields.hasErrors('annualRevenueThreshold2')} ? ' is-invalid'"
                        th:disabled="${!editable}"
-                       min="0" step="1000000">
+                       placeholder="0">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('annualRevenueThreshold2')}" th:errors="*{annualRevenueThreshold2}"></div>
               </div>
             </div>
@@ -181,11 +181,11 @@
             <div class="row g-3 mb-3">
               <div class="col-12 col-md-6">
                 <label for="fsOpeningCash" class="form-label">Tiền mặt mở ca mặc định <span class="text-danger">*</span></label>
-                <input id="fsOpeningCash" type="number" class="form-control"
+                <input id="fsOpeningCash" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{openingCashDefault}"
                        th:classappend="${#fields.hasErrors('openingCashDefault')} ? ' is-invalid'"
                        th:disabled="${!editable}"
-                       min="0" step="1000">
+                       placeholder="0">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('openingCashDefault')}" th:errors="*{openingCashDefault}"></div>
               </div>
               <div class="col-12 col-md-6">
@@ -302,20 +302,20 @@
             <div class="row g-3 mb-0">
               <div class="col-12 col-md-6">
                 <label for="fsCashSafeBalance" class="form-label">Số dư quỹ tiền mặt</label>
-                <input id="fsCashSafeBalance" type="number" class="form-control"
+                <input id="fsCashSafeBalance" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{cashSafeBalance}"
                        th:classappend="${#fields.hasErrors('cashSafeBalance')} ? ' is-invalid'"
                        th:disabled="${!editable}"
-                       min="0" step="1000" placeholder="Chưa thiết lập">
+                       placeholder="Chưa thiết lập">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('cashSafeBalance')}" th:errors="*{cashSafeBalance}"></div>
               </div>
               <div class="col-12 col-md-6">
                 <label for="fsBankAccountBalance" class="form-label">Số dư quỹ ngân hàng</label>
-                <input id="fsBankAccountBalance" type="number" class="form-control"
+                <input id="fsBankAccountBalance" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{bankAccountBalance}"
                        th:classappend="${#fields.hasErrors('bankAccountBalance')} ? ' is-invalid'"
                        th:disabled="${!editable}"
-                       min="0" step="1000" placeholder="Chưa thiết lập">
+                       placeholder="Chưa thiết lập">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('bankAccountBalance')}" th:errors="*{bankAccountBalance}"></div>
               </div>
               <div class="col-12">
@@ -381,5 +381,6 @@
     applyRevenueGroupLock();
   })();
 </script>
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 </body>
 </html>
