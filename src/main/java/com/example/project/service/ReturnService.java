@@ -109,6 +109,7 @@ public class ReturnService {
     // (becomes Nợ) — mirrors the same hook on the Invoice side (see ShiftreportService).
     private final ShiftreportService shiftreportService;
     private final InvoiceService invoiceService;
+    private final WorkflowNotificationService workflowNotificationService;
 
     public ReturnService(ReturnRepository returnRepository,
                          ReturndetailRepository returndetailRepository,
@@ -118,7 +119,8 @@ public class ReturnService {
                          InvoicedetailRepository invoicedetailRepository,
                          FinancialsettingRepository financialsettingRepository,
                          ShiftreportService shiftreportService,
-                         InvoiceService invoiceService) {
+                         InvoiceService invoiceService,
+                         WorkflowNotificationService workflowNotificationService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -128,6 +130,7 @@ public class ReturnService {
         this.financialsettingRepository = financialsettingRepository;
         this.shiftreportService = shiftreportService;
         this.invoiceService = invoiceService;
+        this.workflowNotificationService =  workflowNotificationService;
     }
 
     // ------------------------------------------------------------------ list / search
@@ -384,6 +387,11 @@ public class ReturnService {
 
         if (approvedNow) {
             applyReturnEffect(savedReturn, details);
+        } else if (ReturnStatus.PENDING.equals(
+                savedReturn.getStatus()
+        )) {
+            workflowNotificationService
+                    .returnPending(savedReturn);
         }
 
         return savedReturn.getId();
@@ -403,6 +411,7 @@ public class ReturnService {
         } else {
             ret.setStatus(ReturnStatus.PENDING);
             returnRepository.save(ret);
+            workflowNotificationService.returnPending(ret);
         }
     }
 
@@ -414,6 +423,7 @@ public class ReturnService {
             throw new IllegalArgumentException("Chỉ có thể duyệt phiếu đang ở trạng thái chờ duyệt");
         }
         markApproved(ret);
+        workflowNotificationService.returnApproved(ret);
     }
 
     /** Owner rejects a pending slip → Từ chối. No stock change. */
@@ -426,6 +436,7 @@ public class ReturnService {
         ret.setStatus(ReturnStatus.REJECTED);
         ret.setApprovedAt(nowVn());
         returnRepository.save(ret);
+        workflowNotificationService.returnRejected(ret);
     }
 
     private void markApproved(Return ret) {

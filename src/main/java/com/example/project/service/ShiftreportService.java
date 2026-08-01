@@ -67,6 +67,7 @@ public class ShiftreportService {
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
     private final AccountpermissionRepository accountpermissionRepository;
+    private final WorkflowNotificationService workflowNotificationService;
 
     public ShiftreportService(ShiftreportRepository shiftreportRepository,
                               AccountRepository accountRepository,
@@ -75,7 +76,8 @@ public class ShiftreportService {
                               InvoiceRepository invoiceRepository,
                               IncomeRepository incomeRepository,
                               ExpenseRepository expenseRepository,
-                              AccountpermissionRepository accountpermissionRepository) {
+                              AccountpermissionRepository accountpermissionRepository,
+                              WorkflowNotificationService workflowNotificationService) {
         this.shiftreportRepository = shiftreportRepository;
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
@@ -84,6 +86,7 @@ public class ShiftreportService {
         this.incomeRepository = incomeRepository;
         this.expenseRepository = expenseRepository;
         this.accountpermissionRepository = accountpermissionRepository;
+        this.workflowNotificationService = workflowNotificationService;
     }
 
     /**
@@ -340,6 +343,10 @@ public class ShiftreportService {
         }
 
         shiftreportRepository.save(shift);
+        if (!isOwner) {
+            workflowNotificationService
+                    .shiftReportPending(shift);
+        }
     }
 
     @Transactional
@@ -355,6 +362,7 @@ public class ShiftreportService {
         shift.setApprovedAt(nowVn());
 
         shiftreportRepository.save(shift);
+        workflowNotificationService.shiftReportApproved(shift);
     }
 
     @Transactional
@@ -370,6 +378,7 @@ public class ShiftreportService {
         shift.setApprovedAt(nowVn());
 
         shiftreportRepository.save(shift);
+        workflowNotificationService.shiftReportRejected(shift);
     }
 
     /** Pure (non-persisting) computation of a shift's totals from the Invoice/Return FKs — used both to

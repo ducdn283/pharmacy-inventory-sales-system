@@ -98,6 +98,7 @@ public class IncomeService {
     // for an Accountant.
     private final ShiftreportService shiftreportService;
     private final InvoiceService invoiceService;
+    private final WorkflowNotificationService workflowNotificationService;
 
     public IncomeService(IncomeRepository incomeRepository,
                          AccountRepository accountRepository,
@@ -110,7 +111,8 @@ public class IncomeService {
                          StockadjustmentdetailRepository stockadjustmentdetailRepository,
                          ShiftreportRepository shiftreportRepository,
                          ShiftreportService shiftreportService,
-                         InvoiceService invoiceService) {
+                         InvoiceService invoiceService,
+                         WorkflowNotificationService workflowNotificationService) {
         this.incomeRepository = incomeRepository;
         this.accountRepository = accountRepository;
         this.customerRepository = customerRepository;
@@ -123,6 +125,7 @@ public class IncomeService {
         this.shiftreportRepository = shiftreportRepository;
         this.shiftreportService = shiftreportService;
         this.invoiceService = invoiceService;
+        this.workflowNotificationService = workflowNotificationService;
     }
 
     @Transactional(readOnly = true)
@@ -394,6 +397,11 @@ public class IncomeService {
         if (!asDraft && IncomeTypeOptionResponse.SUPPLIER.equals(incomeTypeCode)) {
             applySupplierOffsetDebtPayment(saved);
         }
+        if (!asDraft) {
+            workflowNotificationService
+                    .incomeCreated(saved);
+        }
+
         return saved.getId();
     }
 

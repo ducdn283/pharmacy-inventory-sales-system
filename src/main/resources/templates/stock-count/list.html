@@ -150,8 +150,7 @@
             </div>
         </div>
 
-        <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
-        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+        <div th:replace="~{fragments/toast :: flash}"></div>
 
         <div class="row g-3 mb-4">
             <div class="col-12 col-md-6 col-xl-3">
