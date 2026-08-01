@@ -221,6 +221,18 @@
             </div>
 
             <div class="row g-3 mb-3">
+              <div class="col-12">
+                <label for="fsAddress" class="form-label">Địa chỉ <span class="text-danger">*</span></label>
+                <input id="fsAddress" type="text" class="form-control"
+                       th:field="*{address}"
+                       th:classappend="${#fields.hasErrors('address')} ? ' is-invalid'"
+                       th:disabled="${!editable}"
+                       maxlength="100">
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('address')}" th:errors="*{address}"></div>
+              </div>
+            </div>
+
+            <div class="row g-3 mb-3">
               <div class="col-12 col-md-6">
                 <label for="fsPhone" class="form-label">Số điện thoại <span class="text-danger">*</span></label>
                 <input id="fsPhone" type="tel" class="form-control"
