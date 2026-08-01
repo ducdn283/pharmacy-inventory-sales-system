@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.ReturnStatus;
+import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.ReturnCreateRequest;
 import com.example.project.dto.request.ReturnLineRequest;
 import com.example.project.dto.response.*;
@@ -874,6 +875,7 @@ public class ReturnService {
                         .filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
                 ret.getTotalVATRefund(),
+                isTaxExempt(),
                 items);
     }
 
@@ -1148,6 +1150,23 @@ public class ReturnService {
                 .map(rate -> rate.min(FULL_REFUND_RATE))
                 .orElse(FULL_REFUND_RATE)
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Nhà thuốc đang thuộc nhóm doanh thu MIỄN THUẾ (Nhóm 1) hay không —
+     * {@code Financialsetting.revenueGroup}, cùng nguồn với {@code ReturnPurchaseService.revenueGroup()}.
+     *
+     * <p>Nhóm 1 dưới ngưỡng 1 nên KHÔNG kê khai gì cả: không có thuế GTGT đầu ra để giảm trừ khi khách
+     * trả hàng. Cờ này chỉ dùng để ẨN phần thuế trên màn hình — số thuế vẫn được lưu nguyên theo snapshot
+     * của dòng hóa đơn gốc , vì phiếu trả là bản đối ứng âm của hóa đơn đó: đổi nhóm doanh thu sau
+     * này không được làm mất căn cứ đảo lại đúng con số đã thu.</p>
+     */
+    @Transactional(readOnly = true)
+    public boolean isTaxExempt() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getRevenueGroup)
+                .map(TaxRevenueGroup::isTaxExempt)
+                .orElse(false);
     }
 
     /**
