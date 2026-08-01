@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="vi"
+      xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>
+        Tổng quan kế toán | PharmaManager
+    </title>
+
+    <script type="module"
+            crossorigin
+            th:src="@{/assets/js/main.js}">
+    </script>
+
+    <link rel="stylesheet"
+          crossorigin
+          th:href="@{/assets/css/main.css}">
+
+    <style>
+        body {
+            background: #f5f6f8;
+        }
+
+        .accountant-dashboard {
+            padding-top: 84px !important;
+            padding-bottom: 48px;
+        }
+
+        .dashboard-card {
+            background: #ffffff;
+            border: 1px solid #e9edf2;
+            border-radius: 14px;
+            box-shadow:
+                    0 1px 2px rgba(16, 24, 40, .035);
+        }
+
+        .welcome-card {
+            padding: 23px 24px;
+        }
+
+        .welcome-title {
+            color: #111827;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .welcome-subtitle {
+            color: #8a94a3;
+            font-size: 12px;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .quick-action {
+            display: inline-flex;
+            align-items: center;
+            min-height: 38px;
+            padding: 8px 15px;
+            border: 1px solid #e3e7ed;
+            border-radius: 9px;
+            background: #ffffff;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            transition:
+                    border-color .15s ease,
+                    color .15s ease,
+                    transform .15s ease;
+        }
+
+        .quick-action:hover {
+            border-color: #10b981;
+            color: #047857;
+            transform: translateY(-1px);
+        }
+
+        .quick-action.primary {
+            border-color: #059669;
+            background: #059669;
+            color: #ffffff;
+        }
+
+        .metric-link {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .metric-card {
+            min-height: 132px;
+            padding: 18px 17px;
+            transition:
+                    transform .15s ease,
+                    box-shadow .15s ease;
+        }
+
+        .metric-link:hover .metric-card {
+            transform: translateY(-2px);
+            box-shadow:
+                    0 8px 20px
+                    rgba(16, 24, 40, .07);
+        }
+
+        .metric-heading {
+            color: #8993a3;
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 1.35;
+        }
+
+        .metric-value {
+            margin-top: 14px;
+            color: #1f2937;
+            font-size: 23px;
+            font-weight: 700;
+            line-height: 1;
+            overflow-wrap: anywhere;
+        }
+
+        .metric-helper {
+            margin-top: 9px;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        .metric-icon {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 11px;
+            font-size: 19px;
+        }
+
+        .tone-success .metric-helper {
+            color: #0aa878;
+        }
+
+        .tone-success .metric-icon {
+            background: #dff7ef;
+            color: #0aa878;
+        }
+
+        .tone-warning .metric-helper {
+            color: #f59e0b;
+        }
+
+        .tone-warning .metric-icon {
+            background: #fff4dc;
+            color: #f59e0b;
+        }
+
+        .tone-danger .metric-helper {
+            color: #ef4444;
+        }
+
+        .tone-danger .metric-icon {
+            background: #fee7e7;
+            color: #ef4444;
+        }
+
+        .tone-info .metric-helper {
+            color: #3b82f6;
+        }
+
+        .tone-info .metric-icon {
+            background: #e6efff;
+            color: #3b82f6;
+        }
+
+        .section-card {
+            padding: 20px 22px;
+        }
+
+        .section-title {
+            margin: 0;
+            color: #253042;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .chart-container {
+            min-height: 300px;
+            margin-top: 12px;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 8px;
+        }
+
+        .chart-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #7b8494;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .chart-legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .accounting-chart-svg {
+            display: block;
+            width: 100%;
+            height: 270px;
+            overflow: visible;
+        }
+
+        .chart-grid {
+            stroke: #e8edf3;
+            stroke-width: 1;
+            stroke-dasharray: 3 3;
+        }
+
+        .chart-axis-label {
+            fill: #98a1b1;
+            font-size: 10px;
+        }
+
+        .chart-line {
+            fill: none;
+            stroke-width: 2.3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .chart-point {
+            stroke: #ffffff;
+            stroke-width: 2;
+        }
+
+        .alert-list {
+            margin-top: 14px;
+        }
+
+        .accounting-alert {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 42px;
+            padding: 9px 0;
+            border-bottom: 1px solid #f0f2f5;
+            color: #495365;
+            font-size: 11px;
+            text-decoration: none;
+        }
+
+        .accounting-alert:last-child {
+            border-bottom: 0;
+        }
+
+        .accounting-alert:hover {
+            color: #047857;
+        }
+
+        .alert-icon {
+            width: 26px;
+            height: 26px;
+            flex: 0 0 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .accounting-alert-warning
+        .alert-icon {
+            background: #fff3d7;
+            color: #f59e0b;
+        }
+
+        .accounting-alert-danger
+        .alert-icon {
+            background: #fee7e7;
+            color: #ef4444;
+        }
+
+        .accounting-alert-success
+        .alert-icon {
+            background: #dff7ef;
+            color: #0aa878;
+        }
+
+        .activity-table {
+            min-width: 970px;
+            margin-bottom: 0;
+        }
+
+        .activity-table thead th {
+            padding: 13px 12px;
+            border-bottom-color: #e9edf2;
+            color: #929aaa;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .activity-table tbody td {
+            padding: 13px 12px;
+            border-bottom-color: #f0f2f5;
+            color: #4b5565;
+            font-size: 11px;
+            vertical-align: middle;
+        }
+
+        .activity-table tbody
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .document-code {
+            color: #273143;
+            font-weight: 600;
+        }
+
+        .money-cell {
+            color: #273143;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .soft-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 23px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-size: 9px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .badge-success-soft {
+            background: #e1f8f0;
+            color: #07966b;
+        }
+
+        .badge-warning-soft {
+            background: #fff4dc;
+            color: #e79308;
+        }
+
+        .badge-danger-soft {
+            background: #fee8e8;
+            color: #e94848;
+        }
+
+        .badge-secondary-soft {
+            background: #edf0f4;
+            color: #697386;
+        }
+
+        .view-link {
+            color: #059669;
+            font-size: 11px;
+            font-weight: 600;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .view-link:hover {
+            color: #047857;
+        }
+
+        @media (max-width: 1199.98px) {
+            .metric-card {
+                min-height: 120px;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .accountant-dashboard {
+                padding-top: 76px !important;
+            }
+
+            .welcome-card,
+            .section-card {
+                padding: 18px;
+            }
+
+            .metric-value {
+                font-size: 21px;
+            }
+
+            .accounting-chart-svg {
+                height: 230px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div th:replace=
+             "~{fragments/topbar :: topbar}">
+</div>
+
+<aside th:replace=
+               "~{fragments/sidebar :: sidebar}">
+</aside>
+
+<main id="content"
+      class="content accountant-dashboard">
+
+    <div class="container-fluid">
+
+        <div class=
+                     "dashboard-card welcome-card mb-3">
+
+            <div class="welcome-title">
+                Xin chào,
+
+                <span th:text=
+                              "${dashboard.greetingName ?: 'Kế toán'}">
+                    Kế toán
+                </span>
+            </div>
+
+            <div class=
+                         "welcome-subtitle mt-1"
+                 th:text="${dashboard.subtitle}">
+
+                Đối chiếu và kiểm duyệt
+                tài chính hôm nay
+            </div>
+
+            <div class="quick-actions">
+
+                <a th:each=
+                           "action : ${dashboard.quickActions}"
+                   th:href="${action.url}"
+                   class="quick-action"
+                   th:classappend=
+                           "${action.primary}
+                           ? ' primary'
+                           : ''"
+                   th:text="${action.label}">
+
+                    Hành động
+                </a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+
+            <div class=
+                         "col-12 col-sm-6 col-xl-2"
+                 th:each=
+                         "metric : ${dashboard.metrics}">
+
+                <a class="metric-link"
+                   th:href="${metric.url}">
+
+                    <div class=
+                                 "dashboard-card
+                                  metric-card h-100"
+                         th:classappend=
+                                 "${' tone-'
+                                 + metric.tone}">
+
+                        <div class=
+                                     "d-flex
+                                      justify-content-between
+                                      align-items-start
+                                      gap-2">
+
+                            <div class="metric-heading"
+                                 th:text="${metric.title}">
+                                Chỉ số
+                            </div>
+
+                            <div class="metric-icon">
+                                <i th:class=
+                                           "${metric.icon}">
+                                </i>
+                            </div>
+                        </div>
+
+                        <div class="metric-value"
+                             th:text="${metric.value}">
+                            0
+                        </div>
+
+                        <div class="metric-helper"
+                             th:text="${metric.helper}">
+                            Mô tả
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+
+            <div class="col-12 col-xl-8">
+
+                <section class=
+                                 "dashboard-card
+                                  section-card h-100">
+
+                    <h2 class="section-title"
+                        th:text=
+                                "${dashboard.weeklyChart.title}">
+
+                        Tổng quan thu - chi -
+                        công nợ trong tuần
+                    </h2>
+
+                    <div id=
+                                 "accountantWeeklyChart"
+                         class="chart-container">
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-12 col-xl-4">
+
+                <section class=
+                                 "dashboard-card
+                                  section-card h-100">
+
+                    <h2 class="section-title">
+                        Cảnh báo kế toán
+                    </h2>
+
+                    <div class="alert-list">
+
+                        <a th:each=
+                                   "alert : ${dashboard.alerts}"
+                           th:href="${alert.url}"
+                           class="accounting-alert"
+                           th:classappend=
+                                   "${' accounting-alert-'
+                                   + alert.tone}">
+
+                            <span class="alert-icon">
+
+                                <i th:class=
+                                           "${alert.tone == 'danger'
+                                           ? 'ti ti-alert-triangle'
+                                           : (alert.tone == 'success'
+                                           ? 'ti ti-circle-check'
+                                           : 'ti ti-alert-circle')}">
+                                </i>
+                            </span>
+
+                            <span th:text=
+                                          "${alert.message}">
+                                Cảnh báo
+                            </span>
+                        </a>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <section class=
+                         "dashboard-card section-card">
+
+            <h2 class="section-title mb-3">
+                Hoạt động gần đây
+            </h2>
+
+            <div class="table-responsive">
+
+                <table class=
+                               "table activity-table">
+
+                    <thead>
+                    <tr>
+                        <th>Mã chứng từ</th>
+                        <th>Loại</th>
+                        <th>Thời gian</th>
+                        <th>Đối tượng liên quan</th>
+                        <th>Số tiền</th>
+                        <th>Phương thức</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">
+                            Thao tác
+                        </th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <tr th:each=
+                                "activity :
+                                ${dashboard.recentActivities}">
+
+                        <td class="document-code"
+                            th:text="${activity.code}">
+                            INV-000001
+                        </td>
+
+                        <td th:text="${activity.type}">
+                            Hóa đơn
+                        </td>
+
+                        <td th:text="${activity.time}">
+                            01/08/2026 10:30
+                        </td>
+
+                        <td th:text=
+                                    "${activity.relatedParty}">
+                            Khách hàng
+                        </td>
+
+                        <td class="money-cell"
+                            th:text="${activity.amount}">
+                            0đ
+                        </td>
+
+                        <td th:text=
+                                    "${activity.paymentMethod}">
+                            Chuyển khoản
+                        </td>
+
+                        <td>
+                            <span class="soft-badge"
+                                  th:classappend=
+                                          "${' badge-'
+                                          + activity.tone
+                                          + '-soft'}"
+                                  th:text=
+                                          "${activity.status}">
+
+                                Hoàn thành
+                            </span>
+                        </td>
+
+                        <td class="text-end">
+
+                            <a class="view-link"
+                               th:href="${activity.url}">
+
+                                <i class=
+                                           "ti ti-eye me-1">
+                                </i>
+
+                                Xem
+                            </a>
+                        </td>
+                    </tr>
+
+                    <tr th:if=
+                                "${#lists.isEmpty(
+                                dashboard.recentActivities)}">
+
+                        <td colspan="8"
+                            class=
+                                    "text-center
+                                    text-secondary
+                                    py-4">
+
+                            Chưa có hoạt động kế toán
+                            gần đây.
+                        </td>
+                    </tr>
+
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script th:inline="javascript">
+
+    const weeklyChart =
+        /*[[${dashboard.weeklyChart}]]*/
+        null;
+
+    const chartColors = [
+        '#10b981',
+        '#ef4444',
+        '#2da8ff'
+    ];
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function formatMoneyShort(value) {
+        const number = Number(value || 0);
+        const absolute = Math.abs(number);
+
+        if (absolute >= 1_000_000_000) {
+            return (
+                number / 1_000_000_000
+            ).toLocaleString(
+                'vi-VN',
+                {
+                    maximumFractionDigits: 1
+                }
+            ) + 'B';
+        }
+
+        if (absolute >= 1_000_000) {
+            return (
+                number / 1_000_000
+            ).toLocaleString(
+                'vi-VN',
+                {
+                    maximumFractionDigits: 1
+                }
+            ) + 'M';
+        }
+
+        if (absolute >= 1_000) {
+            return (
+                number / 1_000
+            ).toLocaleString(
+                'vi-VN',
+                {
+                    maximumFractionDigits: 1
+                }
+            ) + 'K';
+        }
+
+        return number.toLocaleString('vi-VN');
+    }
+
+    function normalizeChart(rawChart) {
+        return {
+            labels: Array.isArray(
+                rawChart?.labels
+            )
+                ? rawChart.labels
+                : [],
+
+            series: Array.isArray(
+                rawChart?.series
+            )
+                ? rawChart.series.map(
+                    series => ({
+                        name: series?.name || '',
+
+                        data: Array.isArray(
+                            series?.data
+                        )
+                            ? series.data.map(
+                                value =>
+                                    Number(value || 0)
+                            )
+                            : []
+                    })
+                )
+                : []
+        };
+    }
+
+    function renderChartLegend(series) {
+        return '<div class="chart-legend">'
+            + series.map(
+                (item, index) =>
+                    '<span class="chart-legend-item">'
+                    + '<span class="chart-legend-dot" '
+                    + 'style="background:'
+                    + chartColors[
+                    index % chartColors.length
+                        ]
+                    + '"></span>'
+                    + escapeHtml(item.name)
+                    + '</span>'
+            ).join('')
+            + '</div>';
+    }
+
+    function renderAccountantChart() {
+        const container =
+            document.getElementById(
+                'accountantWeeklyChart'
+            );
+
+        const chart =
+            normalizeChart(weeklyChart);
+
+        if (
+            !container
+            || chart.labels.length === 0
+            || chart.series.length === 0
+        ) {
+            return;
+        }
+
+        const width = 820;
+        const height = 280;
+
+        const left = 54;
+        const right = 22;
+        const top = 18;
+        const bottom = 38;
+
+        const plotWidth =
+            width - left - right;
+
+        const plotHeight =
+            height - top - bottom;
+
+        const allValues =
+            chart.series.flatMap(
+                series => series.data
+            );
+
+        const rawMax =
+            Math.max(...allValues, 1);
+
+        const magnitude = Math.pow(
+            10,
+            Math.floor(
+                Math.log10(rawMax)
+            )
+        );
+
+        const maxValue =
+            Math.ceil(
+                rawMax / magnitude
+            ) * magnitude;
+
+        const stepX =
+            chart.labels.length > 1
+                ? plotWidth
+                / (chart.labels.length - 1)
+                : 0;
+
+        let svg =
+            '<svg class="accounting-chart-svg" '
+            + 'viewBox="0 0 '
+            + width
+            + ' '
+            + height
+            + '" preserveAspectRatio="none">';
+
+        for (let row = 0; row <= 4; row++) {
+            const y =
+                top
+                + (plotHeight / 4) * row;
+
+            const value =
+                maxValue
+                - (maxValue / 4) * row;
+
+            svg +=
+                '<line class="chart-grid" '
+                + 'x1="'
+                + left
+                + '" y1="'
+                + y
+                + '" x2="'
+                + (width - right)
+                + '" y2="'
+                + y
+                + '"></line>';
+
+            svg +=
+                '<text class="chart-axis-label" '
+                + 'x="'
+                + (left - 8)
+                + '" y="'
+                + (y + 3)
+                + '" text-anchor="end">'
+                + escapeHtml(
+                    formatMoneyShort(value)
+                )
+                + '</text>';
+        }
+
+        chart.labels.forEach(
+            (label, index) => {
+                const x =
+                    left + stepX * index;
+
+                svg +=
+                    '<text class="chart-axis-label" '
+                    + 'x="'
+                    + x
+                    + '" y="'
+                    + (height - 10)
+                    + '" text-anchor="middle">'
+                    + escapeHtml(label)
+                    + '</text>';
+            }
+        );
+
+        chart.series.forEach(
+            (series, seriesIndex) => {
+                const color =
+                    chartColors[
+                    seriesIndex
+                    % chartColors.length
+                        ];
+
+                const points =
+                    chart.labels.map(
+                        (label, index) => {
+                            const value =
+                                Number(
+                                    series.data[index]
+                                    || 0
+                                );
+
+                            return {
+                                x:
+                                    left
+                                    + stepX * index,
+
+                                y:
+                                    top
+                                    + plotHeight
+                                    - (
+                                        value
+                                        / maxValue
+                                    ) * plotHeight,
+
+                                value,
+                                label
+                            };
+                        }
+                    );
+
+                const path =
+                    points.map(
+                        (point, index) =>
+                            (
+                                index === 0
+                                    ? 'M '
+                                    : ' L '
+                            )
+                            + point.x
+                            + ' '
+                            + point.y
+                    ).join('');
+
+                svg +=
+                    '<path class="chart-line" '
+                    + 'stroke="'
+                    + color
+                    + '" d="'
+                    + path
+                    + '"></path>';
+
+                points.forEach(point => {
+                    svg +=
+                        '<circle class="chart-point" '
+                        + 'cx="'
+                        + point.x
+                        + '" cy="'
+                        + point.y
+                        + '" r="4" fill="'
+                        + color
+                        + '">'
+
+                        + '<title>'
+                        + escapeHtml(
+                            series.name
+                            + ' - '
+                            + point.label
+                            + ': '
+                            + Number(
+                                point.value
+                            ).toLocaleString(
+                                'vi-VN'
+                            )
+                            + 'đ'
+                        )
+                        + '</title>'
+
+                        + '</circle>';
+                });
+            }
+        );
+
+        svg += '</svg>';
+
+        container.innerHTML =
+            svg
+            + renderChartLegend(
+                chart.series
+            );
+    }
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        renderAccountantChart
+    );
+
+</script>
+
+</body>
+</html>
