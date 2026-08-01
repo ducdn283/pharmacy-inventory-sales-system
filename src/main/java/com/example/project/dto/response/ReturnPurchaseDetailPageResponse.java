@@ -54,6 +54,8 @@ public class ReturnPurchaseDetailPageResponse {
     private BigDecimal totalVATRefund;
     /** Nhóm 3/4 mới có thuế đầu vào để đảo — dùng để chú thích đúng ngữ cảnh trên màn hình. */
     private boolean deductionGroup;
+    /** Nhóm 1 (miễn thuế) — cũng không có thuế để đảo, nhưng lý do khác Nhóm 2 nên chú thích khác. */
+    private boolean taxExempt;
 
     private List<ReturnPurchaseDetailItemResponse> items;
 }
