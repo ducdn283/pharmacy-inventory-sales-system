@@ -48,8 +48,8 @@ public class Taxperiodsnapshot {
     @Column(name = "vatCarryforwardOut", precision = 15, scale = 2)
     private BigDecimal vatCarryforwardOut;
 
-    @Column(name = "cashBalanceAtPeriodEnd", precision = 15, scale = 2)
-    private BigDecimal cashBalanceAtPeriodEnd;
+    @Column(name = "quarterlyRevenue", precision = 15, scale = 2)
+    private BigDecimal quarterlyRevenue;
 
     @Column(name = "recordedAt")
     private LocalDateTime recordedAt;
