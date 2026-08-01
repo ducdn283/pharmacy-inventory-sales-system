@@ -230,6 +230,43 @@ public class NotificationService {
     }
 
     @Transactional
+    public void resolveByTypeAndReference(
+            String notificationType,
+            String referenceType,
+            Integer referenceId
+    ) {
+        if (notificationType == null
+                || notificationType.isBlank()
+                || referenceType == null
+                || referenceType.isBlank()
+                || referenceId == null) {
+            return;
+        }
+
+        List<Notification> notifications =
+                notificationRepository
+                        .findActiveByTypeAndReference(
+                                notificationType,
+                                referenceType,
+                                referenceId
+                        );
+
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        for (Notification notification : notifications) {
+            notification.setStatus(
+                    NotificationStatus.RESOLVED
+            );
+
+            notification.setResolvedAt(now);
+            notification.setIsActive(false);
+        }
+
+        notificationRepository.saveAll(notifications);
+    }
+
+    @Transactional
     public void resolveByReference(String referenceType, Integer referenceId) {
         if (referenceType == null || referenceType.isBlank() || referenceId == null) {
             return;
@@ -247,19 +284,38 @@ public class NotificationService {
         notificationRepository.saveAll(notifications);
     }
 
-    private boolean isActionRequired(Notification notification) {
+    private boolean isActionRequired(
+            Notification notification
+    ) {
         if (!isNotClosed(notification)) {
             return false;
         }
 
-        String type = notification.getNotificationType();
-        String category = notification.getCategory();
+        String type =
+                notification.getNotificationType();
 
-        return NotificationCategory.PHE_DUYET.equals(category)
-                || NotificationCategory.KY_THUE.equals(category)
+        String category =
+                notification.getCategory();
+
+        /*
+         * Chỉ thông báo PENDING mới là việc cần phê duyệt.
+         * APPROVED/REJECTED chỉ là thông báo kết quả.
+         */
+        boolean pendingApproval =
+                NotificationCategory.PHE_DUYET.equals(
+                        category
+                )
+                        && type != null
+                        && type.endsWith("_PENDING");
+
+        return pendingApproval
+                || NotificationCategory.KY_THUE.equals(
+                category
+        )
                 || type != null && (
-                type.endsWith("_PENDING")
-                        || NotificationSeverity.URGENT.equals(notification.getSeverity())
+                NotificationSeverity.URGENT.equals(
+                        notification.getSeverity()
+                )
                         || "INVOICE_DEBT".equals(type)
                         || "PURCHASE_INVOICE_DUE".equals(type)
                         || "OUT_OF_STOCK".equals(type)

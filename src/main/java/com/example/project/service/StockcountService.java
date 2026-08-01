@@ -29,15 +29,18 @@ public class StockcountService {
     private final StockcountdetailRepository stockcountdetailRepository;
     private final BatchRepository batchRepository;
     private final AccountRepository accountRepository;
+    private final WorkflowNotificationService workflowNotificationService;
 
     public StockcountService(StockcountRepository stockcountRepository,
                              StockcountdetailRepository stockcountdetailRepository,
                              BatchRepository batchRepository,
-                             AccountRepository accountRepository) {
+                             AccountRepository accountRepository,
+                             WorkflowNotificationService workflowNotificationService) {
         this.stockcountRepository = stockcountRepository;
         this.stockcountdetailRepository = stockcountdetailRepository;
         this.batchRepository = batchRepository;
         this.accountRepository = accountRepository;
+        this.workflowNotificationService = workflowNotificationService;
     }
 
     @Transactional(readOnly = true)
@@ -175,7 +178,10 @@ public class StockcountService {
 
             stockcountdetailRepository.save(detail);
         }
-
+        if (isStatus(saved.getStatus(), StockCountStatus.PENDING)) {
+            workflowNotificationService
+                    .stockCountPending(saved);
+        }
         return saved.getId();
     }
 
@@ -260,6 +266,10 @@ public class StockcountService {
         }
 
         stockcountRepository.save(count);
+        if (!isOwner) {
+            workflowNotificationService
+                    .stockCountPending(count);
+        }
     }
 
     @Transactional
@@ -279,6 +289,7 @@ public class StockcountService {
         count.setApprovedAt(Instant.now());
 
         stockcountRepository.save(count);
+        workflowNotificationService.stockCountApproved(count);
     }
 
     @Transactional
@@ -298,6 +309,7 @@ public class StockcountService {
         count.setApprovedAt(Instant.now());
 
         stockcountRepository.save(count);
+        workflowNotificationService.stockCountRejected(count);
     }
 
     @Transactional(readOnly = true)

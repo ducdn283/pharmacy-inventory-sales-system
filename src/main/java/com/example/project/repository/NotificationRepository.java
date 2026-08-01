@@ -78,4 +78,23 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
            """)
     List<Notification> findActiveByReference(@Param("referenceType") String referenceType,
                                              @Param("referenceId") Integer referenceId);
+
+    @Query("""
+       select n
+       from Notification n
+       where n.notificationType = :notificationType
+         and n.referenceType = :referenceType
+         and n.referenceId = :referenceId
+         and n.isActive = true
+       """)
+    List<Notification> findActiveByTypeAndReference(
+            @Param("notificationType")
+            String notificationType,
+
+            @Param("referenceType")
+            String referenceType,
+
+            @Param("referenceId")
+            Integer referenceId
+    );
 }

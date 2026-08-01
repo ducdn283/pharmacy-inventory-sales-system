@@ -91,4 +91,35 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    order by b.expirationDate asc
    """)
     List<Batch> findAllByProduct(@Param("productId") Integer productId);
+
+    /**
+     * Tổng tồn của từng sản phẩm,
+     * chỉ tính các lô đang hoạt động.
+     *
+     * Mỗi Object[] gồm:
+     * [0] = productID
+     * [1] = tổng storageQuantity
+     */
+    @Query("""
+       select b.productID.productID,
+              coalesce(sum(b.storageQuantity), 0)
+       from Batch b
+       where b.productID is not null
+         and b.status = true
+       group by b.productID.productID
+       """)
+    List<Object[]> sumActiveStorageGroupedByProduct();
+
+    /**
+     * Lấy toàn bộ lô cùng thông tin sản phẩm
+     * để kiểm tra hạn sử dụng.
+     */
+    @Query("""
+       select b
+       from Batch b
+       left join fetch b.productID p
+       where b.productID is not null
+       order by b.expirationDate asc, b.id asc
+       """)
+    List<Batch> findAllWithProductForNotifications();
 }

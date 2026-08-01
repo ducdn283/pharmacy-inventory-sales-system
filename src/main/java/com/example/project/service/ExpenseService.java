@@ -101,19 +101,22 @@ public class ExpenseService {
     private final AccountpermissionRepository accountpermissionRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final ShiftreportService shiftreportService;
+    private final WorkflowNotificationService workflowNotificationService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
                           ReturnRepository returnRepository,
                           AccountpermissionRepository accountpermissionRepository,
                           PurchaseinvoiceService purchaseinvoiceService,
-                          ShiftreportService shiftreportService) {
+                          ShiftreportService shiftreportService,
+                          WorkflowNotificationService workflowNotificationService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
         this.accountpermissionRepository = accountpermissionRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
         this.shiftreportService = shiftreportService;
+        this.workflowNotificationService = workflowNotificationService;
     }
 
     // ------------------------------------------------------------------ generated-REST passthrough
@@ -217,7 +220,7 @@ public class ExpenseService {
      *       {@code ReturnStatus}'s javadoc there is deliberately no "Duyệt" for returns, because
      *       approving one means the pharmacy now owes the customer money;</li>
      *   <li>it has a real cash refund — see {@link #cashRefundAmount};</li>
-     *   <li>no live Expense already points at it — see {@link #linkedReturnIds}.</li>
+     *   <li>no live Expense already points at it — see {@link #committedByReturnId()}.</li>
      * </ol>
      */
     @Transactional(readOnly = true)
@@ -371,7 +374,14 @@ public class ExpenseService {
         // Re-stamp the human-facing code from the real generated id (matches Stock Adjustment/
         // Purchase Invoice convention: the placeholder above only reserves a slot in sequence).
         saved.setExpenseCode(formatCode(saved.getId()));
-        return expenseRepository.save(saved).getId();
+
+        Expense finalSaved = expenseRepository.save(saved);
+
+        if (ExpenseStatus.PENDING.equals(finalSaved.getStatus())) {
+            workflowNotificationService.expensePending(finalSaved);
+        }
+
+        return finalSaved.getId();
     }
 
     /** Sends a {@link ExpenseStatus#DRAFT} slip forward, same shape as {@code StockadjustmentService#submit}. */
@@ -394,6 +404,10 @@ public class ExpenseService {
         }
 
         expenseRepository.save(expense);
+        if (!isOwner) {
+            workflowNotificationService
+                    .expensePending(expense);
+        }
     }
 
     @Transactional
@@ -410,6 +424,7 @@ public class ExpenseService {
 
         applyApproval(expense, approver);
         expenseRepository.save(expense);
+        workflowNotificationService.expenseApproved(expense);
     }
 
     @Transactional
@@ -427,6 +442,7 @@ public class ExpenseService {
         expense.setStatus(ExpenseStatus.REJECTED);
         expense.setApprovedAt(Instant.now());
         expenseRepository.save(expense);
+        workflowNotificationService.expenseRejected(expense);
         // approver identity for a rejection isn't modeled separately from approvedAt/status;
         // Expense has no dedicated "rejectedBy" column (see Pharmacy-Database-Description.docx).
     }
