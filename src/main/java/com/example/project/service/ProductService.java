@@ -73,6 +73,10 @@ public class ProductService {
     private static final int RECENT_HISTORY_LIMIT = 10;
     // Used by toInstantForSort() below.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    // normalize("Thuốc kê đơn") — there is no boolean column for this, only the Type's name.
+    private static final String PRESCRIPTION_TYPE_NAME = "thuoc ke don";
+    // Same threshold StockadjustmentService uses for its own "sắp hết hạn" checks.
+    private static final int NEAR_EXPIRY_DAYS = 90;
 
     private final ProductRepository productRepository;
     private final BatchRepository batchRepository;
@@ -136,19 +140,48 @@ public class ProductService {
     @Transactional(readOnly = true)
     public Page<ProductRowResponse> searchProducts(String keyword,
                                                    Integer typeId,
-                                                   Integer producerId,
+                                                   String producerQuery,
                                                    String stockStatus,
                                                    Pageable pageable) {
+        return searchProducts(keyword, null, null, null, producerQuery, typeId, stockStatus, false, pageable);
+    }
+
+    /**
+     * Product List search: either the single combined {@code keyword} (legacy) or the four
+     * expandable-search fields (mã sản phẩm / tên / mã vạch / nhà sản xuất — ANDed when more than
+     * one is filled), plus type / stock-status / near-expiry filters, then in-memory pagination.
+     * Mirrors the load-all + filter approach already used by {@code StockoutService} for
+     * consistency across listing screens.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProductRowResponse> searchProducts(String keyword,
+                                                   String codeQuery,
+                                                   String nameQuery,
+                                                   String barcodeQuery,
+                                                   String producerQuery,
+                                                   Integer typeId,
+                                                   String stockStatus,
+                                                   boolean nearExpiryOnly,
+                                                   Pageable pageable) {
         final String normalizedKeyword = normalize(keyword);
+        final String normalizedCode = normalize(codeQuery);
+        final String normalizedName = normalize(nameQuery);
+        final String normalizedBarcode = normalize(barcodeQuery);
+        final String normalizedProducer = normalize(producerQuery);
 
         Map<Integer, Long> stockByProduct = loadStockByProduct();
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, String> ingredientByProduct = loadIngredientByProduct();
+        Set<Integer> nearExpiryProductIds = nearExpiryOnly ? loadNearExpiryProductIds() : null;
 
         List<ProductRowResponse> filtered = productRepository.findAllWithRelations().stream()
                 .filter(product -> matchesKeyword(product, normalizedKeyword))
+                .filter(product -> matchesCode(product, normalizedCode))
+                .filter(product -> matchesName(product, normalizedName))
+                .filter(product -> matchesBarcode(product, normalizedBarcode))
+                .filter(product -> matchesProducer(product, normalizedProducer))
                 .filter(product -> typeMatches(product, typeId))
-                .filter(product -> producerMatches(product, producerId))
+                .filter(product -> nearExpiryProductIds == null || nearExpiryProductIds.contains(product.getProductID()))
                 .map(product -> toRow(product, stockByProduct, mainUnitByProduct, ingredientByProduct))
                 .filter(row -> stockStatusMatches(row, stockStatus))
                 .toList();
@@ -203,6 +236,11 @@ public class ProductService {
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(this::toUnitDetail)
                 .toList();
+        String baseUnitName = units.stream()
+                .filter(ProductUnitDetailResponse::isBaseUnit)
+                .findFirst()
+                .map(ProductUnitDetailResponse::getUnitName)
+                .orElse("");
 
         List<String> ingredients = medicineapiRepository.findByProductId(productId).stream()
                 .map(this::formatIngredient)
@@ -237,6 +275,7 @@ public class ProductService {
         response.setNote(product.getNote());
         response.setIngredients(ingredients);
         response.setUnits(units);
+        response.setBaseUnitName(baseUnitName);
         response.setTotalStock(totalStock);
         response.setStockStatusLabel(stockStatusLabel(totalStatus));
         response.setStockStatusCss(stockStatusCss(totalStatus));
@@ -335,6 +374,7 @@ public class ProductService {
         // Mã hàng is an internal code — auto-generated ("SP" + sequence), not entered by the user.
         validateUniqueness(name, barcode, trimToNull(request.getRegistrationNumber()), null, errors);
         validateStockBounds(request, errors);
+        validateRequiredFields(request, errors);
         if (request.getTypeId() != null && !typeRepository.existsById(request.getTypeId())) {
             errors.add("Loại hàng không hợp lệ");
         }
@@ -510,6 +550,7 @@ public class ProductService {
         }
         validateUniqueness(name, barcode, trimToNull(request.getRegistrationNumber()), productId, errors);
         validateStockBounds(request, errors);
+        validateRequiredFields(request, errors);
         if (request.getTypeId() != null && !typeRepository.existsById(request.getTypeId())) {
             errors.add("Loại hàng không hợp lệ");
         }
@@ -758,14 +799,31 @@ public class ProductService {
         Integer minStock = request.getMinStock();
         Integer maxStock = request.getMaxStock();
 
-        if (minStock != null && minStock < 0) {
+        if (minStock == null) {
+            errors.add("Tồn tối thiểu không được để trống");
+        } else if (minStock < 0) {
             errors.add("Tồn tối thiểu không được âm");
         }
-        if (maxStock != null && maxStock < 0) {
+        if (maxStock == null) {
+            errors.add("Tồn tối đa không được để trống");
+        } else if (maxStock < 0) {
             errors.add("Tồn tối đa không được âm");
         }
         if (minStock != null && maxStock != null && minStock > maxStock) {
             errors.add("Tồn tối thiểu không được lớn hơn tồn tối đa");
+        }
+    }
+
+    /** Nhà sản xuất, xuất xứ và loại hàng đều bắt buộc phải chọn/điền khi tạo hoặc sửa hàng hóa. */
+    private void validateRequiredFields(ProductCreateRequest request, List<String> errors) {
+        if (request.getProducerId() == null) {
+            errors.add("Nhà sản xuất không được để trống");
+        }
+        if (trimToNull(request.getOrigin()) == null) {
+            errors.add("Xuất xứ không được để trống");
+        }
+        if (request.getTypeId() == null) {
+            errors.add("Loại hàng không được để trống");
         }
     }
 
@@ -999,8 +1057,16 @@ public class ProductService {
                 stock,
                 stockStatusLabel(statusCode),
                 stockStatusCss(statusCode),
-                "—"
+                prescriptionDisplay(product)
         );
+    }
+
+    /** "Có" when the product's Type is "Thuốc kê đơn", "Không" for any other declared type, "—" if none. */
+    private String prescriptionDisplay(Product product) {
+        if (product.getTypeID() == null) {
+            return "—";
+        }
+        return PRESCRIPTION_TYPE_NAME.equals(normalize(product.getTypeID().getName())) ? "Có" : "Không";
     }
 
     private String stockStatusCode(Product product, long stock) {
@@ -1040,18 +1106,36 @@ public class ProductService {
                 || containsNormalized(String.valueOf(product.getProductID()), normalizedKeyword);
     }
 
+    // --- expandable search fields (Mã sản phẩm / Tên sản phẩm / Mã vạch) — ANDed when combined ---
+
+    private boolean matchesCode(Product product, String normalizedCode) {
+        return normalizedCode.isBlank() || containsNormalized(product.getCode(), normalizedCode);
+    }
+
+    private boolean matchesName(Product product, String normalizedName) {
+        return normalizedName.isBlank() || containsNormalized(product.getName(), normalizedName);
+    }
+
+    private boolean matchesBarcode(Product product, String normalizedBarcode) {
+        return normalizedBarcode.isBlank() || containsNormalized(product.getBarcode(), normalizedBarcode);
+    }
+
+    private boolean matchesProducer(Product product, String normalizedProducer) {
+        return normalizedProducer.isBlank()
+                || (product.getProducerID() != null && containsNormalized(product.getProducerID().getName(), normalizedProducer));
+    }
+
+    /** Products carrying at least one in-stock batch expiring within {@link #NEAR_EXPIRY_DAYS} days. */
+    private Set<Integer> loadNearExpiryProductIds() {
+        LocalDate today = LocalDate.now();
+        return new HashSet<>(batchRepository.findProductIdsNearExpiry(today, today.plusDays(NEAR_EXPIRY_DAYS)));
+    }
+
     private boolean typeMatches(Product product, Integer typeId) {
         if (typeId == null) {
             return true;
         }
         return product.getTypeID() != null && typeId.equals(product.getTypeID().getId());
-    }
-
-    private boolean producerMatches(Product product, Integer producerId) {
-        if (producerId == null) {
-            return true;
-        }
-        return product.getProducerID() != null && producerId.equals(product.getProducerID().getId());
     }
 
     private boolean stockStatusMatches(ProductRowResponse row, String stockStatus) {

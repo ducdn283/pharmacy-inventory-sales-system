@@ -109,7 +109,7 @@
             <div class="text-md-end">
                 <div class="info-label">Tổng tồn kho</div>
                 <div class="fs-3 fw-bold"
-                     th:text="${product.totalStock + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName)}">0</div>
+                     th:text="${product.totalStock + (#strings.isEmpty(product.baseUnitName) ? '' : ' ' + product.baseUnitName)}">0</div>
             </div>
         </div>
 
@@ -126,8 +126,8 @@
                 <div class="col-6 col-md-3"><div class="info-label">Nhà sản xuất</div><div class="info-value" th:text="${product.producerName}">—</div></div>
                 <div class="col-6 col-md-3"><div class="info-label">Xuất xứ</div><div class="info-value" th:text="${product.originName}">—</div></div>
                 <div class="col-6 col-md-3"><div class="info-label">Số đăng ký</div><div class="info-value" th:text="${product.registrationNumber != null ? product.registrationNumber : '—'}">—</div></div>
-                <div class="col-6 col-md-3"><div class="info-label">Tồn tối thiểu</div><div class="info-value" th:text="${product.minStock != null ? product.minStock : '—'}">—</div></div>
-                <div class="col-6 col-md-3"><div class="info-label">Tồn tối đa</div><div class="info-value" th:text="${product.maxStock != null ? product.maxStock : '—'}">—</div></div>
+                <div class="col-6 col-md-3"><div class="info-label">Tồn tối thiểu</div><div class="info-value" th:text="${product.minStock != null ? product.minStock + (#strings.isEmpty(product.baseUnitName) ? '' : ' ' + product.baseUnitName) : '—'}">—</div></div>
+                <div class="col-6 col-md-3"><div class="info-label">Tồn tối đa</div><div class="info-value" th:text="${product.maxStock != null ? product.maxStock + (#strings.isEmpty(product.baseUnitName) ? '' : ' ' + product.baseUnitName) : '—'}">—</div></div>
                 <div class="col-12 col-md-6">
                     <div class="info-label">Hoạt chất</div>
                     <div class="info-value">
@@ -146,7 +146,7 @@
                     <thead>
                     <tr>
                         <th>Đơn vị</th>
-                        <th class="text-end">Tỷ lệ quy đổi</th>
+                        <th class="text-end">Tỷ lệ quy đổi (so với đơn vị cơ bản)</th>
                         <th class="text-end">Giá bán</th>
                         <th>Phân loại</th>
                     </tr>
@@ -154,7 +154,8 @@
                     <tbody>
                     <tr th:each="u : ${product.units}">
                         <td class="fw-semibold" th:text="${u.unitName}">Hộp</td>
-                        <td class="text-end" th:text="${u.ratio != null ? #numbers.formatDecimal(u.ratio, 0, 'POINT', 0, 'COMMA') : '—'}">1</td>
+                        <td class="text-end"
+                            th:text="${u.isBaseUnit() or u.ratio == null ? '—' : '1 ' + u.unitName + ' = ' + #numbers.formatDecimal(u.ratio, 0, 'POINT', 0, 'COMMA') + ' ' + (#strings.isEmpty(product.baseUnitName) ? 'đơn vị cơ bản' : product.baseUnitName)}">1</td>
                         <td class="text-end" th:text="${u.sellPrice != null ? #numbers.formatDecimal(u.sellPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">70.000đ</td>
                         <td>
                             <span th:if="${u.isDefault()}" class="status-badge status-instock me-1">Mặc định</span>

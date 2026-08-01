@@ -101,14 +101,14 @@
                 <h2 class="section-title mb-3">Thông tin cơ bản</h2>
                 <div class="row g-3">
                     <div class="col-12 col-md-3">
-                        <label class="info-label">Nhóm mặt hàng</label>
+                        <label class="info-label">Nhóm mặt hàng <span class="text-danger">*</span></label>
                         <select class="form-select" th:field="*{itemGroup}" id="itemGroup">
                             <option value="">-- Chọn nhóm --</option>
                             <option th:each="g : ${typeGroups}" th:value="${g}" th:text="${#strings.capitalize(g)}"></option>
                         </select>
                     </div>
                     <div class="col-12 col-md-3">
-                        <label class="info-label">Loại hàng (Type)</label>
+                        <label class="info-label">Loại hàng (Type) <span class="text-danger">*</span></label>
                         <select class="form-select" th:field="*{typeId}" id="typeSelect">
                             <option value="">-- Chọn loại --</option>
                             <option th:each="t : ${types}" th:value="${t.id}" th:text="${t.name}" th:attr="data-group=${t.sortType}"></option>
@@ -124,13 +124,13 @@
                         <input type="text" class="form-control" th:field="*{barcode}" placeholder="Mã vạch (nếu có)">
                     </div>
                     <div class="col-12 col-md-3">
-                        <label class="info-label">Nhà sản xuất</label>
+                        <label class="info-label">Nhà sản xuất <span class="text-danger">*</span></label>
                         <input type="text" class="form-control ac-field" data-field="producer" data-target="producerId"
                                autocomplete="off" placeholder="Gõ để tìm nhà sản xuất...">
                         <input type="hidden" th:field="*{producerId}">
                     </div>
                     <div class="col-12 col-md-3">
-                        <label class="info-label">Xuất xứ</label>
+                        <label class="info-label">Xuất xứ <span class="text-danger">*</span></label>
                         <input type="text" class="form-control ac-field" data-field="origin"
                                autocomplete="off" th:field="*{origin}" placeholder="Gõ để tìm xuất xứ...">
                     </div>
@@ -146,15 +146,16 @@
 
                     <div class="col-12 col-md-3">
                         <label class="info-label">Số đăng ký</label>
-                        <input type="text" class="form-control" th:field="*{registrationNumber}">
+                        <input type="text" class="form-control" th:field="*{registrationNumber}"
+                               placeholder="Số đăng ký lưu hành (nếu có)">
                     </div>
                     <div class="col-6 col-md-3">
-                        <label class="info-label">Tồn tối thiểu</label>
-                        <input type="number" class="form-control" th:field="*{minStock}" min="0">
+                        <label class="info-label">Tồn tối thiểu <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" th:field="*{minStock}" min="0" placeholder="Ví dụ: 10">
                     </div>
                     <div class="col-6 col-md-3">
-                        <label class="info-label">Tồn tối đa</label>
-                        <input type="number" class="form-control" th:field="*{maxStock}" min="0">
+                        <label class="info-label">Tồn tối đa <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" th:field="*{maxStock}" min="0" placeholder="Ví dụ: 200">
                     </div>
                     <div class="col-12 col-md-3">
                         <label class="info-label">Trạng thái</label>

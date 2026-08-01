@@ -42,9 +42,13 @@ public class ProductPageController {
             "/accountant/products"
     })
     public String listProducts(@RequestParam(name = "keyword", required = false) String keyword,
+                               @RequestParam(name = "codeQuery", required = false) String codeQuery,
+                               @RequestParam(name = "nameQuery", required = false) String nameQuery,
+                               @RequestParam(name = "barcodeQuery", required = false) String barcodeQuery,
+                               @RequestParam(name = "producerQuery", required = false) String producerQuery,
                                @RequestParam(name = "typeId", required = false) Integer typeId,
-                               @RequestParam(name = "producerId", required = false) Integer producerId,
                                @RequestParam(name = "stockStatus", required = false) String stockStatus,
+                               @RequestParam(name = "nearExpiryOnly", defaultValue = "false") boolean nearExpiryOnly,
                                @RequestParam(name = "page", defaultValue = "0") int page,
                                @RequestParam(name = "size", defaultValue = "10") int size,
                                HttpServletRequest request,
@@ -56,20 +60,23 @@ public class ProductPageController {
             size = 10;
         }
 
-        Page<ProductRowResponse> productPage =
-                productService.searchProducts(keyword, typeId, producerId, stockStatus, PageRequest.of(page, size));
+        Page<ProductRowResponse> productPage = productService.searchProducts(keyword, codeQuery, nameQuery,
+                barcodeQuery, producerQuery, typeId, stockStatus, nearExpiryOnly, PageRequest.of(page, size));
 
         model.addAttribute("productPage", productPage);
         model.addAttribute("products", productPage.getContent());
         model.addAttribute("stats", productService.getStats());
 
         model.addAttribute("types", productService.listTypes());
-        model.addAttribute("producers", productService.listProducers());
 
         model.addAttribute("keyword", keyword);
+        model.addAttribute("codeQuery", codeQuery);
+        model.addAttribute("nameQuery", nameQuery);
+        model.addAttribute("barcodeQuery", barcodeQuery);
+        model.addAttribute("producerQuery", producerQuery);
         model.addAttribute("filterTypeId", typeId);
-        model.addAttribute("filterProducerId", producerId);
         model.addAttribute("filterStockStatus", stockStatus);
+        model.addAttribute("nearExpiryOnly", nearExpiryOnly);
 
         model.addAttribute("currentPage", productPage.getNumber());
         model.addAttribute("totalPages", productPage.getTotalPages());
