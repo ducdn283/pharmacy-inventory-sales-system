@@ -24,4 +24,6 @@ public class PurchaseInvoiceDetailItemResponse {
     private BigDecimal vatRate;
     private BigDecimal preTaxAmount;
     private BigDecimal vatAmount;
+    /** Current base-unit sell price of the product, for cross-reference only; null if unset. */
+    private BigDecimal sellPrice;
 }

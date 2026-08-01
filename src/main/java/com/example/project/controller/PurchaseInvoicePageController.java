@@ -41,10 +41,11 @@ public class PurchaseInvoicePageController {
             "/accountant/purchase-invoices",
             "/pharmacist/purchase-invoices"
     })
-    public String listPurchaseInvoices(@RequestParam(name = "keyword", required = false) String keyword,
+    public String listPurchaseInvoices(@RequestParam(name = "codeQuery", required = false) String codeQuery,
+                                       @RequestParam(name = "supplierQuery", required = false) String supplierQuery,
+                                       @RequestParam(name = "productQuery", required = false) String productQuery,
                                        @RequestParam(name = "fromDate", required = false) String fromDate,
                                        @RequestParam(name = "toDate", required = false) String toDate,
-                                       @RequestParam(name = "supplierId", required = false) Integer supplierId,
                                        @RequestParam(name = "paymentStatus", required = false) String paymentStatus,
                                        @RequestParam(name = "page", defaultValue = "0") int page,
                                        @RequestParam(name = "size", defaultValue = "5") int size,
@@ -60,10 +61,11 @@ public class PurchaseInvoicePageController {
 
         Page<PurchaseInvoiceListItemResponse> invoicePage =
                 purchaseinvoiceService.searchPurchaseInvoices(
-                        keyword,
+                        codeQuery,
+                        supplierQuery,
+                        productQuery,
                         fromDate,
                         toDate,
-                        supplierId,
                         paymentStatus,
                         PageRequest.of(page, size)
                 );
@@ -72,13 +74,13 @@ public class PurchaseInvoicePageController {
         model.addAttribute("purchaseInvoices", invoicePage.getContent());
         model.addAttribute("stats", purchaseinvoiceService.getStats());
 
-        model.addAttribute("suppliers", purchaseinvoiceService.listSuppliers());
         model.addAttribute("paymentStatuses", purchaseinvoiceService.listPaymentStatuses());
 
-        model.addAttribute("keyword", keyword);
+        model.addAttribute("codeQuery", codeQuery);
+        model.addAttribute("supplierQuery", supplierQuery);
+        model.addAttribute("productQuery", productQuery);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
-        model.addAttribute("filterSupplierId", supplierId);
         model.addAttribute("filterPaymentStatus", paymentStatus);
 
         model.addAttribute("currentPage", invoicePage.getNumber());
@@ -211,6 +213,7 @@ public class PurchaseInvoicePageController {
         model.addAttribute("costPriceBySupplierAndProduct", purchaseinvoiceService.buildCostPriceBySupplierAndProduct());
         model.addAttribute("vatRateByProduct", purchaseinvoiceService.getVatRateByProduct());
         model.addAttribute("importUnitByProduct", purchaseinvoiceService.getImportUnitNameByProduct());
+        model.addAttribute("sellPriceByProduct", purchaseinvoiceService.getSellPriceByProduct());
         model.addAttribute("basePath", resolveBasePath(request));
     }
 

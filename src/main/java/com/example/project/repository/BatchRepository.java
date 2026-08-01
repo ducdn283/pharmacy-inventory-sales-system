@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface BatchRepository extends JpaRepository<Batch, Integer> {
@@ -91,4 +92,19 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    order by b.expirationDate asc
    """)
     List<Batch> findAllByProduct(@Param("productId") Integer productId);
+
+    /**
+     * Distinct IDs of products carrying at least one in-stock batch expiring within
+     * {@code [today, threshold]} — backs the Product List "Sắp hết hạn" filter.
+     */
+    @Query("""
+   select distinct b.productID.productID
+   from Batch b
+   where b.status = true
+     and b.storageQuantity > 0
+     and b.expirationDate is not null
+     and b.expirationDate between :today and :threshold
+   """)
+    List<Integer> findProductIdsNearExpiry(@Param("today") LocalDate today,
+                                           @Param("threshold") LocalDate threshold);
 }

@@ -340,6 +340,7 @@
                                                    th:field="*{details[__${iterStat.index}__].productId}">
                                             <div class="product-search-results"></div>
                                         </div>
+                                        <div class="small text-secondary mt-1 product-sell-price-display">Giá bán: —</div>
                                         <div class="text-danger small mt-1"
                                              th:if="${#fields.hasErrors('details[__${iterStat.index}__].productId')}"
                                              th:errors="*{details[__${iterStat.index}__].productId}">
@@ -534,6 +535,7 @@
     const costPriceBySupplierAndProduct = /*[[${costPriceBySupplierAndProduct}]]*/ {};
     const vatRateByProduct = /*[[${vatRateByProduct}]]*/ {};
     const importUnitByProduct = /*[[${importUnitByProduct}]]*/ {};
+    const sellPriceByProduct = /*[[${sellPriceByProduct}]]*/ {};
 
     // "Giá nhập" gợi ý = SupplierProduct.costPrice gần nhất của cặp (NCC đang chọn, sản phẩm của dòng này).
     function suggestedCostPrice(supplierId, productId) {
@@ -605,6 +607,23 @@
 
     function wireImportUnitDisplay(row) {
         applyImportUnitDisplay(row);
+    }
+
+    // "Giá bán" chỉ là dòng tham chiếu hiển thị dưới tên sản phẩm — không sửa được ở đây, không ghi
+    // gì vào Productunit.sellPrice (đó vẫn là việc riêng của Thiết lập giá).
+    function applySuggestedSellPrice(row) {
+        const productInput = row.querySelector('.product-select');
+        const display = row.querySelector('.product-sell-price-display');
+        if (!productInput || !display) return;
+
+        const price = sellPriceByProduct[productInput.value];
+        display.textContent = (price === undefined || price === null)
+            ? 'Giá bán: —'
+            : 'Giá bán: ' + Number(price).toLocaleString('vi-VN') + 'đ';
+    }
+
+    function wireSellPriceSuggestion(row) {
+        applySuggestedSellPrice(row);
     }
 
     // "Không có hạn sử dụng" phải được tích chủ động — không suy ra từ việc để trống ô ngày, để
@@ -782,6 +801,7 @@
         applySuggestedPrice(row);
         applySuggestedVatRate(row);
         applyImportUnitDisplay(row);
+        applySuggestedSellPrice(row);
     }
 
     function wireProductSearch(row) {
@@ -1014,6 +1034,7 @@
                                name="details[${index}].productId">
                         <div class="product-search-results"></div>
                     </div>
+                    <div class="small text-secondary mt-1 product-sell-price-display">Giá bán: —</div>
                 </td>
 
                 <td>
@@ -1092,6 +1113,7 @@
         wirePriceSuggestion(tbody);
         wireVatRateSuggestion(tbody);
         wireImportUnitDisplay(tbody);
+        wireSellPriceSuggestion(tbody);
         wireNoExpirationToggle(tbody);
         wireVietnameseRequiredMessages(tbody);
         calculateSummary();
@@ -1128,6 +1150,7 @@
             wirePriceSuggestion(row);
             wireVatRateSuggestion(row);
             wireImportUnitDisplay(row);
+            wireSellPriceSuggestion(row);
             wireNoExpirationToggle(row);
         });
 
