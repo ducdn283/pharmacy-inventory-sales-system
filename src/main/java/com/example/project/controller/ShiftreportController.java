@@ -25,11 +25,21 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.Optional;
 
+/**
+ * Shift-report screens.
+ *
+ * <p>Owner and Pharmacist run shifts; the Accountant does not (they never handle register cash, so
+ * {@code ensureOpenShiftFor} never creates a shift for them) but must be able to READ shift reports.
+ * That is why {@code ACCOUNTANT_BASE} is mapped on the two GET screens only — close/approve/reject
+ * are never mapped for it, and the detail template gates its action cards on {@code isOwnShift} /
+ * {@code isOwner}, both false for an Accountant.</p>
+ */
 @Controller
 public class ShiftreportController {
 
     private static final String OWNER_BASE = "/owner/shift-reports";
     private static final String PHARMACIST_BASE = "/pharmacist/shift-reports";
+    private static final String ACCOUNTANT_BASE = "/accountant/shift-reports";
 
     private final ShiftreportService shiftreportService;
     private final CurrentUserContext currentUserContext;
@@ -42,12 +52,14 @@ public class ShiftreportController {
 
     @GetMapping({
             OWNER_BASE,
-            PHARMACIST_BASE
+            PHARMACIST_BASE,
+            ACCOUNTANT_BASE
     })
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                        @RequestParam(name = "fromDate", required = false) String fromDate,
                        @RequestParam(name = "toDate", required = false) String toDate,
                        @RequestParam(name = "status", required = false) String status,
+                       @RequestParam(name = "discrepancy", required = false) String discrepancy,
                        @RequestParam(name = "page", defaultValue = "0") int page,
                        @RequestParam(name = "size", defaultValue = "5") int size,
                        HttpServletRequest request,
@@ -60,7 +72,7 @@ public class ShiftreportController {
         }
 
         Page<ShiftReportListItemResponse> shiftPage = shiftreportService.search(
-                keyword, fromDate, toDate, status, PageRequest.of(page, size));
+                keyword, fromDate, toDate, status, discrepancy, PageRequest.of(page, size));
 
         model.addAttribute("shiftPage", shiftPage);
         model.addAttribute("shifts", shiftPage.getContent());
@@ -71,6 +83,7 @@ public class ShiftreportController {
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
         model.addAttribute("filterStatus", status);
+        model.addAttribute("filterDiscrepancy", discrepancy);
 
         model.addAttribute("currentPage", shiftPage.getNumber());
         model.addAttribute("totalPages", shiftPage.getTotalPages());
@@ -84,7 +97,8 @@ public class ShiftreportController {
 
     @GetMapping({
             OWNER_BASE + "/{shiftReportId}",
-            PHARMACIST_BASE + "/{shiftReportId}"
+            PHARMACIST_BASE + "/{shiftReportId}",
+            ACCOUNTANT_BASE + "/{shiftReportId}"
     })
     public String detail(@PathVariable Integer shiftReportId,
                          HttpServletRequest request,
@@ -106,7 +120,29 @@ public class ShiftreportController {
         model.addAttribute("isOwnShift", isOwnShift);
         model.addAttribute("mustCloseNow", mustCloseNow);
 
+        // Thu lại phần quỹ thiếu = lập một phiếu THU riêng, không sửa số của ca. Chỉ Chủ nhà thuốc và
+        // Kế toán lập phiếu thu ở đây: Dược sĩ chính là người bị thu nên không tự lập phiếu cho mình.
+        model.addAttribute("incomeBasePath", resolveIncomeBasePath(request));
+        model.addAttribute("canCreateShortageIncome", !isOwnShift
+                && (currentUserContext.isOwner() || isAccountantPath(request)));
+
         return "shift-report/detail";
+    }
+
+    /** Income screens of the caller's own role prefix (IncomeController maps all three). */
+    private String resolveIncomeBasePath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/incomes";
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return "/accountant/incomes";
+        }
+        return "/owner/incomes";
+    }
+
+    private boolean isAccountantPath(HttpServletRequest request) {
+        return request.getRequestURI().startsWith(ACCOUNTANT_BASE);
     }
 
     @PostMapping({
@@ -205,6 +241,9 @@ public class ShiftreportController {
         String uri = request.getRequestURI();
         if (uri.startsWith(OWNER_BASE)) {
             return OWNER_BASE;
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return ACCOUNTANT_BASE;
         }
         return PHARMACIST_BASE;
     }

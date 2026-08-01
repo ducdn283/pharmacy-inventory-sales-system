@@ -221,7 +221,12 @@ public class SidebarMenuService {
 
                 menuGroup("Giao dịch", ICON_TRANSACTIONS,
                         i("Danh sách hóa đơn", "/accountant/invoices", ICON_TRANSACTIONS),
-                        i("Danh sách trả hàng", "/accountant/returns", "ti ti-rotate"))
+                        i("Danh sách trả hàng", "/accountant/returns", "ti ti-rotate")),
+
+                // Kế toán KHÔNG trực ca (không bao giờ có báo cáo ca của chính mình) nhưng phải xem
+                // được báo cáo ca của người khác để đối chiếu quỹ — chỉ xem, không thao tác.
+                linkGroup("Báo cáo ca", ICON_SHIFT_REPORT,
+                        i("Báo cáo ca", "/accountant/shift-reports", ICON_SHIFT_REPORT))
         );
     }
 

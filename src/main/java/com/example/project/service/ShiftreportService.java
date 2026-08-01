@@ -59,6 +59,11 @@ public class ShiftreportService {
     private static final String INCOME_STATUS_DRAFT = "Nháp";
     private static final String INCOME_STATUS_REJECTED = "Từ chối";
 
+    /** Giá trị lọc "thâm hụt quỹ": tiền mặt thực đếm ÍT hơn số dự kiến ({@code cashDiscrepancy < 0}). */
+    public static final String DISCREPANCY_SHORTAGE = "SHORTAGE";
+    /** Giá trị lọc "thừa quỹ": {@code cashDiscrepancy > 0}. */
+    public static final String DISCREPANCY_SURPLUS = "SURPLUS";
+
     private final ShiftreportRepository shiftreportRepository;
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
@@ -188,11 +193,17 @@ public class ShiftreportService {
         return shiftreportRepository.findFirstByCashierID_IdAndStatusOrderByStartTimeDesc(accountId, ShiftReportStatus.DRAFT);
     }
 
+    /**
+     * @param discrepancy lọc theo chênh lệch quỹ: {@link #DISCREPANCY_SHORTAGE} (thâm hụt — tiền thật
+     *                    trong két ÍT hơn số dự kiến, tức còn phải thu lại của người trực),
+     *                    {@link #DISCREPANCY_SURPLUS} (thừa quỹ), rỗng = không lọc
+     */
     @Transactional(readOnly = true)
     public Page<ShiftReportListItemResponse> search(String keyword,
                                                      String fromDate,
                                                      String toDate,
                                                      String status,
+                                                     String discrepancy,
                                                      Pageable pageable) {
         String normalizedKeyword = normalize(keyword);
         LocalDate from = parseDate(fromDate);
@@ -203,6 +214,7 @@ public class ShiftreportService {
                 .filter(shift -> matchesKeyword(shift, normalizedKeyword))
                 .filter(shift -> matchesDate(shift, from, to))
                 .filter(shift -> status == null || status.isBlank() || isStatus(shift.getStatus(), status))
+                .filter(shift -> matchesDiscrepancy(shift, discrepancy))
                 .map(this::toListItem)
                 .toList();
 
@@ -258,6 +270,11 @@ public class ShiftreportService {
         BigDecimal totalBankingOut = live ? totals.totalBankingOut() : shift.getTotalBankingOut();
         BigDecimal totalBankingNet = nz(totalBankingIn).subtract(nz(totalBankingOut));
 
+        // Thâm hụt quỹ = phần tiền mặt thật còn thiếu so với số dự kiến, tức khoản phải thu lại của
+        // người trực ca. Ca còn Nháp thì chưa đếm tiền nên chưa có gì để thu.
+        BigDecimal cashShortage = live ? BigDecimal.ZERO : shortageOf(shift);
+        Income shortageIncome = cashShortage.signum() > 0 ? findShortageIncome(shift.getId()) : null;
+
         return new ShiftReportDetailPageResponse(
                 shift.getId(),
                 shift.getShiftReportCode(),
@@ -286,8 +303,35 @@ public class ShiftreportService {
                 statusCssClass(shift.getStatus()),
                 formatInstant(shift.getApprovedAt()),
                 shift.getNote(),
-                canClose
+                canClose,
+                cashShortage,
+                shortageIncome != null ? shortageIncome.getId() : null,
+                shortageIncome != null ? shortageIncome.getIncomeCode() : null,
+                shortageIncome != null ? shortageIncome.getStatus() : null,
+                cashShortage.signum() > 0 && shortageIncome == null
         );
+    }
+
+    /** Phần quỹ còn thiếu của một ca: {@code |cashDiscrepancy|} khi âm, ngược lại 0. */
+    private BigDecimal shortageOf(Shiftreport shift) {
+        BigDecimal discrepancy = shift.getCashDiscrepancy();
+        return discrepancy != null && discrepancy.signum() < 0 ? discrepancy.abs() : BigDecimal.ZERO;
+    }
+
+    /**
+     * Phiếu thu (nếu có) đang gắn vào ca này qua {@code Income.shiftReportOfAccountID}. Bỏ qua phiếu
+     * đã bị Từ chối — cùng luật với {@code IncomeService.linkedShiftReportOfAccountIds()}, để một ca
+     * bị từ chối phiếu thu vẫn lập lại được thay vì kẹt vĩnh viễn.
+     *
+     * <p>Chỉ ĐỌC bảng income, không đụng gì vào module Thu/Chi.</p>
+     */
+    private Income findShortageIncome(Integer shiftReportId) {
+        return incomeRepository.findAllWithRelations().stream()
+                .filter(income -> income.getShiftReportOfAccountID() != null
+                        && shiftReportId.equals(income.getShiftReportOfAccountID().getId()))
+                .filter(income -> !isStatus(income.getStatus(), INCOME_STATUS_REJECTED))
+                .findFirst()
+                .orElse(null);
     }
 
     /** "Nộp" / "Chốt ca" — applies to a fresh Nháp shift and to a Từ chối shift being resubmitted. */
@@ -338,6 +382,7 @@ public class ShiftreportService {
         if (isOwner) {
             shift.setStatus(ShiftReportStatus.APPROVED);
             shift.setApprovedAt(nowVn());
+            creditCashSafe(shift);
         } else {
             shift.setStatus(ShiftReportStatus.PENDING);
         }
@@ -360,9 +405,38 @@ public class ShiftreportService {
 
         shift.setStatus(ShiftReportStatus.APPROVED);
         shift.setApprovedAt(nowVn());
+        creditCashSafe(shift);
 
         shiftreportRepository.save(shift);
         workflowNotificationService.shiftReportApproved(shift);
+    }
+
+    /**
+     * Nộp tiền mặt của ca vào QUỸ ({@code Financialsetting.cashSafeBalance}) đúng lúc ca được duyệt.
+     *
+     * <p><strong>Doanh thu và quỹ là hai con số khác nhau.</strong> Bán hàng ghi nhận DOANH THU ngay
+     * lúc lập hóa đơn (số đó đi vào kỳ tính thuế); còn QUỸ chỉ tăng khi người trực ca giao lại tiền
+     * mặt thật lúc kết ca. Bán 1.200.000 mà két thiếu 200.000 thì ca vẫn ghi doanh thu 1.200.000,
+     * quỹ chỉ nhận 1.000.000 — phần thiếu là khoản phải THU LẠI của người trực (phiếu thu riêng,
+     * loại {@code SHIFT_SHORTAGE}), không phải khoản giảm doanh thu.</p>
+     *
+     * <p>Số nộp vào quỹ = {@code actualClosingCash − openingCash}: tiền đầu ca là khoản quỹ ứng ra
+     * cho ca rồi thu về nguyên trạng, chỉ phần CHÊNH mới thật sự vào/ra quỹ. Số âm (ca chi tiền mặt
+     * nhiều hơn thu) làm giảm quỹ, đúng chiều tiền thật.</p>
+     *
+     * <p>Gọi đúng tại bước chuyển sang {@code Đã duyệt} — trạng thái này là ĐIỂM CUỐI (chỉ tới được
+     * một lần: {@code approve()} chỉ nhận ca Chờ duyệt, {@code closeShift()} chỉ nhận Nháp/Từ chối)
+     * nên không có đường nào cộng quỹ hai lần. Ca bị từ chối chưa từng cộng nên nộp lại vẫn đúng.</p>
+     */
+    private void creditCashSafe(Shiftreport shift) {
+        BigDecimal handedIn = nz(shift.getActualClosingCash()).subtract(nz(shift.getOpeningCash()));
+        if (handedIn.signum() == 0) {
+            return;
+        }
+        financialsettingRepository.findFirstByOrderByIdAsc().ifPresent(setting -> {
+            setting.setCashSafeBalance(nz(setting.getCashSafeBalance()).add(handedIn));
+            financialsettingRepository.save(setting);
+        });
     }
 
     @Transactional
@@ -547,6 +621,25 @@ public class ShiftreportService {
         return containsNormalized(shift.getShiftReportCode(), keyword)
                 || containsNormalized(shift.getStatus(), keyword)
                 || containsNormalized(shift.getCashierID() != null ? shift.getCashierID().getName() : null, keyword);
+    }
+
+    /**
+     * Ca chưa chốt ({@code cashDiscrepancy} còn null) KHÔNG lọt vào bất kỳ nhóm chênh lệch nào —
+     * chưa đếm tiền thì chưa biết thừa hay thiếu, xếp nó vào "thâm hụt" là vu oan cho người trực.
+     */
+    private boolean matchesDiscrepancy(Shiftreport shift, String discrepancy) {
+        if (discrepancy == null || discrepancy.isBlank()) {
+            return true;
+        }
+        BigDecimal value = shift.getCashDiscrepancy();
+        if (value == null) {
+            return false;
+        }
+        return switch (discrepancy) {
+            case DISCREPANCY_SHORTAGE -> value.signum() < 0;
+            case DISCREPANCY_SURPLUS -> value.signum() > 0;
+            default -> true;
+        };
     }
 
     private boolean matchesDate(Shiftreport shift, LocalDate from, LocalDate to) {

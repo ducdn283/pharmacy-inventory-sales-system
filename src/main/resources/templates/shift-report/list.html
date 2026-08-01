@@ -202,7 +202,7 @@
         <div class="shift-card p-4 mb-4">
             <form method="get" th:action="${basePath}">
                 <div class="row g-3 align-items-end">
-                    <div class="col-12 col-xl-4">
+                    <div class="col-12 col-xl-3">
                         <label class="form-label">Từ khóa</label>
                         <input type="text"
                                class="form-control"
@@ -233,10 +233,23 @@
                         </select>
                     </div>
 
-                    <div class="col-12 col-xl-2 d-grid">
+                    <!-- Lọc theo chênh lệch quỹ: ca thâm hụt là ca còn phải thu lại tiền của người
+                         trực, nên phải tìm ra được nhanh. Ca chưa chốt không thuộc nhóm nào. -->
+                    <div class="col-12 col-md-4 col-xl-2">
+                        <label class="form-label">Chênh lệch quỹ</label>
+                        <select class="form-select" name="discrepancy">
+                            <option value="">Tất cả</option>
+                            <option value="SHORTAGE"
+                                    th:selected="${filterDiscrepancy == 'SHORTAGE'}">Thâm hụt quỹ</option>
+                            <option value="SURPLUS"
+                                    th:selected="${filterDiscrepancy == 'SURPLUS'}">Thừa quỹ</option>
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-xl-1 d-grid">
                         <button type="submit" class="btn btn-shift-primary">
                             <i class="ti ti-search me-1"></i>
-                            Tìm kiếm
+                            Tìm
                         </button>
                     </div>
                 </div>
@@ -334,7 +347,7 @@
                     <ul class="pagination justify-content-end mb-0">
                         <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(page=${currentPage - 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}">
+                               th:href="@{${basePath}(page=${currentPage - 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, discrepancy=${filterDiscrepancy})}">
                                 Trước
                             </a>
                         </li>
@@ -343,7 +356,7 @@
                             th:each="pageNumber : ${#numbers.sequence(0, totalPages - 1)}"
                             th:classappend="${pageNumber == currentPage} ? 'active'">
                             <a class="page-link"
-                               th:href="@{${basePath}(page=${pageNumber}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}"
+                               th:href="@{${basePath}(page=${pageNumber}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, discrepancy=${filterDiscrepancy})}"
                                th:text="${pageNumber + 1}">
                                 1
                             </a>
@@ -351,7 +364,7 @@
 
                         <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? 'disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(page=${currentPage + 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}">
+                               th:href="@{${basePath}(page=${currentPage + 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus}, discrepancy=${filterDiscrepancy})}">
                                 Sau
                             </a>
                         </li>
