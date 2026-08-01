@@ -21,8 +21,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.beans.PropertyEditorSupport;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Tax period ("Kỳ thuế") screens — list and detail, both read-only for now; closing a period is a
@@ -55,6 +53,10 @@ public class TaxPeriodPageController {
 
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
     public String list(HttpServletRequest request, Model model) {
+        // Applies a pending 1 → 2 transition (and warns about an approaching one) every time the
+        // screen is opened — there is no background scheduler, so this is when the correction lands.
+        taxRevenueNotificationService.checkGroupTransitionAndWarn(taxperiodsnapshotService.currentQuarter(), null);
+
         TaxperiodsnapshotService.TaxPeriod next = taxperiodsnapshotService.nextPeriodToClose();
         Integer currentGroup = taxperiodsnapshotService.currentRevenueGroup();
 
@@ -95,8 +97,10 @@ public class TaxPeriodPageController {
         TaxperiodsnapshotService.TaxPeriod period;
         try {
             period = taxperiodsnapshotService.resolveQuarter(year, quarter);
+            // Apply/warn about a group transition BEFORE computing, so the figures below already
+            // reflect a just-applied 1 → 2 correction instead of the stale pre-transition group.
+            taxRevenueNotificationService.checkGroupTransitionAndWarn(period, null);
             model.addAttribute("computation", taxperiodsnapshotService.computePeriod(period));
-            taxRevenueNotificationService.warnIfRevenueThresholdReached(period, null);
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
             return "redirect:" + basePath + "/preview";
@@ -108,9 +112,8 @@ public class TaxPeriodPageController {
 
         String role = currentUserContext.getCurrentRole();
         model.addAttribute("closeBlockedReason", taxperiodsnapshotService.closeBlockedReason(role, period));
-        model.addAttribute("defaultNextGroup", taxperiodsnapshotService.groupForPeriod(period));
-        model.addAttribute("groupOptions", TaxRevenueGroup.ALL);
-        model.addAttribute("groupLabels", groupLabels());
+        Integer autoNextGroup = taxperiodsnapshotService.previewAutoNextGroup(period);
+        model.addAttribute("autoNextGroupDisplay", TaxRevenueGroup.label(autoNextGroup));
 
         model.addAttribute("basePath", basePath);
 
@@ -131,7 +134,7 @@ public class TaxPeriodPageController {
                             Integer.parseInt(form.getPeriodLabel().substring(6))
                     );
 
-            taxRevenueNotificationService.warnIfRevenueThresholdReached(closedPeriod, id);
+            taxRevenueNotificationService.checkGroupTransitionAndWarn(closedPeriod, id);
 
             redirectAttributes.addFlashAttribute("successMessage",
                     "Đã chốt kỳ thuế " + form.getPeriodLabel());
@@ -157,15 +160,6 @@ public class TaxPeriodPageController {
         return "redirect:" + basePath + "/" + periodId;
     }
 
-    /** Group code -> Vietnamese label, for the "nhóm áp dụng cho kỳ sau" dropdown. */
-    private Map<Integer, String> groupLabels() {
-        Map<Integer, String> labels = new LinkedHashMap<>();
-        for (Integer group : TaxRevenueGroup.ALL) {
-            labels.put(group, TaxRevenueGroup.label(group));
-        }
-        return labels;
-    }
-
     /** 1–4, derived from the period's first month. */
     private int quarterNumber(TaxperiodsnapshotService.TaxPeriod period) {
         return (period.startDate().getMonthValue() - 1) / 3 + 1;
@@ -184,8 +178,6 @@ public class TaxPeriodPageController {
             return "redirect:" + basePath;
         }
 
-        model.addAttribute("groupOptions", TaxRevenueGroup.ALL);
-        model.addAttribute("groupLabels", groupLabels());
         model.addAttribute("basePath", basePath);
 
         return "tax-period/detail";

@@ -35,6 +35,7 @@ public final class NotificationType {
 
     public static final String TAX_REVENUE_WARNING = "TAX_REVENUE_WARNING";
     public static final String TAX_REVENUE_EXCEEDED = "TAX_REVENUE_EXCEEDED";
+    public static final String TAX_GROUP_CHANGED = "TAX_GROUP_CHANGED";
 
     public static final String SYSTEM = "SYSTEM";
 

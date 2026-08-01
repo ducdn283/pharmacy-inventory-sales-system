@@ -83,12 +83,19 @@
                 <select id="fsRevenueGroup" class="form-select"
                         th:field="*{revenueGroup}"
                         th:classappend="${#fields.hasErrors('revenueGroup')} ? ' is-invalid'"
-                        th:disabled="${!editable}">
+                        th:disabled="${!editable or revenueGroupLocked}">
                   <option value="1">Nhóm 1 — dưới ngưỡng 1 (miễn thuế)</option>
                   <option value="2">Nhóm 2 — từ ngưỡng 1 đến ngưỡng 2 (được chọn phương thức)</option>
                   <option value="3">Nhóm 3 — trên ngưỡng 2 (bắt buộc theo lợi nhuận)</option>
                 </select>
+                <!-- Một select bị disabled không được submit — gửi kèm giá trị hiện tại qua ô ẩn để
+                     validate vẫn qua; server luôn bỏ qua giá trị này khi đã khoá (xem
+                     FinancialsettingService.saveSettings), nên có bị sửa tay trên DOM cũng vô hại. -->
+                <input type="hidden" th:if="${revenueGroupLocked}" name="revenueGroup" th:value="*{revenueGroup}">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('revenueGroup')}" th:errors="*{revenueGroup}"></div>
+                <div class="form-text" th:if="${revenueGroupLocked}">
+                  Đã khoá — hệ thống tự cập nhật nhóm này theo Kỳ thuế kể từ khi kỳ đầu tiên được chốt.
+                </div>
               </div>
               <div class="col-12 col-md-4">
                 <label for="fsThreshold1" class="form-label">Ngưỡng doanh thu miễn thuế (nhóm 1) <span class="text-danger">*</span></label>

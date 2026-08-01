@@ -31,6 +31,7 @@ public class FinancialSettingPageController {
             model.addAttribute("financialSettingForm", toForm(financialsettingService.getSettings()));
         }
         model.addAttribute("editable", editable);
+        model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
         model.addAttribute("pageTitle", "Thiết lập tài chính");
         return VIEW;
     }
@@ -42,6 +43,7 @@ public class FinancialSettingPageController {
                         RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             model.addAttribute("editable", true);
+            model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
             model.addAttribute("pageTitle", "Thiết lập tài chính");
             return VIEW;
         }
