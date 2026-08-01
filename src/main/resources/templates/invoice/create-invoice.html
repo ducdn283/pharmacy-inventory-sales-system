@@ -714,16 +714,16 @@
                             </div>
 
                             <div class="col-12 col-md-6">
-                                <label class="form-label">Mã đơn thuốc</label>
+                                <label class="form-label" for="prescriptionCode">Mã đơn thuốc</label>
                                 <input type="text" class="form-control" id="prescriptionCode"
                                        th:field="*{prescriptionCode}" maxlength="14"
-                                       placeholder="VD: AB12Cd345xyz-c" disabled>
-                                <div class="form-text">
-                                    12 ký tự chữ/số + "-" + loại đơn (c: thường, n: gây nghiện,
-                                    h: hướng thần, y: y học cổ truyền).
+                                       placeholder="VD: AB12Cd345xyz-c" disabled
+                                       autocomplete="off">
+                                <div class="invalid-feedback" id="prescriptionError">
+                                    Vui lòng nhập mã đơn thuốc.
                                 </div>
-                                <div class="invalid-feedback" id="prescriptionError" style="display:none;">
-                                    Mã đơn thuốc không đúng định dạng (VD: AB12Cd345xyz-c).
+                                <div class="form-text" id="prescriptionUnlockHint">
+                                    Tick "Hóa đơn thuốc kê đơn" và nhập đúng mã để tìm thuốc kê đơn.
                                 </div>
                             </div>
 
@@ -778,7 +778,7 @@
                     </div>
 
                     <div class="mt-4 d-flex gap-3">
-                        <button type="submit" id="submitInvoiceBtn" class="btn btn-sell-primary px-4">
+                        <button type="submit" id="submitInvoiceBtn" class="btn btn-sell-primary px-4" disabled>
                             Lưu hóa đơn
                         </button>
 
@@ -903,7 +903,7 @@
                             <p class="mb-2">2. Bấm <strong>+</strong> ở cuối dòng để thêm cùng sản phẩm ở lô khác; mặc định lô HSD gần nhất.</p>
                             <p class="mb-2" th:if="${debtAllowed}">3. Khách lẻ phải thanh toán đủ; chọn khách hàng nếu muốn ghi nợ.</p>
                             <p class="mb-2" th:unless="${debtAllowed}">3. Phải thu đủ tiền, không được ghi nợ.</p>
-                            <p class="mb-0">4. Bật "thuốc kê đơn" thì phải nhập mã đơn thuốc.</p>
+                            <p class="mb-0">4. Tick "Hóa đơn thuốc kê đơn", nhập đúng mã thì mới tìm và bán được thuốc kê đơn.</p>
                         </div>
                     </div>
                 </div>
@@ -1137,6 +1137,10 @@
 
     function addProductEntryBatch(productId) {
         const product = productById[productId];
+        if (product && product.requiresPrescription && !canSellPrescriptionProducts()) {
+            validatePrescription(true);
+            return;
+        }
         const nextBatch = nextAvailableBatchForProduct(productId);
         if (!product || !nextBatch) return;
 
@@ -1505,8 +1509,70 @@
         });
     }
 
-    /** Validates the prescription code format when the invoice is marked as prescription-required. */
-    function validatePrescription() {
+    const PRESCRIPTION_CODE_PATTERN = /^[A-Za-z0-9]{12}-[cnhy]$/;
+
+    function isPrescriptionInvoiceEnabled() {
+        const checkbox = document.getElementById('prescriptionRequired');
+        return checkbox && checkbox.checked;
+    }
+
+    function hasValidPrescriptionCode() {
+        const codeInput = document.getElementById('prescriptionCode');
+        if (!codeInput || codeInput.disabled) return false;
+        return PRESCRIPTION_CODE_PATTERN.test(codeInput.value.trim());
+    }
+
+    function canSellPrescriptionProducts() {
+        return isPrescriptionInvoiceEnabled() && hasValidPrescriptionCode();
+    }
+
+    function cartHasPrescriptionProduct() {
+        const activeProductIds = new Set();
+        getEntryIdsInTable().forEach(entryId => {
+            if (!hasActiveUnits(entryId)) return;
+            const row = findEntryRows(entryId)[0];
+            if (row && row.dataset.productId) {
+                activeProductIds.add(row.dataset.productId);
+            }
+        });
+        return [...activeProductIds].some(productId => {
+            const product = productById[productId];
+            return product && product.requiresPrescription;
+        });
+    }
+
+    function isSellableProduct(product) {
+        if (!product) return false;
+        return !product.requiresPrescription || canSellPrescriptionProducts();
+    }
+
+    function syncPrescriptionUnlockHint() {
+        const hint = document.getElementById('prescriptionUnlockHint');
+        if (!hint) return;
+        if (canSellPrescriptionProducts()) {
+            hint.textContent = 'Đã mở bán thuốc kê đơn — có thể tìm và thêm vào hóa đơn.';
+            hint.classList.remove('text-secondary');
+            hint.classList.add('text-success');
+        } else if (isPrescriptionInvoiceEnabled()) {
+            hint.textContent = 'Nhập đúng mã đơn thuốc để hiện sản phẩm thuốc kê đơn.';
+            hint.classList.add('text-secondary');
+            hint.classList.remove('text-success');
+        } else {
+            hint.textContent = 'Tick "Hóa đơn thuốc kê đơn" và nhập đúng mã để tìm thuốc kê đơn.';
+            hint.classList.add('text-secondary');
+            hint.classList.remove('text-success');
+        }
+    }
+
+    function refreshProductSearch() {
+        const searchInput = document.getElementById('productSearchInput');
+        if (searchInput && searchInput.value.trim()) {
+            liveSearchProducts(searchInput.value);
+        }
+    }
+
+    /** Validates the prescription code when the invoice is marked as prescription-required. */
+    function validatePrescription(showFeedback) {
         const checkbox = document.getElementById('prescriptionRequired');
         const codeInput = document.getElementById('prescriptionCode');
         const feedback = document.getElementById('prescriptionError');
@@ -1515,12 +1581,27 @@
         }
         if (!checkbox.checked) {
             codeInput.classList.remove('is-invalid');
-            if (feedback) feedback.style.display = 'none';
+            if (cartHasPrescriptionProduct()) {
+                if (feedback && showFeedback) {
+                    feedback.textContent = 'Hóa đơn có thuốc kê đơn — vui lòng tick "Hóa đơn thuốc kê đơn".';
+                    codeInput.classList.add('is-invalid');
+                }
+                return false;
+            }
             return true;
         }
-        const valid = /^[A-Za-z0-9]{12}-[cnhy]$/.test(codeInput.value.trim());
+        const trimmed = codeInput.value.trim();
+        let message = '';
+        if (!trimmed) {
+            message = 'Vui lòng nhập mã đơn thuốc.';
+        } else if (!PRESCRIPTION_CODE_PATTERN.test(trimmed)) {
+            message = 'Mã đơn thuốc không đúng định dạng (VD: AB12Cd345xyz-c).';
+        }
+        const valid = !message;
         codeInput.classList.toggle('is-invalid', !valid);
-        if (feedback) feedback.style.display = valid ? 'none' : 'block';
+        if (feedback && (showFeedback || !valid)) {
+            feedback.textContent = message || 'Vui lòng nhập mã đơn thuốc.';
+        }
         return valid;
     }
 
@@ -1615,6 +1696,15 @@
     function addProductById(productId) {
         const product = productById[productId];
         if (!product) return;
+        if (product.requiresPrescription && !canSellPrescriptionProducts()) {
+            validatePrescription(true);
+            if (!isPrescriptionInvoiceEnabled()) {
+                document.getElementById('prescriptionRequired')?.focus();
+            } else {
+                document.getElementById('prescriptionCode')?.focus();
+            }
+            return;
+        }
 
         const defaultBatchId = getDefaultBatchId(product);
         const existingEntry = getEntryIdsInTable().find(entryId => {
@@ -1905,22 +1995,39 @@
         codeInput.disabled = !checkbox.checked;
         if (!checkbox.checked) {
             codeInput.value = '';
+            codeInput.classList.remove('is-invalid');
+        } else {
+            validatePrescription(true);
         }
+        syncPrescriptionUnlockHint();
+        refreshProductSearch();
         updateSubmitState();
     }
 
     let activeSearchIndex = -1;
     let lastSearchItems = [];
 
+    function productMatchesPrefixSearch(product, normalized) {
+        if (!product || !normalized) return false;
+        const code = (product.code || '').toLowerCase();
+        const name = (product.name || '').toLowerCase();
+        const barcode = (product.barcode || '').toLowerCase();
+        return code.startsWith(normalized)
+                || name.startsWith(normalized)
+                || barcode.startsWith(normalized);
+    }
+
     function searchProducts(keyword) {
         const normalized = keyword.trim().toLowerCase();
         if (!normalized) return [];
-        return products.filter(p => {
-            const code = (p.code || '').toLowerCase();
-            const name = (p.name || '').toLowerCase();
-            const barcode = (p.barcode || '').toLowerCase();
-            return name.includes(normalized) || code.includes(normalized) || barcode.includes(normalized);
-        }).slice(0, 12);
+        return products.filter(p => productMatchesPrefixSearch(p, normalized) && isSellableProduct(p))
+                .slice(0, 12);
+    }
+
+    function searchHasHiddenPrescriptionProducts(keyword) {
+        const normalized = keyword.trim().toLowerCase();
+        if (!normalized || canSellPrescriptionProducts()) return false;
+        return products.some(p => p.requiresPrescription && productMatchesPrefixSearch(p, normalized));
     }
 
     function renderSearchResults(items, emptyMessage) {
@@ -1961,6 +2068,13 @@
         }
         lastSearchItems = searchProducts(keyword);
         activeSearchIndex = -1;
+        if (!lastSearchItems.length && searchHasHiddenPrescriptionProducts(keyword)) {
+            const msg = isPrescriptionInvoiceEnabled()
+                ? 'Nhập đúng mã đơn thuốc để tìm và bán thuốc kê đơn'
+                : 'Tick "Hóa đơn thuốc kê đơn" và nhập đúng mã để tìm thuốc kê đơn';
+            renderSearchResults([], msg);
+            return;
+        }
         renderSearchResults(lastSearchItems);
     }
 
@@ -2051,9 +2165,18 @@
         }
         const codeInput = document.getElementById('prescriptionCode');
         if (codeInput) {
-            codeInput.addEventListener('input', updateSubmitState);
+            codeInput.addEventListener('input', function () {
+                syncPrescriptionUnlockHint();
+                validatePrescription(true);
+                refreshProductSearch();
+                updateSubmitState();
+            });
+            codeInput.addEventListener('blur', function () {
+                validatePrescription(true);
+            });
         }
         togglePrescriptionCode();
+        syncPrescriptionUnlockHint();
 
         const discountInput = document.getElementById('discount');
         if (discountInput && discountInput.value) {
@@ -2062,7 +2185,22 @@
 
         const invoiceForm = document.getElementById('invoiceCreateForm');
         if (invoiceForm) {
-            invoiceForm.addEventListener('submit', function () {
+            invoiceForm.addEventListener('submit', function (event) {
+                const prescriptionOk = validatePrescription(true);
+                const stockOk = validateStock();
+                const hasRows = getEntryIdsInTable().some(entryId => hasActiveUnits(entryId));
+                if (!hasRows || !stockOk || !prescriptionOk) {
+                    event.preventDefault();
+                    if (!prescriptionOk) {
+                        const codeInput = document.getElementById('prescriptionCode');
+                        if (codeInput && !codeInput.disabled) {
+                            codeInput.focus();
+                            codeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                    updateSubmitState();
+                    return;
+                }
                 syncFormDetails();
                 if (discountInput) {
                     discountInput.value = String(parsePrice(discountInput));

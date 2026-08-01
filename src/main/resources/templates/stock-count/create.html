@@ -103,7 +103,8 @@
             </a>
         </div>
 
-        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+        <div th:replace="~{fragments/toast :: flash}"></div>
+        <div th:replace="~{fragments/confirm :: confirm}"></div>
 
         <form th:action="${basePath + '/create'}" th:object="${form}" method="post">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -282,7 +283,7 @@
                                 name="action"
                                 value="submit"
                                 class="btn btn-stock-primary w-100 mb-3"
-                                onclick="return confirm('Bạn có chắc chắn muốn gửi phiếu kiểm kê không?');">
+                                data-confirm="Bạn có chắc chắn muốn gửi phiếu kiểm kê không?">
                             <i class="ti ti-send me-1"></i>
                             Gửi phiếu kiểm kê
                         </button>

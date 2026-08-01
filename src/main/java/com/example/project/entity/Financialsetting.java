@@ -55,6 +55,11 @@ public class Financialsetting {
     @Column(name = "locationName", nullable = false, length = 100)
     private String locationName;
 
+    @Size(max = 100)
+    @NotNull
+    @Column(name = "address", nullable = false, length = 100)
+    private String address;
+
     @Size(max = 10)
     @NotNull
     @Column(name = "phoneNumber", nullable = false, length = 10)
