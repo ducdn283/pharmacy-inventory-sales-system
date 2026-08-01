@@ -146,6 +146,12 @@
             font-size: 12px;
         }
 
+        table.vat-table th,
+        table.vat-table td {
+            font-size: 11px;
+            padding: 4px 5px;
+        }
+
         .text-center {
             text-align: center;
         }
@@ -186,15 +192,61 @@
             font-size: 12px;
         }
 
-        .signature-title {
+        .signature-heading {
             font-weight: bold;
-            margin-bottom: 64px;
+            margin-bottom: 2px;
         }
 
         .signature-note {
             font-style: italic;
             font-weight: normal;
             font-size: 11px;
+            margin-bottom: 8px;
+        }
+
+        .signature-space {
+            min-height: 72px;
+        }
+
+        .signed-stamp-box {
+            display: block;
+            margin: 0 auto;
+            max-width: 280px;
+            text-align: center;
+        }
+
+        .signed-stamp-inner {
+            border: 1px solid #6ab04c;
+            border-radius: 2px;
+            padding: 10px 14px 12px;
+            background: #edf7e8;
+            line-height: 1.45;
+        }
+
+        .signed-stamp-check {
+            color: #52a447;
+            font-size: 44px;
+            font-weight: bold;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .signed-stamp-title {
+            font-weight: bold;
+            font-size: 13px;
+            color: #c0392b;
+            margin-bottom: 6px;
+        }
+
+        .signed-stamp-meta {
+            font-size: 11px;
+            color: #222;
+            text-align: left;
+            word-break: break-word;
+        }
+
+        .signed-stamp-meta + .signed-stamp-meta {
+            margin-top: 2px;
         }
 
         @media print {
@@ -218,7 +270,7 @@
 
 <body>
 
-<div class="no-print">
+<div class="no-print" th:if="${param.embed == null}">
     <a th:href="${basePath + '/' + printData.invoiceId}">Quay lại chi tiết</a>
     <button type="button" onclick="window.print()">In hóa đơn</button>
 </div>
@@ -237,7 +289,8 @@
                 Ngày 24 tháng 06 năm 2026
             </div>
 
-            <div class="cqt-line" th:if="${printData.taxAuthorityCode != null && !printData.taxAuthorityCode.isBlank()}">
+            <div class="cqt-line"
+                 th:if="${printData.signed and param.embed != null and printData.taxAuthorityCode != null and !printData.taxAuthorityCode.isBlank()}">
                 Mã CQT: <span th:text="${printData.taxAuthorityCode}">M2-26-BGALS-00000008208</span>
             </div>
 
@@ -311,7 +364,7 @@
                 </div>
             </div>
 
-            <table>
+            <table th:classappend="${printData.showVatBreakdown ? ' vat-table' : ''}">
                 <thead>
                 <tr>
                     <th style="width: 36px;">STT</th>
@@ -320,6 +373,9 @@
                     <th style="width: 56px;">Số lượng</th>
                     <th style="width: 88px;">Đơn giá</th>
                     <th style="width: 96px;">Thành tiền</th>
+                    <th th:if="${printData.showVatBreakdown}" style="width: 88px;">Thành tiền chưa thuế</th>
+                    <th th:if="${printData.showVatBreakdown}" style="width: 56px;">Thuế suất</th>
+                    <th th:if="${printData.showVatBreakdown}" style="width: 88px;">Thuế GTGT</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -332,16 +388,41 @@
                         th:text="${#numbers.formatDecimal(line.unitSellPrice, 1, 'COMMA', 0, 'POINT')}">10.000</td>
                     <td class="text-right"
                         th:text="${#numbers.formatDecimal(line.lineSubtotal, 1, 'COMMA', 0, 'POINT')}">10.000</td>
+                    <td th:if="${printData.showVatBreakdown}" class="text-right"
+                        th:text="${line.preTaxAmount != null ? #numbers.formatDecimal(line.preTaxAmount, 1, 'COMMA', 0, 'POINT') : '—'}">
+                        9.524
+                    </td>
+                    <td th:if="${printData.showVatBreakdown}" class="text-center"
+                        th:text="${line.vatRate != null ? #numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%' : '—'}">
+                        5%
+                    </td>
+                    <td th:if="${printData.showVatBreakdown}" class="text-right"
+                        th:text="${line.vatAmount != null ? #numbers.formatDecimal(line.vatAmount, 1, 'COMMA', 0, 'POINT') : '—'}">
+                        476
+                    </td>
                 </tr>
 
                 <tr th:if="${#lists.isEmpty(printData.lines)}">
-                    <td colspan="6" class="text-center">Không có dữ liệu.</td>
+                    <td th:colspan="${printData.showVatBreakdown ? 9 : 6}" class="text-center">Không có dữ liệu.</td>
                 </tr>
 
-                <tr class="total-row" th:if="${!#lists.isEmpty(printData.lines)}">
+                <tr class="total-row"
+                    th:if="${printData.showVatBreakdown and !#lists.isEmpty(printData.lines)}">
+                    <td colspan="5">Tổng cộng</td>
+                    <td class="text-right"
+                        th:text="${#numbers.formatDecimal(printData.subtotal, 1, 'COMMA', 0, 'POINT')}">10.000</td>
+                    <td class="text-right"
+                        th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 1, 'COMMA', 0, 'POINT')}">9.524</td>
+                    <td></td>
+                    <td class="text-right"
+                        th:text="${#numbers.formatDecimal(printData.totalVATOutput, 1, 'COMMA', 0, 'POINT')}">476</td>
+                </tr>
+
+                <tr class="total-row"
+                    th:if="${!printData.showVatBreakdown and !#lists.isEmpty(printData.lines)}">
                     <td colspan="5">Cộng tiền bán hàng hóa, dịch vụ</td>
                     <td class="text-right"
-                        th:text="${#numbers.formatDecimal(printData.showVatBreakdown ? printData.totalPreTaxAmount : printData.subtotal, 1, 'COMMA', 0, 'POINT')}">
+                        th:text="${#numbers.formatDecimal(printData.subtotal, 1, 'COMMA', 0, 'POINT')}">
                         10.000
                     </td>
                 </tr>
@@ -350,16 +431,16 @@
 
             <div class="vat-summary" th:if="${printData.showVatBreakdown and !#lists.isEmpty(printData.lines)}">
                 <div class="vat-summary-row">
-                    <span>Thuế suất GTGT</span>
-                    <span></span>
+                    <span>Cộng tiền chưa thuế</span>
+                    <span th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 1, 'COMMA', 0, 'POINT')}">9.524</span>
                 </div>
                 <div class="vat-summary-row">
                     <span>Tiền thuế GTGT</span>
-                    <span th:text="${#numbers.formatDecimal(printData.totalVATOutput, 1, 'COMMA', 0, 'POINT')}">0</span>
+                    <span th:text="${#numbers.formatDecimal(printData.totalVATOutput, 1, 'COMMA', 0, 'POINT')}">476</span>
                 </div>
                 <div class="vat-summary-row">
                     <span><strong>Tổng tiền thanh toán</strong></span>
-                    <span><strong th:text="${#numbers.formatDecimal(printData.total, 1, 'COMMA', 0, 'POINT')}">0</strong></span>
+                    <span><strong th:text="${#numbers.formatDecimal(printData.total, 1, 'COMMA', 0, 'POINT')}">10.000</strong></span>
                 </div>
             </div>
 
@@ -369,17 +450,32 @@
             </div>
 
             <div class="signature-grid">
-                <div>
-                    <div class="signature-title">
-                        Người mua hàng
-                        <div class="signature-note">(Chữ ký số (nếu có))</div>
-                    </div>
+                <div class="signature-block">
+                    <div class="signature-heading">Người mua hàng</div>
+                    <div class="signature-note">(Chữ ký số (nếu có))</div>
+                    <div class="signature-space"></div>
                 </div>
-                <div>
-                    <div class="signature-title">
-                        Người bán hàng
-                        <div class="signature-note">(Chữ ký điện tử, Chữ ký số)</div>
+                <div class="signature-block">
+                    <div class="signature-heading">Người bán hàng</div>
+                    <div class="signature-note">(Chữ ký điện tử, Chữ ký số)</div>
+                    <div class="signed-stamp-box"
+                         th:if="${printData.signed and param.embed != null}">
+                        <div class="signed-stamp-inner">
+                            <div class="signed-stamp-check">✓</div>
+                            <div class="signed-stamp-title">Signature Valid</div>
+                            <div class="signed-stamp-meta"
+                                 th:text="'Ký bởi: ' + ${printData.pharmacyName}">
+                                Ký bởi: HỘ KINH DOANH NHÀ THUỐC HẰNG NGỌC
+                            </div>
+                            <div class="signed-stamp-meta"
+                                 th:if="${printData.signedAtDisplay != null && !printData.signedAtDisplay.isBlank()}"
+                                 th:text="'Ký ngày: ' + ${printData.signedAtDisplay}">
+                                Ký ngày: 24/06/2026
+                            </div>
+                        </div>
                     </div>
+                    <div class="signature-space"
+                         th:unless="${printData.signed and param.embed != null}"></div>
                 </div>
             </div>
         </div>

@@ -78,6 +78,7 @@ public class FinancialsettingService {
         entity.setTaxCode(request.getTaxCode());
         entity.setLocationCode(request.getLocationCode());
         entity.setLocationName(request.getLocationName());
+        entity.setAddress(request.getAddress());
         entity.setPhoneNumber(request.getPhoneNumber());
         entity.setEmail(request.getEmail());
         entity.setBankAccountNumber(request.getBankAccountNumber());

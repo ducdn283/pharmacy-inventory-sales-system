@@ -73,6 +73,7 @@ public class FinancialSettingPageController {
         form.setTaxCode(response.getTaxCode());
         form.setLocationCode(response.getLocationCode());
         form.setLocationName(response.getLocationName());
+        form.setAddress(response.getAddress());
         form.setPhoneNumber(response.getPhoneNumber());
         form.setEmail(response.getEmail());
         form.setBankAccountNumber(response.getBankAccountNumber());

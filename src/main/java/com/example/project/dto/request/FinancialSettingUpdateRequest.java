@@ -63,6 +63,10 @@ public class FinancialSettingUpdateRequest {
     @Size(max = 100, message = "Tên địa điểm kinh doanh không được vượt quá 100 ký tự")
     private String locationName;
 
+    @NotBlank(message = "Địa chỉ không được để trống")
+    @Size(max = 100, message = "Địa chỉ không được vượt quá 100 ký tự")
+    private String address;
+
     @NotBlank(message = "Số điện thoại không được để trống")
     @Size(max = 10, message = "Số điện thoại không được vượt quá 10 ký tự")
     @Pattern(regexp = "0(2|3|5|7|8|9)[0-9]{8}", message = "Số điện thoại không hợp lệ")

@@ -35,6 +35,8 @@ public class ProductDetailResponse {
     /** Active ingredients formatted as "name strength" (may be empty). */
     private List<String> ingredients;
     private List<ProductUnitDetailResponse> units;
+    /** Name of the unit flagged as base unit, or "" if none is set up yet — for unit-clarifying display. */
+    private String baseUnitName;
 
     /** Total on-hand stock (single store — no per-branch breakdown). */
     private long totalStock;

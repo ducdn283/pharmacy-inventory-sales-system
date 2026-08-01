@@ -75,14 +75,23 @@ public class PurchaseinvoiceService {
                 .toList();
     }
 
+    /**
+     * Purchase Invoice List search: three independent, optional, ANDed fields (mã phiếu / nhà cung
+     * cấp / sản phẩm — the expandable search box) plus date range and payment-status filters, then
+     * in-memory pagination. The old single combined {@code keyword} field and the exact-id supplier
+     * dropdown filter were both replaced by this — see the Product List filter for the same idea.
+     */
     @Transactional(readOnly = true)
-    public Page<PurchaseInvoiceListItemResponse> searchPurchaseInvoices(String keyword,
+    public Page<PurchaseInvoiceListItemResponse> searchPurchaseInvoices(String codeQuery,
+                                                                        String supplierQuery,
+                                                                        String productQuery,
                                                                         String fromDate,
                                                                         String toDate,
-                                                                        Integer supplierId,
                                                                         String paymentStatus,
                                                                         Pageable pageable) {
-        String normalizedKeyword = normalize(keyword);
+        String normalizedCode = normalize(codeQuery);
+        String normalizedSupplier = normalize(supplierQuery);
+        String normalizedProduct = normalize(productQuery);
         LocalDate from = parseDate(fromDate);
         LocalDate to = parseDate(toDate);
 
@@ -94,9 +103,10 @@ public class PurchaseinvoiceService {
                 .collect(Collectors.groupingBy(detail -> detail.getPurchaseID().getId()));
 
         List<PurchaseInvoiceListItemResponse> filtered = invoices.stream()
-                .filter(invoice -> matchesKeyword(invoice, detailMap.getOrDefault(invoice.getId(), List.of()), normalizedKeyword))
+                .filter(invoice -> matchesCode(invoice, normalizedCode))
+                .filter(invoice -> matchesSupplier(invoice, normalizedSupplier))
+                .filter(invoice -> matchesProduct(detailMap.getOrDefault(invoice.getId(), List.of()), normalizedProduct))
                 .filter(invoice -> matchesDate(invoice, from, to))
-                .filter(invoice -> supplierId == null || supplierMatches(invoice, supplierId))
                 .map(invoice -> toListItem(invoice, detailMap.getOrDefault(invoice.getId(), List.of())))
                 .filter(item -> paymentStatus == null || paymentStatus.isBlank()
                         || paymentStatus.equals(item.getPaymentStatus()))
@@ -154,6 +164,7 @@ public class PurchaseinvoiceService {
 
         List<Purchasedetail> details = purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId);
         Map<Integer, String> unitNameByDetailId = importUnitNameByPurchaseDetailId(details);
+        Map<Integer, BigDecimal> sellPriceByProduct = getSellPriceByProduct();
 
         BigDecimal subtotal = calculateSubtotal(details);
         BigDecimal additionCost = safe(invoice.getAdditionCost());
@@ -168,7 +179,7 @@ public class PurchaseinvoiceService {
         }
 
         List<PurchaseInvoiceDetailItemResponse> items = details.stream()
-                .map(detail -> toDetailItem(detail, unitNameByDetailId.get(detail.getId())))
+                .map(detail -> toDetailItem(detail, unitNameByDetailId.get(detail.getId()), sellPriceByProduct))
                 .toList();
 
         int totalQuantity = details.stream()
@@ -521,13 +532,14 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Per-product default import-unit name for the Purchase Invoice create form's "Đơn vị" column —
-     * purely informational, showing which unit {@link #resolveImportUnit(Product)} will actually use
-     * for that product's "Số lượng" (same priority: isDefault > isBaseUnit > lowest id), so the
-     * pharmacist can see what unit their quantity is in before saving.
+     * Resolves each product's single "đơn vị nhập" (import unit) — same priority
+     * {@link #resolveImportUnitOrNull} uses at save time: isDefault &gt; isBaseUnit &gt; lowest id.
+     * Backs both {@link #getImportUnitNameByProduct()} and {@link #getSellPriceByProduct()} so the
+     * "Đơn vị" column and the "Giá bán" reference line always agree on which unit they're about —
+     * the sell price of a box shouldn't be shown next to "Đơn vị: Hộp" while secretly meaning a
+     * single viên.
      */
-    @Transactional(readOnly = true)
-    public Map<Integer, String> getImportUnitNameByProduct() {
+    private Map<Integer, Productunit> resolveImportUnitByProduct() {
         Map<Integer, List<Productunit>> unitsByProduct = new HashMap<>();
 
         for (Productunit unit : productunitRepository.findAll()) {
@@ -537,14 +549,41 @@ public class PurchaseinvoiceService {
             unitsByProduct.computeIfAbsent(unit.getProductID().getProductID(), id -> new ArrayList<>()).add(unit);
         }
 
-        Map<Integer, String> result = new HashMap<>();
+        Map<Integer, Productunit> result = new HashMap<>();
 
         unitsByProduct.forEach((productId, units) -> units.stream()
                 .min(Comparator
                         .comparingInt(this::importUnitPriority)
                         .thenComparing(unit -> unit.getId() == null ? Integer.MAX_VALUE : unit.getId()))
-                .ifPresent(unit -> result.put(productId, unit.getUnitName())));
+                .ifPresent(unit -> result.put(productId, unit)));
 
+        return result;
+    }
+
+    /**
+     * Per-product default import-unit name for the Purchase Invoice create form's "Đơn vị" column —
+     * purely informational, showing which unit {@link #resolveImportUnit(Product)} will actually use
+     * for that product's "Số lượng", so the pharmacist can see what unit their quantity is in before
+     * saving.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, String> getImportUnitNameByProduct() {
+        Map<Integer, String> result = new HashMap<>();
+        resolveImportUnitByProduct().forEach((productId, unit) -> result.put(productId, unit.getUnitName()));
+        return result;
+    }
+
+    /**
+     * Per-product sell price of that same "đơn vị nhập" (import unit — the one shown in the "Đơn vị"
+     * column, not necessarily the base unit) — shown as a small read-only reference line under the
+     * product name on the Purchase Invoice create form (and on the Detail screen's batch table).
+     * Purely informational; nothing on this form writes back to {@code Productunit.sellPrice} —
+     * that stays Price Settings' job alone.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> getSellPriceByProduct() {
+        Map<Integer, BigDecimal> result = new HashMap<>();
+        resolveImportUnitByProduct().forEach((productId, unit) -> result.put(productId, unit.getSellPrice()));
         return result;
     }
 
@@ -863,7 +902,8 @@ public class PurchaseinvoiceService {
         );
     }
 
-    private PurchaseInvoiceDetailItemResponse toDetailItem(Purchasedetail detail, String unitName) {
+    private PurchaseInvoiceDetailItemResponse toDetailItem(Purchasedetail detail, String unitName,
+                                                           Map<Integer, BigDecimal> sellPriceByProduct) {
         Product product = detail.getProductID();
         BigDecimal lineTotal = safe(detail.getImportPrice())
                 .multiply(BigDecimal.valueOf(detail.getQuantity() == null ? 0 : detail.getQuantity()));
@@ -882,31 +922,34 @@ public class PurchaseinvoiceService {
                 lineTotal,
                 detail.getVatRate(),
                 detail.getPreTaxAmount(),
-                detail.getVatAmount()
+                detail.getVatAmount(),
+                product != null ? sellPriceByProduct.get(product.getProductID()) : null
         );
     }
 
-    private boolean matchesKeyword(Purchaseinvoice invoice,
-                                   List<Purchasedetail> details,
-                                   String keyword) {
-        if (keyword == null || keyword.isBlank()) {
+    // --- expandable search fields (Mã phiếu / Nhà cung cấp / Sản phẩm) — ANDed when combined ---
+
+    private boolean matchesCode(Purchaseinvoice invoice, String normalizedCode) {
+        return normalizedCode.isBlank() || containsNormalized(formatPurchaseCode(invoice.getId()), normalizedCode);
+    }
+
+    private boolean matchesSupplier(Purchaseinvoice invoice, String normalizedSupplier) {
+        return normalizedSupplier.isBlank()
+                || containsNormalized(invoice.getSupplierID() != null ? invoice.getSupplierID().getName() : null,
+                        normalizedSupplier);
+    }
+
+    private boolean matchesProduct(List<Purchasedetail> details, String normalizedProduct) {
+        if (normalizedProduct.isBlank()) {
             return true;
         }
-
-        if (containsNormalized(formatPurchaseCode(invoice.getId()), keyword)
-                || containsNormalized(invoice.getSupplierID() != null ? invoice.getSupplierID().getName() : null, keyword)
-                || containsNormalized(invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : null, keyword)
-                || containsNormalized(invoice.getNote(), keyword)) {
-            return true;
-        }
-
         return details.stream().anyMatch(detail -> {
             Product product = detail.getProductID();
             return product != null
-                    && (containsNormalized(String.valueOf(product.getProductID()), keyword)
-                    || containsNormalized(product.getName(), keyword)
-                    || containsNormalized(product.getCode(), keyword)
-                    || containsNormalized(product.getBarcode(), keyword));
+                    && (containsNormalized(String.valueOf(product.getProductID()), normalizedProduct)
+                    || containsNormalized(product.getName(), normalizedProduct)
+                    || containsNormalized(product.getCode(), normalizedProduct)
+                    || containsNormalized(product.getBarcode(), normalizedProduct));
         });
     }
 
@@ -926,10 +969,6 @@ public class PurchaseinvoiceService {
         }
 
         return to == null || !date.isAfter(to);
-    }
-
-    private boolean supplierMatches(Purchaseinvoice invoice, Integer supplierId) {
-        return invoice.getSupplierID() != null && supplierId.equals(invoice.getSupplierID().getId());
     }
 
     private BigDecimal calculateSubtotal(List<Purchasedetail> details) {

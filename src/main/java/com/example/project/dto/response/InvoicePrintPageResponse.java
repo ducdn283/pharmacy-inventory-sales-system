@@ -22,6 +22,8 @@ public class InvoicePrintPageResponse {
     private String dateLongDisplay;
     /** Mã CQT — chỉ có khi hóa đơn đã ký. */
     private String taxAuthorityCode;
+    /** Thời điểm ký hiển thị trên khung chữ ký — chỉ có khi hóa đơn đã ký. */
+    private String signedAtDisplay;
 
     private String pharmacyName;
     private String pharmacyTaxCode;
