@@ -1306,14 +1306,23 @@ public class ReturnService {
         return id == null ? "TH-000000" : "TH-" + String.format("%06d", id);
     }
 
-    /** Unique sale-invoice number for the adjustment invoice — {@code HD} + 6-digit next id (mirrors InvoiceService). */
+    /** Unique sale-invoice number — 8 chữ số, không prefix (mirrors InvoiceService). */
     private String generateInvoiceNumber() {
-        int nextId = invoiceRepository.findAll().stream()
-                .map(Invoice::getId)
+        long maxNumber = invoiceRepository.findAll().stream()
+                .map(Invoice::getInvoiceNumber)
                 .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-        return "HD" + String.format("%06d", nextId);
+                .map(String::trim)
+                .filter(number -> !number.isEmpty())
+                .map(number -> number.replaceAll("\\D", ""))
+                .filter(digits -> !digits.isEmpty())
+                .mapToLong(Long::parseLong)
+                .max()
+                .orElse(0L);
+        long next = maxNumber + 1;
+        if (next > 99_999_999L) {
+            throw new IllegalStateException("Đã hết dãy số hóa đơn 8 chữ số");
+        }
+        return String.format("%08d", next);
     }
 
     private BigDecimal nz(BigDecimal value) {
@@ -1328,7 +1337,7 @@ public class ReturnService {
      * Nội dung hóa đơn điều chỉnh / thay thế theo NĐ 70/2025: ghi rõ mẫu số, ký hiệu, số, ngày của hóa
      * đơn gốc và trả toàn bộ hay một phần. HĐ đã ký → "Điều chỉnh giảm cho…", chưa ký → "Thay thế cho…".
      *
-     * <p>VD: "Thay thế cho hóa đơn Mẫu số 2, ký hiệu K26MYY, số HD000001, ngày 16 tháng 07 năm 2026,
+     * <p>VD: "Thay thế cho hóa đơn Mẫu số 2, ký hiệu K26MYY, số 00000001, ngày 16 tháng 07 năm 2026,
      * do người mua trả lại hàng một phần (phiếu trả TH-000002)".</p>
      */
     private String buildAdjustmentNote(Return ret, Invoice original, boolean signed) {

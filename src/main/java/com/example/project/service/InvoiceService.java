@@ -83,8 +83,10 @@ public class InvoiceService {
     private static final String STATUS_SIGNED = "Đã ký";
     private static final String STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
-    private static final String INVOICE_NUMBER_PREFIX = "HD";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final String[] MONEY_WORD_DIGITS = {
+            "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"
+    };
 
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
@@ -666,13 +668,23 @@ public class InvoiceService {
         return allocations;
     }
 
+    /** Số hóa đơn bán hàng: 8 chữ số, không prefix (vd. 00008131). */
     private String generateInvoiceNumber() {
-        int nextId = invoiceRepository.findAll().stream()
-                .map(Invoice::getId)
+        long maxNumber = invoiceRepository.findAll().stream()
+                .map(Invoice::getInvoiceNumber)
                 .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-        return INVOICE_NUMBER_PREFIX + String.format("%06d", nextId);
+                .map(String::trim)
+                .filter(number -> !number.isEmpty())
+                .map(number -> number.replaceAll("\\D", ""))
+                .filter(digits -> !digits.isEmpty())
+                .mapToLong(Long::parseLong)
+                .max()
+                .orElse(0L);
+        long next = maxNumber + 1;
+        if (next > 99_999_999L) {
+            throw new IllegalStateException("Đã hết dãy số hóa đơn 8 chữ số");
+        }
+        return String.format("%08d", next);
     }
 
     /**
@@ -940,12 +952,7 @@ public class InvoiceService {
                 .sum();
 
         boolean showVatBreakdown = isVatSaleInvoice(invoice);
-        String statusName = invoice.getStatus() != null ? invoice.getStatus() : "";
-        String taxCode = isStatus(statusName, STATUS_SIGNED)
-                ? financialsettingRepository.findFirstByOrderByIdAsc()
-                        .map(setting -> trimToNull(setting.getTaxCode()))
-                        .orElse(null)
-                : null;
+        boolean signed = isStatus(invoice.getStatus(), STATUS_SIGNED);
 
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         Customer customer = invoice.getCustomerID();
@@ -954,26 +961,61 @@ public class InvoiceService {
                 .map(this::toPrintLine)
                 .toList();
 
+        String buyerCompanyName;
+        String buyerTaxCode;
+        String buyerAddress;
+        if (customer == null) {
+            buyerCompanyName = "Khách lẻ không lấy hóa đơn";
+            buyerTaxCode = "";
+            buyerAddress = "";
+        } else {
+            boolean companyBuyer = "COMPANY".equalsIgnoreCase(customer.getCustomerType());
+            if (companyBuyer) {
+                buyerCompanyName = nullToEmpty(customer.getName());
+            } else {
+                String name = nullToEmpty(customer.getName());
+                buyerCompanyName = name.isBlank() || "Khách lẻ".equalsIgnoreCase(name.trim())
+                        ? "Khách lẻ không lấy hóa đơn"
+                        : name;
+            }
+            buyerTaxCode = nullToEmpty(customer.getTaxCode());
+            buyerAddress = nullToEmpty(customer.getAddress());
+        }
+
+        BigDecimal printTotal = invoice.getTotal() != null ? invoice.getTotal() : BigDecimal.ZERO;
+
         return new InvoicePrintPageResponse(
                 invoice.getId(),
                 invoiceCode(invoice),
                 invoice.getInvoicePattern(),
+                formatInvoiceSerialNumber(invoice),
                 invoiceTypeDisplay(invoice.getInvoiceType()),
                 showVatBreakdown,
-                formatDate(invoice.getDate()),
-                setting != null ? setting.getLocationName() : "",
-                setting != null ? setting.getTaxCode() : "",
-                setting != null ? setting.getPhoneNumber() : "",
+                signed,
+                formatDateLong(invoice.getDate()),
+                signed ? buildTaxAuthorityCode(invoice, setting) : null,
+                setting != null ? nullToEmpty(setting.getLocationName()) : "",
+                setting != null ? nullToEmpty(setting.getTaxCode()) : "",
+                "",
+                setting != null ? nullToEmpty(setting.getLocationCode()) : "",
+                setting != null ? nullToEmpty(setting.getPhoneNumber()) : "",
+                setting != null ? nullToEmpty(setting.getEmail()) : "",
+                setting != null ? nullToEmpty(setting.getBankAccountNumber()) : "",
+                setting != null ? nullToEmpty(setting.getBankName()) : "",
+                buyerCompanyName,
+                buyerTaxCode,
+                buyerAddress,
+                paymentMethodShort(invoice),
+                moneyAmountInWords(printTotal),
                 customer != null ? customer.getName() : "Khách lẻ",
                 customer != null ? customer.getPhoneNumber() : null,
                 invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
-                taxCode,
                 totalQuantity,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
                 totalPreTaxAmount,
                 totalVATOutput,
-                invoice.getTotal(),
+                printTotal,
                 invoice.getPaidByCash(),
                 invoice.getPaidByBanking(),
                 invoice.getDebtAmount() != null ? invoice.getDebtAmount() : BigDecimal.ZERO,
@@ -1205,6 +1247,172 @@ public class InvoiceService {
             case INVOICE_TYPE_RETURN -> "Trả hàng";
             default -> invoiceType;
         };
+    }
+
+    private String paymentMethodShort(Invoice invoice) {
+        boolean cash = isPositive(invoice.getPaidByCash());
+        boolean banking = isPositive(invoice.getPaidByBanking());
+        if (cash && banking) {
+            return "TM/CK";
+        }
+        if (cash) {
+            return "TM";
+        }
+        if (banking) {
+            return "CK";
+        }
+        if (isPositive(invoice.getDebtAmount())) {
+            return "Ghi nợ";
+        }
+        return "TM";
+    }
+
+    private String formatDateLong(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return "";
+        }
+        LocalDate date = dateTime.toLocalDate();
+        return String.format("Ngày %d tháng %02d năm %d",
+                date.getDayOfMonth(), date.getMonthValue(), date.getYear());
+    }
+
+    private String formatInvoiceSerialNumber(Invoice invoice) {
+        if (invoice == null) {
+            return "";
+        }
+        String number = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber().trim() : "";
+        String digits = number.replaceAll("\\D", "");
+        if (digits.isEmpty() && invoice.getId() != null) {
+            digits = String.valueOf(invoice.getId());
+        }
+        if (digits.isEmpty()) {
+            return "";
+        }
+        try {
+            return String.format("%08d", Long.parseLong(digits));
+        } catch (NumberFormatException ex) {
+            return digits;
+        }
+    }
+
+    private String buildTaxAuthorityCode(Invoice invoice, Financialsetting setting) {
+        if (invoice == null || invoice.getInvoicePattern() == null || invoice.getInvoicePattern().length() < 4) {
+            return null;
+        }
+        String pattern = invoice.getInvoicePattern();
+        char kind = pattern.charAt(0);
+        String yearPart = pattern.substring(2, 4);
+        String series = setting != null && setting.getVatInvoiceSeries() != null
+                ? setting.getVatInvoiceSeries().trim().toUpperCase(Locale.ROOT)
+                : "BGALS";
+        if (series.length() < 5) {
+            series = "BGALS";
+        }
+        int invoiceKey = invoice.getId() != null ? invoice.getId() : 0;
+        return String.format("M%c-%s-%s-%011d", kind, yearPart, series, invoiceKey);
+    }
+
+    private String moneyAmountInWords(BigDecimal amount) {
+        if (amount == null) {
+            return "";
+        }
+        long value = amount.setScale(0, RoundingMode.HALF_UP).longValue();
+        if (value == 0L) {
+            return "Không đồng chẵn.";
+        }
+        if (value < 0L) {
+            return "Âm " + capitalizeMoneyWords(readMoneyNumber(-value)) + " đồng chẵn.";
+        }
+        return capitalizeMoneyWords(readMoneyNumber(value)) + " đồng chẵn.";
+    }
+
+    private String readMoneyNumber(long number) {
+        if (number == 0L) {
+            return MONEY_WORD_DIGITS[0];
+        }
+
+        String[] units = {"", " nghìn", " triệu", " tỷ", " nghìn tỷ", " triệu tỷ"};
+        StringBuilder result = new StringBuilder();
+        int unitIndex = 0;
+
+        while (number > 0L) {
+            int chunk = (int) (number % 1000L);
+            if (chunk != 0) {
+                String chunkWords = readMoneyThreeDigits(chunk, unitIndex > 0);
+                if (!result.isEmpty()) {
+                    result.insert(0, chunkWords + units[unitIndex] + " ");
+                } else {
+                    result.insert(0, chunkWords + units[unitIndex]);
+                }
+            }
+            number /= 1000L;
+            unitIndex++;
+        }
+
+        return result.toString().trim();
+    }
+
+    private String readMoneyThreeDigits(int number, boolean fullReading) {
+        int hundreds = number / 100;
+        int tens = (number % 100) / 10;
+        int ones = number % 10;
+        StringBuilder words = new StringBuilder();
+
+        if (hundreds > 0) {
+            words.append(MONEY_WORD_DIGITS[hundreds]).append(" trăm");
+            if (tens == 0 && ones > 0) {
+                words.append(" lẻ");
+            }
+        } else if (fullReading && (tens > 0 || ones > 0)) {
+            words.append("không trăm");
+        }
+
+        if (tens > 1) {
+            if (!words.isEmpty()) {
+                words.append(' ');
+            }
+            words.append(MONEY_WORD_DIGITS[tens]).append(" mươi");
+            if (ones == 1) {
+                words.append(" mốt");
+            } else if (ones == 4) {
+                words.append(" tư");
+            } else if (ones == 5) {
+                words.append(" lăm");
+            } else if (ones > 0) {
+                words.append(' ').append(MONEY_WORD_DIGITS[ones]);
+            }
+        } else if (tens == 1) {
+            if (!words.isEmpty()) {
+                words.append(' ');
+            }
+            words.append("mười");
+            if (ones == 5) {
+                words.append(" lăm");
+            } else if (ones > 0) {
+                words.append(' ').append(MONEY_WORD_DIGITS[ones]);
+            }
+        } else if (ones > 0) {
+            if (!words.isEmpty()) {
+                words.append(' ');
+            }
+            if (hundreds > 0 || fullReading) {
+                words.append("lẻ ");
+            }
+            words.append(MONEY_WORD_DIGITS[ones]);
+        }
+
+        return words.toString().trim();
+    }
+
+    private String capitalizeMoneyWords(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String paymentDisplay(Invoice invoice) {
