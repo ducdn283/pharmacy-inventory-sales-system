@@ -151,9 +151,8 @@
             </a>
         </div>
 
-        <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
-        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
-
+        <div th:replace="~{fragments/toast :: flash}"></div>
+        <div th:replace="~{fragments/confirm :: confirm}"></div>
         <div class="row g-4">
             <div class="col-12 col-xl-9">
 
@@ -350,7 +349,7 @@
                             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <button type="submit"
                                     class="btn btn-stock-primary w-100"
-                                    onclick="return confirm('Duyệt phiếu kiểm kê này?');">
+                                    data-confirm="Bạn có chắc chắn muốn duyệt phiếu kiểm kê này không?">
                                 <i class="ti ti-check me-1"></i>
                                 Duyệt phiếu
                             </button>
@@ -362,7 +361,7 @@
                             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <button type="submit"
                                     class="btn btn-outline-danger w-100"
-                                    onclick="return confirm('Từ chối phiếu kiểm kê này?');">
+                                    data-confirm="Bạn có chắc chắn muốn từ chối phiếu kiểm kê này không?">
                                 <i class="ti ti-x me-1"></i>
                                 Từ chối
                             </button>
