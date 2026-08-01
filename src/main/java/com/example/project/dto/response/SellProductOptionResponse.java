@@ -26,4 +26,7 @@ public class SellProductOptionResponse {
 
     /** In-stock batches (soonest-expiry first) for lot selection. */
     private List<SellBatchOptionResponse> batches;
+
+    /** True when the product type is {@code Thuốc kê đơn}. */
+    private boolean requiresPrescription;
 }

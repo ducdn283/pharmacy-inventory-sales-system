@@ -22,6 +22,7 @@ public class FinancialsettingResponse {
     private String taxCode;
     private String locationCode;
     private String locationName;
+    private String address;
     private String phoneNumber;
     private String email;
     private String bankAccountNumber;
@@ -47,6 +48,7 @@ public class FinancialsettingResponse {
                 financialsetting.getTaxCode(),
                 financialsetting.getLocationCode(),
                 financialsetting.getLocationName(),
+                financialsetting.getAddress(),
                 financialsetting.getPhoneNumber(),
                 financialsetting.getEmail(),
                 financialsetting.getBankAccountNumber(),

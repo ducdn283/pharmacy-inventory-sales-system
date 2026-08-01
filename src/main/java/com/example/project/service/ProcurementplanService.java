@@ -50,6 +50,8 @@ public class ProcurementplanService {
     private static final String COMPLETED_STATUS = "Đã hoàn thành";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Set<String> ALLOWED_STATUSES = Set.of(DEFAULT_STATUS, COMPLETED_STATUS);
+    /** {@link com.example.project.entity.Type#getSortType()} value for bundle products excluded from procurement. */
+    private static final String SORT_COMBO = "combo";
 
     private final ProcurementplanRepository procurementplanRepository;
     private final ProcurementplandetailRepository procurementplandetailRepository;
@@ -247,9 +249,10 @@ public class ProcurementplanService {
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
 
-        return productRepository.findAll()
+        return productRepository.findAllWithRelations()
                 .stream()
                 .filter(product -> Boolean.TRUE.equals(product.getStatus()))
+                .filter(product -> !isComboProduct(product))
                 .filter(product -> matchesKeyword(product, normalizedKeyword))
                 .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
                 .limit(maxResults)
@@ -350,12 +353,22 @@ public class ProcurementplanService {
         );
     }
 
-    /*kiểm tra xem một sản phẩm (Product) có khớp với từ khóa tìm kiếm hay không.
-      Nếu mã sản phẩm, tên sản phẩm hoặc mã vạch chứa từ khóa thì trả về true.*/
+    /* Kiểm tra sản phẩm khớp từ khóa prefix (mã, tên hoặc barcode bắt đầu bằng keyword). */
     private boolean matchesKeyword(Product product, String normalizedKeyword) {
-        return containsNormalized(product.getCode(), normalizedKeyword)
-                || containsNormalized(product.getName(), normalizedKeyword)
-                || containsNormalized(product.getBarcode(), normalizedKeyword);
+        return startsWithNormalized(product.getCode(), normalizedKeyword)
+                || startsWithNormalized(product.getName(), normalizedKeyword)
+                || startsWithNormalized(product.getBarcode(), normalizedKeyword);
+    }
+
+    private boolean startsWithNormalized(String value, String normalizedKeyword) {
+        return value != null && normalize(value).startsWith(normalizedKeyword);
+    }
+
+    private boolean isComboProduct(Product product) {
+        if (product == null || product.getTypeID() == null || product.getTypeID().getSortType() == null) {
+            return false;
+        }
+        return SORT_COMBO.equals(normalize(product.getTypeID().getSortType()));
     }
 
     // kiểm tra xem một chuỗi có chứa từ khóa sau khi đã được chuẩn hóa (normalize) hay không.
@@ -556,6 +569,12 @@ public class ProcurementplanService {
 
             if (detail.getEstimatedPrice() != null && detail.getEstimatedPrice().compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalArgumentException("Giá dự kiến không được âm");
+            }
+
+            Product product = productRepository.findDetailById(detail.getProductId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm"));
+            if (isComboProduct(product)) {
+                throw new IllegalArgumentException("Không thể dự trù sản phẩm loại combo");
             }
         }
     }

@@ -825,7 +825,7 @@
                         <div id="emptyProductState" class="empty-product-state">
                             <div><i class="ti ti-package"></i></div>
                             <div class="fw-semibold mb-1">Chưa có hàng hóa nào</div>
-                            <div class="small">Nhập tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div>
+                            <div class="small">Gõ từ đầu tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div>
                         </div>
 
                         <div class="p-4 pt-0">
@@ -951,6 +951,7 @@
 
     let activeSearchIndex = -1;
     let lastSearchItems = [];
+    let nextLineOrder = 0;
     let searchTimer = null;
     let searchAbortController = null;
     let searchRequestId = 0;
@@ -1272,6 +1273,7 @@
                 pickerBtn.classList.add('empty');
             }
             setUnitPriceValue(row, null);
+            sortDetailLinesBySupplier();
             return;
         }
 
@@ -1280,6 +1282,7 @@
             pickerBtn.textContent = getSupplierName(supplierId) || 'Chọn nhà cung cấp';
             pickerBtn.classList.toggle('empty', !getSupplierName(supplierId));
         }
+        sortDetailLinesBySupplier();
 
         if (costPrice != null) {
             setUnitPriceValue(row, costPrice);
@@ -1342,6 +1345,34 @@
             }
             applySupplierToRow(row, supplierInput.value, null, true);
         });
+    }
+
+    function getRowSupplierId(row) {
+        const input = row.querySelector('[data-field="supplierId"]');
+        return input && input.value ? String(input.value) : '';
+    }
+
+    function getSupplierGroupKey(supplierId) {
+        if (!supplierId) return '\uffff';
+        const name = getSupplierName(supplierId);
+        return (name || supplierId).toLowerCase();
+    }
+
+    /** Gom các dòng cùng nhà cung cấp liền nhau; giữ thứ tự thêm trong từng nhóm. */
+    function sortDetailLinesBySupplier() {
+        const container = document.getElementById('detailLines');
+        const rows = Array.from(container.querySelectorAll('.product-line'));
+        if (rows.length <= 1) return;
+
+        rows.sort((a, b) => {
+            const bySupplier = getSupplierGroupKey(getRowSupplierId(a))
+                .localeCompare(getSupplierGroupKey(getRowSupplierId(b)), 'vi');
+            if (bySupplier !== 0) return bySupplier;
+            return (Number(a.dataset.lineOrder) || 0) - (Number(b.dataset.lineOrder) || 0);
+        });
+
+        rows.forEach(row => container.appendChild(row));
+        reindexDetailLines();
     }
 
     function toggleEmptyState() {
@@ -1500,7 +1531,11 @@
         const html = buildLineHtml(0, detail);
         if (!html) return;
         container.insertAdjacentHTML(atTop ? 'afterbegin' : 'beforeend', html);
-        reindexDetailLines();
+        const row = atTop ? container.querySelector('.product-line') : container.lastElementChild;
+        if (row) {
+            row.dataset.lineOrder = String(nextLineOrder++);
+        }
+        sortDetailLinesBySupplier();
     }
 
     function addProductById(productId, productData) {
@@ -1728,6 +1763,7 @@
     }
 
     initLineSupplierPrices(true);
+    sortDetailLinesBySupplier();
     toggleEmptyState();
     calculateSummary();
 
