@@ -34,7 +34,7 @@ public class TaxPeriodDetailResponse {
     /** Thuế TNCN của kỳ. Stored, not re-derived — see {@code TaxPeriodUpdateRequest}. */
     private BigDecimal incomeTax;
 
-    private BigDecimal cashBalanceAtPeriodEnd;
+    private BigDecimal quarterlyRevenue;
 
     /** Group to apply from the day after {@code endDate}; defaults to this period's own group. */
     private Integer nextPeriodTaxType;

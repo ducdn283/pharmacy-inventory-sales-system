@@ -32,9 +32,6 @@ public class TaxPeriodUpdateRequest {
     /** Thuế TNCN của kỳ — typed as-is, like the VAT lines above. */
     private BigDecimal incomeTax;
 
-    /** Revenue group to apply from the day after this period's {@code endDate}. */
-    private Integer nextPeriodTaxType;
-
     /** Reference figure only — the docx calls it "tham chiếu, không phải theo dõi liên tục". */
     private BigDecimal cashBalanceAtPeriodEnd;
 

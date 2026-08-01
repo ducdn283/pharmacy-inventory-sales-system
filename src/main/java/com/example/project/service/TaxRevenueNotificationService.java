@@ -41,6 +41,26 @@ public class TaxRevenueNotificationService {
         this.notificationService = notificationService;
     }
 
+    /**
+     * The single entry point the Tax Period screens call: applies the 1 → 2 auto-transition if the
+     * threshold has just been crossed (notifying about it), then falls through to the existing
+     * warning for a 2 → 3 crossing still pending until the year's last quarter closes.
+     */
+    @Transactional
+    public void checkGroupTransitionAndWarn(TaxperiodsnapshotService.TaxPeriod period,
+                                            Integer taxPeriodSnapshotId) {
+        TaxperiodsnapshotService.GroupTransitionResult result =
+                taxperiodsnapshotService.applyAutomaticGroupTransition();
+        if (result.changed()) {
+            sendGroupChangedNotification(period, taxPeriodSnapshotId, result.fromGroup(), result.toGroup());
+        }
+        warnIfRevenueThresholdReached(period, taxPeriodSnapshotId);
+    }
+
+    /**
+     * Warns about a still-pending 2 → 3 crossing (the 1 → 2 case is no longer "pending" by the time
+     * this runs — {@link #checkGroupTransitionAndWarn} already applied it).
+     */
     @Transactional
     public void warnIfRevenueThresholdReached(TaxperiodsnapshotService.TaxPeriod period,
                                               Integer taxPeriodSnapshotId) {
@@ -78,6 +98,32 @@ public class TaxRevenueNotificationService {
         }
     }
 
+    private void sendGroupChangedNotification(TaxperiodsnapshotService.TaxPeriod period,
+                                              Integer taxPeriodSnapshotId,
+                                              Integer fromGroup,
+                                              Integer toGroup) {
+        int year = period.startDate().getYear();
+
+        String title = "Đã tự động chuyển sang " + TaxRevenueGroup.shortLabel(toGroup);
+
+        String message = "Doanh thu lũy kế năm " + year + " đã vượt ngưỡng chuyển nhóm, nên hệ thống "
+                + "đã tự động chuyển từ " + TaxRevenueGroup.shortLabel(fromGroup)
+                + " sang " + TaxRevenueGroup.shortLabel(toGroup)
+                + ", áp dụng ngay từ kỳ hiện tại (" + period.label() + ") theo quy định.";
+
+        String dedupeKey = "TAX_GROUP_CHANGED_" + year + "_G" + fromGroup + "_TO_G" + toGroup;
+
+        sendToOwnerAndAccountant(
+                title,
+                message,
+                NotificationType.TAX_GROUP_CHANGED,
+                NotificationSeverity.URGENT,
+                period,
+                taxPeriodSnapshotId,
+                dedupeKey
+        );
+    }
+
     private void sendWarningNotification(TaxperiodsnapshotService.TaxPeriod period,
                                          Integer taxPeriodSnapshotId,
                                          Integer currentGroup,
@@ -96,8 +142,7 @@ public class TaxRevenueNotificationService {
                 + " sang "
                 + TaxRevenueGroup.shortLabel(nextGroup)
                 + ". "
-                + transitionRule(currentGroup)
-                + " Hệ thống chỉ cảnh báo, không tự động đổi nhóm thuế.";
+                + transitionRule(currentGroup);
 
         String dedupeKey = "TAX_THRESHOLD_" + year
                 + "_G" + currentGroup
@@ -133,9 +178,7 @@ public class TaxRevenueNotificationService {
                 + " sang "
                 + TaxRevenueGroup.shortLabel(nextGroup)
                 + ". "
-                + transitionRule(currentGroup)
-                + " Chủ nhà thuốc/Kế toán cần kiểm tra và chọn nhóm áp dụng cho kỳ sau khi chốt kỳ. "
-                + "Hệ thống không tự động đổi nhóm doanh thu.";
+                + transitionRule(currentGroup);
 
         String dedupeKey = "TAX_THRESHOLD_" + year
                 + "_G" + currentGroup
@@ -234,11 +277,11 @@ public class TaxRevenueNotificationService {
 
     private String transitionRule(Integer currentGroup) {
         if (TaxRevenueGroup.EXEMPT == currentGroup) {
-            return "Quy tắc chuyển Nhóm 1 → 2: nếu vượt ngưỡng trong quý nào thì tính thuế ngay từ chính quý phát sinh vượt ngưỡng.";
+            return "Quy tắc chuyển Nhóm 1 → 2: hệ thống sẽ tự động tính thuế ngay từ chính quý phát sinh vượt ngưỡng, không cần thao tác thủ công.";
         }
 
         if (TaxRevenueGroup.DIRECT == currentGroup) {
-            return "Quy tắc chuyển Nhóm 2 → 3: giữ nhóm cũ đến hết năm tài chính, sang năm sau mới chuyển nhóm.";
+            return "Quy tắc chuyển Nhóm 2 → 3: vẫn giữ Nhóm 2 đến hết năm tài chính; hệ thống sẽ tự chuyển sang Nhóm 3 khi chốt kỳ cuối năm.";
         }
 
         return "";

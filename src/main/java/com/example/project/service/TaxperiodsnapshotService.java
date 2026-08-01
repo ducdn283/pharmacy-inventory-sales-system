@@ -249,6 +249,115 @@ public class TaxperiodsnapshotService {
                 .orElse(TaxRevenueGroup.DIRECT);
     }
 
+    // ------------------------------------------------------------------ automatic group transition
+
+    /**
+     * The group to apply after {@code period}, given the group it was itself taxed under. Two rules
+     * (see {@code TaxRevenueNotificationService.transitionRule}):
+     *
+     * <p><strong>1 → 2 is immediate.</strong> The very quarter revenue crosses ngưỡng 1 must already
+     * be taxed under nhóm 2, so this returns {@link TaxRevenueGroup#DIRECT} the moment the year's
+     * revenue reaches the threshold — regardless of which quarter {@code period} is.</p>
+     *
+     * <p><strong>2 → 3 is deferred to next year.</strong> Crossing ngưỡng 2 mid-year still owes nhóm
+     * 2 for the rest of the year; nhóm 3 only starts the following January. So this only returns
+     * {@link TaxRevenueGroup#DEDUCTION} when {@code period} is itself the year's last quarter
+     * (December) — exactly when the caller is deciding the group for next year's first quarter.</p>
+     */
+    private Integer autoNextGroup(TaxPeriod period, Integer groupOfPeriod) {
+        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
+        int year = period.startDate().getYear();
+
+        if (Integer.valueOf(TaxRevenueGroup.EXEMPT).equals(groupOfPeriod)) {
+            if (revenueForYear(year).compareTo(threshold1(setting)) >= 0) {
+                return TaxRevenueGroup.DIRECT;
+            }
+        } else if (Integer.valueOf(TaxRevenueGroup.DIRECT).equals(groupOfPeriod)
+                && period.endDate().getMonthValue() == 12) {
+            if (revenueForYear(year).compareTo(threshold2(setting)) >= 0) {
+                return TaxRevenueGroup.DEDUCTION;
+            }
+        }
+        return groupOfPeriod;
+    }
+
+    /** What {@link #autoNextGroup} would decide for {@code period} — for the preview screen to show. */
+    @Transactional(readOnly = true)
+    public Integer previewAutoNextGroup(TaxPeriod period) {
+        return autoNextGroup(period, groupForPeriod(period));
+    }
+
+    /** Outcome of {@link #applyAutomaticGroupTransition()} — whether it changed anything, and to what. */
+    public record GroupTransitionResult(boolean changed, Integer fromGroup, Integer toGroup) {
+    }
+
+    /**
+     * Retroactively fixes the 1 → 2 transition the moment it is detected, so the quarter already in
+     * progress ends up taxed under nhóm 2 in full — the "tính thuế ngay từ chính quý phát sinh vượt
+     * ngưỡng" rule. The 2 → 3 transition needs no eager action here: it is decided inside
+     * {@link #closePeriod}/{@link #updateLatest} exactly when the year's last quarter is closed,
+     * which by definition cannot happen before that quarter — and therefore the year — has ended.
+     *
+     * <p>Called from wherever the Tax Period screens are opened or a period is closed, the same
+     * event-driven timing the revenue-threshold notification already uses — there is no background
+     * scheduler in this app, so the correction lands the next time someone visits, not the instant
+     * the threshold is actually crossed.</p>
+     *
+     * <p>Idempotent: once the group is no longer {@link TaxRevenueGroup#EXEMPT}, this is a no-op, so
+     * it is safe to call on every page load.</p>
+     */
+    @Transactional
+    public GroupTransitionResult applyAutomaticGroupTransition() {
+        Integer currentGroup = currentRevenueGroup();
+        if (!Integer.valueOf(TaxRevenueGroup.EXEMPT).equals(currentGroup)) {
+            return new GroupTransitionResult(false, currentGroup, currentGroup);
+        }
+
+        TaxPeriod current = currentQuarter();
+        if (!Integer.valueOf(TaxRevenueGroup.DIRECT).equals(autoNextGroup(current, currentGroup))) {
+            return new GroupTransitionResult(false, currentGroup, currentGroup);
+        }
+
+        // No previous snapshot at all means we are still in the very first period ever, before
+        // anything has ever closed — there is nothing on the chain to retro-fix, so the seed itself
+        // (Financialsetting.revenueGroup) is what needs to change instead.
+        previousSnapshot(current).ifPresent(snapshot -> {
+            snapshot.setNextPeriodTaxType(TaxRevenueGroup.DIRECT);
+            taxperiodsnapshotRepository.save(snapshot);
+        });
+        syncFinancialSettingRevenueGroup(TaxRevenueGroup.DIRECT);
+
+        return new GroupTransitionResult(true, TaxRevenueGroup.EXEMPT, TaxRevenueGroup.DIRECT);
+    }
+
+    /**
+     * Keeps {@code Financialsetting.revenueGroup} mirroring the group actually in force. Nothing in
+     * this service reads the column for that purpose once a period exists — {@link #groupForPeriod}
+     * always follows the snapshot chain — but {@code ReturnPurchaseService} still reads it directly,
+     * so leaving it stale would make that module disagree with the tax period screens about which
+     * group is current.
+     */
+    private void syncFinancialSettingRevenueGroup(Integer group) {
+        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
+        if (setting == null || group.equals(setting.getRevenueGroup())) {
+            return;
+        }
+        setting.setRevenueGroup(group);
+        financialsettingRepository.save(setting);
+    }
+
+    private BigDecimal threshold1(Financialsetting setting) {
+        return setting != null && setting.getAnnualRevenueThreshold1() != null
+                ? setting.getAnnualRevenueThreshold1()
+                : new BigDecimal("1000000000.00");
+    }
+
+    private BigDecimal threshold2(Financialsetting setting) {
+        return setting != null && setting.getAnnualRevenueThreshold2() != null
+                ? setting.getAnnualRevenueThreshold2()
+                : new BigDecimal("3000000000.00");
+    }
+
     // ------------------------------------------------------------------ live computation
 
     // ------------------------------------------------------------------ revenue
@@ -527,7 +636,8 @@ public class TaxperiodsnapshotService {
      * Writes the snapshot for the period currently due. The VAT figures come from
      * {@link #computePeriod}, never from the request — the same "server-authoritative amount" rule
      * Expense uses for a refund payout, and for the same reason: a declaration is derived from the
-     * books, not typed.
+     * books, not typed. The group to apply next is likewise derived, by {@link #autoNextGroup} — see
+     * that method and {@link #applyAutomaticGroupTransition} for the two transition rules.
      *
      * @return the new snapshot's id
      */
@@ -536,6 +646,10 @@ public class TaxperiodsnapshotService {
         if (request == null || request.getPeriodLabel() == null || request.getPeriodLabel().isBlank()) {
             throw new IllegalArgumentException("Thiếu thông tin kỳ thuế cần chốt");
         }
+
+        // Fixes a pending 1 → 2 escalation onto the chain before `due` is even resolved, in case
+        // nobody visited the Tax Period screens since the threshold was crossed.
+        applyAutomaticGroupTransition();
 
         TaxPeriod due = nextPeriodToClose();
         if (!due.label().equals(request.getPeriodLabel().trim())) {
@@ -550,19 +664,13 @@ public class TaxperiodsnapshotService {
             throw new IllegalArgumentException(blocked);
         }
 
-        Integer nextGroup = request.getNextPeriodTaxType() == null
-                ? groupForPeriod(due)
-                : request.getNextPeriodTaxType();
-        if (!TaxRevenueGroup.isKnown(nextGroup)) {
-            throw new IllegalArgumentException("Nhóm áp dụng cho kỳ sau không hợp lệ");
-        }
-
         BigDecimal cashBalance = request.getCashBalanceAtPeriodEnd();
         if (cashBalance != null && cashBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Số dư quỹ tiền mặt cuối kỳ không được âm");
         }
 
         TaxPeriodComputationResponse computed = computePeriod(due);
+        Integer nextGroup = autoNextGroup(due, computed.getRevenueGroup());
 
         Taxperiodsnapshot snapshot = new Taxperiodsnapshot();
         snapshot.setPeriodLabel(due.label());
@@ -578,7 +686,11 @@ public class TaxperiodsnapshotService {
         snapshot.setNote(trimToNull(request.getNote()));
         snapshot.setRecordedAt(LocalDateTime.now(VN_ZONE));
 
-        return taxperiodsnapshotRepository.save(snapshot).getId();
+        Integer newId = taxperiodsnapshotRepository.save(snapshot).getId();
+        // `due.endDate()` has necessarily already passed (closeBlockedReason enforces it), so this
+        // satisfies "khi vượt qua endDate thì cập nhật revenueGroup" for the group taking over now.
+        syncFinancialSettingRevenueGroup(nextGroup);
+        return newId;
     }
 
     /**
@@ -603,10 +715,13 @@ public class TaxperiodsnapshotService {
                     "Chỉ kỳ thuế mới nhất mới được điều chỉnh — các kỳ trước đó đã bị khóa.");
         }
 
-        Integer nextGroup = request.getNextPeriodTaxType();
-        if (!TaxRevenueGroup.isKnown(nextGroup)) {
-            throw new IllegalArgumentException("Nhóm áp dụng cho kỳ sau không hợp lệ");
-        }
+        // Re-derived the same way as closePeriod(), not accepted from the request — see
+        // autoNextGroup(). An amendment can no more hand-pick the next group than a fresh close can.
+        Integer groupOfSnapshot = storedGroup(snapshot);
+        Integer nextGroup = snapshot.getStartDate() == null
+                ? groupOfSnapshot
+                : autoNextGroup(new TaxPeriod(snapshot.getPeriodLabel(), snapshot.getStartDate(),
+                        snapshot.getEndDate()), groupOfSnapshot);
 
         BigDecimal vatOutput = requireNonNegative(request.getVatOutput(), "Thuế GTGT đầu ra");
         BigDecimal vatInput = requireNonNegative(request.getVatInput(), "Thuế GTGT đầu vào");
@@ -639,6 +754,8 @@ public class TaxperiodsnapshotService {
         snapshot.setNote(trimToNull(request.getNote()));
 
         taxperiodsnapshotRepository.save(snapshot);
+        // This snapshot is already closed, so its endDate has necessarily already passed.
+        syncFinancialSettingRevenueGroup(nextGroup);
     }
 
     /**
