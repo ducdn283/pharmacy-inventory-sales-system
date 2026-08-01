@@ -271,6 +271,86 @@
             color: #111827;
         }
 
+        .signed-print-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+
+        .signed-print-modal.open {
+            display: flex;
+        }
+
+        .signed-print-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .signed-print-modal-dialog {
+            position: relative;
+            width: min(920px, 100%);
+            max-height: calc(100vh - 48px);
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .signed-print-modal-header,
+        .signed-print-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #fff;
+        }
+
+        .signed-print-modal-header {
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .signed-print-modal-footer {
+            border-top: 1px solid #e5e7eb;
+            justify-content: flex-end;
+        }
+
+        .signed-print-modal-title {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .signed-print-modal-close {
+            border: none;
+            background: transparent;
+            font-size: 24px;
+            line-height: 1;
+            color: #6b7280;
+            cursor: pointer;
+        }
+
+        .signed-print-modal-body {
+            flex: 1;
+            overflow: auto;
+            background: #f3f4f6;
+            padding: 16px;
+        }
+
+        .signed-print-frame {
+            width: 100%;
+            min-height: 720px;
+            border: none;
+            background: #fff;
+        }
+
         @media (max-width: 991.98px) {
             .invoice-page-content {
                 padding-top: 84px !important;
@@ -627,11 +707,21 @@
                 </div>
 
                 <div class="invoice-card actions-card p-4">
-                        <button type="button" id="printInvoiceBtn"
+                        <button type="button"
+                                id="printInvoiceBtn"
                                 th:data-print-url="${basePath + '/' + detail.id + '/print'}"
                                 class="btn btn-invoice-primary w-100 mb-3">
                             <i class="ti ti-printer me-1"></i>
                             In hóa đơn
+                        </button>
+
+                        <button type="button"
+                                th:if="${detail.statusName == 'Đã ký'}"
+                                id="viewSignedPrintBtn"
+                                th:data-print-url="${basePath + '/' + detail.id + '/print?embed=1'}"
+                                class="btn btn-invoice-primary w-100 mb-3">
+                            <i class="ti ti-photo me-1"></i>
+                            Xem hình ảnh phiếu in
                         </button>
 
                         <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}"
@@ -640,7 +730,7 @@
                               class="mb-3">
                             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <button type="submit" class="btn btn-invoice-primary w-100"
-                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
+                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot; và bạn có thể xem phiếu in có Mã CQT.">
                                 <i class="ti ti-writing-sign me-1"></i>
                                 Ký hóa đơn
                             </button>
@@ -658,24 +748,96 @@
     </div>
 </main>
 
+<div class="signed-print-modal" id="signedPrintModal" aria-hidden="true">
+    <div class="signed-print-modal-backdrop" id="signedPrintModalBackdrop"></div>
+    <div class="signed-print-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="signedPrintModalTitle">
+        <div class="signed-print-modal-header">
+            <h2 class="signed-print-modal-title" id="signedPrintModalTitle">Hình ảnh phiếu in đã ký</h2>
+            <button type="button" class="signed-print-modal-close" id="closeSignedPrintModal" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="signed-print-modal-body">
+            <iframe id="signedPrintFrame"
+                    class="signed-print-frame"
+                    title="Hình ảnh phiếu in hóa đơn đã ký"></iframe>
+        </div>
+        <div class="signed-print-modal-footer">
+            <button type="button" class="btn btn-outline-secondary" id="closeSignedPrintModalFooter">Đóng</button>
+        </div>
+    </div>
+</div>
+
 <script th:inline="none">
-    document.getElementById('printInvoiceBtn').addEventListener('click', function () {
-        var printUrl = this.dataset.printUrl;
-
-        var iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-
-        iframe.addEventListener('load', function () {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            iframe.contentWindow.addEventListener('afterprint', function () {
-                document.body.removeChild(iframe);
+    (function () {
+        var printBtn = document.getElementById('printInvoiceBtn');
+        if (printBtn) {
+            printBtn.addEventListener('click', function () {
+                openPrintDialog(printBtn.dataset.printUrl);
             });
+        }
+
+        var viewSignedBtn = document.getElementById('viewSignedPrintBtn');
+        var signedPrintModal = document.getElementById('signedPrintModal');
+        var signedPrintFrame = document.getElementById('signedPrintFrame');
+        var closeButtons = [
+            document.getElementById('closeSignedPrintModal'),
+            document.getElementById('closeSignedPrintModalFooter'),
+            document.getElementById('signedPrintModalBackdrop')
+        ];
+
+        function openSignedPrintModal(printUrl) {
+            if (!signedPrintModal || !signedPrintFrame) {
+                return;
+            }
+            signedPrintFrame.src = printUrl;
+            signedPrintModal.classList.add('open');
+            signedPrintModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeSignedPrintModal() {
+            if (!signedPrintModal || !signedPrintFrame) {
+                return;
+            }
+            signedPrintModal.classList.remove('open');
+            signedPrintModal.setAttribute('aria-hidden', 'true');
+            signedPrintFrame.src = 'about:blank';
+            document.body.style.overflow = '';
+        }
+
+        if (viewSignedBtn) {
+            viewSignedBtn.addEventListener('click', function () {
+                openSignedPrintModal(viewSignedBtn.dataset.printUrl);
+            });
+        }
+
+        closeButtons.forEach(function (button) {
+            if (button) {
+                button.addEventListener('click', closeSignedPrintModal);
+            }
         });
 
-        iframe.src = printUrl;
-        document.body.appendChild(iframe);
-    });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeSignedPrintModal();
+            }
+        });
+
+        function openPrintDialog(printUrl) {
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+
+            iframe.addEventListener('load', function () {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                iframe.contentWindow.addEventListener('afterprint', function () {
+                    document.body.removeChild(iframe);
+                });
+            });
+
+            iframe.src = printUrl;
+            document.body.appendChild(iframe);
+        }
+    })();
 </script>
 </body>
 </html>

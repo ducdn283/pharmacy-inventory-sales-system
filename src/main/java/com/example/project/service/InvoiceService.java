@@ -880,11 +880,9 @@ public class InvoiceService {
                         LinkedHashMap::new));
 
         String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
-        String taxCode = isStatus(statusName, STATUS_SIGNED)
-                ? financialsettingRepository.findFirstByOrderByIdAsc()
-                        .map(setting -> trimToNull(setting.getTaxCode()))
-                        .orElse(null)
-                : null;
+        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
+        boolean signed = isStatus(statusName, STATUS_SIGNED);
+        String taxCode = signed && setting != null ? trimToNull(setting.getTaxCode()) : null;
         boolean showVatBreakdown = isVatSaleInvoice(invoice);
 
         return new InvoiceDetailPageResponse(
@@ -994,9 +992,10 @@ public class InvoiceService {
                 signed,
                 formatDateLong(invoice.getDate()),
                 signed ? buildTaxAuthorityCode(invoice, setting) : null,
+                signed ? formatSignedAt(invoice.getDate()) : null,
                 setting != null ? nullToEmpty(setting.getLocationName()) : "",
                 setting != null ? nullToEmpty(setting.getTaxCode()) : "",
-                "",
+                setting != null ? nullToEmpty(setting.getAddress()) : "",
                 setting != null ? nullToEmpty(setting.getLocationCode()) : "",
                 setting != null ? nullToEmpty(setting.getPhoneNumber()) : "",
                 setting != null ? nullToEmpty(setting.getEmail()) : "",
@@ -1274,6 +1273,14 @@ public class InvoiceService {
         LocalDate date = dateTime.toLocalDate();
         return String.format("Ngày %d tháng %02d năm %d",
                 date.getDayOfMonth(), date.getMonthValue(), date.getYear());
+    }
+
+    /** dd/MM/yyyy — dùng trên khung chữ ký điện tử của phiếu in. */
+    private String formatSignedAt(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return "";
+        }
+        return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(dateTime);
     }
 
     private String formatInvoiceSerialNumber(Invoice invoice) {
