@@ -157,9 +157,9 @@
                         <div class="col-12">
                             <div class="info-label">Số dư quỹ tiền mặt cuối kỳ (tham chiếu)</div>
                             <div class="info-value"
-                                 th:text="${detail.cashBalanceAtPeriodEnd == null
+                                 th:text="${detail.quarterlyRevenue == null
                                            ? 'Chưa ghi nhận'
-                                           : #numbers.formatDecimal(detail.cashBalanceAtPeriodEnd, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                           : #numbers.formatDecimal(detail.quarterlyRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                 Chưa ghi nhận
                             </div>
                         </div>
@@ -332,7 +332,7 @@
                            data-money
                            name="cashBalanceAtPeriodEnd"
                            class="form-control"
-                           th:value="${detail.cashBalanceAtPeriodEnd}"
+                           th:value="${detail.quarterlyRevenue}"
                            placeholder="Có thể bỏ trống">
                 </div>
 

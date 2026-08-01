@@ -682,7 +682,7 @@ public class TaxperiodsnapshotService {
         snapshot.setVatCarryforwardOut(computed.getVatCarryforwardOut());
         snapshot.setIncomeTax(computed.getIncomeTax());
         snapshot.setNextPeriodTaxType(nextGroup);
-        snapshot.setCashBalanceAtPeriodEnd(cashBalance);
+        snapshot.setQuarterlyRevenue(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
         snapshot.setRecordedAt(LocalDateTime.now(VN_ZONE));
 
@@ -750,7 +750,7 @@ public class TaxperiodsnapshotService {
         snapshot.setVatCarryforwardOut(carryForwardOut(vatOutput, vatInput, carryIn));
         snapshot.setIncomeTax(incomeTax);
         snapshot.setNextPeriodTaxType(nextGroup);
-        snapshot.setCashBalanceAtPeriodEnd(cashBalance);
+        snapshot.setQuarterlyRevenue(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
 
         taxperiodsnapshotRepository.save(snapshot);
@@ -838,9 +838,9 @@ public class TaxperiodsnapshotService {
                 scaled(safe(snapshot.getVatCarryforwardOut())),
                 scaled(vatPayable(vatOutput, vatInput, carryIn)),
                 scaled(snapshot.getIncomeTax()),
-                snapshot.getCashBalanceAtPeriodEnd() == null
+                snapshot.getQuarterlyRevenue() == null
                         ? null
-                        : scaled(snapshot.getCashBalanceAtPeriodEnd()),
+                        : scaled(snapshot.getQuarterlyRevenue()),
                 snapshot.getNextPeriodTaxType(),
                 TaxRevenueGroup.label(snapshot.getNextPeriodTaxType()),
                 formatDateTime(snapshot.getRecordedAt()),
