@@ -77,6 +77,8 @@ public class InvoiceService {
     private static final String PAYMENT_DEBT = "DEBT";
 
     private static final String STATUS_COMPLETED = "Hoàn thành";
+    /** Product {@link Type#getName()} that requires a prescription code before sale. */
+    private static final String PRESCRIPTION_PRODUCT_TYPE = "Thuốc kê đơn";
     private static final String STATUS_DEBT = "Còn nợ";
     private static final String STATUS_SIGNED = "Đã ký";
     private static final String STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
@@ -272,7 +274,7 @@ public class InvoiceService {
         }
 
         List<SellProductOptionResponse> options = new ArrayList<>();
-        for (Product product : productRepository.findAll()) {
+        for (Product product : productRepository.findAllWithRelations()) {
             if (!Boolean.TRUE.equals(product.getStatus())) {
                 continue;
             }
@@ -312,7 +314,8 @@ public class InvoiceService {
                     product.getBarcode(),
                     baseStock,
                     unitOptions,
-                    batchOptions));
+                    batchOptions,
+                    isPrescriptionProduct(product)));
         }
 
         options.sort(Comparator.comparing(SellProductOptionResponse::getName,
@@ -352,6 +355,17 @@ public class InvoiceService {
         if (prescriptionRequired && !prescriptionCode.matches("^[A-Za-z0-9]{12}-[cnhy]$")) {
             throw new IllegalArgumentException(
                     "Mã đơn thuốc không đúng định dạng (12 ký tự chữ/số, dấu \"-\", rồi c/n/h/y)");
+        }
+        if (invoiceContainsPrescriptionProduct(request.getDetails())) {
+            if (!prescriptionRequired) {
+                throw new IllegalArgumentException("Hóa đơn có thuốc kê đơn — vui lòng tick \"Hóa đơn thuốc kê đơn\"");
+            }
+            if (prescriptionCode == null) {
+                throw new IllegalArgumentException("Vui lòng nhập mã đơn thuốc để bán thuốc kê đơn");
+            }
+        }
+        if (!prescriptionRequired && prescriptionCode != null) {
+            prescriptionCode = null;
         }
 
         LocalDateTime invoiceDateTime = LocalDateTime.now(VN_ZONE);
@@ -731,6 +745,30 @@ public class InvoiceService {
 
     private String trimToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private boolean isPrescriptionProduct(Product product) {
+        if (product == null || product.getTypeID() == null || product.getTypeID().getName() == null) {
+            return false;
+        }
+        return PRESCRIPTION_PRODUCT_TYPE.equalsIgnoreCase(product.getTypeID().getName().trim());
+    }
+
+    private boolean invoiceContainsPrescriptionProduct(List<InvoiceDetailCreateRequest> details) {
+        if (details == null) {
+            return false;
+        }
+        for (InvoiceDetailCreateRequest item : details) {
+            if (item == null || item.getProductId() == null
+                    || item.getQuantity() == null || item.getQuantity() <= 0) {
+                continue;
+            }
+            Product product = productRepository.findDetailById(item.getProductId()).orElse(null);
+            if (isPrescriptionProduct(product)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The lines of one invoice, for the quick-view modal (JSON). */
