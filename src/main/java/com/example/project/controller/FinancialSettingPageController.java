@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 @Controller
 public class FinancialSettingPageController {
     private static final String VIEW = "owner/financial-setting";
@@ -27,11 +30,13 @@ public class FinancialSettingPageController {
     public String view(HttpServletRequest request, Model model) {
         boolean editable = request.getRequestURI().startsWith("/owner/");
 
+        FinancialsettingResponse settings = financialsettingService.getSettings();
         if (!model.containsAttribute("financialSettingForm")) {
-            model.addAttribute("financialSettingForm", toForm(financialsettingService.getSettings()));
+            model.addAttribute("financialSettingForm", toForm(settings));
         }
         model.addAttribute("editable", editable);
         model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+        model.addAttribute("balanceUpdatedAtDisplay", formatBalanceUpdatedAt(settings.getBalanceUpdatedAt()));
         model.addAttribute("pageTitle", "Thiết lập tài chính");
         return VIEW;
     }
@@ -44,6 +49,8 @@ public class FinancialSettingPageController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("editable", true);
             model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+            model.addAttribute("balanceUpdatedAtDisplay",
+                    formatBalanceUpdatedAt(financialsettingService.getSettings().getBalanceUpdatedAt()));
             model.addAttribute("pageTitle", "Thiết lập tài chính");
             return VIEW;
         }
@@ -72,6 +79,15 @@ public class FinancialSettingPageController {
         form.setBankName(response.getBankName());
         form.setAutoOffsetDebtOnRefund(response.getAutoOffsetDebtOnRefund());
         form.setReturnPolicyMaxDays(response.getReturnPolicyMaxDays());
+        form.setCashSafeBalance(response.getCashSafeBalance());
+        form.setBankAccountBalance(response.getBankAccountBalance());
         return form;
+    }
+
+    private String formatBalanceUpdatedAt(LocalDateTime balanceUpdatedAt) {
+        if (balanceUpdatedAt == null) {
+            return "Chưa cập nhật";
+        }
+        return balanceUpdatedAt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 }

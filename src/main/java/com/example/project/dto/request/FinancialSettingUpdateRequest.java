@@ -85,4 +85,11 @@ public class FinancialSettingUpdateRequest {
 
     @Min(value = 1, message = "Số ngày cho phép trả hàng phải lớn hơn 0")
     private Integer returnPolicyMaxDays;
+
+    /** Bỏ trống nghĩa là giữ nguyên số dư quỹ hiện tại — chỉ ghi đè khi người dùng thực sự nhập. */
+    @DecimalMin(value = "0", message = "Số dư quỹ tiền mặt không được nhỏ hơn 0")
+    private BigDecimal cashSafeBalance;
+
+    @DecimalMin(value = "0", message = "Số dư quỹ ngân hàng không được nhỏ hơn 0")
+    private BigDecimal bankAccountBalance;
 }
