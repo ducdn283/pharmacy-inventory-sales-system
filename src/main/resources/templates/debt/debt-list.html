@@ -303,6 +303,46 @@
       color: #fff;
     }
 
+    .btn-offset {
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+      border: 1px solid #ddd6fe;
+      background: #f5f3ff;
+      color: #7c3aed;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn-offset:hover {
+      background: #7c3aed;
+      border-color: #7c3aed;
+      color: #fff;
+    }
+
+    .alert-banner {
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .alert-banner.success {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #047857;
+    }
+    .alert-banner.error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+    }
+
     .type-badge {
       display: inline-flex;
       align-items: center;
@@ -424,6 +464,9 @@
     <div class="main-card">
       <div class="main-card-title">Danh sách đối tượng công nợ</div>
 
+      <div th:if="${successMessage}" class="alert-banner success" th:text="${successMessage}"></div>
+      <div th:if="${errorMessage}" class="alert-banner error" th:text="${errorMessage}"></div>
+
       <form th:action="${basePath}" method="get">
         <input type="hidden" name="page" value="0">
         <input type="hidden" name="size" th:value="${pageSize}">
@@ -458,6 +501,7 @@
               <th style="width:140px;">Đối tượng</th>
               <th class="col-amount">Nợ</th>
               <th class="col-amount">Cho nợ</th>
+              <th th:if="${canOffsetDebt}" style="width:110px;text-align:center;">Bù trừ</th>
             </tr>
           </thead>
           <tbody>
@@ -496,10 +540,22 @@
                 <span th:unless="${item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
                       class="amount-zero">—</span>
               </td>
+              <td th:if="${canOffsetDebt}" style="text-align:center;">
+                <a th:if="${item.payableAmount != null && item.payableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0
+                              && item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                   class="btn-offset"
+                   th:href="${basePath + '/offset/' + item.partyType + '/' + item.entityId}"
+                   title="Bù trừ công nợ">
+                  <i class="ti ti-arrows-exchange"></i>Bù trừ
+                </a>
+                <span th:unless="${item.payableAmount != null && item.payableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0
+                                   && item.receivableAmount != null && item.receivableAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                      class="amount-zero">—</span>
+              </td>
             </tr>
 
             <tr th:if="${#lists.isEmpty(debts)}" class="empty-row">
-              <td colspan="4">Không có công nợ nào phù hợp.</td>
+              <td th:colspan="${canOffsetDebt ? 5 : 4}">Không có công nợ nào phù hợp.</td>
             </tr>
           </tbody>
         </table>

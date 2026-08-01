@@ -44,7 +44,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
     boolean existsByBarcodeExcludingProduct(@Param("barcode") String barcode, @Param("productId") Integer productId);
 
     /**
-     * Product name must be unique (2026-07-29).
+     * Product name must be unique.
      *
      * <p>The comparison is deliberately left to the column's collation,
      * {@code utf8mb4_0900_ai_ci} — accent-insensitive and case-insensitive — so "Paracetamol",

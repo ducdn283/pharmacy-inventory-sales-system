@@ -20,6 +20,7 @@
             border-radius: 16px;
             background: #ffffff;
             box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            overflow: hidden;
         }
 
         .section-title {
@@ -29,7 +30,7 @@
 
         .info-row {
             display: grid;
-            grid-template-columns: 180px 1fr;
+            grid-template-columns: 180px minmax(0, 1fr);
             padding: 12px 0;
             border-bottom: 1px solid #f1f5f9;
             font-size: 14px;
@@ -37,6 +38,13 @@
 
         .info-label {
             color: #6b7280;
+        }
+
+        /* Lý do chi là text tự do, không có ô này thì một chuỗi dài làm vỡ lưới. */
+        .info-row > div:last-child {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            min-width: 0;
         }
 
         .status-badge {
@@ -194,28 +202,6 @@
                         </div>
 
                         <div class="info-row">
-                            <div class="info-label">Số tiền cần chi</div>
-                            <div class="fw-semibold"
-                                 th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                650.000đ
-                            </div>
-                        </div>
-
-                        <div class="info-row">
-                            <div class="info-label">Đã chi</div>
-                            <div>
-                                <span class="fw-semibold"
-                                      th:text="${#numbers.formatDecimal(detail.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    650.000đ
-                                </span>
-                                <span class="text-secondary small">
-                                    (tiền mặt <span th:text="${#numbers.formatDecimal(detail.paidByCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>,
-                                    chuyển khoản <span th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>)
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="info-row">
                             <div class="info-label">Trạng thái</div>
                             <div>
                                 <span class="status-badge"
@@ -246,6 +232,68 @@
             </div>
 
             <div class="col-12 col-xl-4">
+
+                <!-- Tiền tách khỏi khối thông tin bên trái, cùng chỗ với phiếu thu. "Còn lại" là
+                     phần nghĩa vụ chưa chi: amount không co lại khi chi thiếu, paid mới là số đã ra. -->
+                <div class="expense-card p-4 mb-4"
+                     th:with="remaining=${detail.amount.subtract(detail.paid)}">
+                    <div class="section-title mb-4">
+                        <i class="ti ti-calculator text-success me-1"></i>
+                        Thanh toán
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Số tiền cần chi</span>
+                        <strong class="text-success"
+                                th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Đã chi</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3" th:if="${remaining.signum() > 0}">
+                        <span class="text-secondary">Còn phải chi</span>
+                        <strong class="text-warning"
+                                th:text="${#numbers.formatDecimal(remaining, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Tiền mặt</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-secondary">Chuyển khoản</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3"
+                         th:if="${detail.paidByCredit != null and detail.paidByCredit.signum() > 0}">
+                        <span class="text-secondary">Cấn trừ công nợ</span>
+                        <strong th:text="${#numbers.formatDecimal(detail.paidByCredit, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            0đ
+                        </strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span class="text-secondary">Hình thức</span>
+                        <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
+                    </div>
+                </div>
 
                 <div class="expense-card p-4 mb-4">
 
@@ -286,32 +334,12 @@
                         </form>
                     </th:block>
 
-                    <!-- Awaiting payment: record how much of the remaining amount is being paid now. -->
-                    <form th:if="${detail.statusName == 'Chờ thanh toán'}"
-                          th:action="${basePath + '/' + detail.id + '/mark-paid'}"
-                          method="post"
-                          class="mb-3"
-                          id="markPaidForm">
-                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                        <label class="form-label small mb-1">Ghi nhận thanh toán (số tiền còn lại)</label>
-                        <div class="input-group input-group-sm mb-2">
-                            <span class="input-group-text">Tiền mặt</span>
-                            <input type="text" inputmode="numeric" data-money class="form-control" name="cashPortion"
-                                   id="markPaidCash" placeholder="0">
-                        </div>
-                        <div class="input-group input-group-sm mb-2">
-                            <span class="input-group-text">Chuyển khoản</span>
-                            <input type="text" inputmode="numeric" data-money class="form-control" name="bankingPortion"
-                                   id="markPaidBanking" placeholder="0">
-                        </div>
-                        <button type="submit" class="btn btn-expense-primary w-100">
-                            <i class="ti ti-cash-banknote me-1"></i>
-                            Ghi nhận thanh toán
-                        </button>
-                    </form>
+                    <!-- Không còn ô "Ghi nhận thanh toán": phiếu chi là một lần chi và không sửa
+                         được. Trả thêm cho cùng chứng từ thì lập phiếu chi mới. -->
 
-                    <!-- Cancel: internal correction, available before the slip is fully paid/completed. -->
-                    <form th:if="${detail.statusName != 'Đã hoàn thành' and detail.statusName != 'Đã hủy'}"
+                    <!-- Hủy: sửa lỗi nội bộ. Phiếu đã hoàn thành vẫn hủy được — duyệt phát là hoàn
+                         thành ngay, chặn ở đây thì một phiếu lập sai sẽ không còn đường nào sửa. -->
+                    <form th:if="${detail.statusName != 'Đã hủy'}"
                           th:action="${basePath + '/' + detail.id + '/cancel'}"
                           method="post"
                           class="mb-3"
@@ -339,7 +367,6 @@
     </div>
 </main>
 
-<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 
 </body>
 </html>

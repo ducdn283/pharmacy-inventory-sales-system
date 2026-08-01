@@ -52,7 +52,7 @@
 
         <div th:replace="~{fragments/toast :: flash}"></div>
 
-        <form id="returnForm" th:action="${basePath + '/create'}" method="post">
+        <form id="returnForm" th:action="${basePath + '/create'}" method="post" data-validate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <input type="hidden" id="purchaseId" name="purchaseId" th:value="${form.purchaseId}">
             <input type="hidden" id="action" name="action" value="submit">
@@ -152,7 +152,8 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Lý do trả hàng <span class="text-danger">*</span></label>
-                                <textarea class="form-control" name="reason" rows="2"
+                                <textarea class="form-control" name="reason" rows="2" required
+                                          data-required-message="Vui lòng nhập lý do trả hàng"
                                           placeholder="VD: Hàng lỗi, sai quy cách, cận hạn..." th:text="${form.reason}"></textarea>
                             </div>
 
@@ -542,5 +543,9 @@
 
 <!-- Xem chú thích ở return/create.html — cùng lý do: ô số lượng trả và ô tỷ lệ NCC chấp nhận hoàn. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- "Lý do trả hàng" bắt buộc (ReturnPurchaseService cũng chặn) — báo ngay dưới ô thay vì để người
+     dùng bấm Tạo, chờ nạp lại cả trang mới thấy thông báo ở đầu trang. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 </body>
 </html>

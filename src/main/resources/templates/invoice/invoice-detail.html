@@ -121,7 +121,9 @@
         .sell-items-table thead th.col-qty,
         .sell-items-table thead th.col-price,
         .sell-items-table thead th.col-line-total,
-        .sell-items-table thead th.col-total {
+        .sell-items-table thead th.col-total,
+        .sell-items-table thead th.col-pretax,
+        .sell-items-table thead th.col-vat {
             text-align: right;
         }
 
@@ -159,6 +161,17 @@
         .sell-items-table .col-total {
             width: 100px;
             text-align: right;
+        }
+
+        .sell-items-table .col-pretax,
+        .sell-items-table .col-vat {
+            width: 100px;
+            text-align: right;
+        }
+
+        .sell-items-table .col-vat-rate {
+            width: 72px;
+            text-align: center;
         }
 
         tr.unit-line-row td {
@@ -246,6 +259,18 @@
             padding: 32px 16px;
         }
 
+        .actions-card .btn-outline-invoice {
+            border-radius: 12px;
+            border-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .actions-card .btn-outline-invoice:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #111827;
+        }
+
         @media (max-width: 991.98px) {
             .invoice-page-content {
                 padding-top: 84px !important;
@@ -266,19 +291,12 @@
 <main id="content" class="content invoice-page-content">
     <div class="container-fluid">
 
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-            <div>
-                <h1 class="fs-4 mb-1">
-                    Chi tiết hóa đơn –
-                    <span class="text-success" th:text="${detail.invoiceCode}">HD000046</span>
-                    <span class="rx-badge ms-2" th:if="${detail.prescriptionRequired}">Rx</span>
-                </h1>
-            </div>
-
-            <a th:href="${basePath}" class="btn btn-outline-secondary">
-                <i class="ti ti-arrow-left me-1"></i>
-                Quay lại danh sách
-            </a>
+        <div class="mb-4">
+            <h1 class="fs-4 mb-0">
+                Chi tiết hóa đơn –
+                <span class="text-success" th:text="${detail.invoiceCode}">HD000046</span>
+                <span class="rx-badge ms-2" th:if="${detail.prescriptionRequired}">Rx</span>
+            </h1>
         </div>
 
         <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
@@ -420,6 +438,9 @@
                                 <th class="col-qty">SL</th>
                                 <th class="col-price">Giá bán</th>
                                 <th class="col-line-total">Thành tiền</th>
+                                <th class="col-pretax" th:if="${detail.showVatBreakdown}">Chưa thuế</th>
+                                <th class="col-vat-rate" th:if="${detail.showVatBreakdown}">Thuế suất</th>
+                                <th class="col-vat" th:if="${detail.showVatBreakdown}">Thuế GTGT</th>
                                 <th class="col-total">Tổng</th>
                             </tr>
                             </thead>
@@ -462,6 +483,18 @@
                                         th:text="${#numbers.formatDecimal(line.lineSubtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                         0đ
                                     </td>
+                                    <td class="unit-total-cell text-secondary" th:if="${detail.showVatBreakdown}"
+                                        th:text="${line.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(line.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                        0đ
+                                    </td>
+                                    <td class="text-center" th:if="${detail.showVatBreakdown}"
+                                        th:text="${line.vatRate == null} ? '—' : ${#numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">
+                                        5%
+                                    </td>
+                                    <td class="unit-total-cell" th:if="${detail.showVatBreakdown}"
+                                        th:text="${line.vatAmount == null} ? '—' : ${#numbers.formatDecimal(line.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                        0đ
+                                    </td>
                                     <td th:if="${stat.first}"
                                         th:rowspan="${#lists.size(group.lines)}"
                                         class="col-total">
@@ -472,8 +505,18 @@
                                     </td>
                                 </tr>
                             </th:block>
+                            <tr th:if="${detail.showVatBreakdown and !#lists.isEmpty(detail.productGroups)}"
+                                class="fw-semibold">
+                                <td colspan="5">Tổng cộng</td>
+                                <td th:text="${#numbers.formatDecimal(detail.subtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                                <td class="text-secondary"
+                                    th:text="${#numbers.formatDecimal(detail.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                                <td></td>
+                                <td th:text="${#numbers.formatDecimal(detail.totalVATOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                                <td></td>
+                            </tr>
                             <tr th:if="${#lists.isEmpty(detail.productGroups)}" class="sell-items-empty">
-                                <td colspan="7" class="text-center text-secondary">Không có hàng hóa</td>
+                                <td th:colspan="${detail.showVatBreakdown ? 10 : 7}" class="text-center text-secondary">Không có hàng hóa</td>
                             </tr>
                             </tbody>
                         </table>
@@ -508,6 +551,20 @@
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Giảm giá</span>
                             <strong th:text="${#numbers.formatDecimal(detail.discount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                0đ
+                            </strong>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3" th:if="${detail.showVatBreakdown}">
+                            <span class="text-secondary">Tiền hàng (chưa thuế)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                0đ
+                            </strong>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3" th:if="${detail.showVatBreakdown}">
+                            <span class="text-secondary">Thuế GTGT đầu ra</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalVATOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                 0đ
                             </strong>
                         </div>
@@ -569,17 +626,30 @@
                     </div>
                 </div>
 
-                <div class="invoice-card p-4"
-                     th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}">
-                    <form th:action="${basePath + '/' + detail.id + '/sign'}"
-                          method="post">
-                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                        <button type="submit" class="btn btn-invoice-primary w-100"
-                                data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
-                            <i class="ti ti-writing-sign me-1"></i>
-                            Ký hóa đơn
+                <div class="invoice-card actions-card p-4">
+                        <button type="button" id="printInvoiceBtn"
+                                th:data-print-url="${basePath + '/' + detail.id + '/print'}"
+                                class="btn btn-invoice-primary w-100 mb-3">
+                            <i class="ti ti-printer me-1"></i>
+                            In hóa đơn
                         </button>
-                    </form>
+
+                        <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}"
+                              th:action="${basePath + '/' + detail.id + '/sign'}"
+                              method="post"
+                              class="mb-3">
+                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" class="btn btn-invoice-primary w-100"
+                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
+                                <i class="ti ti-writing-sign me-1"></i>
+                                Ký hóa đơn
+                            </button>
+                        </form>
+
+                        <a th:href="${basePath}" class="btn btn-outline-invoice w-100">
+                            <i class="ti ti-arrow-left me-1"></i>
+                            Quay lại danh sách
+                        </a>
                 </div>
 
             </div>
@@ -587,5 +657,25 @@
 
     </div>
 </main>
+
+<script th:inline="none">
+    document.getElementById('printInvoiceBtn').addEventListener('click', function () {
+        var printUrl = this.dataset.printUrl;
+
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+
+        iframe.addEventListener('load', function () {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            iframe.contentWindow.addEventListener('afterprint', function () {
+                document.body.removeChild(iframe);
+            });
+        });
+
+        iframe.src = printUrl;
+        document.body.appendChild(iframe);
+    });
+</script>
 </body>
 </html>

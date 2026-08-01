@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Shift reports are created lazily (see {@link #ensureOpenShiftFor}) at the moment a real
@@ -89,14 +90,10 @@ public class ShiftreportService {
      * Returns the account's currently open (Nháp) shift, creating one if none exists yet.
      * Called at the exact point a transaction (Return, Invoice, ...) is recorded — never from login.
      *
-     * <p>Returns {@code null} for an account that does not run a register. Only Owner and Pharmacist
-     * do — an Accountant never handles cash (their slips settle by transfer), so they have no shift
-     * and their transactions simply carry no {@code shiftReportID}. This guard lives here because
-     * this is the ONLY place a shift is ever created, so the invariant cannot be bypassed by a caller
-     * that forgets to check the role — and {@code IncomeService.createIncome} was doing exactly that
-     * ever since phiếu thu opened to Accountants, giving them a Nháp shift that
-     * {@link com.example.project.controller.ShiftreportController#logoutGuard} then blocked their
-     * logout on, redirecting to {@code /accountant/shift-reports/...} which does not exist.</p>
+     * <p>Trả {@code null} cho tài khoản không trực quầy — chỉ Owner và Dược sĩ có ca; Kế toán không
+     * cầm tiền mặt nên giao dịch của họ không mang {@code shiftReportID}. Guard đặt ở đây vì đây là
+     * nơi DUY NHẤT ca được tạo, nên không caller nào lách được bằng cách quên kiểm role (Income của
+     * Kế toán từng tạo ca như vậy, làm họ không đăng xuất được).</p>
      */
     @Transactional
     public Shiftreport ensureOpenShiftFor(Integer accountId) {
@@ -127,7 +124,7 @@ public class ShiftreportService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
         Shiftreport shift = new Shiftreport();
-        shift.setShiftReportCode(generateCode());
+        shift.setShiftReportCode(temporaryCode());
         shift.setCashierID(cashier);
         shift.setShiftDate(LocalDate.now(VN_ZONE));
         shift.setShiftType(resolveShiftType());
@@ -145,7 +142,10 @@ public class ShiftreportService {
         shift.setStatus(ShiftReportStatus.DRAFT);
         shift.setCreatedAt(nowVn());
 
-        return shiftreportRepository.save(shift);
+        Shiftreport saved = shiftreportRepository.save(shift);
+        // Mã thật = CA- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
+        saved.setShiftReportCode(formatCode(saved.getId()));
+        return saved;
     }
 
     /** Chỉ Owner và Dược sĩ trực quầy (có két) mới có báo cáo ca; Kế toán không. */
@@ -157,17 +157,13 @@ public class ShiftreportService {
     /**
      * Ca Nháp của tài khoản còn tồn từ NGÀY TRƯỚC, nếu có.
      *
-     * <p>Ca dở dang qua đêm (mất điện, quên chốt, về đột xuất) là ca phải chốt trước khi làm gì tiếp:
-     * nếu cứ để đó thì {@link #ensureOpenShiftFor} dùng lại đúng ca cũ và mọi giao dịch hôm nay bị dồn
-     * vào ca hôm qua — sai cả {@code shiftDate} lẫn số liệu báo cáo ngày. {@code PendingShiftInterceptor}
-     * dùng hàm này để chặn thao tác sau khi đăng nhập.</p>
+     * <p>Ca dở dang qua đêm phải chốt trước khi làm gì tiếp: để đó thì {@link #ensureOpenShiftFor}
+     * dùng lại ca cũ và mọi giao dịch hôm nay bị dồn vào ca hôm qua — sai cả {@code shiftDate} lẫn số
+     * liệu. {@code PendingShiftInterceptor} dùng hàm này để chặn thao tác sau khi đăng nhập.</p>
      *
-     * <p>So sánh theo NGÀY chứ không theo ca: ca mở sáng nay chưa chốt là bình thường (đang trực),
-     * chỉ ca từ hôm trước trở về trước mới là tồn đọng.</p>
-     *
-     * <p>Lấy ca Nháp CŨ NHẤT chứ không phải mới nhất như {@link #findDraftShift}: bình thường mỗi tài
-     * khoản chỉ có đúng một ca Nháp, nhưng nếu lỡ tồn song song thì ca cũ mới là ca phải chốt trước,
-     * và nhìn ca mới nhất sẽ bỏ sót nó.</p>
+     * <p>So theo NGÀY: ca mở sáng nay chưa chốt là bình thường (đang trực). Và lấy ca Nháp CŨ NHẤT
+     * (khác {@link #findDraftShift}) — nếu lỡ có 2 ca Nháp song song thì nhìn ca mới nhất sẽ bỏ sót
+     * đúng ca cần chốt.</p>
      */
     @Transactional(readOnly = true)
     public Optional<Shiftreport> findStaleDraftShift(Integer accountId) {
@@ -493,13 +489,9 @@ public class ShiftreportService {
     /**
      * Tiền đầu ca = khoản quỹ CỐ ĐỊNH cấp cho mỗi ca, lấy từ {@code Financialsetting.openingCashDefault}.
      *
-     * <p>Mỗi ca có phần quỹ riêng và luôn được cấp cùng một khoản (vd 1 triệu), nên ca
-     * sau KHÔNG kế thừa số cuối ca của ca trước. Trước đây hàm này lấy {@code actualClosingCash} của ca
-     * đã duyệt gần nhất *cùng tài khoản* và chỉ rơi về số mặc định khi không có — sai mô hình, và làm
-     * số đầu ca phụ thuộc vào việc Owner đã duyệt ca cũ hay chưa.</p>
-     *
-     * <p>Người trực ca vẫn sửa được số này lúc chốt ({@code openingCashOverride}) nếu thực tế nhận
-     * khác với mức cấp.</p>
+     * <p>Mỗi ca có phần quỹ riêng và luôn được cấp cùng một khoản, nên ca sau KHÔNG kế thừa số cuối ca
+     * của ca trước — kế thừa sẽ làm số đầu ca phụ thuộc vào việc Owner đã duyệt ca cũ hay chưa. Người
+     * trực vẫn sửa được số này lúc chốt ({@code openingCashOverride}) nếu thực nhận khác mức cấp.</p>
      */
     private BigDecimal resolveOpeningCash() {
         return financialsettingRepository.findFirstByOrderByIdAsc()
@@ -584,15 +576,22 @@ public class ShiftreportService {
         return "status-default";
     }
 
-    private String generateCode() {
-        int nextId = shiftreportRepository.findAll()
-                .stream()
-                .map(Shiftreport::getId)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
+    /**
+     * Mã tạm dùng đúng một lần, chỉ để qua được ràng buộc {@code NOT NULL UNIQUE} của
+     * {@code shiftReportCode} tại thời điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật.
+     * Ngay sau khi lưu, mã được ghi lại theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước
+     * nằm trong cùng một transaction.
+     *
+     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
+     * người phát sinh giao dịch đầu ca cùng lúc nhận cùng một số; cột mã có UNIQUE nên người thứ hai ăn
+     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     */
+    private String temporaryCode() {
+        return "TMP-" + UUID.randomUUID();
+    }
 
-        return "CA-" + String.format("%06d", nextId);
+    private String formatCode(Integer id) {
+        return id == null ? "CA-000000" : "CA-" + String.format("%06d", id);
     }
 
     private Instant nowVn() {

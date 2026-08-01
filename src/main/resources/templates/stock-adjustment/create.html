@@ -184,14 +184,15 @@
         <div th:replace="~{fragments/toast :: flash}"></div>
         <div th:replace="~{fragments/confirm :: confirm}"></div>
 
-        <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="adjustmentForm">
+        <form th:action="${basePath + '/create'}" th:object="${form}" method="post" id="adjustmentForm"
+              data-validate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
             <div class="row g-4">
                 <div class="col-12 col-xl-9">
 
-                    <!-- Source is folded into the "Loại / Nguồn điều chỉnh" dropdown; these hidden fields
-                         carry the resolved source (and chosen count) to the server. -->
+                    <!-- Nguồn gộp vào dropdown "Loại / Nguồn điều chỉnh"; 2 hidden field này mang
+                         nguồn đã chọn (và phiếu kiểm kê) sang server. -->
                     <input type="hidden" name="sourceMode" id="sourceModeInput"
                            th:value="${form.sourceMode != null ? form.sourceMode : 'MANUAL'}" value="MANUAL">
                     <input type="hidden" name="stockCountId" id="stockCountIdInput" th:value="${form.stockCountId}">
@@ -220,7 +221,8 @@
 
                             <div class="col-12 col-md-6" id="typeField">
                                 <label class="form-label">Loại / Nguồn điều chỉnh <span class="text-danger">*</span></label>
-                                <select class="form-select" th:field="*{adjustmentType}" id="adjustmentTypeSelect" required>
+                                <select class="form-select" th:field="*{adjustmentType}" id="adjustmentTypeSelect" required
+                                        data-required-message="Vui lòng chọn loại hoặc nguồn điều chỉnh">
                                     <option value="">-- Chọn loại điều chỉnh --</option>
                                     <optgroup label="Điều chỉnh thủ công">
                                         <option th:each="entry : ${creatableTypeLabels}"
@@ -260,6 +262,7 @@
                                     <span class="text-danger" id="reasonRequiredMark">*</span></label>
                                 <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
                                        required
+                                       data-required-message="Vui lòng nhập lý do điều chỉnh"
                                        placeholder="VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…">
                             </div>
 
@@ -341,7 +344,7 @@
                                     <th style="min-width: 120px;">Số lượng</th>
                                     <th style="min-width: 160px;">Lý do</th>
                                     <th class="vat-col" style="min-width: 150px; display: none;">Thuế GTGT đầu ra</th>
-                                    <th>Giá trị ước tính</th>
+                                    <th>Giá vốn</th>
                                     <th class="text-end">Thao tác</th>
                                 </tr>
                                 </thead>
@@ -387,7 +390,7 @@
                                         <th>Thực tế</th>
                                         <th>Chênh lệch</th>
                                         <th>Loại</th>
-                                        <th>Giá trị</th>
+                                        <th>Giá vốn</th>
                                         <th>Nguồn gốc hàng thừa</th>
                                     </tr>
                                     </thead>
@@ -420,7 +423,7 @@
                         </div>
 
                         <div class="summary-row">
-                            <span class="text-secondary">Tổng giá trị ước tính</span>
+                            <span class="text-secondary">Tổng giá vốn</span>
                             <strong class="text-danger" id="totalValueDisplay">0đ</strong>
                         </div>
                     </div>
@@ -853,9 +856,8 @@
     }
 
     /**
-     * Lý do: CHỈ nguồn "theo phiếu kiểm kê" mới được để trống (server tự điền theo mã phiếu kiểm kê).
-     * Mọi loại thủ công (hủy hàng / nội bộ / hàng mẫu / quà tặng) vẫn bắt buộc người lập tự nhập —
-     * server chặn bằng validateRequest, đây chỉ là để form báo sớm và không hiện dấu * sai chỗ.
+     * Lý do CHỈ được để trống với nguồn "theo phiếu kiểm kê" (server tự điền theo mã phiếu); mọi loại
+     * thủ công vẫn bắt buộc nhập — server chặn bằng validateRequest, đây chỉ là báo sớm.
      */
     function applyReasonRequirement(isCount) {
         const input = document.getElementById('reasonInput');
@@ -1255,10 +1257,12 @@
     });
 </script>
 
-<!-- Ô "Số lượng" (min=1) và ô "Thuế suất GTGT đầu ra" (min=0, step=0.01) đều không bao giờ nhận số
-     âm hay ký hiệu khoa học. Dòng hàng được thêm bằng JS nên fragment phải bind ở mức document —
-     đúng như nó đang làm; không cần gọi lại sau mỗi lần addBatchRow(). -->
+<!-- Ô "Số lượng" và "Thuế suất GTGT đầu ra" không bao giờ nhận số âm hay ký hiệu. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
+
+<!-- Ô Lý do được JS bật/tắt `required` theo nguồn; fragment đọc lại đúng lúc submit nên không cần
+     đồng bộ gì thêm. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
 </body>
 </html>

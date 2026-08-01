@@ -79,5 +79,7 @@ public class Batch {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
 }

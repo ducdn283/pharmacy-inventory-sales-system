@@ -166,7 +166,7 @@
         <div th:replace="~{fragments/toast :: flash}"></div>
 
         <!-- Ca dở dang từ ngày trước — PendingShiftInterceptor đang chặn mọi thao tác khác cho tới
-             khi ca này được chốt. Giải thích rõ để người dùng không tưởng là lỗi điều hướng. -->
+             khi ca này được chốt. -->
         <div th:if="${mustCloseNow}" class="alert alert-warning d-flex gap-3 align-items-start mb-4">
             <i class="ti ti-alert-triangle fs-4 mt-1"></i>
             <div>
@@ -175,7 +175,7 @@
                     Ca ngày <strong th:text="${detail.shiftDateDisplay}">01/07/2026</strong> chưa được chốt
                     trên hệ thống. Mọi thao tác khác đang tạm bị khoá.
                     Hãy nhập <strong>đúng số tiền bạn đã kiểm đếm khi kết thúc ca hôm đó</strong> rồi nộp báo cáo
-                    ở phần <strong>Chốt ca</strong> bên dưới. Nếu ca bị bỏ dở do sự cố (ví dụ: mất điện, máy hỏng,...),
+                    ở phần <strong>Chốt ca</strong> bên dưới. Nếu ca bị bỏ dở do sự cố,
                     ghi rõ vào ô <strong>Ghi chú chênh lệch</strong> để chủ nhà thuốc nắm khi duyệt.
                 </div>
             </div>
@@ -371,7 +371,8 @@
                           id="closeShiftForm"
                           th:action="${basePath + '/' + detail.id + '/close'}"
                           method="post"
-                          class="mb-3">
+                          class="mb-3"
+                          data-validate>
                         <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
                         <div class="mb-3">
@@ -386,11 +387,21 @@
 
                         <div class="mb-3">
                             <label class="form-label">Tiền mặt cuối ca (thực đếm)</label>
-                            <input type="text" inputmode="numeric" data-money
+                            <!-- Cho phép số ÂM: nếu trong ca chi ra nhiều hơn tiền đầu ca cộng tiền thu vào
+                                 thì két bị hụt, và người trực phải ghi được đúng con số âm đó thay vì bị ô
+                                 nhập ép về số dương. Ô tiền đầu ca KHÔNG bật vì khoản quỹ được cấp không
+                                 bao giờ âm. -->
+                            <!-- Điền lại số đã lưu: form này còn hiện với ca bị Từ chối ("Sửa và nộp lại"),
+                                 trước đây ô luôn trống nên người trực phải gõ lại từ đầu. -->
+                            <input type="text" inputmode="numeric" data-money data-money-allow-negative
                                    class="form-control"
                                    id="inputActualClosingCash"
                                    name="actualClosingCash"
-                                   required>
+                                   th:value="${detail.actualClosingCash}"
+                                   required
+                                   data-required-message="Vui lòng nhập số tiền mặt đã kiểm đếm khi kết thúc ca">
+                            <div class="form-text">Nhập đúng số đã kiểm đếm. Được nhập số âm (gõ dấu trừ ở
+                                đầu) nếu tiền chi ra trong ca vượt quá tiền đầu ca cộng tiền thu vào.</div>
                         </div>
 
                         <div class="mb-3">
@@ -451,6 +462,10 @@
 
 <div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 
+<!-- Ô "Tiền mặt cuối ca" bắt buộc: báo ngay dưới ô thay cho bong bóng mặc định của trình duyệt.
+     Dấu trừ trơ trọi cũng bị tính là chưa nhập — money-input gửi rỗng cho ca đó. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
+
 <script>
     (function () {
         const card = document.getElementById('cashReconCard');
@@ -480,7 +495,9 @@
             reconOpening.textContent = fmt(opening);
             reconExpected.textContent = fmt(expected);
 
-            if (actualInput.value === '') {
+            // "-" trơ trọi = người dùng mới gõ dấu trừ, chưa có con số nào để đối chiếu.
+            const typed = actualInput.value.trim();
+            if (typed === '' || typed === '-') {
                 reconActual.textContent = '—';
                 banner.style.display = 'none';
                 return;

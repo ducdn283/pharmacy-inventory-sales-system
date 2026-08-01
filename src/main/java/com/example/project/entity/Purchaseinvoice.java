@@ -86,4 +86,8 @@ public class Purchaseinvoice {
 
     @Column(name = "dueDate")
     private LocalDate dueDate;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
 }

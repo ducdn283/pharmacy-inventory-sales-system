@@ -9,6 +9,7 @@ import com.example.project.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,17 +30,14 @@ import java.util.stream.Collectors;
  * or approves; there is no "Chờ duyệt" hand-off. Statuses: {@link ReturnPurchaseStatus} —
  * Nháp → Đã duyệt / Từ chối.</p>
  *
- * <p><strong>Approval deducts stock</strong> (goods physically leave for the supplier): each line's
- * quantity is removed from the batches that were imported on the original purchase line
- * ({@code batch.purchaseDetailID}), FIFO by expiry, blocking negative stock. The purchase invoice's
- * {@code returnStatus} / {@code returnQty} are recomputed in the same transaction, and the value returned
- * is netted against whatever the pharmacy still owes on that purchase ({@code PurchaseInvoice.paid} goes
- * up by {@code offsetDebtAmount} — see {@code applyDebtOffset}). Only the remainder is real money the
- * supplier still has to hand back, which the Income module collects.</p>
+ * <p><strong>Approval deducts stock</strong> (goods physically leave for the supplier): each line is
+ * removed from the batches imported on the original purchase line ({@code batch.purchaseDetailID}),
+ * FIFO by expiry, blocking negative stock. The value returned is netted against what the pharmacy
+ * still owes on that purchase (see {@code applyDebtOffset}); only the remainder is real money the
+ * supplier hands back, which the Income module collects.</p>
  *
- * <p>Per-line "already returned" is derived on the fly from {@code returndetail} (there is no
- * {@code returnedQty} column on {@code purchasedetail}); see
- * {@link ReturndetailRepository#sumReturnedQtyByPurchaseDetail}.</p>
+ * <p>Per-line "already returned" is derived on the fly from {@code returndetail} — there is no
+ * {@code returnedQty} column on {@code purchasedetail}.</p>
  */
 @Service
 public class ReturnPurchaseService {
@@ -74,6 +72,8 @@ public class ReturnPurchaseService {
     private final PurchasedetailRepository purchasedetailRepository;
     // Read-only: current tax revenue group (Nhóm 2/3) — Nhóm 3 records the reversed input VAT.
     private final FinancialsettingRepository financialsettingRepository;
+    private final DebtService debtService;
+    private final PurchaseinvoiceService purchaseinvoiceService;
 
     public ReturnPurchaseService(ReturnRepository returnRepository,
                                  ReturndetailRepository returndetailRepository,
@@ -82,7 +82,9 @@ public class ReturnPurchaseService {
                                  ProductunitRepository productunitRepository,
                                  PurchaseinvoiceRepository purchaseinvoiceRepository,
                                  PurchasedetailRepository purchasedetailRepository,
-                                 FinancialsettingRepository financialsettingRepository) {
+                                 FinancialsettingRepository financialsettingRepository,
+                                 DebtService debtService,
+                                 PurchaseinvoiceService purchaseinvoiceService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -91,6 +93,8 @@ public class ReturnPurchaseService {
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.purchasedetailRepository = purchasedetailRepository;
         this.financialsettingRepository = financialsettingRepository;
+        this.debtService = debtService;
+        this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
     /** Current tax revenue group of the household (1/2/3/4), read from the financial setting singleton. */
@@ -399,7 +403,7 @@ public class ReturnPurchaseService {
         String status = asDraft ? ReturnPurchaseStatus.DRAFT : ReturnPurchaseStatus.APPROVED;
 
         Return ret = new Return();
-        ret.setReturnCode(generateCode());
+        ret.setReturnCode(temporaryCode());
         ret.setInvoiceID(null);
         ret.setPurchaseID(purchase);
         ret.setReturnedBy(creator);
@@ -421,6 +425,8 @@ public class ReturnPurchaseService {
         }
 
         Return savedReturn = returnRepository.save(ret);
+        // Mã thật = TNCC- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
+        savedReturn.setReturnCode(formatCode(savedReturn.getId()));
 
         for (Chunk chunk : chunks) {
             Returndetail detail = new Returndetail();
@@ -506,10 +512,25 @@ public class ReturnPurchaseService {
                         + (detail.getProductID() != null ? detail.getProductID().getName() : "") + "\"");
             }
             batch.setStorageQuantity(available - qty);
-            batchRepository.save(batch);
+            saveBatchGuardingConcurrentEdit(batch, detail);
         }
         applyDebtOffset(ret, ret.getPurchaseID());
         recomputeReturnPurchaseStatus(ret.getPurchaseID());
+    }
+
+    /**
+     * Ghi tồn kho một lô, dịch lỗi khoá lạc quan thành câu người dùng đọc được — xem
+     * {@code StockadjustmentService.saveBatchGuardingConcurrentEdit} để biết cơ chế.
+     */
+    private void saveBatchGuardingConcurrentEdit(Batch batch, Returndetail detail) {
+        try {
+            batchRepository.saveAndFlush(batch);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            String product = detail.getProductID() != null ? detail.getProductID().getName() : "";
+            throw new IllegalArgumentException("Lô hàng của sản phẩm \"" + product
+                    + "\" vừa được người khác cập nhật."
+                    + " Vui lòng tải lại trang để xem tồn kho mới nhất rồi thực hiện lại.", exception);
+        }
     }
 
     // ------------------------------------------------------------------ bù trừ công nợ (netting)
@@ -529,27 +550,24 @@ public class ReturnPurchaseService {
 
     /**
      * Thực hiện bù trừ khi duyệt phiếu: chốt {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM DUYỆT rồi
-     * ghi tăng {@code PurchaseInvoice.paid} đúng số đó — nợ NCC giảm ngay trong cùng transaction (mục 3.3
+     * ghi tăng {@code PurchaseInvoice.paid} và đồng bộ {@code status} qua
+     * {@link DebtService#recordPurchaseDebtOffset} — nợ NCC giảm ngay trong cùng transaction (mục 3.3
      * bước 1, mục 3.4 "cập nhật trực tiếp").
      *
-     * <p><strong>⚠️ ĐỔI NGHĨA CỘT {@code offsetDebtAmount} (28/07) — cần báo chủ module Thu/Chi.</strong>
-     * Trước đây cột này mang nghĩa "NCC CÒN phải hoàn": lúc duyệt = {@code totalRefund}, rồi
-     * {@code IncomeService.applySupplierOffsetDebtPayment} trừ dần mỗi lần NCC hoàn tiền. Theo đặc tả mới
-     * nó là SỐ ĐÃ BÙ TRỪ (cố định, không phải số dư động). Vì vậy phần NCC còn phải hoàn bằng tiền thật
-     * nay là {@code totalRefund − offsetDebtAmount} — {@code IncomeService.collectibleOffsetDebt} phải
-     * đổi theo (và trừ dần theo tổng Income đã lập, không trừ vào cột này nữa), nếu không màn thu tiền
-     * NCC sẽ hiểu sai số còn thu được.</p>
+     * <p><strong> {@code offsetDebtAmount} nay là SỐ ĐÃ BÙ TRỪ (cố định)</strong>
+     * (số dư động do {@code IncomeService.applySupplierOffsetDebtPayment} trừ dần). Phần
+     * NCC còn phải hoàn bằng tiền thật nay là {@code totalRefund − offsetDebtAmount} ⇒
+     * {@code IncomeService.collectibleOffsetDebt} phải đổi theo, nếu không màn thu tiền NCC hiểu sai
+     * số còn thu được.</p>
      */
     private void applyDebtOffset(Return ret, Purchaseinvoice purchase) {
         BigDecimal offset = computeDebtOffset(purchase, ret.getTotalRefund());
         ret.setOffsetDebtAmount(offset);
         returnRepository.save(ret);
-        if (offset.signum() <= 0 || purchase == null) {
+        if (offset.signum() <= 0 || purchase == null || purchase.getId() == null) {
             return;
         }
-        BigDecimal paid = purchase.getPaid() != null ? purchase.getPaid() : BigDecimal.ZERO;
-        purchase.setPaid(paid.add(offset));
-        purchaseinvoiceRepository.save(purchase);
+        debtService.recordPurchaseDebtOffset(purchase.getId(), offset);
     }
 
     private void recomputeReturnPurchaseStatus(Purchaseinvoice purchase) {
@@ -578,7 +596,7 @@ public class ReturnPurchaseService {
         String status = totalReturnedBase == 0 ? PURCHASE_RETURN_NONE
                 : (totalOnHand == 0 ? PURCHASE_RETURN_FULL : PURCHASE_RETURN_PARTIAL);
         purchase.setReturnStatus(status);
-        purchaseinvoiceRepository.save(purchase);
+        purchaseinvoiceService.persistPurchaseInvoice(purchase);
     }
 
     /** Tỉ lệ quy đổi (base / đơn vị nhập) cho mỗi dòng nhập — lấy từ BẤT KỲ lô nào của dòng (kể cả đã hết
@@ -887,13 +905,17 @@ public class ReturnPurchaseService {
         return product != null && product.getName() != null ? product.getName() : "Sản phẩm";
     }
 
-    private String generateCode() {
-        int nextId = returnRepository.findAll().stream()
-                .map(Return::getId)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-        return "TNCC-" + String.format("%06d", nextId);
+    /**
+     * Mã tạm dùng đúng một lần, chỉ để qua được ràng buộc {@code NOT NULL UNIQUE} của cột mã tại thời
+     * điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật. Ngay sau khi lưu, mã được ghi lại
+     * theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước nằm trong cùng một transaction.
+     *
+     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
+     * người tạo phiếu cùng lúc nhận cùng một số; cột {@code returnCode} có UNIQUE nên người thứ hai ăn
+     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     */
+    private String temporaryCode() {
+        return "TMP-" + UUID.randomUUID();
     }
 
     private String formatCode(Integer id) {

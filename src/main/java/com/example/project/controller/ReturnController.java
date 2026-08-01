@@ -77,6 +77,8 @@ public class ReturnController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", returnPage.getTotalElements());
 
+        // Tắt bù trừ thì 2 cột cấn trừ luôn bằng 0 ⇒ ẩn hẳn cột thay vì để một cột toàn số 0.
+        model.addAttribute("autoOffsetDebt", returnService.isAutoOffsetDebt());
         model.addAttribute("basePath", resolveBasePath(request));
         return "return/list";
     }
@@ -160,9 +162,17 @@ public class ReturnController {
     }
 
     @GetMapping({OWNER_BASE + "/{returnId}", PHARMACIST_BASE + "/{returnId}", ACCOUNTANT_BASE + "/{returnId}"})
-    public String detail(@PathVariable Integer returnId, HttpServletRequest request, Model model) {
-        model.addAttribute("detail", returnService.getDetail(returnId));
-        model.addAttribute("basePath", resolveBasePath(request));
+    public String detail(@PathVariable Integer returnId, HttpServletRequest request, Model model,
+                         RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+        try {
+            model.addAttribute("detail", returnService.getDetail(returnId));
+        } catch (IllegalArgumentException exception) {
+            // Gõ tay id không tồn tại: về danh sách kèm thông báo thay vì rơi vào trang lỗi chung.
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:" + basePath;
+        }
+        model.addAttribute("basePath", basePath);
         // Cho phép bấm thẳng từ "Hóa đơn gốc" sang màn chi tiết hóa đơn — cả 3 role đều xem được hóa đơn.
         model.addAttribute("invoiceBasePath", resolveInvoiceBasePath(request));
         return "return/detail";

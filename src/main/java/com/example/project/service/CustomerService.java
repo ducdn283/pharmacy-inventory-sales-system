@@ -7,6 +7,7 @@ import com.example.project.entity.Customer;
 import com.example.project.entity.Invoice;
 import com.example.project.repository.CustomerRepository;
 import com.example.project.repository.InvoiceRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -40,8 +41,8 @@ public class CustomerService {
         List<CustomerResponse> filtered = customerRepository.findAll().stream()
                 .filter(c -> matchesKeyword(c, kw))
                 .filter(c -> typeFilter == null || typeFilter.equals(c.getCustomerType()))
-                // Sắp theo MÃ (= customerID) cho khớp cột mã người dùng đọc đầu tiên, giống màn NCC.
-                // Sắp theo tên thì mã nhảy lung tung giữa danh sách, và khách vừa tạo không biết ở đâu.
+                // Sắp theo MÃ (= customerID) cho khớp cột mã người dùng đọc đầu tiên: sắp theo tên
+                // thì mã nhảy lung tung và khách vừa tạo không biết nằm đâu.
                 .sorted(Comparator.comparing(Customer::getId,
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(CustomerResponse::from)
@@ -109,7 +110,7 @@ public class CustomerService {
         validate(req, null);
         Customer c = new Customer();
         apply(c, req);
-        return customerRepository.save(c).getId();
+        return saveGuardingUniqueRace(c, req).getId();
     }
 
     // ------------------------------------------------------------------ update
@@ -119,7 +120,7 @@ public class CustomerService {
         Customer c = findOrThrow(id);
         validate(req, id);
         apply(c, req);
-        customerRepository.save(c);
+        saveGuardingUniqueRace(c, req);
     }
 
     // ------------------------------------------------------------------ legacy
@@ -140,15 +141,54 @@ public class CustomerService {
     }
 
     /**
-     * Toàn bộ kiểm tra chạy TRƯỚC khi ghi bất cứ thứ gì vào entity — định dạng rồi mới tới trùng lặp,
-     * để người dùng thấy lỗi định dạng ("CCCD phải 12 số") thay vì lỗi trùng của một giá trị vốn đã sai.
+     * Chặn trùng cho ca hai người nhập cùng lúc: {@link #validate} hỏi-rồi-ghi nên luôn có khe hở,
+     * chỉ UNIQUE index ở DB phân xử được. Dịch lỗi DB sang đúng câu mà {@code validate} vẫn dùng.
      *
-     * <p><strong>Vì sao phải tự kiểm ở đây:</strong> bảng {@code customer} KHÔNG có ràng buộc UNIQUE
-     * nào ngoài khoá chính, nên không có lưới an toàn ở tầng DB. Thiếu một dòng ở đây là dữ liệu bẩn
-     * lọt thẳng vào hệ thống — đúng như ca đã gặp: số điện thoại được chặn nhưng CCCD thì không, nên
-     * cứ đổi số điện thoại là tạo được khách trùng CCCD.</p>
+     * <p>Phải {@code saveAndFlush}: {@code save} chỉ đưa vào session, UPDATE thật chạy lúc commit —
+     * tức là sau khi đã ra khỏi khối {@code try} này.
+     */
+    private Customer saveGuardingUniqueRace(Customer c, CustomerRequest req) {
+        try {
+            return customerRepository.saveAndFlush(c);
+        } catch (DataIntegrityViolationException exception) {
+            throw new IllegalArgumentException(duplicateMessage(exception,
+                    "COMPANY".equals(req.getCustomerType())), exception);
+        }
+    }
+
+    /** Không nhận ra index thì trả câu chung — thà chung chung còn hơn chỉ sai ô. */
+    private String duplicateMessage(DataIntegrityViolationException exception, boolean company) {
+        String key = violatedIndexName(exception);
+        if (key.contains("phonenumber")) {
+            return "Số điện thoại đã tồn tại trong hệ thống";
+        }
+        if (key.contains("taxcode")) {
+            return company
+                    ? "Mã số thuế đã tồn tại trong hệ thống"
+                    : "Số CCCD/CMND đã tồn tại trong hệ thống";
+        }
+        return "Thông tin khách hàng bị trùng với một khách hàng khác, vui lòng kiểm tra lại";
+    }
+
+    /**
+     * Tên index bị vi phạm, cắt từ câu lỗi MySQL {@code Duplicate entry '<giá trị>' for key
+     * '<bảng>.<index>'}. Phải cắt phần sau {@code for key}, KHÔNG dò cả câu: giá trị bị trùng cũng
+     * nằm trong câu đó nên dễ khớp nhầm tên cột khác (vd email {@code phone@...}).
+     */
+    private String violatedIndexName(DataIntegrityViolationException exception) {
+        String detail = exception.getMostSpecificCause().getMessage();
+        if (detail == null) {
+            return "";
+        }
+        int marker = detail.lastIndexOf("for key");
+        return (marker < 0 ? "" : detail.substring(marker + "for key".length())).toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Chạy TRƯỚC khi ghi vào entity, và kiểm định dạng trước rồi mới tới trùng lặp — để không báo
+     * "CCCD đã tồn tại" cho một chuỗi vốn không phải CCCD.
      *
-     * @param excludeId id của bản ghi đang sửa (null khi tạo mới) — bản ghi luôn "trùng với chính nó"
+     * @param excludeId id bản ghi đang sửa (null khi tạo mới) — bản ghi luôn "trùng với chính nó"
      */
     private void validate(CustomerRequest req, Integer excludeId) {
         boolean company = "COMPANY".equals(req.getCustomerType());
@@ -167,20 +207,14 @@ public class CustomerService {
         c.setPhoneNumber(trimToNull(req.getPhoneNumber()));
         c.setAddress(trimToNull(req.getAddress()));
         c.setNote(trimToNull(req.getNote()));
-        // taxCode dùng cho CẢ 2 loại doanh nghiệp = Mã số thuế (MST),
-        // cá nhân = số CCCD/CMND — cần để xuất hóa đơn/hóa đơn điều chỉnh cho khách.
-        String taxCode = trimToNull(req.getTaxCode());
-        c.setTaxCode(taxCode);
+        // taxCode dùng cho CẢ 2 loại: doanh nghiệp = MST, cá nhân = CCCD/CMND.
+        c.setTaxCode(trimToNull(req.getTaxCode()));
         // Thông tin ngân hàng chỉ áp dụng cho khách doanh nghiệp.
         c.setBankAccountNumber(company ? trimToNull(req.getBankAccountNumber()) : null);
         c.setBankName(company ? trimToNull(req.getBankName()) : null);
     }
 
-    /**
-     * Định dạng {@code taxCode} theo loại khách (bỏ qua khi để trống — không bắt buộc):
-     * doanh nghiệp = Mã số thuế {@code 10} chữ số (tùy chọn {@code -3} chữ số chi nhánh, mirror Supplier);
-     * cá nhân = số CCCD {@code 12} chữ số hoặc CMND {@code 9} chữ số.
-     */
+    /** Doanh nghiệp = MST 10 số (kèm "-3 số" chi nhánh); cá nhân = CCCD 12 số hoặc CMND 9 số. */
     private void validateTaxCode(boolean company, String taxCode) {
         if (taxCode == null) {
             return;
@@ -198,14 +232,13 @@ public class CustomerService {
     private void validatePhoneUnique(String phone, Integer excludeId) {
         if (phone == null || phone.isBlank()) return;
         if (isPhoneTaken(phone.trim(), excludeId)) {
-            throw new IllegalArgumentException("Số điện thoại đã tồn tại trong hệ thống (MSG-44)");
+            throw new IllegalArgumentException("Số điện thoại đã tồn tại trong hệ thống");
         }
     }
 
     /**
-     * CCCD/CMND (khách cá nhân) và MST (khách doanh nghiệp) đều định danh duy nhất một pháp nhân —
-     * hai khách hàng không thể dùng chung. Bỏ qua khi để trống: trường này KHÔNG bắt buộc, khách lẻ
-     * mua thuốc thường không cần xuất hóa đơn nên không phải khai.
+     * CCCD/MST định danh duy nhất một pháp nhân nên không thể dùng chung. Bỏ qua khi để trống:
+     * trường này không bắt buộc, khách lẻ không cần xuất hóa đơn thì không phải khai.
      */
     private void validateTaxCodeUnique(boolean company, String taxCode, Integer excludeId) {
         if (taxCode == null || taxCode.isBlank()) return;

@@ -400,19 +400,11 @@
                 <input type="hidden" name="periodLabel" th:value="${computation.periodLabel}">
 
                 <div class="col-12 col-md-5">
-                    <label for="nextGroupInput" class="form-label">
-                        Nhóm áp dụng cho kỳ sau <span class="text-danger">*</span>
-                    </label>
-                    <select id="nextGroupInput" name="nextPeriodTaxType" class="form-select">
-                        <option th:each="g : ${groupOptions}"
-                                th:value="${g}"
-                                th:text="${groupLabels.get(g)}"
-                                th:selected="${g == defaultNextGroup}">Nhóm 2</option>
-                    </select>
+                    <label class="form-label">Nhóm áp dụng cho kỳ sau</label>
+                    <div class="form-control bg-light" th:text="${autoNextGroupDisplay}">Nhóm 2</div>
                     <div class="form-text">
-                        Mặc định giữ nguyên nhóm hiện tại. Chỉ đổi khi doanh thu đã vượt ngưỡng —
-                        chuyển nhóm 1→2 áp dụng ngay từ quý vượt ngưỡng, nhóm 2→3 giữ nhóm cũ đến hết
-                        năm rồi mới đổi.
+                        Hệ thống tự tính theo doanh thu năm, không chỉnh tay được — nhóm 1→2 áp dụng
+                        ngay từ quý vượt ngưỡng, nhóm 2→3 giữ nhóm cũ đến hết năm rồi mới đổi.
                     </div>
                 </div>
 

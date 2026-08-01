@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Thymeleaf page controller for the Product List screen. Serves the same screen under each
- * role prefix (Owner / Chief Pharmacist / Pharmacist), following the pattern established by
- * {@code StockOutPageController}. Replaces the former placeholder mappings for these routes.
+ * Thymeleaf page controller for the Product List / Detail / Create / Edit screens. Serves the
+ * same screen under each role prefix (Owner / Pharmacist / Accountant) — Create and Edit are
+ * Owner-only.
  */
 @Controller
 public class ProductPageController {

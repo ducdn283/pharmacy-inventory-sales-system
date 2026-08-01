@@ -71,8 +71,7 @@ public class ProductService {
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final int RECENT_HISTORY_LIMIT = 10;
-    // Invoice.date is stored as a VN wall-clock LocalDateTime (see InvoiceService) — used only to
-    // convert it back to a real Instant for cross-source sorting in loadRecentHistory().
+    // Used by toInstantForSort() below.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ProductRepository productRepository;

@@ -6,9 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CustomerRepository extends JpaRepository<Customer, Integer> {
 
     /**
-     * Trùng lặp phải chặn ở TẦNG SERVICE: bảng {@code customer} không có ràng buộc UNIQUE nào ngoài
-     * khoá chính (kiểm bằng {@code information_schema.STATISTICS} ngày 28/07/2026), nên DB sẽ nhận
-     * bừa hai khách cùng số điện thoại / cùng CCCD nếu service không hỏi trước.
+     * Bảng {@code customer} có UNIQUE index trên {@code phoneNumber} và {@code taxCode} (kiểm bằng
+     * {@code information_schema.STATISTICS} ngày 30/07/2026) — đó là lưới chặn thật. Service vẫn hỏi
+     * trước bằng các hàm này để cho được câu thông báo gắn đúng ô nhập, thay vì để người dùng nhận
+     * một câu lỗi kỹ thuật chung của DB.
      *
      * <p>Biến thể {@code ...AndIdNot} dành cho màn sửa: bản ghi đang sửa luôn "trùng với chính nó".</p>
      */

@@ -9,6 +9,7 @@ import com.example.project.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,14 +42,9 @@ public class StockadjustmentService {
     private static final String TYPE_DESTROY_EMPLOYEE_FAULT = "DESTROY_EMPLOYEE_FAULT";
 
     /**
-     * Hai loại phiếu mà giá trị hàng mất ĐƯỢC PHÉP đòi nhân viên đền bù — nguồn của phiếu thu
-     * {@code Income} loại "Thu tiền nhân viên đền bù" (sheet 01 + sheet 03: cột "Liên kết Income?"
-     * chỉ ghi CÓ ở đúng 2 dòng này).
-     *
-     * <p>Khác nhau ở chỗ còn hiện vật hay không: {@code DESTROY_EMPLOYEE_FAULT} là hàng hỏng do lỗi
-     * chủ quan — vẫn cầm được, vẫn phải tiêu hủy vật lý; {@code COUNT_DECREASE} là hàng đã thất lạc,
-     * chỉ phát hiện qua kiểm kê. Về thuế thì cả hai đều KHÔNG được tính chi phí hợp lý khi có người
-     * bồi thường, nên tiền đền bù là một khoản thu nhập mới (sheet 03).</p>
+     * Hai loại phiếu mà giá trị hàng mất được phép đòi nhân viên đền bù — nguồn của phiếu thu
+     * "Thu tiền nhân viên đền bù" (sheet 03).
+     * Cả hai đều KHÔNG được tính chi phí hợp lý khi có người bồi thường.
      */
     private static final Set<String> EMPLOYEE_LIABLE_TYPES =
             Set.of(TYPE_DESTROY_EMPLOYEE_FAULT, TYPE_COUNT_DECREASE);
@@ -66,17 +62,15 @@ public class StockadjustmentService {
             List.of(TYPE_DESTROY, TYPE_DESTROY_EMPLOYEE_FAULT, "INTERNAL_USE", "SAMPLE", "GIFT");
 
     /**
-     * Chỉ 3/7 loại phải tính thuế GTGT ĐẦU RA theo giá bán: dùng nội bộ / biếu tặng / hàng mẫu.
-     * Hai loại hủy hàng và COUNT_INCREASE/COUNT_DECREASE không phát sinh GTGT đầu ra → để 4 field thuế
-     * null. Riêng hai loại hủy còn GIỮ NGUYÊN phần GTGT đầu vào đã khấu trừ lúc mua (sheet 03).
+     * Chỉ 3/7 loại phải tính GTGT đầu ra theo giá bán. Hai loại hủy hàng và COUNT_* để 4 field thuế
+     * null; riêng hủy hàng còn giữ nguyên GTGT đầu vào đã khấu trừ lúc mua (sheet 03).
      */
     private static final Set<String> VAT_OUTPUT_TYPES = Set.of("INTERNAL_USE", "GIFT", "SAMPLE");
 
     /**
-     * Các loại phiếu ĐƯA HÀNG RA NGOÀI để dùng/tặng thật — hàng quá hạn tuyệt đối không được đi theo
-     * đường này (dùng nội bộ, làm mẫu cho khách dùng thử, biếu tặng đều là thuốc tới tay người dùng).
-     * Cố tình trùng với {@link #VAT_OUTPUT_TYPES} về mặt danh sách nhưng KHÁC về lý do, nên tách hằng
-     * riêng: một cái là luật thuế, một cái là an toàn dược — sau này đổi cái này không kéo theo cái kia.
+     * Loại phiếu đưa hàng tới tay người dùng thật ⇒ cấm hàng quá hạn. Cố tình TÁCH KHỎI
+     * {@link #VAT_OUTPUT_TYPES} dù trùng danh sách: một cái là luật thuế, một cái là an toàn dược,
+     * sau này đổi cái này không được kéo theo cái kia.
      */
     private static final Set<String> NO_EXPIRED_GOODS_TYPES = Set.of("INTERNAL_USE", "GIFT", "SAMPLE");
 
@@ -188,7 +182,7 @@ public class StockadjustmentService {
 
     public Map<String, String> adjustmentTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
-        labels.put(TYPE_DESTROY, "Hủy hàng (nguyên nhân khách quan)");
+        labels.put(TYPE_DESTROY, "Hủy hàng");
         labels.put(TYPE_DESTROY_EMPLOYEE_FAULT, "Hủy hàng (lỗi nhân viên)");
         labels.put("INTERNAL_USE", "Sử dụng nội bộ");
         labels.put("SAMPLE", "Hàng mẫu");
@@ -311,24 +305,34 @@ public class StockadjustmentService {
                 }
                 batch.setStorageQuantity(current - qty);
             }
-            batchRepository.save(batch);
+            saveBatchGuardingConcurrentEdit(batch);
         }
     }
 
     /**
-     * Hủy một phiếu điều chỉnh lập sai. Phiếu điều chỉnh kho là chứng từ NỘI BỘ (không phải hóa đơn
-     * đã phát hành) nên được phép hủy và đảo ngược — cùng nguyên tắc với
-     * {@code PurchaseinvoiceService.cancelPurchaseInvoice}.
+     * Ghi tồn kho một lô, dịch lỗi khoá lạc quan thành câu người dùng đọc được.
      *
-     * <ul>
-     *   <li>Phiếu {@code Nháp}: chưa đụng tồn kho ⇒ chỉ đổi trạng thái.</li>
-     *   <li>Phiếu {@code Hoàn thành}: <strong>đảo ngược đúng phần đã cộng/trừ</strong> — dòng IN thì
-     *       trừ lại, dòng OUT thì cộng lại.</li>
-     * </ul>
+     * <p>{@code Batch} có {@code @Version} nên Hibernate đưa version vào {@code WHERE}: ai đọc phải số
+     * cũ thì update khớp 0 dòng và bị ném lỗi, thay vì âm thầm ghi đè số của người ghi trước.
      *
-     * <p>Chặn khi không đảo được: nếu phiếu đã cộng hàng vào kho (IN) mà số hàng đó đã bán/xuất bớt,
-     * trừ ngược lại sẽ làm tồn âm — lúc đó phải xử lý bằng một phiếu điều chỉnh mới chứ không phải
-     * hủy phiếu cũ. Lý do hủy ghi vào {@code note} (DB không có cột riêng cho lý do hủy).</p>
+     * <p>Phải {@code saveAndFlush}: {@code save} chỉ đưa vào session, UPDATE thật chạy lúc commit —
+     * tức là sau khi đã ra khỏi khối {@code try} này. Ném {@link IllegalArgumentException} vì
+     * controller chỉ bắt loại đó, loại khác là người dùng nhận trang 500 thô.
+     */
+    private void saveBatchGuardingConcurrentEdit(Batch batch) {
+        try {
+            batchRepository.saveAndFlush(batch);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new IllegalArgumentException("Lô " + displayBatch(batch)
+                    + " vừa được người khác cập nhật (bán hàng, nhập hàng hoặc phiếu điều chỉnh khác)."
+                    + " Vui lòng tải lại trang để xem tồn kho mới nhất rồi thực hiện lại.", exception);
+        }
+    }
+
+    /**
+     * Hủy phiếu lập sai: phiếu {@code Nháp} chưa đụng tồn kho nên chỉ đổi trạng thái; phiếu
+     * {@code Hoàn thành} thì đảo ngược đúng phần đã cộng/trừ (IN trừ lại, OUT cộng lại).
+     * Lý do hủy nối vào {@code note} — DB không có cột riêng.
      */
     @Transactional
     public void cancel(Integer adjustmentId, String reason) {
@@ -357,17 +361,11 @@ public class StockadjustmentService {
     }
 
     /**
-     * Nguyên tắc đảo ngược DUY NHẤT của {@code Dac_ta_Income_StockAdjustment.xlsx} sheet 05: chỉ được
-     * hủy một phiếu đã {@code Hoàn thành} khi <strong>mọi lô của phiếu vẫn y hệt như ngay sau khi
-     * phiếu được áp dụng</strong> — chưa có giao dịch nào khác động vào lô đó kể từ lúc đó.
+     * Luật đảo ngược DUY NHẤT (sheet 05): chỉ hủy được phiếu {@code Hoàn thành} khi mọi lô của nó vẫn
+     * y hệt như ngay sau khi phiếu được áp dụng. Kiểm 2 nguồn duy nhất làm đổi tồn: hóa đơn bán và
+     * phiếu điều chỉnh khác (chỉ tính phiếu đang {@code Hoàn thành} — phiếu đã hủy có tác động ròng 0).
      *
-     * <p>Kiểm hai nguồn duy nhất làm đổi {@code Batch.storageQuantity}: hóa đơn bán và phiếu điều
-     * chỉnh kho khác. Phiếu khác chỉ tính khi đang {@code Hoàn thành} — phiếu đã bị hủy thì phần
-     * cộng/trừ của nó đã được đảo lại, tác động ròng bằng 0 nên không cản trở gì.</p>
-     *
-     * <p>Tài liệu nhấn mạnh đây <em>không</em> phải nhiều luật rời rạc: "lô hết hạn không đảo ngược
-     * được" chỉ là một hệ quả của luật này, vì phát hiện hết hạn tất yếu kéo theo một phiếu Hủy hàng
-     * khác đã động vào lô.</p>
+     * <p>"Lô hết hạn không đảo ngược được" chỉ là hệ quả của luật này, không phải luật riêng.
      */
     private void assertBatchesUntouchedSince(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
         if (adjustment.getDate() == null) {
@@ -442,7 +440,7 @@ public class StockadjustmentService {
             } else {
                 batch.setStorageQuantity(current + qty);
             }
-            batchRepository.save(batch);
+            saveBatchGuardingConcurrentEdit(batch);
         }
     }
 
@@ -563,17 +561,12 @@ public class StockadjustmentService {
      *       {@code COUNT_DECREASE} for shortage lines) rebuilt server-side from an approved stock count.</li>
      * </ul>
      *
-     * <p>Resulting status (both sources): {@code asDraft} → {@link StockAdjustmentStatus#DRAFT},
-     * ngược lại → {@link StockAdjustmentStatus#COMPLETED} và tồn kho được cập nhật ngay. Không còn
-     * nhánh "chờ duyệt": chỉ Owner tạo được phiếu này (bảng phân quyền, BA 2026-07-27) nên không có
-     * ai để duyệt chéo.</p>
+     * <p>{@code asDraft} → {@link StockAdjustmentStatus#DRAFT}, ngược lại → {@code COMPLETED} và tồn
+     * kho cập nhật ngay. Không có nhánh "chờ duyệt": chỉ Owner tạo được phiếu này nên không có ai để
+     * duyệt chéo. Trả về id phiếu (đầu tiên) để controller redirect.</p>
      *
-     * <p>Returns the id of the (first) created slip so the caller can redirect to it.</p>
-     *
-     * <p><strong>Không ghi lại người thao tác.</strong> DB đã bỏ 3 cột {@code createdBy} /
-     * {@code approvedBy} / {@code approvedAt} (28/07/2026) vì chỉ Owner mới đụng được màn này, nên
-     * phiếu không còn mang dấu vết ai lập, ai thực hiện, lúc nào. Mốc thời gian duy nhất còn lại là
-     * {@code date} — thời điểm lập phiếu.</p>
+     * <p><strong>Không ghi lại người thao tác</strong> .
+     * Mốc duy nhất còn lại là {@code date} (lúc lập phiếu).</p>
      */
     @Transactional
     public Integer createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
@@ -613,7 +606,7 @@ public class StockadjustmentService {
         boolean approvedNow = StockAdjustmentStatus.COMPLETED.equals(status);
 
         Stockadjustment adjustment = new Stockadjustment();
-        adjustment.setStockAdjustmentCode(generateCode());
+        adjustment.setStockAdjustmentCode(temporaryCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(request.getReason().trim());
@@ -621,7 +614,7 @@ public class StockadjustmentService {
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
-        Stockadjustment savedAdjustment = stockadjustmentRepository.save(adjustment);
+        Stockadjustment savedAdjustment = assignCode(stockadjustmentRepository.save(adjustment));
 
         List<Stockadjustmentdetail> savedDetails = new ArrayList<>();
         for (Batch batch : selectedBatches) {
@@ -731,7 +724,7 @@ public class StockadjustmentService {
         boolean approvedNow = StockAdjustmentStatus.COMPLETED.equals(status);
 
         Stockadjustment adjustment = new Stockadjustment();
-        adjustment.setStockAdjustmentCode(generateCode());
+        adjustment.setStockAdjustmentCode(temporaryCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(reason);
@@ -740,7 +733,7 @@ public class StockadjustmentService {
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
-        Stockadjustment savedAdjustment = stockadjustmentRepository.save(adjustment);
+        Stockadjustment savedAdjustment = assignCode(stockadjustmentRepository.save(adjustment));
 
         List<Stockadjustmentdetail> savedDetails = new ArrayList<>();
         Set<Integer> unknownOrigin = request.getUnknownOriginBatchIds() == null
@@ -790,16 +783,11 @@ public class StockadjustmentService {
     }
 
     /**
-     * Lô MỚI cho hàng thừa không xác định được nguồn gốc ({@code Dac_ta_Income_StockAdjustment.xlsx}
-     * sheet 06 mục 1b). Đặc điểm bắt buộc: {@code purchaseDetailID = NULL} (không có hóa đơn mua
-     * thật ⇒ không có GTGT đầu vào nào để khấu trừ cho lô này), {@code importDate} = ngày lập phiếu,
-     * {@code importPricePerBase} = giá vốn <em>ước tính</em>.
+     * Lô MỚI cho hàng thừa không rõ nguồn gốc (sheet 06 mục 1b). Bắt buộc {@code purchaseDetailID =
+     * NULL} — không có hóa đơn mua thật ⇒ không có GTGT đầu vào để khấu trừ cho lô này.
      *
-     * <p>Số lô / hạn dùng chép từ lô được đếm — chính lô đó là căn cứ nhận diện hàng thừa, và hai
-     * thông tin này ảnh hưởng trực tiếp tới FEFO lẫn an toàn dược phẩm nên không được để trống.</p>
-     *
-     * <p>Tồn khởi tạo = 0: tồn chỉ thật sự cộng vào lúc phiếu {@code Hoàn thành}
-     * ({@link #applyStockEffect}), nên phiếu còn {@code Nháp} sẽ trỏ vào một lô rỗng.</p>
+     * <p>Số lô / hạn dùng chép từ lô được đếm: hai thông tin này ảnh hưởng FEFO lẫn an toàn dược nên
+     * không được để trống. Tồn khởi tạo = 0 vì tồn chỉ cộng vào lúc phiếu {@code Hoàn thành}.</p>
      */
     private Batch createSurplusBatch(Batch sourceBatch, Stockadjustment adjustment, Stockcount count) {
         BigDecimal estimatedCost = estimateImportPricePerBase(sourceBatch);
@@ -1307,28 +1295,36 @@ public class StockadjustmentService {
         return "PDC-" + String.format("%06d", id);
     }
 
-    private String generateCode() {
+    /**
+     * Mã tạm chỉ để qua ràng buộc {@code NOT NULL UNIQUE} lúc INSERT (chưa biết id nên chưa dựng được
+     * mã thật). Không bao giờ commit ra ngoài: nó và {@link #assignCode} cùng một transaction.
+     */
+    private String temporaryCode() {
+        return "TMP-" + UUID.randomUUID();
+    }
+
+    /**
+     * Mã thật = {@code PDC-} + id do DB cấp. Sinh TỪ id chứ không phải {@code max(id)+1} vì cách cũ là
+     * đọc-rồi-ghi: hai người tạo cùng lúc nhận cùng một số, người thứ hai ăn lỗi UNIQUE. Cách này còn
+     * đảm bảo mã lưu trong DB luôn khớp {@link #formatCode(Integer)} mà màn hình hiển thị.
+     */
+    private Stockadjustment assignCode(Stockadjustment saved) {
+        saved.setStockAdjustmentCode(formatCode(saved.getId()));
+        return saved;
+    }
+
+    /**
+     * Mã <em>dự kiến</em> cho màn tạo, CHỈ ĐỂ XEM — không giữ chỗ mã nào. Có thể lệch với mã thật nếu
+     * có phiếu khác lưu chen vào lúc đang soạn, hoặc khi nguồn kiểm kê sinh 2 phiếu (hiện mã phiếu đầu).
+     */
+    @Transactional(readOnly = true)
+    public String previewNextCode() {
         int nextId = stockadjustmentRepository.findAll().stream()
                 .map(Stockadjustment::getId)
                 .filter(Objects::nonNull)
                 .max(Integer::compareTo)
                 .orElse(0) + 1;
-        return "PDC-" + String.format("%06d", nextId);
-    }
-
-    /**
-     * Mã phiếu <em>dự kiến</em> cho màn tạo — hiển thị trước cho người lập biết phiếu sắp tới mang mã
-     * gì, thay vì ô trống "PDC-…".
-     *
-     * <p><strong>Chỉ để xem.</strong> Mã thật vẫn được sinh lúc lưu ({@link #generateCode()}) chứ
-     * không đặt trước ở đây, nên không có mã nào bị "giữ chỗ" rồi bỏ phí khi người dùng thoát màn mà
-     * không lưu. Hệ quả cần biết: con số này có thể lệch nếu trong lúc đang soạn có phiếu khác được
-     * lưu trước, hoặc khi nguồn là phiếu kiểm kê có cả thừa lẫn thiếu (sinh 2 phiếu — mã hiển thị là
-     * mã của phiếu đầu).</p>
-     */
-    @Transactional(readOnly = true)
-    public String previewNextCode() {
-        return generateCode();
+        return formatCode(nextId);
     }
 
     private String displayBatch(Batch batch) {

@@ -5,14 +5,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Central definition of the valid {@code Expense.expenseType} values, confirmed by the team's BA
- * on 2026-07-23 (the docx's own table was ambiguous — see project memory
- * {@code expense-price-settings-open-questions}). {@code SALARY} is not its own type: per the BA,
- * regular payroll falls under {@link #OPERATIONAL}. {@code RETURN_TO_SUPPLIER_LOSS} was dropped
- * from the earlier docx draft entirely — not a real type.
+ * Central definition of the valid {@code Expense.expenseType} values — the docx's own table was
+ * ambiguous, so this is the authoritative list. {@code SALARY} is not its own type: regular payroll
+ * falls under {@link #OPERATIONAL}. {@code RETURN_TO_SUPPLIER_LOSS} is not a real type, despite
+ * appearing in an earlier docx draft.
+ *
+ * <p>{@link #GOODS_PAYMENT} splits tiền hàng out of {@link #OPERATIONAL} — see
+ * {@link #PURCHASE_LINKABLE} for why.</p>
  */
 public final class ExpenseType {
 
+    /** Tiền hàng trả nhà cung cấp — loại duy nhất gắn được phiếu nhập. Xem {@link #PURCHASE_LINKABLE}. */
+    public static final String GOODS_PAYMENT = "GOODS_PAYMENT";
     public static final String OPERATIONAL = "OPERATIONAL";
     public static final String DEBT_PAYMENT = "DEBT_PAYMENT";
     public static final String RETURN_REFUND_PAYOUT = "RETURN_REFUND_PAYOUT";
@@ -21,28 +25,33 @@ public final class ExpenseType {
 
     /** All valid types, in display order. */
     public static final List<String> ALL = List.of(
-            OPERATIONAL, DEBT_PAYMENT, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
+            GOODS_PAYMENT, OPERATIONAL, DEBT_PAYMENT, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
 
     /**
-     * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #OPERATIONAL} only</strong>
-     * — BA decision 2026-07-26.
+     * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #GOODS_PAYMENT}
+     * only</strong>. {@link #OPERATIONAL} deliberately does NOT link a purchase invoice — gộp tiền
+     * hàng vào đó từng làm "Chi phí vận hành" phình to và không còn trả lời được câu "tháng này tốn
+     * bao nhiêu cho điện, nước, lương", nên tiền hàng được tách hẳn:
      *
-     * <p>"Chi phí vận hành" is the pharmacy's bucket for regular day-to-day outgoings, and
-     * <em>everything that touches a purchase invoice lives here</em>, money owed to the supplier
-     * included: that debt <em>is</em> the import invoice, so it is not a separate kind of payment.
-     * It sits alongside lương, tiền điện, tiền nước, which are not modelled as sub-types — they are
-     * just what the user writes in {@code reason}. Only the import-invoice case needs a document to
-     * reconcile against, hence a link rather than a bigger taxonomy.</p>
+     * <ul>
+     *   <li>{@link #GOODS_PAYMENT} "Thanh toán hàng" — tiền trả cho hàng nhập, luôn gắn phiếu nhập;</li>
+     *   <li>{@link #OPERATIONAL} "Chi phí vận hành" — <em>chỉ</em> điện, nước, lương và những khoản
+     *       vận hành tương tự, không gắn phiếu nhập. Các khoản này không được mô hình hoá thành loại
+     *       con: người dùng tự viết vào {@code reason}.</li>
+     * </ul>
      *
-     * <p>{@link #DEBT_PAYMENT} is deliberately <em>not</em> here. It covers debt arising somewhere
-     * other than an import invoice, which has no document in this system to point at — {@code reason}
-     * carries the whole story. An earlier build did allow it; that was reverted once the BA settled
-     * the split, so do not add it back without re-checking with them.</p>
+     * <p>Việc tách còn ảnh hưởng tới tính thuế: {@code TaxperiodsnapshotService.DEDUCTIBLE_EXPENSE_TYPES}
+     * lọc thêm điều kiện "không gắn phiếu nhập" để loại tiền hàng ra khỏi chi phí được trừ (tiền hàng
+     * đã nằm trong giá vốn) — điều kiện đó chỉ còn cần cho các phiếu cũ lưu trước khi tách loại.
+     * <strong>Đừng thêm {@link #GOODS_PAYMENT} vào danh sách được trừ.</strong></p>
      *
-     * <p>The link is orthogonal to the type: the type says how the money is classified, the link
-     * says which document it settles. It is always optional, never required.</p>
+     * <p>{@link #DEBT_PAYMENT} vẫn cố tình không nằm ở đây: nó dành cho khoản nợ phát sinh ở chỗ khác,
+     * không có chứng từ nào trong hệ thống để trỏ tới.</p>
+     *
+     * <p>Các phiếu cũ mang {@code OPERATIONAL} kèm {@code purchaseID} vẫn còn trong DB và vẫn hiển thị
+     * bình thường — theo lệ "màn hình đọc đúng cột trong DB".</p>
      */
-    public static final List<String> PURCHASE_LINKABLE = List.of(OPERATIONAL);
+    public static final List<String> PURCHASE_LINKABLE = List.of(GOODS_PAYMENT);
 
     private ExpenseType() {
     }
@@ -62,6 +71,7 @@ public final class ExpenseType {
             return "";
         }
         return switch (type) {
+            case GOODS_PAYMENT -> "Thanh toán hàng";
             case OPERATIONAL -> "Chi phí vận hành";
             case DEBT_PAYMENT -> "Trả nợ";
             case RETURN_REFUND_PAYOUT -> "Hoàn tiền trả hàng";

@@ -180,7 +180,8 @@
         <button type="button" class="btn-close" id="btnCloseEdit" aria-label="Đóng"></button>
       </div>
 
-      <form th:action="@{/customer/{id}(id=${customer.id})}" th:object="${form}" method="post" novalidate id="editFormEl">
+      <!-- data-validate thay cho novalidate — xem fragments/field-validation. -->
+      <form th:action="@{/customer/{id}(id=${customer.id})}" th:object="${form}" method="post" data-validate id="editFormEl">
 
         <div class="mb-3">
           <label class="form-label">Mã khách hàng</label>
@@ -207,6 +208,7 @@
           <input id="editName" type="text" class="form-control"
                  th:field="*{name}"
                  th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
+                 required
                  placeholder="Nhập tên khách hàng">
           <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
         </div>
@@ -224,6 +226,7 @@
                    data-unique-message="Số điện thoại đã tồn tại trong hệ thống"
                    pattern="0(2|3|5|7|8|9)[0-9]{8}"
                    title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
+                   required
                    placeholder="0900000000">
             <div class="invalid-feedback" th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}"></div>
           </div>
@@ -372,5 +375,8 @@
 
 <!-- data-unique-id = id khách đang sửa, để nó không tự báo trùng với chính mình. -->
 <div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
+
+<!-- Ô bắt buộc để trống / sai định dạng: báo ngay dưới ô, không dùng bong bóng của trình duyệt. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 </body>
 </html>

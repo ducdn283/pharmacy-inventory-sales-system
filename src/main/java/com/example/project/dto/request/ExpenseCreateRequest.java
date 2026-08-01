@@ -6,10 +6,10 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * Form backing the "create expense" screen. {@code applicantID} is always the current user. The
- * optional {@code PurchaseInvoice}/{@code ShiftReport}/{@code Supplier}/{@code Account} links on
- * the entity are still left unset; {@code returnID} is now wired (see {@link #returnId}) and
- * {@code customerID} is derived from it server-side.
+ * Form backing the "create expense" screen. {@code applicantID} is always the current user.
+ * {@code returnID} (see {@link #returnId}) and {@code purchaseID} (see {@link #purchaseId}) are
+ * both wired here; {@code customerID}/{@code supplierID} are derived server-side from whichever is
+ * linked. {@code shiftReportID} and {@code accountID} are never posted by this form.
  */
 @Getter
 @Setter
@@ -40,14 +40,15 @@ public class ExpenseCreateRequest {
 
     private String reason;
 
-    /** Tổng số tiền cần chi. */
+    /**
+     * Số tiền chi lần này — <strong>không phải</strong> tổng nghĩa vụ của chứng từ được gắn.
+     *
+     * <p>Một phiếu chi là một lần chi tiền và không sửa được: nợ 50.000 mà hôm nay trả 30.000 thì
+     * phiếu này là 30.000, hôm sau trả nốt là một phiếu khác. Nghĩa vụ còn lại nằm ở chứng từ
+     * (phiếu nhập / phiếu trả hàng), không nằm ở đây. Vì vậy không còn {@code fullyPaid} lẫn
+     * {@code paid}: {@code paid} luôn bằng {@code amount}.</p>
+     */
     private BigDecimal amount;
-
-    /** Whether the full amount was already paid out at creation time. */
-    private boolean fullyPaid = true;
-
-    /** Only read when {@code fullyPaid} is false; must be between 0 and {@code amount}. */
-    private BigDecimal paid;
 
     private BigDecimal paidByCash;
 

@@ -53,6 +53,81 @@
             border-color: #059669;
         }
 
+        /* Khối tiền bên dưới lấy nguyên từ màn tạo phiếu thu để hai màn nhìn như một. */
+        .money-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            font-size: 14px;
+        }
+
+        .money-input-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        .money-input-wrap .form-control {
+            width: 100%;
+            padding-right: 22px;
+        }
+
+        .money-stepper {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            bottom: 1px;
+            width: 18px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #dee2e6;
+            border-radius: 0 6px 6px 0;
+            overflow: hidden;
+        }
+
+        .money-step-btn {
+            flex: 1;
+            border: none;
+            background: #f8f9fa;
+            color: #6b7280;
+            font-size: 9px;
+            line-height: 1;
+            padding: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .money-step-btn:hover {
+            background: #e9ecef;
+            color: #111827;
+        }
+
+        .money-stepper.is-disabled { display: none; }
+
+        .split-payment-error {
+            display: none;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            padding: 0.625rem 0.75rem;
+            border-radius: 10px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+
+        .split-payment-error.is-visible { display: flex; }
+
+        .split-payment-error i {
+            flex-shrink: 0;
+            margin-top: 1px;
+            font-size: 1rem;
+        }
+
         @media (max-width: 991.98px) {
             .expense-page-content {
                 padding-top: 84px !important;
@@ -106,10 +181,10 @@
                                        value="Tài khoản hiện tại" readonly tabindex="-1">
                             </div>
 
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">Ngày chi</label>
-                                <input type="date" class="form-control" th:field="*{date}" id="dateInput">
-                            </div>
+                            <!-- Không có ô "Ngày chi": phiếu tạo mới luôn là hôm nay và server tự
+                                 điền (resolveDate trả về LocalDate.now() khi form bỏ trống), nên một
+                                 ô date đã điền sẵn hôm nay chỉ tổ mời người dùng sửa nhầm. Màn tạo
+                                 phiếu thu cũng không có ô này. -->
 
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Loại phiếu chi <span class="text-danger">*</span></label>
@@ -149,14 +224,14 @@
                                 </div>
                             </div>
 
-                            <!-- Hiện với các loại trong ExpenseType.PURCHASE_LINKABLE — hiện chỉ "Chi phí
-                                 vận hành", nơi gom mọi khoản chi liên quan phiếu nhập, kể cả nợ NCC.
-                                 Khác ô hoàn tiền ở trên: không bắt buộc chọn (trả tiền NCC không gắn hóa
-                                 đơn cụ thể là hợp lệ) và số tiền vẫn sửa được. -->
+                            <!-- Hiện với các loại trong ExpenseType.PURCHASE_LINKABLE (chỉ "Thanh toán
+                                 hàng"; "Chi phí vận hành" thuần điện/nước/lương, không gắn phiếu nhập).
+                                 Khác ô hoàn tiền ở trên: không bắt buộc chọn (trả tiền NCC không gắn
+                                 hóa đơn cụ thể là hợp lệ). -->
                             <div class="col-12" id="purchaseLinkFields" style="display: none;">
                                 <label class="form-label">Thanh toán cho phiếu nhập</label>
                                 <select class="form-select" th:field="*{purchaseId}" id="purchaseIdInput">
-                                    <option value="">-- Không gắn phiếu nhập (lương, điện, nước…) --</option>
+                                    <option value="">-- Không gắn phiếu nhập cụ thể --</option>
                                     <option th:each="item : ${purchaseInvoices}"
                                             th:value="${item.id}"
                                             th:text="${item.code + ' · ' + item.dateDisplay + ' · còn '
@@ -172,87 +247,148 @@
                                 </div>
                             </div>
 
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">Lý do chi <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" th:field="*{reason}"
-                                       placeholder="VD: Tiền điện tháng 7, ứng lương nhân viên A…">
-                            </div>
-
-                            <div class="col-12 col-md-6">
+                            <!-- Ô nhập tiền nằm ở đây chứ không ở cột "Thanh toán", giống màn tạo
+                                 phiếu thu: nó là bước cuối của luồng khai báo bên trái (chọn loại →
+                                 chọn chứng từ nếu có → nhập tiền). Cột phải chỉ hiển thị con số đã chốt. -->
+                            <div class="col-12 col-md-6" id="amountField">
                                 <label class="form-label">Số tiền cần chi <span class="text-danger">*</span></label>
-                                <div class="input-group">
+                                <div class="money-input-wrap">
                                     <input type="text" inputmode="numeric" data-money class="form-control"
                                            th:field="*{amount}" id="amountInput" placeholder="0">
-                                    <span class="input-group-text">đ</span>
+                                    <div class="money-stepper" id="amountStepper">
+                                        <button type="button" class="money-step-btn step-up"
+                                                onclick="stepMoney('amountInput', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                        <button type="button" class="money-step-btn step-down"
+                                                onclick="stepMoney('amountInput', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                    </div>
                                 </div>
                                 <div class="form-text" id="amountLockedHint" style="display: none;">
-                                    <i class="ti ti-lock me-1"></i>
-                                    <span id="amountLockedText">
-                                        Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.
-                                    </span>
-                                    Chi ít hơn thì bỏ chọn "Đã chi đủ" bên cạnh, đừng sửa số này.
+                                    <i class="ti ti-info-circle me-1"></i>
+                                    <span id="amountLockedText"></span>
+                                    Đã điền sẵn phần còn thiếu — sửa nhỏ lại nếu lần này chỉ trả một phần.
                                 </div>
                             </div>
 
-                            <div class="col-12 col-md-6 d-flex align-items-end">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" th:field="*{fullyPaid}"
-                                           id="fullyPaidInput" checked>
-                                    <label class="form-check-label" for="fullyPaidInput">
-                                        Đã chi đủ số tiền trên ngay bây giờ
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div id="partialPaymentFields" class="col-12" style="display: none;">
-                                <div class="row g-3">
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label">Số tiền đã chi thực tế</label>
-                                        <div class="input-group">
-                                            <input type="text" inputmode="numeric" data-money class="form-control"
-                                                   th:field="*{paid}" id="paidInput" placeholder="0">
-                                            <span class="input-group-text">đ</span>
-                                        </div>
-                                    </div>
-                                    <!-- Tiền mặt chỉ dành cho Chủ nhà thuốc: kế toán chi qua chuyển
-                                         khoản, không giữ quỹ nên cũng không có báo cáo ca để đối soát. -->
-                                    <div class="col-12 col-md-4" th:if="${canPayCash}">
-                                        <label class="form-label">Trong đó tiền mặt</label>
-                                        <div class="input-group">
-                                            <input type="text" inputmode="numeric" data-money class="form-control"
-                                                   th:field="*{paidByCash}" id="cashInput" placeholder="0">
-                                            <span class="input-group-text">đ</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label">Trong đó chuyển khoản</label>
-                                        <div class="input-group">
-                                            <input type="text" inputmode="numeric" data-money class="form-control"
-                                                   th:field="*{paidByBanking}" id="bankingInput" placeholder="0">
-                                            <span class="input-group-text">đ</span>
-                                        </div>
-                                    </div>
-                                    <div class="form-text">
-                                        <i class="ti ti-info-circle me-1"></i>
-                                        Nếu chưa chi hết, phiếu sẽ ở trạng thái "Chờ thanh toán" cho đến khi ghi nhận đủ.
-                                        <span th:if="${!canPayCash}">
-                                            Kế toán chỉ chi qua chuyển khoản.
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="form-label">Ghi chú</label>
-                                <textarea class="form-control" rows="3" th:field="*{note}"
-                                          placeholder="Nhập ghi chú nếu có"></textarea>
-                            </div>
                         </div>
                     </div>
 
                 </div>
 
                 <div class="col-12 col-xl-4">
+
+                    <!-- Cùng bố cục với card "Thanh toán" của màn tạo phiếu thu: cột này KHÔNG nhập
+                         số tiền, chỉ chốt lại con số khai bên trái rồi hỏi chi bằng hình thức nào.
+                         Không còn ô tick "Đã chi đủ": một phiếu chi là một lần chi, tiền đã chi luôn
+                         đúng bằng số tiền của phiếu. Trả thiếu so với phiếu nhập thì phiếu nhập còn
+                         nợ, và hôm sau lập phiếu chi khác.
+                         Mọi id ở đây đều được script cuối trang dùng tới. -->
+                    <div class="expense-card p-4 mb-4" id="paymentCard">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-calculator text-success me-1"></i>
+                            Thanh toán
+                        </div>
+
+                        <div class="money-summary-row">
+                            <span class="text-secondary">Tổng số tiền chi</span>
+                            <strong class="text-success" id="totalDisplay">0đ</strong>
+                        </div>
+
+                        <hr>
+
+                        <!-- Tiền mặt chỉ dành cho Chủ nhà thuốc: kế toán chi qua chuyển khoản, không
+                             giữ quỹ nên cũng không có báo cáo ca để đối soát. Với kế toán nhóm này chỉ
+                             còn đúng một lựa chọn — vẫn hiện để họ thấy vì sao, thay vì biến mất. -->
+                        <div class="mb-3">
+                            <label class="form-label d-block mb-2">Hình thức thanh toán</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check" th:if="${canPayCash}">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payCash" value="cash" checked>
+                                    <label class="form-check-label" for="payCash">Tiền mặt</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payBanking" value="banking" th:checked="${!canPayCash}">
+                                    <label class="form-check-label" for="payBanking">Chuyển khoản</label>
+                                </div>
+                                <div class="form-check" th:if="${canPayCash}">
+                                    <input class="form-check-input" type="radio" name="payMethod"
+                                           id="payBoth" value="both">
+                                    <label class="form-check-label" for="payBoth">Tiền mặt + Chuyển khoản</label>
+                                </div>
+                            </div>
+                            <div class="form-text" th:unless="${canPayCash}">
+                                Kế toán chỉ chi qua chuyển khoản; phần tiền mặt phải do chủ nhà thuốc chi.
+                            </div>
+                        </div>
+
+                        <!-- Hai ô dưới là field thật bind thẳng vào form, không phải ô hiển thị kèm
+                             input hidden như bên phiếu thu: nhờ vậy nếu JS hỏng thì số tiền người dùng
+                             gõ vẫn được POST, và server vẫn suy ra "đã chi" = tiền mặt + chuyển khoản. -->
+                        <div class="mb-3" id="cashBox" th:if="${canPayCash}">
+                            <label class="form-label" id="cashLabel">Tiền mặt</label>
+                            <div class="money-input-wrap">
+                                <input type="text" inputmode="numeric" data-money class="form-control"
+                                       th:field="*{paidByCash}" id="cashInput" placeholder="0">
+                                <div class="money-stepper" id="cashStepper">
+                                    <button type="button" class="money-step-btn step-up"
+                                            onclick="stepMoney('cashInput', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                    <button type="button" class="money-step-btn step-down"
+                                            onclick="stepMoney('cashInput', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="bankingBox">
+                            <label class="form-label" id="bankingLabel">Chuyển khoản</label>
+                            <div class="money-input-wrap">
+                                <input type="text" inputmode="numeric" data-money class="form-control"
+                                       th:field="*{paidByBanking}" id="bankingInput" placeholder="0">
+                                <div class="money-stepper" id="bankingStepper">
+                                    <button type="button" class="money-step-btn step-up"
+                                            onclick="stepMoney('bankingInput', 1000)"><i class="ti ti-chevron-up"></i></button>
+                                    <button type="button" class="money-step-btn step-down"
+                                            onclick="stepMoney('bankingInput', -1000)"><i class="ti ti-chevron-down"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="money-summary-row">
+                            <span class="text-secondary">Đã phân bổ</span>
+                            <strong id="paidDisplay">0đ</strong>
+                        </div>
+
+                        <div class="split-payment-error" id="paymentError" role="alert">
+                            <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                            <span id="paymentErrorText"></span>
+                        </div>
+
+                        <div class="form-text">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Mỗi phiếu chi là một lần chi tiền và không sửa được. Trả thêm cho cùng
+                            một phiếu nhập hay phiếu trả hàng thì lập phiếu chi mới.
+                        </div>
+                    </div>
+
+                    <div class="expense-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-file-description text-success me-1"></i>
+                            Nội dung phiếu chi
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Lý do chi <span class="text-danger">*</span></label>
+                            <textarea class="form-control" rows="2" th:field="*{reason}"
+                                      placeholder="VD: Tiền điện tháng 7, ứng lương nhân viên A…"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Ghi chú</label>
+                            <textarea class="form-control" rows="3" th:field="*{note}"
+                                      placeholder="Nhập ghi chú nếu có"></textarea>
+                        </div>
+                    </div>
+
                     <div class="expense-card p-4">
                         <!-- Owner: submit auto-approves the slip. -->
                         <button th:if="${#strings.startsWith(basePath, '/owner')}"
@@ -293,15 +429,150 @@
     const PURCHASE_LINKABLE_TYPES = /*[[${purchaseLinkableTypes}]]*/ [];
     const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
 
-    function today() {
-        const date = new Date();
-        const offset = date.getTimezoneOffset();
-        return new Date(date.getTime() - offset * 60000).toISOString().split('T')[0];
+    // Script nằm sau form nên các phần tử đã tồn tại; cashInput là null với kế toán (không được chi tiền mặt).
+    const cashInput = document.getElementById('cashInput');
+    const bankingInput = document.getElementById('bankingInput');
+
+    function money(value) {
+        return (value || 0).toLocaleString('vi-VN') + 'đ';
     }
 
-    function togglePartialPaymentFields() {
-        const fullyPaid = document.getElementById('fullyPaidInput').checked;
-        document.getElementById('partialPaymentFields').style.display = fullyPaid ? 'none' : '';
+    /** Ghi giá trị vào ô data-money rồi phát 'input' để fragment money-input định dạng lại. */
+    function setMoney(input, value) {
+        if (!input) {
+            return;
+        }
+        input.value = value > 0 ? String(value) : '';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+
+    function stepMoney(inputId, delta) {
+        const input = document.getElementById(inputId);
+        if (!input || input.readOnly || input.disabled) {
+            return;
+        }
+        setMoney(input, Math.max(0, pmMoneyValue(input) + delta));
+    }
+
+    function currentPayMethod() {
+        const picked = document.querySelector('input[name="payMethod"]:checked');
+        return picked ? picked.value : 'banking';
+    }
+
+    /**
+     * Người dùng đã tự gõ vào phần chia tiền mặt / chuyển khoản hay chưa. Chừng nào chưa động tới thì
+     * ô tiền mặt còn bám theo số cần chi; gõ một cái là JS buông tay hoàn toàn (xem syncPaymentOnce).
+     */
+    let splitTouched = false;
+
+    /**
+     * Hiện đúng số ô tương ứng hình thức đã chọn: một ô cho tiền mặt / chuyển khoản, hai ô khi chia
+     * cả hai. Ô bị ẩn phải xoá giá trị, nếu không nó vẫn được POST và làm lệch tổng.
+     */
+    function applyPayMethod() {
+        const method = currentPayMethod();
+        const showCash = method === 'cash' || method === 'both';
+        const showBanking = method === 'banking' || method === 'both';
+        const split = method === 'both';
+
+        const cashBox = document.getElementById('cashBox');
+        if (cashBox) {
+            cashBox.style.display = showCash ? '' : 'none';
+            document.getElementById('cashLabel').textContent = split ? 'Tiền mặt' : 'Số tiền đã chi';
+        }
+        document.getElementById('bankingBox').style.display = showBanking ? '' : 'none';
+        document.getElementById('bankingLabel').textContent = split ? 'Chuyển khoản' : 'Số tiền đã chi';
+
+        if (!showCash) {
+            setMoney(cashInput, 0);
+        }
+        if (!showBanking) {
+            setMoney(bankingInput, 0);
+        }
+        // Đổi hình thức là bắt đầu lại: gợi ý số tiền cho lần đầu, chưa tính là người dùng đã gõ.
+        splitTouched = false;
+        syncPayment();
+    }
+
+    let syncing = false;
+
+    function syncPayment() {
+        // setMoney() phát 'input', mà chính 'input' lại gọi vào đây — không chốt thì đệ quy vô hạn.
+        if (syncing) {
+            return;
+        }
+        syncing = true;
+        try {
+            syncPaymentOnce();
+        } finally {
+            syncing = false;
+        }
+    }
+
+    /**
+     * Chỉ MỘT hình thức thì ô tiền là con số suy ra được (toàn bộ số tiền của phiếu), nên khoá và tự
+     * điền.
+     *
+     * <p>Chia cả hai thì KHÔNG tự bù trừ: gõ ô này mà ô kia tự trừ đi thì không xoá đi gõ lại được,
+     * cứ như form giành quyền với người dùng. Ở đây hai ô hoàn toàn tự do, JS chỉ gợi ý toàn bộ số
+     * tiền vào ô tiền mặt lúc mới chọn (chừng nào chưa ai gõ), rồi báo lệch nếu tổng không khớp —
+     * người dùng tự quyết chia thế nào. Hai ô phải cộng lại đúng bằng số tiền của phiếu vì phiếu chi
+     * là một lần chi: server cũng từ chối nếu lệch.</p>
+     */
+    function syncPaymentOnce() {
+        const method = currentPayMethod();
+        const split = method === 'both';
+        const total = pmMoneyValue(document.getElementById('amountInput'));
+
+        if (!split) {
+            setMoney(method === 'cash' ? cashInput : bankingInput, total);
+        } else if (!splitTouched) {
+            setMoney(cashInput, total);
+            setMoney(bankingInput, 0);
+        }
+
+        [cashInput, bankingInput].forEach(function (input) {
+            if (!input) {
+                return;
+            }
+            input.readOnly = !split;
+            input.classList.toggle('auto-field', !split);
+        });
+        ['cashStepper', 'bankingStepper'].forEach(function (id) {
+            const stepper = document.getElementById(id);
+            if (stepper) {
+                stepper.classList.toggle('is-disabled', !split);
+            }
+        });
+
+        const paid = pmMoneyValue(cashInput) + pmMoneyValue(bankingInput);
+
+        // Hai dòng tiền luôn hiện, chưa nhập gì thì là 0đ — giống card "Thanh toán" của phiếu thu.
+        document.getElementById('totalDisplay').textContent = money(total);
+        document.getElementById('paidDisplay').textContent = money(paid);
+
+        showPaymentError(paymentErrorFor(total, paid, split));
+    }
+
+    function paymentErrorFor(total, paid, split) {
+        if (total <= 0 || !split) {
+            return '';
+        }
+        if (paid > total) {
+            return 'Tiền mặt + chuyển khoản (' + money(paid) + ') đang lớn hơn số tiền chi ('
+                + money(total) + ').';
+        }
+        if (paid < total) {
+            return 'Tiền mặt + chuyển khoản đang thiếu ' + money(total - paid)
+                + ' so với số tiền chi. Chi ít hơn thì sửa ô "Số tiền cần chi" bên trái.';
+        }
+        return '';
+    }
+
+    function showPaymentError(message) {
+        const box = document.getElementById('paymentError');
+        document.getElementById('paymentErrorText').textContent = message;
+        box.classList.toggle('is-visible', !!message);
     }
 
     function currentType() {
@@ -321,6 +592,8 @@
         const amountInput = document.getElementById('amountInput');
         amountInput.value = value == null ? '' : String(value);
         amountInput.dispatchEvent(new Event('input', {bubbles: true}));
+        // Số cần chi đổi thì phần "đã chi" phải chạy theo, nếu không ô tiền vẫn giữ số của chứng từ cũ.
+        syncPayment();
     }
 
     function syncRefundAmount() {
@@ -340,26 +613,28 @@
         applyAmountLock();
     }
 
-    /** Ô tiền bị khoá bất cứ khi nào nó được suy ra từ một chứng từ đã chọn. */
+    /**
+     * Chọn chứng từ thì ô tiền được điền sẵn phần còn thiếu, nhưng KHÔNG khoá — trả một phần là
+     * chuyện bình thường và đó chính là lý do có nhiều phiếu chi cho cùng một phiếu nhập. Chỉ hiện
+     * mức trần để người lập biết gõ tối đa bao nhiêu; server cũng chặn đúng con số này.
+     */
     function applyAmountLock() {
-        const amountInput = document.getElementById('amountInput');
         const refundPayout = isRefundPayout();
-        const purchasePicked = supportsPurchaseLink()
-            && !!document.getElementById('purchaseIdInput').value;
-        const locked = refundPayout || purchasePicked;
+        const purchaseId = supportsPurchaseLink() ? document.getElementById('purchaseIdInput').value : '';
+        const returnId = refundPayout ? document.getElementById('returnIdInput').value : '';
+        const max = refundPayout
+            ? (returnId ? RETURN_REFUND_AMOUNTS[returnId] : null)
+            : (purchaseId ? PURCHASE_PAYABLE_AMOUNTS[purchaseId] : null);
 
-        amountInput.readOnly = locked;
-        amountInput.classList.toggle('auto-field', locked);
-        document.getElementById('amountLockedHint').style.display = locked ? '' : 'none';
+        document.getElementById('amountLockedHint').style.display = max == null ? 'none' : '';
         document.getElementById('amountLockedText').textContent = refundPayout
-            ? 'Số tiền lấy theo phần tiền hoàn của phiếu trả hàng đã chọn.'
-            : 'Số tiền lấy theo phần còn phải trả của phiếu nhập đã chọn.';
+            ? 'Phiếu trả hàng này còn phải hoàn tối đa ' + money(max) + '.'
+            : 'Phiếu nhập này còn phải trả tối đa ' + money(max) + '.';
     }
 
     function toggleReferenceFields() {
         const refundPayout = isRefundPayout();
         const purchaseLink = supportsPurchaseLink();
-
         document.getElementById('returnRefundFields').style.display = refundPayout ? '' : 'none';
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
 
@@ -375,16 +650,28 @@
             syncRefundAmount();
         }
         applyAmountLock();
+        syncPayment();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const dateInput = document.getElementById('dateInput');
-        if (!dateInput.value) {
-            dateInput.value = today();
-        }
-
-        document.getElementById('fullyPaidInput').addEventListener('change', togglePartialPaymentFields);
-        togglePartialPaymentFields();
+        document.querySelectorAll('input[name="payMethod"]').forEach(function (radio) {
+            radio.addEventListener('change', applyPayMethod);
+        });
+        document.getElementById('amountInput').addEventListener('input', syncPayment);
+        // Gõ (hoặc bấm mũi tên) vào ô chia tiền là người dùng tự quyết -> JS thôi gợi ý. Phân biệt với
+        // lần setMoney() của chính syncPayment nhờ cờ `syncing`: lúc đó handler này cũng chạy, nhưng
+        // là do code phát ra chứ không phải người gõ.
+        [cashInput, bankingInput].forEach(function (input) {
+            if (!input) {
+                return;
+            }
+            input.addEventListener('input', function () {
+                if (!syncing) {
+                    splitTouched = true;
+                }
+                syncPayment();
+            });
+        });
 
         document.getElementById('expenseTypeInput').addEventListener('change', toggleReferenceFields);
         document.getElementById('returnIdInput').addEventListener('change', syncRefundAmount);
@@ -397,6 +684,12 @@
         if (document.getElementById('purchaseIdInput').value) {
             syncPurchaseAmount();
         }
+
+        // Hoãn tới sau tất cả handler DOMContentLoaded: fragment money-input đăng ký handler của nó
+        // SAU khối script này, nên trước đó ô tiền vẫn giữ giá trị thô server render ("500000.00").
+        // pmMoneyValue bóc ký tự không phải số nên sẽ đọc chuỗi đó thành 50.000.000 — sai 100 lần.
+        // Sau khi fragment chạy xong, mọi ô đều là "500.000" và đọc lúc nào cũng đúng.
+        setTimeout(applyPayMethod, 0);
 
         document.getElementById('expenseForm').addEventListener('submit', function (event) {
             function reject(message) {
@@ -416,6 +709,14 @@
             const amount = pmMoneyValue(document.getElementById('amountInput'));
             if (amount <= 0) {
                 reject('Vui lòng nhập số tiền cần chi lớn hơn 0.');
+                return;
+            }
+
+            // Cùng một hàm với phần cảnh báo trực tiếp trên form, để hai chỗ không thể lệch nhau.
+            const paid = pmMoneyValue(cashInput) + pmMoneyValue(bankingInput);
+            const paymentProblem = paymentErrorFor(amount, paid, currentPayMethod() === 'both');
+            if (paymentProblem) {
+                reject(paymentProblem);
                 return;
             }
 

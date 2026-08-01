@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title th:text="'Lỗi ' + ${status} + ' | Nhà thuốc Hằng Ngọc'">Lỗi | Nhà thuốc Hằng Ngọc</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
+    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+
+    <th:block th:replace="~{fragments/error-page :: errorStyles}"></th:block>
+</head>
+
+<body>
+<!--
+  Trang lỗi CHUNG của toàn hệ thống. Spring Boot tự dùng view tên "error" cho MỌI lỗi không được
+  controller nào bắt (id không tồn tại, gõ sai URL, tham số sai kiểu, lỗi máy chủ), nên chỉ cần đúng
+  file này là không còn trang "Whitelabel Error Page" mặc định ở bất kỳ màn nào.
+
+  Cố tình KHÔNG in message/stack trace của lỗi: người dùng không đọc được, mà lộ ra thì thành thông
+  tin cho người muốn dò hệ thống. Chi tiết lỗi vẫn nằm nguyên trong log máy chủ.
+-->
+<th:block th:replace="~{fragments/error-page :: errorBody(${status}, ${path})}"></th:block>
+
+</body>
+
+</html>
