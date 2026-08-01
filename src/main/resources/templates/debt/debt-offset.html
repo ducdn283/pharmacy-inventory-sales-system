@@ -279,7 +279,7 @@
                     th:text="${#numbers.formatDecimal(line.receivableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}"
                     th:attr="data-remaining=${line.receivableAmount}">0đ</td>
                 <td class="col-amount">
-                  <input type="number" min="0" step="1" class="amount-input receivable-amount"
+                  <input type="text" inputmode="numeric" data-money class="amount-input receivable-amount"
                          th:name="${'receivableLines[' + stat.index + '].amount'}"
                          th:attr="data-remaining=${line.receivableAmount}, data-index=${stat.index}"
                          disabled>
@@ -321,7 +321,7 @@
                     th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}"
                     th:attr="data-remaining=${line.payableAmount}">0đ</td>
                 <td class="col-amount">
-                  <input type="number" min="0" step="1" class="amount-input payable-amount"
+                  <input type="text" inputmode="numeric" data-money class="amount-input payable-amount"
                          th:name="${'payableLines[' + stat.index + '].amount'}"
                          th:attr="data-remaining=${line.payableAmount}, data-index=${stat.index}"
                          disabled>
@@ -370,13 +370,24 @@
       return Math.round(n).toLocaleString('vi-VN') + 'đ';
     }
 
+    /** Ghi số vào ô data-money rồi phát input để fragment money-input định dạng (650000 → 650.000). */
+    function setMoney(input, value) {
+      if (!input) return;
+      input.value = value > 0 ? String(Math.round(value)) : '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function inputAmount(input) {
+      return window.pmMoneyValue ? window.pmMoneyValue(input) : parseNum(input.value);
+    }
+
     function sumChecked(inputs, checkClass) {
       let total = 0;
       inputs.forEach(function (input) {
         const row = input.closest('tr');
         const check = row.querySelector(checkClass);
         if (check && check.checked) {
-          total += parseNum(input.value);
+          total += inputAmount(input);
         }
       });
       return total;
@@ -417,7 +428,7 @@
           if (!input) return;
           input.disabled = !check.checked;
           if (check.checked && !input.value) {
-            input.value = Math.round(parseNum(input.dataset.remaining));
+            setMoney(input, parseNum(input.dataset.remaining));
           }
           if (!check.checked) {
             input.value = '';
@@ -454,7 +465,7 @@
           const use = Math.min(cap, remaining);
           check.checked = true;
           input.disabled = false;
-          input.value = use;
+          setMoney(input, use);
           remaining -= use;
         });
       }
@@ -472,5 +483,7 @@
     updateTotals();
   })();
 </script>
+
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 </body>
 </html>

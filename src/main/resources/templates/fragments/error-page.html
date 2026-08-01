@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Thân + style dùng chung cho các trang lỗi, để trang lỗi chung (error.html) và trang từ chối quyền
+  (403.html) không phải chép CSS hai lần và không bao giờ lệch giao diện.
+
+  Cách dùng:
+      <head> ... <th:block th:replace="~{fragments/error-page :: errorStyles}"></th:block> </head>
+      <body>  <th:block th:replace="~{fragments/error-page :: errorBody(403, null)}"></th:block> </body>
+
+  Tham số: status = mã lỗi (quyết định icon, màu, câu chữ); path = đường dẫn đã gõ, null thì ẩn.
+-->
+<th:block th:fragment="errorStyles">
+    <style>
+        .err-wrap {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+            background: #f9fafb;
+        }
+
+        /* Cùng ngôn ngữ hình khối với các thẻ nội dung trong app (.stock-card / .destroy-card). */
+        .err-card {
+            width: 100%;
+            max-width: 560px;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            padding: 40px 32px 32px;
+            text-align: center;
+        }
+
+        .err-icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+        }
+
+        /* Lỗi phía người dùng (4xx) = vàng "sai thao tác"; lỗi phía hệ thống (5xx) = đỏ "hỏng thật". */
+        .err-icon--warn { background: #fef3c7; color: #d97706; }
+        .err-icon--danger { background: #fee2e2; color: #dc2626; }
+
+        .err-code {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            margin-bottom: 12px;
+        }
+
+        .err-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 10px;
+        }
+
+        .err-desc {
+            font-size: 14px;
+            line-height: 1.65;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        /* Cho người dùng thấy đúng đường dẫn đã gõ — phần lớn ca là gõ thừa/thiếu ký tự. */
+        .err-path {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 10px 14px;
+            margin-bottom: 24px;
+            border: 1px dashed #e5e7eb;
+            border-radius: 12px;
+            background: #f9fafb;
+        }
+
+        .err-path-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .err-path code {
+            font-size: 13px;
+            color: #374151;
+            overflow-wrap: anywhere;
+            word-break: break-all;
+        }
+
+        .err-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-err-primary {
+            background: #059669;
+            border-color: #059669;
+            color: #ffffff;
+            border-radius: 12px;
+            padding: 9px 18px;
+        }
+
+        .btn-err-primary:hover {
+            background: #047857;
+            border-color: #047857;
+            color: #ffffff;
+        }
+
+        .btn-err-ghost {
+            border-color: #e5e7eb;
+            color: #4b5563;
+            border-radius: 12px;
+            padding: 9px 18px;
+        }
+
+        .btn-err-ghost:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .err-foot {
+            margin-top: 20px;
+            font-size: 12.5px;
+            color: #9ca3af;
+            text-align: center;
+        }
+
+        @media (max-width: 575.98px) {
+            .err-card { padding: 32px 20px 24px; }
+            .err-title { font-size: 19px; }
+        }
+    </style>
+</th:block>
+
+<th:block th:fragment="errorBody(status, path)">
+    <!-- knownStatus: Spring trả mã 999 khi không có lỗi thật nào gắn vào request (vd mở thẳng /error).
+         Con số đó vô nghĩa với người dùng nên ẩn hẳn, chỉ giữ lại câu mô tả chung. -->
+    <div class="err-wrap"
+         th:with="serverError=${status != null and status >= 500},
+                  knownStatus=${status != null and status > 0 and status != 999}">
+        <div class="err-card">
+
+            <div class="err-icon" th:classappend="${serverError} ? ' err-icon--danger' : ' err-icon--warn'">
+                <th:block th:switch="${status}">
+                    <i th:case="404" class="ti ti-search"></i>
+                    <i th:case="403" class="ti ti-lock"></i>
+                    <i th:case="400" class="ti ti-alert-triangle"></i>
+                    <i th:case="405" class="ti ti-alert-triangle"></i>
+                    <i th:case="*" class="ti ti-alert-circle"></i>
+                </th:block>
+            </div>
+
+            <div class="err-code" th:if="${knownStatus}" th:text="'MÃ LỖI ' + ${status}">MÃ LỖI 404</div>
+
+            <!-- Mỗi nhóm mã lỗi một câu; nói rõ người dùng nên làm gì tiếp, không nói lỗi kỹ thuật. -->
+            <h1 class="err-title" th:switch="${status}">
+                <span th:case="404">Không tìm thấy trang</span>
+                <span th:case="400">Đường dẫn không hợp lệ</span>
+                <span th:case="403">Bạn không có quyền xem trang này</span>
+                <span th:case="405">Thao tác không được hỗ trợ</span>
+                <span th:case="*">Đã có lỗi xảy ra</span>
+            </h1>
+
+            <p class="err-desc" th:switch="${status}">
+                <span th:case="404">Trang bạn tìm không tồn tại, hoặc dữ liệu đã bị xóa. Hãy kiểm tra lại
+                    đường dẫn, hoặc quay về danh sách để chọn đúng bản ghi.</span>
+                <span th:case="400">Đường dẫn chứa giá trị không đúng định dạng. Hãy quay lại danh sách và
+                    bấm vào bản ghi cần xem thay vì tự gõ địa chỉ.</span>
+                <span th:case="403">Trang này thuộc về một vai trò khác. Nếu bạn cho rằng mình cần quyền
+                    truy cập, hãy liên hệ chủ nhà thuốc.</span>
+                <span th:case="405">Yêu cầu được gửi bằng cách hệ thống không hỗ trợ. Hãy thao tác bằng
+                    nút trên màn hình thay vì gọi trực tiếp đường dẫn.</span>
+                <span th:case="*">Hệ thống gặp sự cố khi xử lý yêu cầu. Vui lòng thử lại; nếu vẫn lỗi,
+                    báo lại kèm thao tác bạn vừa làm.</span>
+            </p>
+
+            <div class="err-path" th:if="${path != null and !#strings.isEmpty(path)}">
+                <span class="err-path-label">Đường dẫn</span>
+                <code th:text="${path}">/owner/stock-adjustments/12</code>
+            </div>
+
+            <div class="err-actions">
+                <a th:href="@{/dashboard}" class="btn btn-err-primary">
+                    <i class="ti ti-home me-1"></i>Về trang tổng quan
+                </a>
+                <a href="javascript:history.back()" class="btn btn-err-ghost">
+                    <i class="ti ti-arrow-left me-1"></i>Quay lại trang trước
+                </a>
+            </div>
+        </div>
+
+        <p class="err-foot" th:if="${knownStatus}">
+            Nếu lỗi lặp lại, báo cho quản trị kèm <strong th:text="'mã lỗi ' + ${status}">mã lỗi 404</strong>
+            <span th:if="${path != null and !#strings.isEmpty(path)}">và đường dẫn ở trên</span>.
+        </p>
+    </div>
+</th:block>
+</body>
+</html>

@@ -143,8 +143,16 @@ public class SupplierController {
     // ------------------------------------------------------------------ detail / update
 
     @GetMapping("/{id}")
-    public String detail(@PathVariable Integer id, Model model) {
-        SupplierResponse supplier = supplierService.getById(id);
+    public String detail(@PathVariable Integer id, Model model,
+                         RedirectAttributes redirectAttributes) {
+        SupplierResponse supplier;
+        try {
+            supplier = supplierService.getById(id);
+        } catch (IllegalArgumentException exception) {
+            // Gõ tay id không tồn tại: về danh sách kèm thông báo thay vì rơi vào trang lỗi chung.
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:/supplier";
+        }
         model.addAttribute("supplier", supplier);
 
         if (!model.containsAttribute("form")) {

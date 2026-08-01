@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${printData.showVatBreakdown ? 'Hóa đơn GTGT' : 'Hóa đơn bán hàng'} + ' | PharmaManager'">
+        Hóa đơn bán hàng | PharmaManager
+    </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: "Times New Roman", serif;
+            font-size: 14px;
+            color: #000;
+            background: #fff;
+        }
+
+        .no-print {
+            max-width: 900px;
+            margin: 16px auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-family: Arial, sans-serif;
+        }
+
+        .no-print a,
+        .no-print button {
+            padding: 8px 14px;
+            border: 1px solid #999;
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            color: #111;
+            font-size: 14px;
+        }
+
+        .print-page {
+            width: 900px;
+            margin: 0 auto;
+            padding: 10px 20px 40px;
+        }
+
+        .title {
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            margin: 12px 0 6px;
+        }
+
+        .code-line {
+            text-align: center;
+            font-size: 15px;
+            margin-bottom: 2px;
+        }
+
+        .code-line strong {
+            font-size: 16px;
+        }
+
+        .date-line {
+            text-align: center;
+            font-style: italic;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .meta-block {
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+
+        .meta-item {
+            display: flex;
+        }
+
+        .meta-label {
+            min-width: 130px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        th, td {
+            border: 1px solid #000;
+            padding: 8px 6px;
+            vertical-align: middle;
+        }
+
+        th {
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .note {
+            margin-top: 14px;
+        }
+
+        .summary {
+            width: 380px;
+            margin-left: auto;
+            margin-top: 18px;
+            line-height: 1.8;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .summary-row.total {
+            font-weight: bold;
+        }
+
+        .signature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 48px;
+            text-align: center;
+        }
+
+        .signature-title {
+            font-weight: bold;
+            margin-bottom: 70px;
+        }
+
+        @media print {
+            .no-print {
+                display: none;
+            }
+
+            .print-page {
+                width: auto;
+                margin: 0;
+                padding: 0;
+            }
+
+            @page {
+                size: A4 portrait;
+                margin: 14mm;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="no-print">
+    <a th:href="${basePath + '/' + printData.invoiceId}">Quay lại chi tiết</a>
+    <button type="button" onclick="window.print()">In hóa đơn</button>
+</div>
+
+<div class="print-page">
+    <div class="title" th:text="${printData.showVatBreakdown ? 'HÓA ĐƠN GTGT' : 'HÓA ĐƠN BÁN HÀNG'}">
+        HÓA ĐƠN BÁN HÀNG
+    </div>
+
+    <div class="code-line">
+        Số hóa đơn:
+        <strong th:text="${printData.invoiceCode}">HD000046</strong>
+    </div>
+
+    <div class="date-line">
+        Ngày: <span th:text="${printData.dateDisplay}">01/07/2026 14:10</span>
+    </div>
+
+    <div class="meta-block">
+        <div class="meta-item" th:if="${printData.pharmacyName != null && !printData.pharmacyName.isBlank()}">
+            <div class="meta-label">Đơn vị bán:</div>
+            <div th:text="${printData.pharmacyName}">Nhà thuốc Hằng Ngọc</div>
+        </div>
+
+        <div class="meta-item" th:if="${printData.pharmacyPhone != null && !printData.pharmacyPhone.isBlank()}">
+            <div class="meta-label">Điện thoại:</div>
+            <div th:text="${printData.pharmacyPhone}">0901234567</div>
+        </div>
+
+        <div class="meta-item">
+            <div class="meta-label">Ký hiệu HĐ:</div>
+            <div th:text="${printData.invoicePattern}">2K26MAA</div>
+        </div>
+
+        <div class="meta-item">
+            <div class="meta-label">Loại hóa đơn:</div>
+            <div th:text="${printData.invoiceTypeDisplay}">Bán hàng</div>
+        </div>
+
+        <div class="meta-item" th:if="${printData.taxCode != null}">
+            <div class="meta-label">Mã số thuế (HĐ):</div>
+            <div th:text="${printData.taxCode}">022176001896</div>
+        </div>
+
+        <div class="meta-item">
+            <div class="meta-label">Khách hàng:</div>
+            <div th:text="${printData.customerName}">Khách lẻ</div>
+        </div>
+
+        <div class="meta-item"
+             th:if="${printData.customerPhone != null && !printData.customerPhone.isBlank()}">
+            <div class="meta-label">SĐT khách:</div>
+            <div th:text="${printData.customerPhone}">0901234567</div>
+        </div>
+
+        <div class="meta-item">
+            <div class="meta-label">Người bán:</div>
+            <div th:text="${printData.employeeName}">Dược sĩ A</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th style="width: 40px;">STT</th>
+            <th style="width: 90px;">Mã hàng</th>
+            <th>Tên hàng</th>
+            <th style="width: 70px;">Đơn vị</th>
+            <th style="width: 60px;">SL</th>
+            <th style="width: 90px;">Đơn giá</th>
+            <th style="width: 100px;">Thành tiền</th>
+            <th style="width: 90px;" th:if="${printData.showVatBreakdown}">Chưa thuế</th>
+            <th style="width: 60px;" th:if="${printData.showVatBreakdown}">Thuế suất</th>
+            <th style="width: 90px;" th:if="${printData.showVatBreakdown}">Thuế GTGT</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        <tr th:each="line, iterStat : ${printData.lines}">
+            <td class="text-center" th:text="${iterStat.index + 1}">1</td>
+            <td th:text="${line.productCode}">SP001</td>
+            <td th:text="${line.productName}">Paracetamol 500mg</td>
+            <td class="text-center" th:text="${line.unitName}">Hộp</td>
+            <td class="text-right" th:text="${line.quantity}">1</td>
+            <td class="text-right"
+                th:text="${#numbers.formatDecimal(line.unitSellPrice, 0, 'POINT', 0, 'COMMA')}">0</td>
+            <td class="text-right"
+                th:text="${#numbers.formatDecimal(line.lineSubtotal, 0, 'POINT', 0, 'COMMA')}">0</td>
+            <td class="text-right" th:if="${printData.showVatBreakdown}"
+                th:text="${line.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(line.preTaxAmount, 0, 'POINT', 0, 'COMMA')}">0</td>
+            <td class="text-center" th:if="${printData.showVatBreakdown}"
+                th:text="${line.vatRate == null} ? '—' : ${#numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
+            <td class="text-right" th:if="${printData.showVatBreakdown}"
+                th:text="${line.vatAmount == null} ? '—' : ${#numbers.formatDecimal(line.vatAmount, 0, 'POINT', 0, 'COMMA')}">0</td>
+        </tr>
+
+        <tr th:if="${!#lists.isEmpty(printData.lines) and printData.showVatBreakdown}" class="fw-semibold">
+            <td colspan="6" class="text-right">Tổng cộng</td>
+            <td class="text-right"
+                th:text="${#numbers.formatDecimal(printData.subtotal, 0, 'POINT', 0, 'COMMA')}">0</td>
+            <td class="text-right"
+                th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA')}">0</td>
+            <td></td>
+            <td class="text-right"
+                th:text="${#numbers.formatDecimal(printData.totalVATOutput, 0, 'POINT', 0, 'COMMA')}">0</td>
+        </tr>
+
+        <tr th:if="${#lists.isEmpty(printData.lines)}">
+            <td th:colspan="${printData.showVatBreakdown ? 10 : 7}" class="text-center">Không có dữ liệu.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="note">
+        Ghi chú:
+        <span th:text="${printData.note ?: ''}"></span>
+    </div>
+
+    <div class="summary">
+        <div class="summary-row">
+            <div>Tổng số lượng:</div>
+            <div th:text="${printData.totalQuantity}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Tiền hàng:</div>
+            <div th:text="${#numbers.formatDecimal(printData.subtotal, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row" th:if="${printData.showVatBreakdown}">
+            <div>Tiền hàng (chưa thuế):</div>
+            <div th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row" th:if="${printData.showVatBreakdown}">
+            <div>Thuế GTGT đầu ra:</div>
+            <div th:text="${#numbers.formatDecimal(printData.totalVATOutput, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Giảm giá:</div>
+            <div th:text="${#numbers.formatDecimal(printData.discount, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row total">
+            <div>Tổng thanh toán:</div>
+            <div th:text="${#numbers.formatDecimal(printData.total, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Tiền mặt:</div>
+            <div th:text="${#numbers.formatDecimal(printData.paidByCash, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Chuyển khoản:</div>
+            <div th:text="${#numbers.formatDecimal(printData.paidByBanking, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Còn nợ:</div>
+            <div th:text="${#numbers.formatDecimal(printData.debtAmount, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Hình thức TT:</div>
+            <div th:text="${printData.paymentDisplay}">Tiền mặt</div>
+        </div>
+    </div>
+
+    <div class="signature-grid">
+        <div>
+            <div class="signature-title">Khách hàng</div>
+            <div>.................................</div>
+        </div>
+
+        <div>
+            <div class="signature-title">Người bán</div>
+            <div>.................................</div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
