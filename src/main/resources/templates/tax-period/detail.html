@@ -324,19 +324,7 @@
                     </div>
                 </div>
 
-                <div class="col-12 col-md-5">
-                    <label for="nextGroupInput" class="form-label">
-                        Nhóm áp dụng cho kỳ sau <span class="text-danger">*</span>
-                    </label>
-                    <select id="nextGroupInput" name="nextPeriodTaxType" class="form-select">
-                        <option th:each="g : ${groupOptions}"
-                                th:value="${g}"
-                                th:text="${groupLabels.get(g)}"
-                                th:selected="${g == detail.nextPeriodTaxType}">Nhóm 2</option>
-                    </select>
-                </div>
-
-                <div class="col-12 col-md-4">
+                <div class="col-12 col-md-9">
                     <label for="cashBalanceInput" class="form-label">Số dư quỹ tiền mặt cuối kỳ</label>
                     <input id="cashBalanceInput"
                            type="text"
