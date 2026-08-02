@@ -214,6 +214,9 @@ public class IncomeController {
                              @RequestParam(name = "invoiceId", required = false) Integer invoiceId,
                              @RequestParam(name = "supplierId", required = false) Integer supplierId,
                              @RequestParam(name = "returnId", required = false) Integer returnId,
+                             @RequestParam(name = "accountId", required = false) Integer accountId,
+                             @RequestParam(name = "shiftReportOfAccountId", required = false)
+                             Integer shiftReportOfAccountId,
                              HttpServletRequest request,
                              Model model) {
         if (!model.containsAttribute("form")) {
@@ -225,6 +228,10 @@ public class IncomeController {
             form.setInvoiceId(invoiceId);
             form.setSupplierId(supplierId);
             form.setReturnId(returnId);
+            // Điền sẵn khi mở từ màn báo cáo ca bị thâm hụt quỹ (loại SHIFT_SHORTAGE): người chịu
+            // trách nhiệm = người trực ca, chứng từ liên quan = chính ca đó.
+            form.setAccountId(accountId);
+            form.setShiftReportOfAccountId(shiftReportOfAccountId);
             model.addAttribute("form", form);
         }
         addCreatePageData(request, model);

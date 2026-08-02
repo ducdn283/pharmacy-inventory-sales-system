@@ -56,5 +56,11 @@ public class ReturnDetailPageResponse {
     /** Thuế GTGT đầu ra được giảm trừ trong kỳ TRẢ HÀNG (không hồi tố kỳ bán gốc) = Return.totalVATRefund. */
     private BigDecimal totalVATRefund;
 
+    /**
+     * Nhà thuốc đang ở Nhóm 1 (miễn thuế) ⇒ không kê khai gì, nên màn hình ẩn hẳn phần thuế thay vì
+     * hiển thị một cột toàn số không có ý nghĩa. Số thuế vẫn được lưu theo hóa đơn gốc.
+     */
+    private boolean taxExempt;
+
     private List<ReturnDetailItemResponse> items;
 }
