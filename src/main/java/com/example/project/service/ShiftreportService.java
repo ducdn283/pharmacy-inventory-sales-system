@@ -73,6 +73,7 @@ public class ShiftreportService {
     private final ExpenseRepository expenseRepository;
     private final AccountpermissionRepository accountpermissionRepository;
     private final WorkflowNotificationService workflowNotificationService;
+    private final FinancialsettingService financialsettingService;
 
     public ShiftreportService(ShiftreportRepository shiftreportRepository,
                               AccountRepository accountRepository,
@@ -82,7 +83,8 @@ public class ShiftreportService {
                               IncomeRepository incomeRepository,
                               ExpenseRepository expenseRepository,
                               AccountpermissionRepository accountpermissionRepository,
-                              WorkflowNotificationService workflowNotificationService) {
+                              WorkflowNotificationService workflowNotificationService,
+                              FinancialsettingService financialsettingService) {
         this.shiftreportRepository = shiftreportRepository;
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
@@ -92,6 +94,7 @@ public class ShiftreportService {
         this.expenseRepository = expenseRepository;
         this.accountpermissionRepository = accountpermissionRepository;
         this.workflowNotificationService = workflowNotificationService;
+        this.financialsettingService = financialsettingService;
     }
 
     /**
@@ -420,23 +423,39 @@ public class ShiftreportService {
      * quỹ chỉ nhận 1.000.000 — phần thiếu là khoản phải THU LẠI của người trực (phiếu thu riêng,
      * loại {@code SHIFT_SHORTAGE}), không phải khoản giảm doanh thu.</p>
      *
-     * <p>Số nộp vào quỹ = {@code actualClosingCash − openingCash}: tiền đầu ca là khoản quỹ ứng ra
-     * cho ca rồi thu về nguyên trạng, chỉ phần CHÊNH mới thật sự vào/ra quỹ. Số âm (ca chi tiền mặt
-     * nhiều hơn thu) làm giảm quỹ, đúng chiều tiền thật.</p>
+     * <p><strong>Chốt ca nộp đúng phần CHÊNH LỆCH THỰC ĐẾM</strong> ({@code cashDiscrepancy}), không
+     * nộp lại toàn bộ tiền của ca. Lý do: tiền mặt thu trong ca ĐÃ được cộng vào quỹ ngay lúc phát
+     * sinh — {@code InvoiceService.createSaleInvoice} và {@code IncomeService} đều gọi
+     * {@code applyFundDelta(paidByCash, paidByBanking)}. Cộng thêm {@code thực đếm − đầu ca} ở đây
+     * nữa là đếm cùng một tờ tiền hai lần.</p>
+     *
+     * <p>Cộng chênh lệch thì kết quả cuối cùng đúng bằng tiền thật đếm được:</p>
+     * <pre>
+     * quỹ 1.000.000
+     *   + 199.000  (bán hàng — quỹ nhận theo số "đáng lẽ phải có")
+     *   −  99.000  (chốt ca — thực đếm thiếu 99.000 so với dự kiến)
+     *   = 1.100.000  ← đúng số tiền mặt đang thật sự nằm trong két
+     * </pre>
+     *
+     * <p>Phần 99.000 thiếu là khoản phải THU LẠI của người trực; khi lập phiếu thu
+     * {@code SHIFT_SHORTAGE} và phiếu đó hoàn thành, {@code IncomeService} cộng nốt vào quỹ →
+     * 1.199.000. Doanh thu của ca thì KHÔNG đổi (vẫn 199.000, số của kỳ tính thuế) — thâm hụt quỹ
+     * không bao giờ là khoản giảm doanh thu.</p>
      *
      * <p>Gọi đúng tại bước chuyển sang {@code Đã duyệt} — trạng thái này là ĐIỂM CUỐI (chỉ tới được
      * một lần: {@code approve()} chỉ nhận ca Chờ duyệt, {@code closeShift()} chỉ nhận Nháp/Từ chối)
-     * nên không có đường nào cộng quỹ hai lần. Ca bị từ chối chưa từng cộng nên nộp lại vẫn đúng.</p>
+     * nên không có đường nào trừ quỹ hai lần. Ca bị từ chối chưa từng trừ nên nộp lại vẫn đúng.</p>
+     *
+     * <p><strong>⚠️ Phụ thuộc ngầm cần nhớ:</strong> công thức này đúng vì bên bán hàng/phiếu thu tự
+     * cộng quỹ lúc lập. Nếu sau này module đó bỏ {@code applyFundDelta}, chỗ này phải đổi thành
+     * {@code thực đếm − đầu ca}. Ngoài ra tiền mặt CHI ra trong ca ({@code totalCashOut}) hiện chưa
+     * có nơi nào trừ khỏi quỹ — thiếu sót sẵn có của module Phiếu chi, không xử lý ở đây để không
+     * giành việc của họ rồi trừ hai lần khi họ làm.</p>
      */
     private void creditCashSafe(Shiftreport shift) {
-        BigDecimal handedIn = nz(shift.getActualClosingCash()).subtract(nz(shift.getOpeningCash()));
-        if (handedIn.signum() == 0) {
-            return;
-        }
-        financialsettingRepository.findFirstByOrderByIdAsc().ifPresent(setting -> {
-            setting.setCashSafeBalance(nz(setting.getCashSafeBalance()).add(handedIn));
-            financialsettingRepository.save(setting);
-        });
+        // Chỉ đụng quỹ TIỀN MẶT: chuyển khoản không qua ngăn kéo nên không có gì để đối chiếu lúc
+        // chốt ca, quỹ ngân hàng đã nhận đủ ngay lúc lập hóa đơn/phiếu thu.
+        financialsettingService.applyFundDelta(nz(shift.getCashDiscrepancy()), BigDecimal.ZERO);
     }
 
     @Transactional
