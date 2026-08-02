@@ -96,6 +96,7 @@ public class InvoiceService {
     private final CustomerRepository customerRepository;
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
+    private final FinancialsettingService financialsettingService;
     private final ReturnRepository returnRepository;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
@@ -110,6 +111,7 @@ public class InvoiceService {
                           CustomerRepository customerRepository,
                           AccountRepository accountRepository,
                           FinancialsettingRepository financialsettingRepository,
+                          FinancialsettingService financialsettingService,
                           ReturnRepository returnRepository,
                           ShiftreportService shiftreportService) {
         this.invoiceRepository = invoiceRepository;
@@ -120,6 +122,7 @@ public class InvoiceService {
         this.customerRepository = customerRepository;
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
+        this.financialsettingService = financialsettingService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
     }
@@ -438,6 +441,8 @@ public class InvoiceService {
         savedInvoice.setShiftReportID(shiftreportService.ensureOpenShiftFor(currentAccountId));
 
         saveInvoiceGuardingConcurrentEdit(savedInvoice);
+
+        financialsettingService.applyFundDelta(paidByCash, paidByBanking);
 
         return savedInvoice.getId();
     }

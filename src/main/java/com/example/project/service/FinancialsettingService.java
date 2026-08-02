@@ -89,8 +89,8 @@ public class FinancialsettingService {
         // Bỏ trống nghĩa là "giữ nguyên số dư hiện tại". Form luôn hiển thị sẵn giá trị đang lưu
         // (giống mọi trường khác), nên chỉ cập nhật mốc thời gian khi số vừa gửi lên THỰC SỰ khác số
         // đang lưu — nếu không, mỗi lần lưu một thiết lập không liên quan (ví dụ đổi số điện thoại)
-        // cũng vô tình "chạm" vào mốc cập nhật quỹ. Đây là số dư do người dùng tự set/điều chỉnh thủ
-        // công; việc tự động cộng trừ theo Invoice/Income/Expense chưa được xây trong bản này.
+        // cũng vô tình "chạm" vào mốc cập nhật quỹ. Ngoài chỉnh tay tại đây, số dư còn được cộng/trừ
+        // tự động khi phát sinh giao dịch (xem {@link #applyFundDelta}).
         boolean balanceChanged = false;
         if (request.getCashSafeBalance() != null
                 && (entity.getCashSafeBalance() == null || entity.getCashSafeBalance().compareTo(request.getCashSafeBalance()) != 0)) {
@@ -107,6 +107,29 @@ public class FinancialsettingService {
         }
 
         return FinancialsettingResponse.from(financialsettingRepository.save(entity));
+    }
+
+    /**
+     * Cộng/trừ số dư quỹ tiền mặt và quỹ ngân hàng theo delta. Delta dương = thu (hóa đơn bán),
+     * delta âm = chi (phiếu chi đã duyệt, v.v.).
+     */
+    @Transactional
+    public void applyFundDelta(BigDecimal cashDelta, BigDecimal bankingDelta) {
+        BigDecimal cash = cashDelta != null ? cashDelta : BigDecimal.ZERO;
+        BigDecimal banking = bankingDelta != null ? bankingDelta : BigDecimal.ZERO;
+        if (cash.compareTo(BigDecimal.ZERO) == 0 && banking.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new IllegalStateException("Chưa cấu hình thiết lập tài chính"));
+        entity.setCashSafeBalance(nullToZero(entity.getCashSafeBalance()).add(cash));
+        entity.setBankAccountBalance(nullToZero(entity.getBankAccountBalance()).add(banking));
+        entity.setBalanceUpdatedAt(LocalDateTime.now());
+        financialsettingRepository.save(entity);
+    }
+
+    private static BigDecimal nullToZero(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     private static FinancialsettingResponse defaultSettings() {

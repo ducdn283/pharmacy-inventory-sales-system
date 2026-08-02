@@ -721,7 +721,7 @@
                                 th:data-print-url="${basePath + '/' + detail.id + '/print?embed=1'}"
                                 class="btn btn-invoice-primary w-100 mb-3">
                             <i class="ti ti-photo me-1"></i>
-                            Xem hình ảnh phiếu in
+                            Xem hình ảnh hóa đơn
                         </button>
 
                         <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}"
@@ -730,7 +730,7 @@
                               class="mb-3">
                             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <button type="submit" class="btn btn-invoice-primary w-100"
-                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot; và bạn có thể xem phiếu in có Mã CQT.">
+                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot; và bạn có thể xem hình ảnh hóa đơn có Mã CQT.">
                                 <i class="ti ti-writing-sign me-1"></i>
                                 Ký hóa đơn
                             </button>
@@ -752,13 +752,13 @@
     <div class="signed-print-modal-backdrop" id="signedPrintModalBackdrop"></div>
     <div class="signed-print-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="signedPrintModalTitle">
         <div class="signed-print-modal-header">
-            <h2 class="signed-print-modal-title" id="signedPrintModalTitle">Hình ảnh phiếu in đã ký</h2>
+            <h2 class="signed-print-modal-title" id="signedPrintModalTitle">Hình ảnh hóa đơn đã ký</h2>
             <button type="button" class="signed-print-modal-close" id="closeSignedPrintModal" aria-label="Đóng">&times;</button>
         </div>
         <div class="signed-print-modal-body">
             <iframe id="signedPrintFrame"
                     class="signed-print-frame"
-                    title="Hình ảnh phiếu in hóa đơn đã ký"></iframe>
+                    title="Hình ảnh hóa đơn đã ký"></iframe>
         </div>
         <div class="signed-print-modal-footer">
             <button type="button" class="btn btn-outline-secondary" id="closeSignedPrintModalFooter">Đóng</button>
