@@ -98,6 +98,7 @@ public class IncomeService {
     // for an Accountant.
     private final ShiftreportService shiftreportService;
     private final InvoiceService invoiceService;
+    private final FinancialsettingService financialsettingService;
     private final WorkflowNotificationService workflowNotificationService;
 
     public IncomeService(IncomeRepository incomeRepository,
@@ -112,6 +113,7 @@ public class IncomeService {
                          ShiftreportRepository shiftreportRepository,
                          ShiftreportService shiftreportService,
                          InvoiceService invoiceService,
+                         FinancialsettingService financialsettingService,
                          WorkflowNotificationService workflowNotificationService) {
         this.incomeRepository = incomeRepository;
         this.accountRepository = accountRepository;
@@ -125,6 +127,7 @@ public class IncomeService {
         this.shiftreportRepository = shiftreportRepository;
         this.shiftreportService = shiftreportService;
         this.invoiceService = invoiceService;
+        this.financialsettingService = financialsettingService;
         this.workflowNotificationService = workflowNotificationService;
     }
 
@@ -402,7 +405,17 @@ public class IncomeService {
                     .incomeCreated(saved);
         }
 
+        creditFundOnCompletion(saved);
+
         return saved.getId();
+    }
+
+    /** Cộng tiền mặt / chuyển khoản vào quỹ khi phiếu thu đã hoàn thành (không áp dụng cấn trừ công nợ). */
+    private void creditFundOnCompletion(Income income) {
+        if (!isCompletedStatus(income.getStatus())) {
+            return;
+        }
+        financialsettingService.applyFundDelta(income.getPaidByCash(), income.getPaidByBanking());
     }
 
     @Transactional(readOnly = true)
