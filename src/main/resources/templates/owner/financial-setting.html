@@ -95,8 +95,7 @@
                 <input type="hidden" th:if="${revenueGroupLocked}" name="revenueGroup" th:value="*{revenueGroup}">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('revenueGroup')}" th:errors="*{revenueGroup}"></div>
                 <div class="form-text" th:if="${revenueGroupLocked}">
-                  Đã khoá — nhóm doanh thu chỉ chỉnh sửa được một lần. Kể từ khi kỳ thuế đầu tiên
-                  được chốt, hệ thống sẽ tự động cập nhật nhóm này theo Kỳ thuế.
+                  Đã khoá — hệ thống tự cập nhật nhóm này theo Kỳ thuế kể từ khi kỳ đầu tiên được chốt.
                 </div>
               </div>
               <div class="col-12 col-md-4">

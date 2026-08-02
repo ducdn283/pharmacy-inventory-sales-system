@@ -14,6 +14,7 @@ public final class NotificationReferenceType {
     public static final String PURCHASE_INVOICE = "PURCHASE_INVOICE";
     public static final String TAX_PERIOD = "TAX_PERIOD";
     public static final String SYSTEM = "SYSTEM";
+    public static final String EMPLOYEE_NOTE = "EMPLOYEE_NOTE";
 
     private NotificationReferenceType() {
     }

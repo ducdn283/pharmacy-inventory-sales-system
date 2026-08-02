@@ -366,6 +366,54 @@
                     </div>
                 </div>
 
+                <!-- Thu lại phần quỹ thiếu. Doanh thu của ca KHÔNG bị sửa: hóa đơn đã bán thì doanh
+                     thu vẫn ghi nhận đủ (số của kỳ tính thuế), phần két thiếu là khoản phải thu lại
+                     của người trực và được thu bằng một phiếu thu riêng. -->
+                <div class="shift-card p-4 mb-4"
+                     th:if="${detail.cashShortage != null and detail.cashShortage.signum() > 0}">
+                    <div class="section-title mb-3">Thu tiền thâm hụt quỹ</div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Số tiền còn thiếu</span>
+                        <strong class="text-danger"
+                                th:text="${#numbers.formatDecimal(detail.cashShortage, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Người chịu trách nhiệm</span>
+                        <strong th:text="${detail.cashierName}">—</strong>
+                    </div>
+
+                    <!-- Đã có phiếu thu gắn vào ca này thì không lập phiếu thứ hai (IncomeService cũng
+                         chặn lại) — chỉ trỏ sang phiếu đã có. -->
+                    <div th:if="${detail.shortageIncomeId != null}" class="mt-3">
+                        <div class="text-secondary small mb-2">
+                            Đã lập phiếu thu
+                            <span class="fw-semibold" th:text="${detail.shortageIncomeCode}">PT-000001</span>
+                            <span th:text="${'(' + detail.shortageIncomeStatus + ')'}">(Nháp)</span>
+                        </div>
+                        <a class="btn btn-outline-secondary w-100"
+                           th:href="${incomeBasePath + '/' + detail.shortageIncomeId}">
+                            <i class="ti ti-eye me-1"></i>
+                            Xem phiếu thu
+                        </a>
+                    </div>
+
+                    <div th:if="${detail.shortageIncomeId == null}" class="mt-3">
+                        <a th:if="${canCreateShortageIncome}"
+                           class="btn btn-shift-primary w-100"
+                           th:href="@{${incomeBasePath + '/create'}(incomeType='SHIFT_SHORTAGE',
+                                     accountId=${detail.cashierId},
+                                     shiftReportOfAccountId=${detail.id})}">
+                            <i class="ti ti-cash-banknote me-1"></i>
+                            Tạo phiếu thu tiền thâm hụt
+                        </a>
+                        <div class="text-secondary small" th:unless="${canCreateShortageIncome}">
+                            Phiếu thu khoản thâm hụt do Chủ nhà thuốc hoặc Kế toán lập.
+                        </div>
+                    </div>
+                </div>
+
                 <div class="shift-card p-4">
                     <form th:if="${detail.canClose and isOwnShift}"
                           id="closeShiftForm"

@@ -208,6 +208,28 @@
                 max-width: none;
             }
         }
+
+        .profile-note-item {
+            padding: 14px;
+            border: 1px solid var(--profile-border);
+            border-radius: 12px;
+            background: #f9fafb;
+        }
+
+        .profile-note-content {
+            margin: 0;
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .profile-note-date {
+            margin-top: 8px;
+            color: var(--profile-muted);
+            font-size: 12px;
+        }
     </style>
 </head>
 
@@ -373,7 +395,64 @@
                         </form>
                     </div>
                 </div>
+                <div id="employee-notes"
+                     class="profile-card profile-form-card mt-4"
+                     th:unless="${
+         param.section != null
+         and param.section[0] == 'password'
+     }">
 
+                    <div class="p-5">
+
+                        <div class="d-flex justify-content-between
+                    align-items-start gap-3 mb-4">
+
+                            <div>
+                                <h2 class="fs-5 mb-1">
+                                    Ghi chú nhân viên
+                                </h2>
+
+                                <p class="profile-muted small mb-0">
+                                    Các ghi chú do Chủ nhà thuốc tạo.
+                                    Bạn chỉ có quyền xem nội dung này.
+                                </p>
+                            </div>
+
+                            <i class="ti ti-notes fs-4 text-success"></i>
+                        </div>
+
+                        <div th:if="${#lists.isEmpty(employeeNotes)}"
+                             class="text-center profile-muted py-4">
+
+                            Bạn chưa có ghi chú nhân viên nào.
+                        </div>
+
+                        <div class="d-flex flex-column gap-3"
+                             th:unless="${#lists.isEmpty(employeeNotes)}">
+
+                            <div class="profile-note-item"
+                                 th:each="note : ${employeeNotes}">
+
+                                <p class="profile-note-content"
+                                   th:text="${note.content}">
+                                    Nội dung ghi chú
+                                </p>
+
+                                <div class="profile-note-date">
+                                    <i class="ti ti-clock me-1"></i>
+
+                                    Ngày tạo:
+
+                                    <span th:text="${note.dateDisplay}">
+                        02/08/2026 10:30:00
+                    </span>
+                                </div>
+
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
                 <div class="profile-card profile-form-card"
                      th:if="${param.section != null and param.section[0] == 'password'}">
                     <div class="p-5">

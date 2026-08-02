@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.ReturnStatus;
+import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.ReturnCreateRequest;
 import com.example.project.dto.request.ReturnLineRequest;
 import com.example.project.dto.response.*;
@@ -65,10 +66,15 @@ public class ReturnService {
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String INVOICE_STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
 
-    // Only sale/replacement invoices are returnable. DB invoiceType: Bán hàng/Điều chỉnh/Thay thế — a
-    // return must not be opened against an adjustment invoice (the negative slip emitted by TH2, no
-    // returnable lines of its own).
+    // Only sale/replacement invoices are returnable. DB invoiceType (nay lưu tiếng Việt):
+    // Bán hàng / Hóa đơn GTGT / Điều chỉnh / Thay thế — a return must not be opened against an
+    // adjustment invoice (the negative slip emitted by TH2, no returnable lines of its own).
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
+    /**
+     * Hóa đơn bán hàng của nhà thuốc Nhóm 3+ — {@code InvoiceService} gán loại này thay cho
+     * {@link #INVOICE_TYPE_NORMAL}. Vẫn là bán hàng, vẫn trả lại được (xem {@link #isNormalInvoice}).
+     */
+    private static final String INVOICE_TYPE_VAT = "Hóa đơn GTGT";
     /** Legacy DB value before invoiceType was stored in Vietnamese. */
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
@@ -874,6 +880,7 @@ public class ReturnService {
                         .filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
                 ret.getTotalVATRefund(),
+                isTaxExempt(),
                 items);
     }
 
@@ -1045,6 +1052,11 @@ public class ReturnService {
     /**
      * A return target must be a sale or replacement invoice — never an adjustment invoice (it carries only
      * negative delta lines, nothing sellable to return again). (invoiceType is NOT NULL.)
+     *
+     * <p><strong>"Hóa đơn GTGT" cũng là hóa đơn BÁN HÀNG.</strong> {@code InvoiceService.createSaleInvoice}
+     * gán loại này thay cho "Bán hàng" khi nhà thuốc đang ở Nhóm 3+ — cùng một nghiệp vụ bán, chỉ khác
+     * hình thức chứng từ. Thiếu nó ở đây thì khi chuyển sang Nhóm 3, MỌI hóa đơn bán mới đều không trả
+     * lại được và danh sách chọn ở màn trả hàng rỗng trơn.</p>
      */
     private boolean isNormalInvoice(Invoice invoice) {
         if (invoice == null) {
@@ -1054,6 +1066,7 @@ public class ReturnService {
         return type == null
                 || INVOICE_TYPE_NORMAL.equalsIgnoreCase(type)
                 || INVOICE_TYPE_NORMAL_LEGACY.equalsIgnoreCase(type)
+                || INVOICE_TYPE_VAT.equalsIgnoreCase(type)
                 || INVOICE_TYPE_REPLACEMENT.equalsIgnoreCase(type);
     }
 
@@ -1148,6 +1161,23 @@ public class ReturnService {
                 .map(rate -> rate.min(FULL_REFUND_RATE))
                 .orElse(FULL_REFUND_RATE)
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Nhà thuốc đang thuộc nhóm doanh thu MIỄN THUẾ (Nhóm 1) hay không —
+     * {@code Financialsetting.revenueGroup}, cùng nguồn với {@code ReturnPurchaseService.revenueGroup()}.
+     *
+     * <p>Nhóm 1 dưới ngưỡng 1 nên KHÔNG kê khai gì cả: không có thuế GTGT đầu ra để giảm trừ khi khách
+     * trả hàng. Cờ này chỉ dùng để ẨN phần thuế trên màn hình — số thuế vẫn được lưu nguyên theo snapshot
+     * của dòng hóa đơn gốc , vì phiếu trả là bản đối ứng âm của hóa đơn đó: đổi nhóm doanh thu sau
+     * này không được làm mất căn cứ đảo lại đúng con số đã thu.</p>
+     */
+    @Transactional(readOnly = true)
+    public boolean isTaxExempt() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getRevenueGroup)
+                .map(TaxRevenueGroup::isTaxExempt)
+                .orElse(false);
     }
 
     /**

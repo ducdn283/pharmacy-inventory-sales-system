@@ -678,18 +678,10 @@
                     </div>
 
                     <div class="income-card p-4">
-                        <button th:if="${#strings.startsWith(basePath, '/owner')}"
-                                type="submit" name="action" value="submit"
+                        <button type="submit" name="action" value="submit"
                                 class="btn btn-income-primary w-100 mb-3">
                             <i class="ti ti-circle-check me-1"></i>
                             Hoàn thành
-                        </button>
-
-                        <button th:unless="${#strings.startsWith(basePath, '/owner')}"
-                                type="submit" name="action" value="submit"
-                                class="btn btn-income-primary w-100 mb-3">
-                            <i class="ti ti-send me-1"></i>
-                            Gửi duyệt
                         </button>
 
                         <button type="submit" name="action" value="draft"

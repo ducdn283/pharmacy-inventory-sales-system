@@ -281,9 +281,14 @@
                         <p class="text-secondary small mb-0 mt-2" th:if="${detail.deductionGroup}">
                             Ghi giảm thuế đầu vào đã khấu trừ vào kỳ tính thuế của ngày trả hàng.
                         </p>
-                        <p class="text-secondary small mb-0 mt-2" th:unless="${detail.deductionGroup}">
+                        <p class="text-secondary small mb-0 mt-2"
+                           th:if="${!detail.deductionGroup and !detail.taxExempt}">
                             Hộ kinh doanh đang ở Nhóm 2 (tính trực tiếp trên doanh thu) — chưa từng khấu trừ
                             thuế đầu vào nên không có gì phải điều chỉnh.
+                        </p>
+                        <p class="text-secondary small mb-0 mt-2" th:if="${detail.taxExempt}">
+                            Hộ kinh doanh đang ở Nhóm 1 (dưới ngưỡng 1 — miễn thuế) nên không kê khai thuế GTGT,
+                            phiếu trả NCC không phát sinh điều chỉnh thuế.
                         </p>
                     </div>
                 </div>

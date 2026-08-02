@@ -214,6 +214,9 @@ public class IncomeController {
                              @RequestParam(name = "invoiceId", required = false) Integer invoiceId,
                              @RequestParam(name = "supplierId", required = false) Integer supplierId,
                              @RequestParam(name = "returnId", required = false) Integer returnId,
+                             @RequestParam(name = "accountId", required = false) Integer accountId,
+                             @RequestParam(name = "shiftReportOfAccountId", required = false)
+                             Integer shiftReportOfAccountId,
                              HttpServletRequest request,
                              Model model) {
         if (!model.containsAttribute("form")) {
@@ -225,6 +228,10 @@ public class IncomeController {
             form.setInvoiceId(invoiceId);
             form.setSupplierId(supplierId);
             form.setReturnId(returnId);
+            // Điền sẵn khi mở từ màn báo cáo ca bị thâm hụt quỹ (loại SHIFT_SHORTAGE): người chịu
+            // trách nhiệm = người trực ca, chứng từ liên quan = chính ca đó.
+            form.setAccountId(accountId);
+            form.setShiftReportOfAccountId(shiftReportOfAccountId);
             model.addAttribute("form", form);
         }
         addCreatePageData(request, model);
@@ -243,17 +250,9 @@ public class IncomeController {
             Integer incomeId = incomeService.createIncome(
                     form,
                     currentUserContext.getCurrentAccountId(),
-                    currentUserContext.isOwner(),
                     asDraft);
 
-            String message;
-            if (asDraft) {
-                message = "Đã lưu nháp phiếu thu";
-            } else if (currentUserContext.isOwner()) {
-                message = "Tạo phiếu thu thành công";
-            } else {
-                message = "Đã gửi phiếu thu, đang chờ duyệt";
-            }
+            String message = asDraft ? "Đã lưu nháp phiếu thu" : "Tạo phiếu thu thành công";
             redirectAttributes.addFlashAttribute("successMessage", message);
             return "redirect:" + basePath + "/" + incomeId;
         } catch (IllegalArgumentException exception) {

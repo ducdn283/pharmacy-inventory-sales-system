@@ -200,6 +200,29 @@ public class FinancialsettingService {
         }
     }
 
+    /**
+     * Cộng/trừ số dư quỹ tiền mặt và quỹ ngân hàng theo delta. Delta dương = thu (hóa đơn bán),
+     * delta âm = chi (phiếu chi đã duyệt, v.v.).
+     */
+    @Transactional
+    public void applyFundDelta(BigDecimal cashDelta, BigDecimal bankingDelta) {
+        BigDecimal cash = cashDelta != null ? cashDelta : BigDecimal.ZERO;
+        BigDecimal banking = bankingDelta != null ? bankingDelta : BigDecimal.ZERO;
+        if (cash.compareTo(BigDecimal.ZERO) == 0 && banking.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new IllegalStateException("Chưa cấu hình thiết lập tài chính"));
+        entity.setCashSafeBalance(nullToZero(entity.getCashSafeBalance()).add(cash));
+        entity.setBankAccountBalance(nullToZero(entity.getBankAccountBalance()).add(banking));
+        entity.setBalanceUpdatedAt(LocalDateTime.now());
+        financialsettingRepository.save(entity);
+    }
+
+    private static BigDecimal nullToZero(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
     private static FinancialsettingResponse defaultSettings() {
         return new FinancialsettingResponse(
                 null,
