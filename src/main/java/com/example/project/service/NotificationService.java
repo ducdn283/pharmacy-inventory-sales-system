@@ -10,7 +10,8 @@ import com.example.project.entity.Notification;
 import com.example.project.repository.NotificationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,25 +35,26 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public List<NotificationResponse> search(Integer accountId,
-                                             String keyword,
-                                             String category,
-                                             String severity,
-                                             String status,
-                                             boolean unreadOnly) {
+    public Page<NotificationResponse> search(
+            Integer accountId,
+            String keyword,
+            String category,
+            String severity,
+            String status,
+            boolean unreadOnly,
+            Pageable pageable
+    ) {
         validateAccountId(accountId);
 
         return notificationRepository.searchForAccount(
-                        accountId,
-                        blankToNull(keyword),
-                        blankToNull(category),
-                        blankToNull(severity),
-                        blankToNull(status),
-                        unreadOnly
-                )
-                .stream()
-                .map(NotificationResponse::from)
-                .toList();
+                accountId,
+                blankToNull(keyword),
+                blankToNull(category),
+                blankToNull(severity),
+                blankToNull(status),
+                unreadOnly,
+                pageable
+        ).map(NotificationResponse::from);
     }
 
     @Transactional(readOnly = true)
