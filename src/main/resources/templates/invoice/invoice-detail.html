@@ -255,6 +255,19 @@
             font-weight: 600;
         }
 
+        /* Dòng "0 số lượng, còn tiền" của hóa đơn thay thế — xem chú thích ở chỗ dùng. */
+        .retained-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #e0e7ff;
+            color: #4338ca;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
         .sell-items-empty td {
             padding: 32px 16px;
         }
@@ -552,6 +565,15 @@
                                               th:if="${line.returnedQty != null && line.returnedQty > 0}"
                                               th:text="'Đã trả: ' + ${line.returnedQty}">
                                             Đã trả: 1
+                                        </span>
+                                        <!-- Dòng SL = 0 chỉ sinh ra trên hóa đơn THAY THẾ, khi khách trả hết
+                                             hàng nhưng tỷ lệ hoàn < 100%: khách không còn giữ hộp nào, phần
+                                             tiền nhà thuốc giữ lại vẫn là doanh thu nên phải nằm trên hóa đơn.
+                                             Không có badge thì dòng đọc ra "SL 0 × đơn giá = thành tiền" không
+                                             nhân được, người xem tưởng hệ thống tính sai. -->
+                                        <span class="retained-badge d-block"
+                                              th:if="${line.quantity == 0 and detail.invoiceTypeDisplay == 'Thay thế'}">
+                                            Phần giữ lại (không hoàn)
                                         </span>
                                     </td>
                                     <td class="unit-qty-cell" th:text="${line.quantity}">2</td>
