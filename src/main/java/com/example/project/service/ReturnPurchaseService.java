@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.ReturnPurchaseStatus;
+import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.ReturnPurchaseCreateRequest;
 import com.example.project.dto.request.ReturnPurchaseLineRequest;
 import com.example.project.dto.response.*;
@@ -108,6 +109,16 @@ public class ReturnPurchaseService {
     @Transactional(readOnly = true)
     public boolean isDeductionGroup() {
         return revenueGroup() >= 3;
+    }
+
+    /**
+     * Nhóm 1 = dưới ngưỡng 1, miễn thuế hoàn toàn. Cũng không có thuế đầu vào để đảo như Nhóm 2, nhưng
+     * LÝ DO khác hẳn (Nhóm 2 có kê khai, chỉ là tính trực tiếp trên doanh thu) nên màn hình phải chú
+     * thích đúng nhóm thay vì mặc định "đang ở Nhóm 2".
+     */
+    @Transactional(readOnly = true)
+    public boolean isTaxExempt() {
+        return TaxRevenueGroup.isTaxExempt(revenueGroup());
     }
 
     /**
@@ -664,6 +675,7 @@ public class ReturnPurchaseService {
                         .reduce(BigDecimal.ZERO, BigDecimal::add),
                 ret.getTotalVATRefund(),
                 isDeductionGroup(),
+                isTaxExempt(),
                 items);
     }
 

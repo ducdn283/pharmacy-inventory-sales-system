@@ -223,8 +223,12 @@
                                     <strong id="summaryVat">0đ</strong>
                                 </div>
                             </th:block>
-                            <div class="form-text mb-3" th:unless="${deductionGroup}">
+                            <div class="form-text mb-3" th:if="${!deductionGroup and !taxExempt}">
                                 Hộ kinh doanh đang ở Nhóm 2 — chưa khấu trừ thuế GTGT đầu vào nên phiếu trả
+                                NCC không phát sinh điều chỉnh thuế.
+                            </div>
+                            <div class="form-text mb-3" th:if="${taxExempt}">
+                                Hộ kinh doanh đang ở Nhóm 1 (miễn thuế) — không kê khai thuế GTGT nên phiếu trả
                                 NCC không phát sinh điều chỉnh thuế.
                             </div>
 
