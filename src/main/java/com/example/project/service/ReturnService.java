@@ -66,10 +66,15 @@ public class ReturnService {
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String INVOICE_STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
 
-    // Only sale/replacement invoices are returnable. DB invoiceType: Bán hàng/Điều chỉnh/Thay thế — a
-    // return must not be opened against an adjustment invoice (the negative slip emitted by TH2, no
-    // returnable lines of its own).
+    // Only sale/replacement invoices are returnable. DB invoiceType (nay lưu tiếng Việt):
+    // Bán hàng / Hóa đơn GTGT / Điều chỉnh / Thay thế — a return must not be opened against an
+    // adjustment invoice (the negative slip emitted by TH2, no returnable lines of its own).
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
+    /**
+     * Hóa đơn bán hàng của nhà thuốc Nhóm 3+ — {@code InvoiceService} gán loại này thay cho
+     * {@link #INVOICE_TYPE_NORMAL}. Vẫn là bán hàng, vẫn trả lại được (xem {@link #isNormalInvoice}).
+     */
+    private static final String INVOICE_TYPE_VAT = "Hóa đơn GTGT";
     /** Legacy DB value before invoiceType was stored in Vietnamese. */
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
@@ -1047,6 +1052,11 @@ public class ReturnService {
     /**
      * A return target must be a sale or replacement invoice — never an adjustment invoice (it carries only
      * negative delta lines, nothing sellable to return again). (invoiceType is NOT NULL.)
+     *
+     * <p><strong>"Hóa đơn GTGT" cũng là hóa đơn BÁN HÀNG.</strong> {@code InvoiceService.createSaleInvoice}
+     * gán loại này thay cho "Bán hàng" khi nhà thuốc đang ở Nhóm 3+ — cùng một nghiệp vụ bán, chỉ khác
+     * hình thức chứng từ. Thiếu nó ở đây thì khi chuyển sang Nhóm 3, MỌI hóa đơn bán mới đều không trả
+     * lại được và danh sách chọn ở màn trả hàng rỗng trơn.</p>
      */
     private boolean isNormalInvoice(Invoice invoice) {
         if (invoice == null) {
@@ -1056,6 +1066,7 @@ public class ReturnService {
         return type == null
                 || INVOICE_TYPE_NORMAL.equalsIgnoreCase(type)
                 || INVOICE_TYPE_NORMAL_LEGACY.equalsIgnoreCase(type)
+                || INVOICE_TYPE_VAT.equalsIgnoreCase(type)
                 || INVOICE_TYPE_REPLACEMENT.equalsIgnoreCase(type);
     }
 
