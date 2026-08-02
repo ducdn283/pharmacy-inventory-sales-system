@@ -252,8 +252,14 @@
             </td>
 
             <td class="text-right"
-                th:text="${#numbers.formatDecimal(item.discrepancyValue, 0, 'POINT', 0, 'COMMA')}">
-                0
+                th:text="${#numbers.formatDecimal(
+                    item.discrepancyValue,
+                    0,
+                    'POINT',
+                    0,
+                    'COMMA'
+                ) + ' đ'}">
+                            0 đ
             </td>
         </tr>
 
@@ -270,35 +276,59 @@
 
     <div class="summary">
         <div class="summary-row">
-            <div>
-                Tổng thực tế
-                (<span th:text="${printData.totalActualQty}">0</span>):
+            <div>Tổng tồn hệ thống:</div>
+
+            <div th:text="${printData.totalSystemQty}">
+                0
             </div>
-            <div th:text="${#numbers.formatDecimal(printData.totalDiscrepancyValue, 0, 'POINT', 0, 'COMMA')}">0</div>
         </div>
 
         <div class="summary-row">
-            <div>
-                Tổng lệch tăng
-                (<span th:text="${printData.totalExcessQty}">0</span>):
+            <div>Tổng tồn thực tế:</div>
+
+            <div th:text="${printData.totalActualQty}">
+                0
             </div>
-            <div th:text="${printData.totalExcessQty}">0</div>
         </div>
 
         <div class="summary-row">
-            <div>
-                Tổng lệch giảm
-                (<span th:text="${printData.totalShortageQty}">0</span>):
+            <div>Tổng lệch tăng:</div>
+
+            <div th:text="${printData.totalExcessQty}">
+                0
             </div>
-            <div th:text="${printData.totalShortageQty}">0</div>
         </div>
 
         <div class="summary-row">
-            <div>
-                Tổng chênh lệch
-                (<span th:text="${printData.totalDiscrepancyQty}">0</span>):
+            <div>Tổng lệch giảm:</div>
+
+            <div th:text="${printData.totalShortageQty}">
+                0
             </div>
-            <div th:text="${#numbers.formatDecimal(printData.totalDiscrepancyValue, 0, 'POINT', 0, 'COMMA')}">0</div>
+        </div>
+
+        <div class="summary-row">
+            <div>Tổng chênh lệch số lượng:</div>
+
+            <div th:text="${printData.totalDiscrepancyQty > 0
+                ? '+' + printData.totalDiscrepancyQty
+                : printData.totalDiscrepancyQty}">
+                0
+            </div>
+        </div>
+
+        <div class="summary-row">
+            <div>Tổng giá trị chênh lệch:</div>
+
+            <div th:text="${#numbers.formatDecimal(
+            printData.totalDiscrepancyValue,
+            0,
+            'POINT',
+            0,
+            'COMMA'
+        ) + ' đ'}">
+                0 đ
+            </div>
         </div>
     </div>
 

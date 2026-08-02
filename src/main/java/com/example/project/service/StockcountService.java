@@ -422,7 +422,7 @@ public class StockcountService {
                             ? batch.getImportPricePerBase()
                             : BigDecimal.ZERO;
 
-                    BigDecimal discrepancyValue = unitCost.multiply(BigDecimal.valueOf(Math.abs(discrepancy)));
+                    BigDecimal discrepancyValue = unitCost.multiply(BigDecimal.valueOf(discrepancy));
 
                     return new StockCountVoucherPrintLineResponse(
                             product != null ? product.getProductID() : null,
@@ -461,7 +461,7 @@ public class StockcountService {
                 .map(StockCountVoucherPrintLineResponse::getDiscrepancy)
                 .filter(Objects::nonNull)
                 .filter(value -> value < 0)
-                .mapToInt(Integer::intValue)
+                .mapToInt(value -> Math.abs(value))
                 .sum();
 
         int totalDiscrepancyQty = totalActualQty - totalSystemQty;
