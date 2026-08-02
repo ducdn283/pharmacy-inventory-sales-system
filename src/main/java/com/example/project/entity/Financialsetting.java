@@ -107,4 +107,8 @@ public class Financialsetting {
 
     @Column(name = "balanceUpdatedAt")
     private LocalDateTime balanceUpdatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
 }
