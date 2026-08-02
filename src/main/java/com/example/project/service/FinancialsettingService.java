@@ -5,7 +5,6 @@ import com.example.project.dto.response.FinancialsettingResponse;
 import com.example.project.entity.Financialsetting;
 import com.example.project.repository.FinancialsettingRepository;
 import com.example.project.repository.TaxperiodsnapshotRepository;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,24 +24,13 @@ public class FinancialsettingService {
     }
 
     /**
-     * Khoá vì MỘT TRONG HAI lý do độc lập:
-     * <ul>
-     *   <li>đã có kỳ thuế nào đóng — từ đó {@code TaxperiodsnapshotService} tự giữ đồng bộ
-     *   {@code revenueGroup} theo chuỗi kỳ ({@code applyAutomaticGroupTransition}/{@code
-     *   closePeriod}), con người không còn quyền sửa qua form nữa; hoặc</li>
-     *   <li>người dùng đã tự xác nhận khoá qua form (cột {@code revenueGroupConfirmed}) — nhóm doanh
-     *   thu, giống quỹ tiền mặt/ngân hàng, chỉ sửa được qua form MỘT LẦN rồi khoá vĩnh viễn, kể cả
-     *   khi chưa có kỳ thuế nào đóng.</li>
-     * </ul>
+     * Khoá khi đã có kỳ thuế nào đóng — từ đó {@code TaxperiodsnapshotService} tự giữ đồng bộ
+     * {@code revenueGroup} theo chuỗi kỳ ({@code applyAutomaticGroupTransition}/{@code
+     * closePeriod}), con người không còn quyền sửa qua form nữa.
      */
     @Transactional(readOnly = true)
     public boolean isRevenueGroupLocked() {
-        if (taxperiodsnapshotRepository.count() > 0) {
-            return true;
-        }
-        return financialsettingRepository.findFirstByOrderByIdAsc()
-                .map(entity -> Boolean.TRUE.equals(entity.getRevenueGroupConfirmed()))
-                .orElse(false);
+        return taxperiodsnapshotRepository.count() > 0;
     }
 
     /**
@@ -87,17 +75,10 @@ public class FinancialsettingService {
         Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
                 .orElseGet(Financialsetting::new);
 
-        // Khoá vì kỳ thuế đã đóng HOẶC vì người dùng đã tự xác nhận khoá trước đó — xem
-        // isRevenueGroupLocked(). Tính trực tiếp trên entity đã load thay vì gọi lại
-        // isRevenueGroupLocked() để khỏi fetch hai lần trong cùng một transaction. Nếu chưa khoá,
-        // lần lưu NÀY chính là "một lần sửa" được phép — sau đó revenueGroupConfirmed bật lên, khoá
-        // vĩnh viễn từ lần lưu kế tiếp, kể cả khi vẫn chưa có kỳ thuế nào đóng.
-        boolean revenueGroupLocked = taxperiodsnapshotRepository.count() > 0
-                || Boolean.TRUE.equals(entity.getRevenueGroupConfirmed());
+        // Khoá vì kỳ thuế đã đóng — xem isRevenueGroupLocked(). Tính trực tiếp trên biến đếm thay vì
+        // gọi lại isRevenueGroupLocked() để khỏi fetch hai lần trong cùng một transaction.
+        boolean revenueGroupLocked = taxperiodsnapshotRepository.count() > 0;
         Integer revenueGroup = revenueGroupLocked ? entity.getRevenueGroup() : request.getRevenueGroup();
-        if (!revenueGroupLocked) {
-            entity.setRevenueGroupConfirmed(true);
-        }
 
         // Nhóm 3 (>ngưỡng 2) bắt buộc tính theo lợi nhuận — client JS đã khoá UI, nhưng chốt lại ở
         // server để không phụ thuộc vào JS phía client.
@@ -143,7 +124,7 @@ public class FinancialsettingService {
             entity.setBalanceUpdatedAt(LocalDateTime.now());
         }
 
-        return FinancialsettingResponse.from(saveGuardingConcurrentEdit(entity));
+        return FinancialsettingResponse.from(financialsettingRepository.save(entity));
     }
 
     /**
@@ -180,24 +161,7 @@ public class FinancialsettingService {
         }
 
         entity.setBalanceUpdatedAt(LocalDateTime.now());
-        saveGuardingConcurrentEdit(entity);
-    }
-
-    /**
-     * Từ khi quỹ được Expense cập nhật real-time, có thể có nhiều nơi ghi vào cùng một dòng
-     * {@code Financialsetting} gần như đồng thời (Owner sửa thiết lập tay + một phiếu chi vừa được
-     * duyệt) — {@code saveAndFlush} buộc kiểm tra {@code @Version} ngay trong transaction hiện tại
-     * thay vì im lặng đến lúc commit, cùng cơ chế {@code PurchaseinvoiceService}/{@code
-     * InvoiceService} đã dùng.
-     */
-    private Financialsetting saveGuardingConcurrentEdit(Financialsetting entity) {
-        try {
-            return financialsettingRepository.saveAndFlush(entity);
-        } catch (ObjectOptimisticLockingFailureException exception) {
-            throw new IllegalArgumentException(
-                    "Thiết lập tài chính vừa được cập nhật ở nơi khác (có thể do một phiếu chi vừa"
-                            + " giải ngân). Vui lòng tải lại trang rồi thử lại.", exception);
-        }
+        financialsettingRepository.save(entity);
     }
 
     /**

@@ -397,19 +397,18 @@
     applyRevenueGroupLock();
   })();
 
-  // Quỹ tiền mặt/ngân hàng VÀ nhóm doanh thu đều chỉ sửa được một lần qua form rồi khoá vĩnh viễn
-  // (xem FinancialsettingService.isCashSafeBalanceLocked/isBankAccountBalanceLocked/
-  // isRevenueGroupLocked). Trước khi khoá thật sự (submit), hỏi lại người dùng — chỉ hỏi về những
-  // mục ĐANG chưa khoá và thực sự sắp bị khoá bởi lần lưu này, không hỏi khi họ chỉ sửa các thiết
-  // lập khác trên cùng form.
+  // Quỹ tiền mặt/ngân hàng chỉ sửa được một lần qua form rồi khoá vĩnh viễn (xem
+  // FinancialsettingService.isCashSafeBalanceLocked/isBankAccountBalanceLocked). Nhóm doanh thu
+  // KHÔNG khoá theo lần lưu — nó chỉ khoá khi kỳ thuế đầu tiên được chốt (isRevenueGroupLocked),
+  // nên không cần hỏi xác nhận riêng cho nó ở đây. Trước khi khoá quỹ thật sự (submit), hỏi lại
+  // người dùng — chỉ hỏi về những quỹ ĐANG chưa khoá và thực sự sắp bị khoá bởi lần lưu này, không
+  // hỏi khi họ chỉ sửa các thiết lập khác trên cùng form.
   (function () {
     var form = document.getElementById('financialSettingForm');
     var cashInput = document.getElementById('fsCashSafeBalance');
     var bankInput = document.getElementById('fsBankAccountBalance');
-    var revenueGroupSelect = document.getElementById('fsRevenueGroup');
     var cashLocked = /*[[${cashSafeBalanceLocked}]]*/ false;
     var bankLocked = /*[[${bankAccountBalanceLocked}]]*/ false;
-    var revenueGroupLockedFlag = /*[[${revenueGroupLocked}]]*/ false;
     var confirmed = false;
 
     function hasTypedValue(input) {
@@ -429,9 +428,8 @@
         return;
       }
 
-      // Quỹ: chỉ tính là "sắp khoá" khi người dùng vừa thực sự gõ số vào (ô còn "Chưa thiết lập"
-      // thì bỏ trống vẫn không sao, không khoá gì cả). Nhóm doanh thu: select luôn có sẵn một giá
-      // trị, nên hễ đang mở khoá và form được nộp là coi như "một lần sửa" đã dùng.
+      // Chỉ tính là "sắp khoá" khi người dùng vừa thực sự gõ số vào (ô còn "Chưa thiết lập" thì bỏ
+      // trống vẫn không sao, không khoá gì cả).
       var fundItems = [];
       if (!cashLocked && hasTypedValue(cashInput)) {
         fundItems.push('quỹ tiền mặt');
@@ -439,22 +437,13 @@
       if (!bankLocked && hasTypedValue(bankInput)) {
         fundItems.push('quỹ ngân hàng');
       }
-      var lockingRevenueGroup = !revenueGroupLockedFlag && revenueGroupSelect && !revenueGroupSelect.disabled;
 
-      if (fundItems.length === 0 && !lockingRevenueGroup) {
+      if (fundItems.length === 0) {
         return;
       }
 
-      var parts = [];
-      if (fundItems.length > 0) {
-        parts.push('số dư ' + fundItems.join(' và '));
-      }
-      if (lockingRevenueGroup) {
-        parts.push('nhóm doanh thu hộ kinh doanh');
-      }
-
       event.preventDefault();
-      var message = 'Sau khi lưu, ' + parts.join(' và ')
+      var message = 'Sau khi lưu, số dư ' + fundItems.join(' và ')
           + ' sẽ được khoá vĩnh viễn và không thể chỉnh sửa lại qua màn này nữa. Bạn có chắc chắn'
           + ' muốn tiếp tục?';
       if (typeof window.pmConfirm === 'function') {
