@@ -548,7 +548,10 @@
 
             <form id="employeeNoteCreateForm"
                   class="employee-note-create-box d-none mb-4">
-
+                <h4 id="employeeNoteFormTitle"
+                    class="fs-6 mb-3">
+                    Tạo ghi chú mới
+                </h4>
                 <label for="employeeNoteContent"
                        class="form-label fw-semibold">
 
@@ -601,7 +604,9 @@
             document.getElementById('employeeNoteModalTitle');
 
         const modalSubtitle =
-            document.getElementById('employeeNoteModalSubtitle');
+            document.getElementById(
+                'employeeNoteModalSubtitle'
+            );
 
         const noteList =
             document.getElementById('employeeNoteList');
@@ -610,10 +615,19 @@
             document.getElementById('employeeNoteAlert');
 
         const createForm =
-            document.getElementById('employeeNoteCreateForm');
+            document.getElementById(
+                'employeeNoteCreateForm'
+            );
+
+        const formTitle =
+            document.getElementById(
+                'employeeNoteFormTitle'
+            );
 
         const noteContent =
-            document.getElementById('employeeNoteContent');
+            document.getElementById(
+                'employeeNoteContent'
+            );
 
         const showCreateButton =
             document.getElementById(
@@ -631,7 +645,9 @@
             );
 
         const csrfTokenElement =
-            document.querySelector('meta[name="_csrf"]');
+            document.querySelector(
+                'meta[name="_csrf"]'
+            );
 
         const csrfHeaderElement =
             document.querySelector(
@@ -647,11 +663,13 @@
             : null;
 
         let currentAccountId = null;
+        let editingNoteId = null;
         let lastTriggerButton = null;
 
         function showAlert(message, type) {
             alertBox.textContent = message;
-            alertBox.className = 'alert alert-' + type;
+            alertBox.className =
+                'alert alert-' + type;
         }
 
         function hideAlert() {
@@ -659,49 +677,133 @@
             alertBox.className = 'alert d-none';
         }
 
+        function setSaveButton(editing, loading) {
+            saveButton.disabled = loading;
+
+            if (loading) {
+                saveButton.innerHTML = `
+                    <span class="
+                        spinner-border
+                        spinner-border-sm
+                        me-1">
+                    </span>
+                    Đang lưu...
+                `;
+
+                return;
+            }
+
+            saveButton.innerHTML = `
+                <i class="
+                    ti ti-device-floppy me-1">
+                </i>
+                ${
+                editing
+                    ? 'Cập nhật ghi chú'
+                    : 'Lưu ghi chú'
+            }
+            `;
+        }
+
         function showCreateForm() {
+            editingNoteId = null;
+
+            formTitle.textContent =
+                'Tạo ghi chú mới';
+
+            createForm.reset();
+
+            setSaveButton(false, false);
+
             createForm.classList.remove('d-none');
             showCreateButton.classList.add('d-none');
+
+            noteContent.focus();
+        }
+
+        function showEditForm(note) {
+            editingNoteId = note.id;
+
+            formTitle.textContent =
+                'Chỉnh sửa ghi chú';
+
+            noteContent.value = note.content || '';
+
+            setSaveButton(true, false);
+
+            createForm.classList.remove('d-none');
+            showCreateButton.classList.add('d-none');
+
+            createForm.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
+            });
+
             noteContent.focus();
         }
 
         function hideCreateForm() {
+            editingNoteId = null;
+
             createForm.classList.add('d-none');
             showCreateButton.classList.remove('d-none');
+
             createForm.reset();
+
+            formTitle.textContent =
+                'Tạo ghi chú mới';
+
+            setSaveButton(false, false);
         }
 
         function openModal(button) {
-            currentAccountId = button.dataset.accountId;
+            currentAccountId =
+                button.dataset.accountId;
+
             lastTriggerButton = button;
 
             const employeeName =
-                button.dataset.employeeName || 'Nhân viên';
+                button.dataset.employeeName
+                || 'Nhân viên';
 
             const employeeCode =
-                button.dataset.employeeCode || '';
+                button.dataset.employeeCode
+                || '';
 
             modalTitle.textContent =
                 'Ghi chú của ' + employeeName;
 
-            modalSubtitle.textContent = employeeCode;
+            modalSubtitle.textContent =
+                employeeCode;
 
             hideAlert();
             hideCreateForm();
 
             modal.classList.add('is-open');
-            modal.setAttribute('aria-hidden', 'false');
 
-            document.body.classList.add('overflow-hidden');
+            modal.setAttribute(
+                'aria-hidden',
+                'false'
+            );
+
+            document.body.classList.add(
+                'overflow-hidden'
+            );
 
             loadNotes();
         }
 
         function closeModal() {
             modal.classList.remove('is-open');
-            modal.setAttribute('aria-hidden', 'true');
 
-            document.body.classList.remove('overflow-hidden');
+            modal.setAttribute(
+                'aria-hidden',
+                'true'
+            );
+
+            document.body.classList.remove(
+                'overflow-hidden'
+            );
 
             currentAccountId = null;
 
@@ -711,28 +813,6 @@
             if (lastTriggerButton) {
                 lastTriggerButton.focus();
             }
-        }
-
-        function formatDateTime(value) {
-            if (!value) {
-                return '-';
-            }
-
-            const date = new Date(value);
-
-            if (Number.isNaN(date.getTime())) {
-                return value;
-            }
-
-            return new Intl.DateTimeFormat('vi-VN', {
-                timeZone: 'Asia/Ho_Chi_Minh',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            }).format(date);
         }
 
         function renderNotes(notes) {
@@ -756,7 +836,44 @@
                 const item =
                     document.createElement('div');
 
-                item.className = 'employee-note-item';
+                item.className =
+                    'employee-note-item';
+
+                const header =
+                    document.createElement('div');
+
+                header.className =
+                    'd-flex justify-content-between '
+                    + 'align-items-center gap-3 mb-2';
+
+                const createdAt =
+                    document.createElement('div');
+
+                createdAt.className =
+                    'employee-note-date mt-0';
+
+                createdAt.textContent =
+                    'Ngày tạo: '
+                    + (note.dateDisplay || '-');
+
+                const editButton =
+                    document.createElement('button');
+
+                editButton.type = 'button';
+
+                editButton.className =
+                    'btn btn-sm btn-outline-primary';
+
+                editButton.innerHTML =
+                    '<i class="ti ti-edit me-1"></i>'
+                    + 'Chỉnh sửa';
+
+                editButton.addEventListener(
+                    'click',
+                    function () {
+                        showEditForm(note);
+                    }
+                );
 
                 const content =
                     document.createElement('p');
@@ -765,23 +882,17 @@
                     'employee-note-content';
 
                 /*
-                 * Dùng textContent để tránh chèn HTML hoặc
-                 * JavaScript từ nội dung ghi chú.
+                 * Không dùng innerHTML cho nội dung note
+                 * để tránh XSS.
                  */
-                content.textContent = note.content || '';
+                content.textContent =
+                    note.content || '';
 
-                const createdAt =
-                    document.createElement('div');
+                header.appendChild(createdAt);
+                header.appendChild(editButton);
 
-                createdAt.className =
-                    'employee-note-date';
-
-                createdAt.textContent =
-                    'Ngày tạo: ' +
-                    formatDateTime(note.date);
-
+                item.appendChild(header);
                 item.appendChild(content);
-                item.appendChild(createdAt);
 
                 noteList.appendChild(item);
             });
@@ -789,14 +900,15 @@
 
         async function getErrorMessage(
             response,
-            fallbackMessage
+            fallback
         ) {
             try {
-                const data = await response.json();
+                const data =
+                    await response.json();
 
-                return data.message || fallbackMessage;
+                return data.message || fallback;
             } catch (error) {
-                return fallbackMessage;
+                return fallback;
             }
         }
 
@@ -806,7 +918,11 @@
             }
 
             noteList.innerHTML = `
-                <div class="text-center text-secondary py-4">
+                <div class="
+                    text-center
+                    text-secondary
+                    py-4">
+
                     <span class="
                         spinner-border
                         spinner-border-sm
@@ -819,27 +935,33 @@
 
             try {
                 const url =
-                    '/owner/users/' +
-                    encodeURIComponent(currentAccountId) +
-                    '/notes';
+                    '/owner/users/'
+                    + encodeURIComponent(
+                        currentAccountId
+                    )
+                    + '/notes';
 
-                const response = await fetch(url, {
-                    headers: {
-                        'Accept': 'application/json'
+                const response = await fetch(
+                    url,
+                    {
+                        headers: {
+                            'Accept':
+                                'application/json'
+                        }
                     }
-                });
+                );
 
                 if (!response.ok) {
-                    const message =
+                    throw new Error(
                         await getErrorMessage(
                             response,
                             'Không thể tải danh sách ghi chú'
-                        );
-
-                    throw new Error(message);
+                        )
+                    );
                 }
 
-                const notes = await response.json();
+                const notes =
+                    await response.json();
 
                 renderNotes(notes);
 
@@ -847,21 +969,22 @@
                 noteList.innerHTML = '';
 
                 showAlert(
-                    error.message ||
-                    'Không thể tải danh sách ghi chú',
+                    error.message
+                    || 'Không thể tải danh sách ghi chú',
                     'danger'
                 );
             }
         }
 
-        async function createNote(event) {
+        async function saveNote(event) {
             event.preventDefault();
 
             if (!currentAccountId) {
                 return;
             }
 
-            const content = noteContent.value.trim();
+            const content =
+                noteContent.value.trim();
 
             if (!content) {
                 showAlert(
@@ -873,84 +996,83 @@
                 return;
             }
 
+            const isEditing =
+                editingNoteId !== null;
+
+            let url =
+                '/owner/users/'
+                + encodeURIComponent(
+                    currentAccountId
+                )
+                + '/notes';
+
+            if (isEditing) {
+                url += '/'
+                    + encodeURIComponent(
+                        editingNoteId
+                    );
+            }
+
             const headers = {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             };
 
-            /*
-             * Spring Security yêu cầu CSRF đối với POST.
-             */
             if (csrfHeader && csrfToken) {
                 headers[csrfHeader] = csrfToken;
             }
 
-            saveButton.disabled = true;
-
-            saveButton.innerHTML = `
-                <span class="
-                    spinner-border
-                    spinner-border-sm
-                    me-1">
-                </span>
-
-                Đang lưu...
-            `;
+            setSaveButton(isEditing, true);
 
             try {
-                const url =
-                    '/owner/users/' +
-                    encodeURIComponent(currentAccountId) +
-                    '/notes';
+                const response = await fetch(
+                    url,
+                    {
+                        method: isEditing
+                            ? 'PUT'
+                            : 'POST',
 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({
-                        content: content
-                    })
-                });
+                        headers: headers,
+
+                        body: JSON.stringify({
+                            content: content
+                        })
+                    }
+                );
 
                 if (!response.ok) {
-                    const message =
+                    throw new Error(
                         await getErrorMessage(
                             response,
-                            'Không thể tạo ghi chú'
-                        );
-
-                    throw new Error(message);
+                            isEditing
+                                ? 'Không thể cập nhật ghi chú'
+                                : 'Không thể tạo ghi chú'
+                        )
+                    );
                 }
 
                 hideCreateForm();
 
                 showAlert(
-                    'Tạo ghi chú mới thành công',
+                    isEditing
+                        ? 'Cập nhật ghi chú thành công'
+                        : 'Tạo ghi chú mới thành công',
                     'success'
                 );
 
-                /*
-                 * Tải lại để ghi chú mới nhất xuất hiện đầu tiên.
-                 */
                 await loadNotes();
 
             } catch (error) {
                 showAlert(
-                    error.message ||
-                    'Không thể tạo ghi chú',
+                    error.message
+                    || 'Không thể lưu ghi chú',
                     'danger'
                 );
             } finally {
-                saveButton.disabled = false;
-
-                saveButton.innerHTML = `
-                    <i class="
-                        ti
-                        ti-device-floppy
-                        me-1">
-                    </i>
-
-                    Lưu ghi chú
-                `;
+                setSaveButton(
+                    isEditing,
+                    false
+                );
             }
         }
 
@@ -990,15 +1112,17 @@
 
         createForm.addEventListener(
             'submit',
-            createNote
+            saveNote
         );
 
         document.addEventListener(
             'keydown',
             function (event) {
                 if (
-                    event.key === 'Escape' &&
-                    modal.classList.contains('is-open')
+                    event.key === 'Escape'
+                    && modal.classList.contains(
+                        'is-open'
+                    )
                 ) {
                     closeModal();
                 }

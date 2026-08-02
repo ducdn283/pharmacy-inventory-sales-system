@@ -1,6 +1,7 @@
 package com.example.project.controller;
 
 import com.example.project.dto.request.EmployeenoteCreateRequest;
+import com.example.project.dto.request.EmployeenoteUpdateRequest;
 import com.example.project.dto.response.EmployeenoteResponse;
 import com.example.project.service.EmployeenoteService;
 import jakarta.validation.Valid;
@@ -24,18 +25,18 @@ public class EmployeenoteController {
         this.employeenoteService = employeenoteService;
     }
 
-    /*
-     * Lấy toàn bộ ghi chú của một nhân viên.
-     */
     @GetMapping("/{accountId}/notes")
     public ResponseEntity<?> getByAccountId(
             @PathVariable Integer accountId
     ) {
         try {
             List<EmployeenoteResponse> notes =
-                    employeenoteService.getByAccountId(accountId);
+                    employeenoteService.getByAccountId(
+                            accountId
+                    );
 
             return ResponseEntity.ok(notes);
+
         } catch (IllegalArgumentException exception) {
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
@@ -46,25 +47,17 @@ public class EmployeenoteController {
         }
     }
 
-    /*
-     * Tạo ghi chú mới cho một nhân viên.
-     */
     @PostMapping("/{accountId}/notes")
     public ResponseEntity<?> create(
             @PathVariable Integer accountId,
+
             @Valid
             @RequestBody EmployeenoteCreateRequest request,
+
             BindingResult bindingResult
     ) {
         if (bindingResult.hasErrors()) {
-            String message = bindingResult.getFieldErrors()
-                    .stream()
-                    .findFirst()
-                    .map(error -> error.getDefaultMessage())
-                    .orElse("Dữ liệu ghi chú không hợp lệ");
-
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", message));
+            return validationError(bindingResult);
         }
 
         try {
@@ -85,5 +78,54 @@ public class EmployeenoteController {
                             exception.getMessage()
                     ));
         }
+    }
+
+    /*
+     * Chỉ Owner truy cập được vì URL bắt đầu bằng /owner.
+     */
+    @PutMapping("/{accountId}/notes/{noteId}")
+    public ResponseEntity<?> update(
+            @PathVariable Integer accountId,
+            @PathVariable Integer noteId,
+
+            @Valid
+            @RequestBody EmployeenoteUpdateRequest request,
+
+            BindingResult bindingResult
+    ) {
+        if (bindingResult.hasErrors()) {
+            return validationError(bindingResult);
+        }
+
+        try {
+            EmployeenoteResponse updatedNote =
+                    employeenoteService.update(
+                            accountId,
+                            noteId,
+                            request.getContent()
+                    );
+
+            return ResponseEntity.ok(updatedNote);
+
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "message",
+                            exception.getMessage()
+                    ));
+        }
+    }
+
+    private ResponseEntity<?> validationError(
+            BindingResult bindingResult
+    ) {
+        String message = bindingResult.getFieldErrors()
+                .stream()
+                .findFirst()
+                .map(error -> error.getDefaultMessage())
+                .orElse("Dữ liệu ghi chú không hợp lệ");
+
+        return ResponseEntity.badRequest()
+                .body(Map.of("message", message));
     }
 }
