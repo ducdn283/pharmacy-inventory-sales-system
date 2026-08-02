@@ -36,6 +36,8 @@ public class FinancialSettingPageController {
         }
         model.addAttribute("editable", editable);
         model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+        model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
+        model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
         model.addAttribute("balanceUpdatedAtDisplay", formatBalanceUpdatedAt(settings.getBalanceUpdatedAt()));
         model.addAttribute("pageTitle", "Thiết lập tài chính");
         return VIEW;
@@ -49,13 +51,20 @@ public class FinancialSettingPageController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("editable", true);
             model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+            model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
+            model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
             model.addAttribute("balanceUpdatedAtDisplay",
                     formatBalanceUpdatedAt(financialsettingService.getSettings().getBalanceUpdatedAt()));
             model.addAttribute("pageTitle", "Thiết lập tài chính");
             return VIEW;
         }
 
-        financialsettingService.saveSettings(form);
+        try {
+            financialsettingService.saveSettings(form);
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:/owner/financial-setting";
+        }
         redirectAttributes.addFlashAttribute("successMessage", "Cập nhật thiết lập tài chính thành công");
         return "redirect:/owner/financial-setting";
     }

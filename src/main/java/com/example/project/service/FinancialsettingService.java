@@ -24,15 +24,35 @@ public class FinancialsettingService {
     }
 
     /**
-     * Once the first tax period has ever been closed, {@code revenueGroup} stops being something a
-     * human sets — {@code TaxperiodsnapshotService} takes over and keeps it synced to the snapshot
-     * chain's {@code nextPeriodTaxType} (see {@code applyAutomaticGroupTransition}/{@code
-     * closePeriod}). Before that, there is no chain yet, so this is still the one seed a human must
-     * provide.
+     * Khoá khi đã có kỳ thuế nào đóng — từ đó {@code TaxperiodsnapshotService} tự giữ đồng bộ
+     * {@code revenueGroup} theo chuỗi kỳ ({@code applyAutomaticGroupTransition}/{@code
+     * closePeriod}), con người không còn quyền sửa qua form nữa.
      */
     @Transactional(readOnly = true)
     public boolean isRevenueGroupLocked() {
         return taxperiodsnapshotRepository.count() > 0;
+    }
+
+    /**
+     * Số dư quỹ tiền mặt là số khởi tạo nhập MỘT LẦN DUY NHẤT — không giống {@code revenueGroup},
+     * việc khoá ở đây không phụ thuộc một bảng khác mà chỉ dựa vào chính cột này: hễ đã có giá trị
+     * (khác {@code null}) là coi như người dùng đã xác nhận khoá, vì từ lúc đó
+     * {@code ExpenseService} bắt đầu cộng trừ số dư này theo thời gian thực — cho sửa tay đè lên sẽ
+     * làm sai lệch dữ liệu đang được theo dõi tự động.
+     */
+    @Transactional(readOnly = true)
+    public boolean isCashSafeBalanceLocked() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(entity -> entity.getCashSafeBalance() != null)
+                .orElse(false);
+    }
+
+    /** Tương tự {@link #isCashSafeBalanceLocked()} nhưng cho quỹ ngân hàng — khoá độc lập với quỹ tiền mặt. */
+    @Transactional(readOnly = true)
+    public boolean isBankAccountBalanceLocked() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(entity -> entity.getBankAccountBalance() != null)
+                .orElse(false);
     }
 
     @Transactional(readOnly = true)
@@ -55,10 +75,10 @@ public class FinancialsettingService {
         Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
                 .orElseGet(Financialsetting::new);
 
-        // Locked once a tax period exists — see isRevenueGroupLocked(). Whatever the form posted
-        // (even a tampered value bypassing the disabled control) is ignored in favour of the group
-        // TaxperiodsnapshotService already maintains.
-        Integer revenueGroup = isRevenueGroupLocked() ? entity.getRevenueGroup() : request.getRevenueGroup();
+        // Khoá vì kỳ thuế đã đóng — xem isRevenueGroupLocked(). Tính trực tiếp trên biến đếm thay vì
+        // gọi lại isRevenueGroupLocked() để khỏi fetch hai lần trong cùng một transaction.
+        boolean revenueGroupLocked = taxperiodsnapshotRepository.count() > 0;
+        Integer revenueGroup = revenueGroupLocked ? entity.getRevenueGroup() : request.getRevenueGroup();
 
         // Nhóm 3 (>ngưỡng 2) bắt buộc tính theo lợi nhuận — client JS đã khoá UI, nhưng chốt lại ở
         // server để không phụ thuộc vào JS phía client.
@@ -86,19 +106,17 @@ public class FinancialsettingService {
         entity.setAutoOffsetDebtOnRefund(Boolean.TRUE.equals(request.getAutoOffsetDebtOnRefund()));
         entity.setReturnPolicyMaxDays(request.getReturnPolicyMaxDays());
 
-        // Bỏ trống nghĩa là "giữ nguyên số dư hiện tại". Form luôn hiển thị sẵn giá trị đang lưu
-        // (giống mọi trường khác), nên chỉ cập nhật mốc thời gian khi số vừa gửi lên THỰC SỰ khác số
-        // đang lưu — nếu không, mỗi lần lưu một thiết lập không liên quan (ví dụ đổi số điện thoại)
-        // cũng vô tình "chạm" vào mốc cập nhật quỹ. Ngoài chỉnh tay tại đây, số dư còn được cộng/trừ
-        // tự động khi phát sinh giao dịch (xem {@link #applyFundDelta}).
+        // Số dư khởi tạo chỉ được NHẬP MỘT LẦN. Một khi cột đã khác null (xem isCashSafeBalanceLocked/
+        // isBankAccountBalanceLocked), giá trị đăng lên bị bỏ qua hoàn toàn — kể cả khi ai đó lách
+        // control đã disable ở client để cố gửi lên một số khác — vì từ lúc khoá, ExpenseService là
+        // nơi DUY NHẤT còn được phép đổi số này (cộng trừ theo thời gian thực mỗi khi phiếu chi giải
+        // ngân/bị hủy). Hai quỹ khoá độc lập nhau.
         boolean balanceChanged = false;
-        if (request.getCashSafeBalance() != null
-                && (entity.getCashSafeBalance() == null || entity.getCashSafeBalance().compareTo(request.getCashSafeBalance()) != 0)) {
+        if (entity.getCashSafeBalance() == null && request.getCashSafeBalance() != null) {
             entity.setCashSafeBalance(request.getCashSafeBalance());
             balanceChanged = true;
         }
-        if (request.getBankAccountBalance() != null
-                && (entity.getBankAccountBalance() == null || entity.getBankAccountBalance().compareTo(request.getBankAccountBalance()) != 0)) {
+        if (entity.getBankAccountBalance() == null && request.getBankAccountBalance() != null) {
             entity.setBankAccountBalance(request.getBankAccountBalance());
             balanceChanged = true;
         }
@@ -107,6 +125,43 @@ public class FinancialsettingService {
         }
 
         return FinancialsettingResponse.from(financialsettingRepository.save(entity));
+    }
+
+    /**
+     * Cộng dồn {@code cashDelta}/{@code bankDelta} (âm = trừ, dương = cộng lại) vào số dư quỹ —
+     * gọi bởi {@code ExpenseService} mỗi khi một phiếu chi thực sự giải ngân (trừ) hoặc bị hủy sau
+     * khi đã giải ngân (cộng lại). Chỉ quỹ ĐÃ ĐƯỢC THIẾT LẬP (khác null, tức đã khoá — xem
+     * {@link #isCashSafeBalanceLocked}) mới bị/được cộng trừ; quỹ còn "Chưa thiết lập" thì chưa có
+     * mốc nào để theo dõi real-time nên delta của quỹ đó bị bỏ qua lặng lẽ, không phải lỗi.
+     */
+    @Transactional
+    public void adjustFundBalances(BigDecimal cashDelta, BigDecimal bankDelta) {
+        boolean cashRequested = cashDelta != null && cashDelta.compareTo(BigDecimal.ZERO) != 0;
+        boolean bankRequested = bankDelta != null && bankDelta.compareTo(BigDecimal.ZERO) != 0;
+        if (!cashRequested && !bankRequested) {
+            return;
+        }
+
+        Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
+        if (entity == null) {
+            return;
+        }
+
+        boolean touched = false;
+        if (cashRequested && entity.getCashSafeBalance() != null) {
+            entity.setCashSafeBalance(entity.getCashSafeBalance().add(cashDelta));
+            touched = true;
+        }
+        if (bankRequested && entity.getBankAccountBalance() != null) {
+            entity.setBankAccountBalance(entity.getBankAccountBalance().add(bankDelta));
+            touched = true;
+        }
+        if (!touched) {
+            return;
+        }
+
+        entity.setBalanceUpdatedAt(LocalDateTime.now());
+        financialsettingRepository.save(entity);
     }
 
     /**

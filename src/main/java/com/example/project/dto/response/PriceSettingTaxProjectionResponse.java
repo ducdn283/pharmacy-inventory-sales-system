@@ -11,29 +11,25 @@ import java.math.BigDecimal;
  * is on <em>right now</em> ({@code TaxperiodsnapshotService.currentRevenueGroup()}, i.e. the last
  * snapshot's {@code nextPeriodTaxType}, not the raw {@code Financialsetting.revenueGroup}).
  *
- * <p>The three branches deliberately mirror {@code TaxperiodsnapshotService.computePeriod()} so a
+ * <p>The two branches deliberately mirror {@code TaxperiodsnapshotService.computePeriod()} so a
  * price decision and the quarterly declaration cannot tell the Owner different stories:</p>
  *
  * <table>
  *   <tr><th>Group</th><th>GTGT</th><th>TNCN</th></tr>
  *   <tr><td>1 — miễn thuế</td><td>—</td><td>—</td></tr>
- *   <tr><td>2 — trực tiếp</td><td>{@code giá bán × 1%}</td><td>{@code giá bán × 0,5%}</td></tr>
- *   <tr><td>3 — khấu trừ</td><td>{@code VAT đầu ra − VAT đầu vào}</td><td>{@code 15% × (giá bán − giá vốn)}</td></tr>
+ *   <tr><td>2/3 — trực tiếp</td><td>{@code giá bán × 1%}</td><td>{@code giá bán × 0,5%}</td></tr>
  * </table>
  *
- * <p><strong>Two honest limits, surfaced as {@link #caveat} rather than hidden:</strong></p>
- * <ul>
- *   <li>Group 3's taxable income at period level is {@code doanh thu − giá vốn − chi phí vận hành}.
- *       Operating costs (điện, nước, lương) belong to the period, not to one unit, so the per-unit
- *       {@code incomeTax} here is an <em>upper bound</em>.</li>
- *   <li>Group 3's input VAT is only deductible from an invoice that passes
- *       {@code Purchaseinvoice.isValidForDeduction} (Điều 26 NĐ 181/2025), which is time-dependent.
- *       This projection assumes the batch's purchase invoice qualifies.</li>
- * </ul>
+ * <p><strong>BA quyết định trực tiếp (chưa có tài liệu):</strong> group 3 no longer offsets input
+ * VAT against output VAT — it now projects identically to group 2 (see {@code
+ * TaxRevenueGroup.DEDUCTION}'s javadoc). This panel does not yet reflect group 2's optional
+ * profit-based TNCN ({@code Financialsetting.taxCalculationMethod}) — it always shows the flat
+ * revenue-based figure.</p>
  *
- * <p>Under group 2 the product's own VAT rate is <strong>irrelevant</strong> — the percentage method
- * taxes revenue flat, so an 8% product and a 0% product are charged identically. That surprises
- * people, so {@link #productVatApplies} lets the screen say it out loud.</p>
+ * <p>The product's own VAT rate is <strong>irrelevant to every group now</strong> — the percentage
+ * method taxes revenue flat, so an 8% product and a 0% product are charged identically. That
+ * surprises people, so {@link #productVatApplies} (always {@code false} now) lets the screen say it
+ * out loud unconditionally.</p>
  */
 @Getter
 @AllArgsConstructor
@@ -43,9 +39,13 @@ public class PriceSettingTaxProjectionResponse {
     private String groupLabel;
     /** Group 1 — declares nothing at all. */
     private boolean exempt;
-    /** Group 3 — input VAT is offset against output VAT. */
+    /**
+     * {@code group == 3} on its own terms — <strong>always {@code false}</strong> now for the
+     * purpose this field used to serve (no group offsets input VAT against output VAT any more), so
+     * the per-batch "GTGT đầu vào" column it used to gate in {@code price-settings.html} never shows.
+     */
     private boolean deduction;
-    /** Group 2 — a flat percentage of revenue. */
+    /** Not exempt — a flat percentage of revenue, for groups 2 and 3 alike. */
     private boolean direct;
 
     /** The product's own VAT rate as a percentage ({@code 8.00}), from override or type. */

@@ -24,28 +24,38 @@ public class TaxPeriodComputationResponse {
 
     private Integer revenueGroup;
     private String revenueGroupDisplay;
+
+    /**
+     * {@code group == 3} on its own terms — no longer means "GTGT uses the deduction method" (see
+     * {@code TaxRevenueGroup.DEDUCTION}'s javadoc). Kept for callers that still need group identity;
+     * the GTGT-deduction-breakdown block on the tax-period screens it used to gate is permanently
+     * hidden now (hardcoded off in the template), since no group uses that method any more.
+     */
     private boolean deductionGroup;
     private boolean taxExempt;
 
     /**
-     * True for group 2, which owes a flat percentage of revenue instead of output minus input.
-     * The three groups are mutually exclusive, so this is simply "neither of the other two".
+     * GTGT method: true whenever the period is not tax-exempt — <strong>both</strong> group 2 and
+     * group 3 now pay a flat percentage of revenue instead of output minus input.
      */
     private boolean percentageMethod;
 
-    /** Revenue of the period: sales less what customers brought back inside it. */
+    /** Revenue of the period: sales that are "còn hiệu lực" plus hoa hồng NCC and hàng biếu tặng. */
     private BigDecimal periodRevenue;
 
     /** The percentage-method rate as a human number (e.g. {@code 1.00} for 1%). */
     private BigDecimal directVatRatePercent;
 
-    // --- output VAT: sales in the period, less VAT on goods customers returned in the period
+    // --- output VAT. vatOutputFromSales/vatOutput are the same figure now (revenue × 1%);
+    //     vatOutputReturnDeduction is always zero — kept as separate fields only so the DTO shape is
+    //     unchanged, since the "Nhóm 3 khấu trừ" block that showed them broken out is hidden for good.
     private BigDecimal vatOutputFromSales;
     private BigDecimal vatOutputReturnDeduction;
     private BigDecimal vatOutput;
 
-    // --- input VAT: deductible purchases in the period, less VAT reversed by supplier returns.
-    //     Both are zero outside the deduction group — there is nothing to deduct.
+    // --- input VAT. Always zero now — no group deducts input VAT against output VAT any more.
+    //     Kept as fields (never removed from the DTO, never shown) because Taxperiodsnapshot's
+    //     vatInput/vatCarryforwardIn/vatCarryforwardOut columns stay in the schema unchanged.
     private BigDecimal vatInputFromPurchases;
     private BigDecimal vatInputReturnReversal;
     private BigDecimal vatInput;
@@ -54,14 +64,16 @@ public class TaxPeriodComputationResponse {
     private BigDecimal vatCarryforwardOut;
     private BigDecimal vatPayable;
 
-    // --- personal income tax. Group 2 pays a slice of revenue, group 3 a slice of profit, so the
-    //     three cost lines below are only populated (and only meaningful) for group 3.
+    // --- personal income tax. Only populated (and only meaningful) when pitCostMethod is true.
     private BigDecimal costOfGoodsSold;
     private BigDecimal operatingCost;
     private BigDecimal taxableIncome;
     private BigDecimal incomeTax;
 
-    /** PIT rate as a human number: {@code 0.50} for group 2, {@code 15.00} for group 3. */
+    /**
+     * PIT rate as a human number: {@code 0.50} for group 2 on the revenue method, {@code 15.00} for
+     * group 2 on the profit method, {@code 17.00} for group 3.
+     */
     private BigDecimal incomeTaxRatePercent;
 
     /** How many source documents fell in the period — a sanity check for an empty-looking result. */
@@ -78,4 +90,13 @@ public class TaxPeriodComputationResponse {
 
     /** True when a snapshot with this {@code periodLabel} has already been closed. */
     private boolean alreadyClosed;
+
+    /**
+     * TNCN method: true when this period's personal income tax is computed on profit (taxable-income
+     * revenue minus chi phí hợp lý) rather than a flat rate on revenue. Always true for group 3;
+     * for group 2 it follows {@code Financialsetting.taxCalculationMethod} — the Owner's choice
+     * between the two. Independent from {@link #percentageMethod}, which is about GTGT only: a
+     * group-2 period can be GTGT-percentage <em>and</em> PIT-cost-method at the same time.
+     */
+    private boolean pitCostMethod;
 }
