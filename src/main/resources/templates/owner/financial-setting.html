@@ -60,6 +60,7 @@
 <div th:replace="~{fragments/topbar :: topbar}"></div>
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 <div th:replace="~{fragments/toast :: flash}"></div>
+<div th:replace="~{fragments/confirm :: confirm}"></div>
 
 <main id="content" class="content py-8">
   <div class="container-fluid">
@@ -68,7 +69,7 @@
       <h1 class="fs-4 mb-0">Thiết lập tài chính</h1>
     </div>
 
-    <form th:action="@{/owner/financial-setting}" th:object="${financialSettingForm}" method="post" novalidate>
+    <form id="financialSettingForm" th:action="@{/owner/financial-setting}" th:object="${financialSettingForm}" method="post" novalidate>
       <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
       <div class="row g-4">
@@ -94,7 +95,8 @@
                 <input type="hidden" th:if="${revenueGroupLocked}" name="revenueGroup" th:value="*{revenueGroup}">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('revenueGroup')}" th:errors="*{revenueGroup}"></div>
                 <div class="form-text" th:if="${revenueGroupLocked}">
-                  Đã khoá — hệ thống tự cập nhật nhóm này theo Kỳ thuế kể từ khi kỳ đầu tiên được chốt.
+                  Đã khoá — nhóm doanh thu chỉ chỉnh sửa được một lần. Kể từ khi kỳ thuế đầu tiên
+                  được chốt, hệ thống sẽ tự động cập nhật nhóm này theo Kỳ thuế.
                 </div>
               </div>
               <div class="col-12 col-md-4">
@@ -307,8 +309,9 @@
           <div class="sup-card p-4 p-md-5">
             <h2 class="fs-6 mb-1">Quỹ tiền mặt &amp; ngân hàng</h2>
             <p class="text-secondary small mb-4">
-              Số dư do người dùng tự nhập/điều chỉnh thủ công — chưa tự động cộng trừ theo hóa đơn
-              bán hàng, phiếu thu hoặc phiếu chi.
+              Số dư khởi tạo — mỗi ô chỉ được nhập <strong>MỘT LẦN</strong>, sau khi lưu sẽ khoá lại
+              và không thể sửa nữa. Từ đó về sau, quỹ tương ứng sẽ tự động trừ theo thời gian thực
+              mỗi khi một phiếu chi giải ngân (và cộng lại nếu phiếu đó bị hủy).
             </p>
 
             <div class="row g-3 mb-0">
@@ -317,18 +320,20 @@
                 <input id="fsCashSafeBalance" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{cashSafeBalance}"
                        th:classappend="${#fields.hasErrors('cashSafeBalance')} ? ' is-invalid'"
-                       th:disabled="${!editable}"
+                       th:disabled="${!editable or cashSafeBalanceLocked}"
                        placeholder="Chưa thiết lập">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('cashSafeBalance')}" th:errors="*{cashSafeBalance}"></div>
+                <div class="form-text" th:if="${cashSafeBalanceLocked}">Đã khoá — chỉ còn thay đổi tự động theo phiếu chi.</div>
               </div>
               <div class="col-12 col-md-6">
                 <label for="fsBankAccountBalance" class="form-label">Số dư quỹ ngân hàng</label>
                 <input id="fsBankAccountBalance" type="text" inputmode="numeric" data-money class="form-control"
                        th:field="*{bankAccountBalance}"
                        th:classappend="${#fields.hasErrors('bankAccountBalance')} ? ' is-invalid'"
-                       th:disabled="${!editable}"
+                       th:disabled="${!editable or bankAccountBalanceLocked}"
                        placeholder="Chưa thiết lập">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('bankAccountBalance')}" th:errors="*{bankAccountBalance}"></div>
+                <div class="form-text" th:if="${bankAccountBalanceLocked}">Đã khoá — chỉ còn thay đổi tự động theo phiếu chi.</div>
               </div>
               <div class="col-12">
                 <div class="form-text">Cập nhật lần cuối: <span th:text="${balanceUpdatedAtDisplay}">Chưa cập nhật</span></div>
@@ -391,6 +396,78 @@
       revenueGroupSelect.addEventListener('change', applyRevenueGroupLock);
     }
     applyRevenueGroupLock();
+  })();
+
+  // Quỹ tiền mặt/ngân hàng VÀ nhóm doanh thu đều chỉ sửa được một lần qua form rồi khoá vĩnh viễn
+  // (xem FinancialsettingService.isCashSafeBalanceLocked/isBankAccountBalanceLocked/
+  // isRevenueGroupLocked). Trước khi khoá thật sự (submit), hỏi lại người dùng — chỉ hỏi về những
+  // mục ĐANG chưa khoá và thực sự sắp bị khoá bởi lần lưu này, không hỏi khi họ chỉ sửa các thiết
+  // lập khác trên cùng form.
+  (function () {
+    var form = document.getElementById('financialSettingForm');
+    var cashInput = document.getElementById('fsCashSafeBalance');
+    var bankInput = document.getElementById('fsBankAccountBalance');
+    var revenueGroupSelect = document.getElementById('fsRevenueGroup');
+    var cashLocked = /*[[${cashSafeBalanceLocked}]]*/ false;
+    var bankLocked = /*[[${bankAccountBalanceLocked}]]*/ false;
+    var revenueGroupLockedFlag = /*[[${revenueGroupLocked}]]*/ false;
+    var confirmed = false;
+
+    function hasTypedValue(input) {
+      if (!input) {
+        return false;
+      }
+      var digits = (input.value || '').replace(/[^\d-]/g, '');
+      return digits !== '' && digits !== '-';
+    }
+
+    if (!form) {
+      return;
+    }
+
+    form.addEventListener('submit', function (event) {
+      if (confirmed) {
+        return;
+      }
+
+      // Quỹ: chỉ tính là "sắp khoá" khi người dùng vừa thực sự gõ số vào (ô còn "Chưa thiết lập"
+      // thì bỏ trống vẫn không sao, không khoá gì cả). Nhóm doanh thu: select luôn có sẵn một giá
+      // trị, nên hễ đang mở khoá và form được nộp là coi như "một lần sửa" đã dùng.
+      var fundItems = [];
+      if (!cashLocked && hasTypedValue(cashInput)) {
+        fundItems.push('quỹ tiền mặt');
+      }
+      if (!bankLocked && hasTypedValue(bankInput)) {
+        fundItems.push('quỹ ngân hàng');
+      }
+      var lockingRevenueGroup = !revenueGroupLockedFlag && revenueGroupSelect && !revenueGroupSelect.disabled;
+
+      if (fundItems.length === 0 && !lockingRevenueGroup) {
+        return;
+      }
+
+      var parts = [];
+      if (fundItems.length > 0) {
+        parts.push('số dư ' + fundItems.join(' và '));
+      }
+      if (lockingRevenueGroup) {
+        parts.push('nhóm doanh thu hộ kinh doanh');
+      }
+
+      event.preventDefault();
+      var message = 'Sau khi lưu, ' + parts.join(' và ')
+          + ' sẽ được khoá vĩnh viễn và không thể chỉnh sửa lại qua màn này nữa. Bạn có chắc chắn'
+          + ' muốn tiếp tục?';
+      if (typeof window.pmConfirm === 'function') {
+        window.pmConfirm(message, function () {
+          confirmed = true;
+          form.requestSubmit();
+        });
+      } else if (window.confirm(message)) {
+        confirmed = true;
+        form.requestSubmit();
+      }
+    });
   })();
 </script>
 <div th:replace="~{fragments/money-input :: moneyInputs}"></div>

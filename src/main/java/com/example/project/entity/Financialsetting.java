@@ -84,6 +84,16 @@ public class Financialsetting {
     @Column(name = "revenueGroup")
     private Integer revenueGroup;
 
+    /**
+     * Người dùng đã xác nhận khoá nhóm doanh thu chưa — độc lập với việc đã có kỳ thuế nào đóng hay
+     * chưa. Nhóm doanh thu chỉ sửa được MỘT LẦN qua form: lần lưu đầu tiên (khi cột này còn false)
+     * đánh dấu true luôn, khoá lại từ đó. {@code isRevenueGroupLocked()} khoá khi cột này true
+     * HOẶC khi đã có kỳ thuế đóng — hai lý do khoá độc lập, chỉ cần một cái đúng là khoá.
+     */
+    @ColumnDefault("0")
+    @Column(name = "revenueGroupConfirmed")
+    private Boolean revenueGroupConfirmed;
+
     @ColumnDefault("1000000000.00")
     @Column(name = "annualRevenueThreshold1", precision = 15, scale = 2)
     private BigDecimal annualRevenueThreshold1;
@@ -107,4 +117,8 @@ public class Financialsetting {
 
     @Column(name = "balanceUpdatedAt")
     private LocalDateTime balanceUpdatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
 }

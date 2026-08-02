@@ -62,18 +62,42 @@ public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, In
 
     /**
      * Cost of the goods sold in {@code [from, to)}, valued at what each batch actually cost to buy:
-     * {@code baseQtyDeducted × Batch.importPricePerBase}. Feeds the group-3 personal income tax,
-     * which taxes profit rather than revenue.
+     * {@code baseQtyDeducted × Batch.importPricePerBase}. Feeds the profit-based personal income tax
+     * (group 3 always; group 2 when it opts into the profit method).
      *
      * <p>Bounds are VN wall-clock {@code LocalDateTime}s because they filter on
      * {@code Invoice.date} — see {@code TaxperiodsnapshotService}'s boundary helpers.</p>
+     *
+     * <p>Only counts lines on an invoice that is <strong>"còn hiệu lực"</strong> — same predicate as
+     * {@code InvoiceRepository.findValidInPeriod}, duplicated here (JPQL has no shared fragments)
+     * rather than reusing that query's result set, since this needs to join down to
+     * {@code Invoicedetail}/{@code Batch} in one aggregate query instead of walking lines in Java.
+     * Without this filter a superseded original's lines and its replacement's lines would both be
+     * summed, double-counting giá vốn the same way revenue used to double-count doanh thu.</p>
      */
     @Query("""
        select coalesce(sum(d.baseQtyDeducted * b.importPricePerBase), 0)
        from Invoicedetail d
        join d.batchID b
-       where d.invoiceID.date >= :from
-         and d.invoiceID.date < :to
+       join d.invoiceID i
+       where i.date >= :from
+         and i.date < :to
+         and (
+           i.invoiceType = 'Thay thế'
+           or i.invoiceType = 'Điều chỉnh'
+           or (
+             (i.invoiceType is null or i.invoiceType = 'Bán hàng' or i.invoiceType = 'normal')
+             and not exists (
+               select 1 from Invoice r
+               where r.invoiceType = 'Thay thế'
+                 and r.originalInvoiceID = i
+             )
+             and not (
+               (i.status is null or i.status <> 'Đã ký')
+               and i.returnStatus = 'FULL'
+             )
+           )
+         )
        """)
     BigDecimal sumCostOfGoodsSoldInPeriod(@Param("from") LocalDateTime from,
                                           @Param("to") LocalDateTime to);

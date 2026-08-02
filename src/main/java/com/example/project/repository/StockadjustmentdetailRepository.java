@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 public interface StockadjustmentdetailRepository extends JpaRepository<Stockadjustmentdetail, Integer> {
@@ -43,4 +46,55 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
            left join fetch d.batchID
            """)
     List<Stockadjustmentdetail> findAllWithRelations();
+
+    /**
+     * GTGT-inclusive value of stock given away rather than sold ({@code GIFT}/{@code SAMPLE}/
+     * {@code INTERNAL_USE} — {@code StockadjustmentService.VAT_OUTPUT_TYPES}) in {@code [from, to)},
+     * feeding tax-period revenue (mục C.2). {@code preTaxAmount + vatAmount} reconstructs the
+     * "grossValue" ({@code refSellPrice × quantity}, VAT-inclusive) that
+     * {@code StockadjustmentService.applyOutputVat} split into those two columns at creation time —
+     * summing {@code preTaxAmount} alone would under-count by the VAT portion. Only a completed slip
+     * ({@code StockAdjustmentStatus.COMPLETED}) actually happened; a draft or cancelled one is not
+     * real revenue.
+     */
+    @Query("""
+           select coalesce(sum(d.preTaxAmount + d.vatAmount), 0)
+           from Stockadjustmentdetail d
+           where d.stockAdjustmentID.adjustmentType in :adjustmentTypes
+             and d.stockAdjustmentID.status = :status
+             and d.stockAdjustmentID.date >= :from
+             and d.stockAdjustmentID.date < :to
+           """)
+    BigDecimal sumGrossValueInPeriod(@Param("adjustmentTypes") Collection<String> adjustmentTypes,
+                                     @Param("status") String status,
+                                     @Param("from") Instant from,
+                                     @Param("to") Instant to);
+
+    /**
+     * Cost of {@code COUNT_INCREASE} lines whose batch was created as unknown-origin stock-count
+     * surplus, in {@code [from, to)} — feeds the taxable-income-only revenue add-on (mục D.2).
+     *
+     * <p>No dedicated flag exists on {@code Stockadjustmentdetail}/{@code Batch} for "unknown
+     * origin", so this relies on the one structural signal {@code StockadjustmentService
+     * .createSurplusBatch} leaves behind: the batch code is prefixed {@code "KK-"} <strong>only</strong>
+     * when a new batch was created for unknown-origin surplus (a known-origin {@code COUNT_INCREASE}
+     * line reuses the counted batch as-is, never creating one), and {@code purchaseDetailID} is
+     * always {@code null} on it (no real purchase behind it). Verified 2026-08 that no other flow in
+     * the codebase produces a {@code "KK-"}-prefixed batch code ({@code PurchaseinvoiceService} uses
+     * {@code "BATCH-"}, {@code ReturnService.cloneReturnBatch} uses {@code "RT-"}).</p>
+     */
+    @Query("""
+           select coalesce(sum(d.lineCost), 0)
+           from Stockadjustmentdetail d
+           join d.batchID b
+           where d.stockAdjustmentID.adjustmentType = 'COUNT_INCREASE'
+             and d.stockAdjustmentID.status = :status
+             and d.stockAdjustmentID.date >= :from
+             and d.stockAdjustmentID.date < :to
+             and b.batchCode like 'KK-%'
+             and b.purchaseDetailID is null
+           """)
+    BigDecimal sumUnknownOriginIncreaseCostInPeriod(@Param("status") String status,
+                                                     @Param("from") Instant from,
+                                                     @Param("to") Instant to);
 }

@@ -200,19 +200,21 @@
                                     Phiếu trả hàng của khách (đã duyệt):
                                     <strong th:text="${computation.customerReturnCount}">0</strong>
                                 </li>
-                                <li th:if="${computation.deductionGroup}">
+                                <!-- Không nhóm nào còn khấu trừ GTGT đầu vào nữa, nên số phiếu nhập
+                                     "được khấu trừ"/hàng trả NCC không còn ảnh hưởng tới thuế phải
+                                     nộp — ẩn để khỏi ngầm ý ngược lại. -->
+                                <li th:if="false">
                                     Phiếu nhập được khấu trừ:
                                     <strong th:text="${computation.purchaseInvoiceCount}">0</strong>
                                 </li>
-                                <li th:if="${computation.deductionGroup}">
+                                <li th:if="false">
                                     Phiếu trả hàng NCC (đã duyệt):
                                     <strong th:text="${computation.supplierReturnCount}">0</strong>
                                 </li>
                             </ul>
                         </div>
 
-                        <div class="col-12"
-                             th:if="${computation.deductionGroup and computation.nonDeductiblePurchaseCount > 0}">
+                        <div class="col-12" th:if="false">
                             <div class="alert alert-warning small p-3 mb-0">
                                 <i class="ti ti-file-alert me-1"></i>
                                 <strong th:text="${computation.nonDeductiblePurchaseCount}">0</strong>
@@ -250,8 +252,10 @@
 
                     <table class="table vat-table mb-0" th:unless="${computation.taxExempt}">
                         <tbody>
-                        <!-- Nhóm 3 — phương pháp khấu trừ -->
-                        <th:block th:if="${computation.deductionGroup}">
+                        <!-- Không nhóm nào còn dùng phương pháp khấu trừ cho GTGT nữa (nhóm 3 chuyển
+                             sang tính trực tiếp trên doanh thu, giống nhóm 2) — khối này vĩnh viễn
+                             không hiện, giữ lại markup/DTO field để không phải đổi schema. -->
+                        <th:block th:if="false">
                             <tr class="component">
                                 <td>Thuế GTGT đầu ra của hóa đơn bán hàng</td>
                                 <td class="amount"
@@ -311,7 +315,7 @@
                                 th:text="${#numbers.formatDecimal(computation.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
 
-                        <tr th:if="${computation.deductionGroup}">
+                        <tr th:if="false">
                             <td>Thuế GTGT còn được khấu trừ chuyển sang kỳ sau</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(computation.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
@@ -323,9 +327,10 @@
 
                     <table class="table vat-table mb-0" th:unless="${computation.taxExempt}">
                         <tbody>
-                        <!-- Nhóm 3 đánh thuế trên lợi nhuận nên phải bóc chi phí ra; nhóm 2 chỉ lấy
-                             một tỷ lệ trên doanh thu đã hiện ở bảng trên. -->
-                        <th:block th:if="${computation.deductionGroup}">
+                        <!-- Nhóm 3 luôn đánh thuế trên lợi nhuận nên phải bóc chi phí ra; nhóm 2 tự
+                             chọn giữa cách này và một tỷ lệ trên doanh thu (Financialsetting
+                             .taxCalculationMethod) — xem TaxperiodsnapshotService.computePeriod. -->
+                        <th:block th:if="${computation.pitCostMethod}">
                             <tr class="component">
                                 <td>Doanh thu của kỳ (đã trừ hàng bán bị trả lại)</td>
                                 <td class="amount"
@@ -348,14 +353,14 @@
                             </tr>
                         </th:block>
 
-                        <tr class="component" th:if="${computation.percentageMethod}">
+                        <tr class="component" th:if="${!computation.pitCostMethod}">
                             <td>Doanh thu của kỳ (đã trừ hàng bán bị trả lại)</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
 
                         <tr class="component">
-                            <td th:text="${computation.deductionGroup
+                            <td th:text="${computation.pitCostMethod
                                           ? 'Thuế suất TNCN trên thu nhập chịu thuế'
                                           : 'Tỷ lệ thuế TNCN trên doanh thu (bán lẻ hàng hóa)'}">Thuế suất TNCN</td>
                             <td class="amount"
