@@ -250,17 +250,9 @@ public class IncomeController {
             Integer incomeId = incomeService.createIncome(
                     form,
                     currentUserContext.getCurrentAccountId(),
-                    currentUserContext.isOwner(),
                     asDraft);
 
-            String message;
-            if (asDraft) {
-                message = "Đã lưu nháp phiếu thu";
-            } else if (currentUserContext.isOwner()) {
-                message = "Tạo phiếu thu thành công";
-            } else {
-                message = "Đã gửi phiếu thu, đang chờ duyệt";
-            }
+            String message = asDraft ? "Đã lưu nháp phiếu thu" : "Tạo phiếu thu thành công";
             redirectAttributes.addFlashAttribute("successMessage", message);
             return "redirect:" + basePath + "/" + incomeId;
         } catch (IllegalArgumentException exception) {

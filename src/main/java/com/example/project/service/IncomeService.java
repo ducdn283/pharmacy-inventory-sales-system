@@ -347,11 +347,10 @@ public class IncomeService {
 
     /**
      * Creates a manual income slip. When {@code asDraft} is true it is saved as {@link #STATUS_DRAFT};
-     * otherwise the Owner's slip is auto-completed and anyone else's goes to {@link #STATUS_PENDING}.
+     * otherwise it is auto-completed ({@link #STATUS_COMPLETED}) — income slips do not require approval.
      */
     @Transactional
-    public Integer createIncome(IncomeCreateRequest request, Integer currentAccountId, boolean isOwner,
-                                boolean asDraft) {
+    public Integer createIncome(IncomeCreateRequest request, Integer currentAccountId, boolean asDraft) {
         validateCreateRequest(request);
 
         Account applicant = accountRepository.findById(currentAccountId)
@@ -377,10 +376,8 @@ public class IncomeService {
 
         if (asDraft) {
             income.setStatus(STATUS_DRAFT);
-        } else if (isOwner) {
-            income.setStatus(STATUS_COMPLETED);
         } else {
-            income.setStatus(STATUS_PENDING);
+            income.setStatus(STATUS_COMPLETED);
         }
 
         // A submitted income is a real counter transaction (cash/banking physically received) →
