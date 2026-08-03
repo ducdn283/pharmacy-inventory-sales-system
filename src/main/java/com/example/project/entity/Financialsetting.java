@@ -105,6 +105,10 @@ public class Financialsetting {
     @Column(name = "cashSafeBalance", precision = 15, scale = 2)
     private BigDecimal cashSafeBalance;
 
+    @ColumnDefault("0")
+    @Column(name = "setupConfirmed")
+    private Boolean setupConfirmed;
+
     @Column(name = "balanceUpdatedAt")
     private LocalDateTime balanceUpdatedAt;
 

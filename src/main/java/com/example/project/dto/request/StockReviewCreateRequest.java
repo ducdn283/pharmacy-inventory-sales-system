@@ -8,9 +8,9 @@ import java.util.List;
 
 @Getter
 @Setter
-public class StockCountCreateRequest {
+public class StockReviewCreateRequest {
 
     private String note;
 
-    private List<StockCountItemRequest> items = new ArrayList<>();
+    private List<StockReviewItemRequest> items = new ArrayList<>();
 }

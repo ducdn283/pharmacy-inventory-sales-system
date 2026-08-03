@@ -10,7 +10,7 @@ import com.example.project.entity.Expense;
 import com.example.project.entity.Income;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
-import com.example.project.entity.Stockcount;
+import com.example.project.entity.Stockreview;
 import com.example.project.repository.AccountpermissionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -216,7 +216,7 @@ public class WorkflowNotificationService {
     // =========================================================
 
     @Transactional
-    public void stockCountPending(Stockcount value) {
+    public void stockCountPending(Stockreview value) {
         if (value == null || value.getId() == null) {
             return;
         }
@@ -242,7 +242,7 @@ public class WorkflowNotificationService {
     }
 
     @Transactional
-    public void stockCountApproved(Stockcount value) {
+    public void stockCountApproved(Stockreview value) {
         if (value == null || value.getId() == null) {
             return;
         }
@@ -267,7 +267,7 @@ public class WorkflowNotificationService {
     }
 
     @Transactional
-    public void stockCountRejected(Stockcount value) {
+    public void stockCountRejected(Stockreview value) {
         if (value == null || value.getId() == null) {
             return;
         }

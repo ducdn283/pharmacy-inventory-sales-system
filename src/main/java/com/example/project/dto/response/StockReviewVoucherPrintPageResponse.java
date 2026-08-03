@@ -8,11 +8,11 @@ import java.util.List;
 
 @Getter
 @AllArgsConstructor
-public class StockCountVoucherPrintPageResponse {
+public class StockReviewVoucherPrintPageResponse {
 
-    private Integer stockCountId;
+    private Integer stockReviewId;
 
-    private String stockCountCode;
+    private String stockReviewCode;
 
     private String countDateDisplay;
 
@@ -40,5 +40,5 @@ public class StockCountVoucherPrintPageResponse {
 
     private BigDecimal totalDiscrepancyValue;
 
-    private List<StockCountVoucherPrintLineResponse> items;
+    private List<StockReviewVoucherPrintLineResponse> items;
 }

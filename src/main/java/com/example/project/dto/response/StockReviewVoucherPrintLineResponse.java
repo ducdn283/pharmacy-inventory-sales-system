@@ -3,13 +3,11 @@ package com.example.project.dto.response;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Getter
 @AllArgsConstructor
-public class StockCountBatchCandidateResponse {
-
-    private Integer batchId;
+public class StockReviewVoucherPrintLineResponse {
 
     private Integer productId;
 
@@ -19,9 +17,13 @@ public class StockCountBatchCandidateResponse {
 
     private String lotNumber;
 
-    private LocalDate expirationDate;
-
     private String expirationDateDisplay;
 
     private Integer systemQty;
+
+    private Integer actualQty;
+
+    private Integer discrepancy;
+
+    private BigDecimal discrepancyValue;
 }

@@ -102,6 +102,7 @@ public class ExpenseService {
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final ShiftreportService shiftreportService;
     private final WorkflowNotificationService workflowNotificationService;
+    private final FinancialsettingService financialsettingService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
@@ -109,7 +110,8 @@ public class ExpenseService {
                           AccountpermissionRepository accountpermissionRepository,
                           PurchaseinvoiceService purchaseinvoiceService,
                           ShiftreportService shiftreportService,
-                          WorkflowNotificationService workflowNotificationService) {
+                          WorkflowNotificationService workflowNotificationService,
+                          FinancialsettingService financialsettingService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
@@ -117,6 +119,7 @@ public class ExpenseService {
         this.purchaseinvoiceService = purchaseinvoiceService;
         this.shiftreportService = shiftreportService;
         this.workflowNotificationService = workflowNotificationService;
+        this.financialsettingService = financialsettingService;
     }
 
     // ------------------------------------------------------------------ generated-REST passthrough
@@ -469,7 +472,15 @@ public class ExpenseService {
         // Give the money back to the invoice's outstanding debt before voiding the slip. Computed
         // while the status is still the pre-cancel one, since that is what decides whether anything
         // was ever disbursed. A DRAFT/PENDING slip pushed nothing, so this is a no-op for them.
+        boolean wasDisbursed = isDisbursed(expense);
         settlePurchaseInvoice(expense, disbursedAmount(expense).negate());
+        // Same "đã từng giải ngân chưa" mốc, nhưng trả lại đúng theo từng quỹ (tiền mặt/ngân hàng)
+        // thay vì tổng paid — paidByCredit không đụng tới quỹ nào nên không cần đảo ngược.
+        if (wasDisbursed) {
+            financialsettingService.adjustFundBalances(
+                    nullToZero(expense.getPaidByCash()),
+                    nullToZero(expense.getPaidByBanking()));
+        }
 
         expense.setStatus(ExpenseStatus.CANCELLED);
         String trimmedReason = trimToNull(reason);
@@ -616,6 +627,12 @@ public class ExpenseService {
         BigDecimal paid = nullToZero(expense.getPaid());
         expense.setStatus(ExpenseStatus.COMPLETED);
         settlePurchaseInvoice(expense, paid);
+        // Tiền rời quỹ đúng lúc này — cùng thời điểm status chuyển COMPLETED, không phải lúc tạo
+        // phiếu (PENDING chưa phải tiền thật). Xem FinancialsettingService.adjustFundBalances: quỹ
+        // chưa từng được thiết lập (còn null) thì delta của quỹ đó bị bỏ qua lặng lẽ.
+        financialsettingService.adjustFundBalances(
+                nullToZero(expense.getPaidByCash()).negate(),
+                nullToZero(expense.getPaidByBanking()).negate());
         attachOpenShift(expense, applicantIdOf(expense));
     }
 
@@ -863,9 +880,13 @@ public class ExpenseService {
      * typed, but nobody has authorised it leaving the register yet.
      */
     private BigDecimal disbursedAmount(Expense expense) {
-        boolean approved = ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
+        return isDisbursed(expense) ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+    }
+
+    /** Whether money has actually left for this slip — status-only, independent of amount. */
+    private boolean isDisbursed(Expense expense) {
+        return ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
                 || ExpenseStatus.COMPLETED.equals(expense.getStatus());
-        return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
     }
 
     private List<Expense> liveExpenses() {

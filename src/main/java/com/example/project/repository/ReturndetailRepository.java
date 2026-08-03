@@ -6,8 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 
 public interface ReturndetailRepository extends JpaRepository<Returndetail, Integer> {
@@ -59,26 +57,4 @@ public interface ReturndetailRepository extends JpaRepository<Returndetail, Inte
        """)
     List<Object[]> sumReturnedQtyByPurchaseDetail(@Param("status") String status);
 
-    /**
-     * Cost of goods that came back into stock on approved customer returns in {@code [from, to)}.
-     * Subtracted from cost of goods sold so profit is measured on the same basis as revenue, which
-     * is itself net of refunds.
-     *
-     * <p>Only {@code restockable} lines count: goods that could not be put back are gone, so their
-     * cost stays a cost of the business rather than being reversed out.</p>
-     */
-    @Query("""
-       select coalesce(sum(d.baseQtyRestored * b.importPricePerBase), 0)
-       from Returndetail d
-       join d.batchID b
-       join d.returnID r
-       where r.invoiceID is not null
-         and r.status = :approvedStatus
-         and d.restockable = true
-         and r.returnDate >= :from
-         and r.returnDate < :to
-       """)
-    BigDecimal sumRestockedCostInPeriod(@Param("from") Instant from,
-                                        @Param("to") Instant to,
-                                        @Param("approvedStatus") String approvedStatus);
 }

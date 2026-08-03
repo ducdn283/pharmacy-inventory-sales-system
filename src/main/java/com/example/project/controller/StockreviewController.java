@@ -1,12 +1,12 @@
 package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
-import com.example.project.dto.request.StockCountCreateRequest;
-import com.example.project.dto.response.StockCountDetailPageResponse;
-import com.example.project.dto.response.StockCountListItemResponse;
-import com.example.project.dto.response.StockCountPrintPageResponse;
-import com.example.project.dto.response.StockCountVoucherPrintPageResponse;
-import com.example.project.service.StockcountService;
+import com.example.project.dto.request.StockReviewCreateRequest;
+import com.example.project.dto.response.StockReviewDetailPageResponse;
+import com.example.project.dto.response.StockReviewListItemResponse;
+import com.example.project.dto.response.StockReviewPrintPageResponse;
+import com.example.project.dto.response.StockReviewVoucherPrintPageResponse;
+import com.example.project.service.StockreviewService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,17 +16,17 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
-public class StockcountController {
+public class StockreviewController {
 
     private static final String OWNER_BASE = "/owner/stock-counts";
     private static final String PHARMACIST_BASE = "/pharmacist/stock-counts";
 
-    private final StockcountService stockcountService;
+    private final StockreviewService stockreviewService;
     private final CurrentUserContext currentUserContext;
 
-    public StockcountController(StockcountService stockcountService,
-                                CurrentUserContext currentUserContext) {
-        this.stockcountService = stockcountService;
+    public StockreviewController(StockreviewService stockreviewService,
+                                 CurrentUserContext currentUserContext) {
+        this.stockreviewService = stockreviewService;
         this.currentUserContext = currentUserContext;
     }
 
@@ -50,7 +50,7 @@ public class StockcountController {
             size = 5;
         }
 
-        Page<StockCountListItemResponse> countPage = stockcountService.search(
+        Page<StockReviewListItemResponse> countPage = stockreviewService.search(
                 keyword,
                 fromDate,
                 toDate,
@@ -60,8 +60,8 @@ public class StockcountController {
 
         model.addAttribute("countPage", countPage);
         model.addAttribute("counts", countPage.getContent());
-        model.addAttribute("stats", stockcountService.getStats());
-        model.addAttribute("statuses", stockcountService.listStatuses());
+        model.addAttribute("stats", stockreviewService.getStats());
+        model.addAttribute("statuses", stockreviewService.listStatuses());
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("fromDate", fromDate);
@@ -85,10 +85,10 @@ public class StockcountController {
     public String createPage(@RequestParam(name = "keyword", required = false) String keyword,
                              HttpServletRequest request,
                              Model model) {
-        StockCountCreateRequest form = stockcountService.buildDefaultForm();
+        StockReviewCreateRequest form = stockreviewService.buildDefaultForm();
 
         model.addAttribute("form", form);
-        model.addAttribute("candidates", stockcountService.listCountableBatches(keyword));
+        model.addAttribute("candidates", stockreviewService.listCountableBatches(keyword));
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
         model.addAttribute("keyword", keyword);
         model.addAttribute("basePath", resolveBasePath(request));
@@ -100,7 +100,7 @@ public class StockcountController {
             OWNER_BASE + "/create",
             PHARMACIST_BASE + "/create"
     })
-    public String create(@ModelAttribute("form") StockCountCreateRequest form,
+    public String create(@ModelAttribute("form") StockReviewCreateRequest form,
                          @RequestParam(name = "action", required = false) String action,
                          HttpServletRequest request,
                          RedirectAttributes redirectAttributes,
@@ -109,7 +109,7 @@ public class StockcountController {
         boolean asDraft = "draft".equals(action);
 
         try {
-            Integer stockCountId = stockcountService.create(
+            Integer stockCountId = stockreviewService.create(
                     form,
                     currentUserContext.getCurrentAccountId(),
                     currentUserContext.isOwner(),
@@ -132,7 +132,7 @@ public class StockcountController {
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
-            model.addAttribute("candidates", stockcountService.listCountableBatches(null));
+            model.addAttribute("candidates", stockreviewService.listCountableBatches(null));
             model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
             model.addAttribute("keyword", null);
             model.addAttribute("basePath", basePath);
@@ -147,8 +147,8 @@ public class StockcountController {
     })
     public String printPage(HttpServletRequest request,
                             Model model) {
-        StockCountPrintPageResponse printData =
-                stockcountService.getPrintPage(currentUserContext.getCurrentAccountName());
+        StockReviewPrintPageResponse printData =
+                stockreviewService.getPrintPage(currentUserContext.getCurrentAccountName());
 
         model.addAttribute("printData", printData);
         model.addAttribute("basePath", resolveBasePath(request));
@@ -163,8 +163,8 @@ public class StockcountController {
     public String printVoucher(@PathVariable Integer stockCountId,
                                HttpServletRequest request,
                                Model model) {
-        StockCountVoucherPrintPageResponse printData =
-                stockcountService.getVoucherPrintPage(stockCountId);
+        StockReviewVoucherPrintPageResponse printData =
+                stockreviewService.getVoucherPrintPage(stockCountId);
 
         model.addAttribute("printData", printData);
         model.addAttribute("basePath", resolveBasePath(request));
@@ -179,7 +179,7 @@ public class StockcountController {
     public String detail(@PathVariable Integer stockCountId,
                          HttpServletRequest request,
                          Model model) {
-        StockCountDetailPageResponse detail = stockcountService.getDetail(stockCountId);
+        StockReviewDetailPageResponse detail = stockreviewService.getDetail(stockCountId);
 
         model.addAttribute("detail", detail);
         model.addAttribute("basePath", resolveBasePath(request));
@@ -198,7 +198,7 @@ public class StockcountController {
         String basePath = resolveBasePath(request);
 
         try {
-            stockcountService.submit(
+            stockreviewService.submit(
                     stockCountId,
                     currentUserContext.getCurrentAccountId(),
                     currentUserContext.isOwner()
@@ -222,7 +222,7 @@ public class StockcountController {
                           @RequestParam(name = "redirectTo", required = false) String redirectTo,
                           RedirectAttributes redirectAttributes) {
         try {
-            stockcountService.approve(stockCountId, currentUserContext.getCurrentAccountId());
+            stockreviewService.approve(stockCountId, currentUserContext.getCurrentAccountId());
             redirectAttributes.addFlashAttribute("successMessage", "Đã duyệt phiếu kiểm kê");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
@@ -236,7 +236,7 @@ public class StockcountController {
                          @RequestParam(name = "redirectTo", required = false) String redirectTo,
                          RedirectAttributes redirectAttributes) {
         try {
-            stockcountService.reject(stockCountId, currentUserContext.getCurrentAccountId());
+            stockreviewService.reject(stockCountId, currentUserContext.getCurrentAccountId());
             redirectAttributes.addFlashAttribute("successMessage", "Đã từ chối phiếu kiểm kê");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());

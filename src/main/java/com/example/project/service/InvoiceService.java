@@ -1,6 +1,5 @@
 package com.example.project.service;
 
-import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
@@ -382,7 +381,10 @@ public class InvoiceService {
         invoice.setDate(invoiceDateTime);
         invoice.setEmployeeID(employee);
         invoice.setCustomerID(customer);
-        invoice.setInvoiceType(isDeductionGroup() ? INVOICE_TYPE_VAT : INVOICE_TYPE_NORMAL);
+        // Nhóm 3 không còn phát hành "Hóa đơn GTGT" nữa — GTGT giờ tính trực tiếp trên doanh thu cho
+        // mọi nhóm chịu thuế, giống nhóm 2 (xem TaxRevenueGroup.DEDUCTION javadoc); INVOICE_TYPE_VAT
+        // chỉ còn dùng để ĐỌC những hóa đơn cũ đã phát hành trước khi đổi (isVatSaleInvoice).
+        invoice.setInvoiceType(INVOICE_TYPE_NORMAL);
         invoice.setPrescriptionRequired(prescriptionRequired);
         invoice.setPrescriptionCode(prescriptionCode);
         invoice.setNote(trimToNull(request.getNote()));
@@ -716,17 +718,12 @@ public class InvoiceService {
                     "Hai ký tự cuối của ký hiệu mẫu số hóa đơn phải là chữ cái (VD: AA, YY)");
         }
 
-        char kindPrefix = isDeductionGroup() ? '1' : '2';
+        // '2' = mẫu hóa đơn bán hàng thông thường — mọi hóa đơn mới phát hành đều dùng ký hiệu này
+        // từ nay, kể cả nhóm 3 (không còn phát hành "1"K/"Hóa đơn GTGT" nữa, xem setInvoiceType ở
+        // createSaleInvoice).
+        char kindPrefix = '2';
         String yearPart = String.format("%02d", date.getYear() % 100);
         return kindPrefix + "K" + yearPart + "M" + sellerSuffix;
-    }
-
-    /** Nhóm 3/4 (khấu trừ) — đọc từ thiết lập tài chính tại thời điểm lập hóa đơn. */
-    private boolean isDeductionGroup() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
-                .map(Financialsetting::getRevenueGroup)
-                .map(TaxRevenueGroup::isDeductionGroup)
-                .orElse(false);
     }
 
     /**

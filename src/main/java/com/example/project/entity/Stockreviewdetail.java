@@ -7,20 +7,21 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "stockcountdetail")
-public class Stockcountdetail {
+@Table(name = "stockreviewdetail")
+public class Stockreviewdetail {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "stockCountDetailID", nullable = false)
+    @Column(name = "stockReviewDetailID", nullable = false)
     private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "stockCountID")
-    private Stockcount stockCountID;
+    @JoinColumn(name = "stockReviewID")
+    private Stockreview stockReviewID;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "productID")
@@ -40,6 +41,16 @@ public class Stockcountdetail {
 
     @Column(name = "discrepancy")
     private Integer discrepancy;
+
+    @Column(name = "recordedExpirationDate")
+    private LocalDate recordedExpirationDate;
+
+    @Column(name = "actualExpirationDate")
+    private LocalDate actualExpirationDate;
+
+    @Size(max = 50)
+    @Column(name = "conditionStatus", length = 50)
+    private String conditionStatus;
 
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
