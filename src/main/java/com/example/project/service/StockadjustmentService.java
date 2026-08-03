@@ -254,6 +254,7 @@ public class StockadjustmentService {
                 totalItems,
                 totalQuantity,
                 estimatedValue,
+                costImpactDisplay(adjustment),
                 itemResponses,
                 VAT_OUTPUT_TYPES.contains(adjustment.getAdjustmentType()),
                 totalOutputVat,
@@ -1245,6 +1246,11 @@ public class StockadjustmentService {
             return existing;
         }
         return trimToNull(existing) == null ? addition.trim() : existing.trim() + " | " + addition.trim();
+    }
+
+    /** Trạng thái ghi nhận chi phí hợp lý — liên kết Expense chưa triển khai (TODO ở {@link #complete}). */
+    private String costImpactDisplay(Stockadjustment adjustment) {
+        return "Chưa ghi nhận chi phí";
     }
 
     private String formatAdjustmentType(String type) {

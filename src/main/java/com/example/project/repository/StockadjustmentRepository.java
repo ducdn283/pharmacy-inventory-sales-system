@@ -12,9 +12,7 @@ public interface StockadjustmentRepository extends JpaRepository<Stockadjustment
     @Query("""
            select s
            from Stockadjustment s
-           left join fetch s.expenseID e
-           left join fetch e.accountID
-           left join fetch s.stockCountID sc
+           left join fetch s.stockReviewID sc
            left join fetch sc.createdBy
            order by s.date desc
            """)
@@ -23,9 +21,7 @@ public interface StockadjustmentRepository extends JpaRepository<Stockadjustment
     @Query("""
            select s
            from Stockadjustment s
-           left join fetch s.expenseID e
-           left join fetch e.accountID
-           left join fetch s.stockCountID sc
+           left join fetch s.stockReviewID sc
            left join fetch sc.createdBy
            where s.id = :id
            """)
