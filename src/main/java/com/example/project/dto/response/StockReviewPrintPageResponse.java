@@ -7,7 +7,7 @@ import java.util.List;
 
 @Getter
 @AllArgsConstructor
-public class StockCountPrintPageResponse {
+public class StockReviewPrintPageResponse {
 
     private String printDateDisplay;
 
@@ -15,5 +15,5 @@ public class StockCountPrintPageResponse {
 
     private long totalItems;
 
-    private List<StockCountPrintLineResponse> items;
+    private List<StockReviewPrintLineResponse> items;
 }

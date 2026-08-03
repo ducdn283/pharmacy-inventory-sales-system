@@ -7,13 +7,13 @@ import java.time.Instant;
 
 @Getter
 @AllArgsConstructor
-public class StockCountListItemResponse {
+public class StockReviewListItemResponse {
 
-    private Integer stockCountId;
+    private Integer stockReviewId;
 
-    private String stockCountCode;
+    private String stockReviewCode;
 
-    private Instant countDate;
+    private Instant reviewDate;
 
     private String countDateDisplay;
 

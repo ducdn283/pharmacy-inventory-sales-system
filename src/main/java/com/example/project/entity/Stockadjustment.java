@@ -37,12 +37,8 @@ public class Stockadjustment {
     private String reason;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "stockCountID")
-    private Stockcount stockCountID;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "expenseID")
-    private Expense expenseID;
+    @JoinColumn(name = "stockReviewID")
+    private Stockreview stockReviewID;
 
     @Size(max = 50)
     @NotNull

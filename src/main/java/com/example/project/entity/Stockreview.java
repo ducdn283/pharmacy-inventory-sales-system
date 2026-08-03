@@ -11,21 +11,26 @@ import java.time.Instant;
 @Getter
 @Setter
 @Entity
-@Table(name = "stockcount")
-public class Stockcount {
+@Table(name = "stockreview")
+public class Stockreview {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "stockCountID", nullable = false)
+    @Column(name = "stockReviewID", nullable = false)
     private Integer id;
 
     @Size(max = 50)
     @NotNull
-    @Column(name = "stockCountCode", nullable = false, length = 50)
+    @Column(name = "stockReviewCode", nullable = false, length = 50)
     private String stockCountCode;
 
+    @Size(max = 50)
     @NotNull
-    @Column(name = "countDate", nullable = false)
-    private Instant countDate;
+    @Column(name = "type", nullable = false, length = 50)
+    private String type;
+
+    @NotNull
+    @Column(name = "reviewDate", nullable = false)
+    private Instant reviewDate;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

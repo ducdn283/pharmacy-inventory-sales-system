@@ -3,11 +3,9 @@ package com.example.project.dto.response;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.math.BigDecimal;
-
 @Getter
 @AllArgsConstructor
-public class StockCountVoucherPrintLineResponse {
+public class StockReviewPrintLineResponse {
 
     private Integer productId;
 
@@ -20,10 +18,4 @@ public class StockCountVoucherPrintLineResponse {
     private String expirationDateDisplay;
 
     private Integer systemQty;
-
-    private Integer actualQty;
-
-    private Integer discrepancy;
-
-    private BigDecimal discrepancyValue;
 }

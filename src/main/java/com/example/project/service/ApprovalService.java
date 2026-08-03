@@ -10,11 +10,11 @@ import com.example.project.dto.response.ApprovalStatsResponse;
 import com.example.project.entity.Expense;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
-import com.example.project.entity.Stockcount;
+import com.example.project.entity.Stockreview;
 import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.ShiftreportRepository;
-import com.example.project.repository.StockcountRepository;
+import com.example.project.repository.StockreviewRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,28 +57,28 @@ public class ApprovalService {
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ReturnRepository returnRepository;
-    private final StockcountRepository stockcountRepository;
+    private final StockreviewRepository stockreviewRepository;
     private final ShiftreportRepository shiftreportRepository;
     private final ExpenseRepository expenseRepository;
     private final ReturnService returnService;
-    private final StockcountService stockcountService;
+    private final StockreviewService stockreviewService;
     private final ShiftreportService shiftreportService;
     private final ExpenseService expenseService;
 
     public ApprovalService(ReturnRepository returnRepository,
-                           StockcountRepository stockcountRepository,
+                           StockreviewRepository stockreviewRepository,
                            ShiftreportRepository shiftreportRepository,
                            ExpenseRepository expenseRepository,
                            ReturnService returnService,
-                           StockcountService stockcountService,
+                           StockreviewService stockreviewService,
                            ShiftreportService shiftreportService,
                            ExpenseService expenseService) {
         this.returnRepository = returnRepository;
-        this.stockcountRepository = stockcountRepository;
+        this.stockreviewRepository = stockreviewRepository;
         this.shiftreportRepository = shiftreportRepository;
         this.expenseRepository = expenseRepository;
         this.returnService = returnService;
-        this.stockcountService = stockcountService;
+        this.stockreviewService = stockreviewService;
         this.shiftreportService = shiftreportService;
         this.expenseService = expenseService;
     }
@@ -102,7 +102,7 @@ public class ApprovalService {
         // phiếu đi thẳng Nháp → Hoàn thành, không bao giờ có trạng thái chờ duyệt để gom vào đây.
 
         if (matchesType(typeFilter, TYPE_STOCK_COUNT)) {
-            stockcountRepository.findAllWithRelations().stream()
+            stockreviewRepository.findAllWithRelations().stream()
                     .filter(count -> !isStatus(count.getStatus(), StockCountStatus.DRAFT))
                     .map(this::toApprovalItem)
                     .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
@@ -136,7 +136,7 @@ public class ApprovalService {
         long returnCount = returnRepository.findAllWithRelations().stream()
                 .filter(ret -> ret.getInvoiceID() != null && isStatus(ret.getStatus(), ReturnStatus.PENDING))
                 .count();
-        long stockCountCount = stockcountRepository.findAllWithRelations().stream()
+        long stockCountCount = stockreviewRepository.findAllWithRelations().stream()
                 .filter(count -> isStatus(count.getStatus(), StockCountStatus.PENDING))
                 .count();
         long shiftReportCount = shiftreportRepository.findAllWithRelations().stream()
@@ -176,7 +176,7 @@ public class ApprovalService {
                 Integer id = Integer.valueOf(parts[1]);
                 switch (parts[0]) {
                     case TYPE_CODE_RETURN -> returnService.approve(id);
-                    case TYPE_CODE_STOCK_COUNT -> stockcountService.approve(id, ownerAccountId);
+                    case TYPE_CODE_STOCK_COUNT -> stockreviewService.approve(id, ownerAccountId);
                     case TYPE_CODE_SHIFT_REPORT -> shiftreportService.approve(id, ownerAccountId);
                     case TYPE_CODE_EXPENSE -> expenseService.approve(id, ownerAccountId);
                     default -> {
@@ -216,7 +216,7 @@ public class ApprovalService {
         );
     }
 
-    private ApprovalItemResponse toApprovalItem(Stockcount count) {
+    private ApprovalItemResponse toApprovalItem(Stockreview count) {
         String id = String.valueOf(count.getId());
         boolean pending = isStatus(count.getStatus(), StockCountStatus.PENDING);
         return new ApprovalItemResponse(
@@ -224,8 +224,8 @@ public class ApprovalService {
                 TYPE_CODE_STOCK_COUNT + ":" + id,
                 count.getStockCountCode(),
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
-                count.getCountDate(),
-                formatInstant(count.getCountDate()),
+                count.getReviewDate(),
+                formatInstant(count.getReviewDate()),
                 count.getNote() != null && !count.getNote().isBlank()
                         ? truncate(count.getNote(), 60)
                         : "Phiếu kiểm kê",

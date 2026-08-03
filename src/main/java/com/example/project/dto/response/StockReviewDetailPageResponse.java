@@ -8,13 +8,13 @@ import java.util.List;
 
 @Getter
 @AllArgsConstructor
-public class StockCountDetailPageResponse {
+public class StockReviewDetailPageResponse {
 
-    private Integer stockCountId;
+    private Integer stockReviewId;
 
-    private String stockCountCode;
+    private String stockReviewCode;
 
-    private Instant countDate;
+    private Instant reviewDate;
 
     private String countDateDisplay;
 
@@ -42,5 +42,5 @@ public class StockCountDetailPageResponse {
 
     private int totalDiscrepancy;
 
-    private List<StockCountDetailItemResponse> items;
+    private List<StockReviewDetailItemResponse> items;
 }

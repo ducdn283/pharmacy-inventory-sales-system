@@ -1,14 +1,14 @@
 package com.example.project.service;
 
 import com.example.project.constant.StockCountStatus;
-import com.example.project.dto.request.StockCountCreateRequest;
-import com.example.project.dto.request.StockCountItemRequest;
+import com.example.project.dto.request.StockReviewCreateRequest;
+import com.example.project.dto.request.StockReviewItemRequest;
 import com.example.project.dto.response.*;
 import com.example.project.entity.*;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.BatchRepository;
-import com.example.project.repository.StockcountRepository;
-import com.example.project.repository.StockcountdetailRepository;
+import com.example.project.repository.StockreviewRepository;
+import com.example.project.repository.StockreviewdetailRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -23,44 +23,44 @@ import java.util.stream.Collectors;
 import java.math.BigDecimal;
 
 @Service
-public class StockcountService {
+public class StockreviewService {
 
-    private final StockcountRepository stockcountRepository;
-    private final StockcountdetailRepository stockcountdetailRepository;
+    private final StockreviewRepository stockreviewRepository;
+    private final StockreviewdetailRepository stockreviewdetailRepository;
     private final BatchRepository batchRepository;
     private final AccountRepository accountRepository;
     private final WorkflowNotificationService workflowNotificationService;
 
-    public StockcountService(StockcountRepository stockcountRepository,
-                             StockcountdetailRepository stockcountdetailRepository,
-                             BatchRepository batchRepository,
-                             AccountRepository accountRepository,
-                             WorkflowNotificationService workflowNotificationService) {
-        this.stockcountRepository = stockcountRepository;
-        this.stockcountdetailRepository = stockcountdetailRepository;
+    public StockreviewService(StockreviewRepository stockreviewRepository,
+                              StockreviewdetailRepository stockreviewdetailRepository,
+                              BatchRepository batchRepository,
+                              AccountRepository accountRepository,
+                              WorkflowNotificationService workflowNotificationService) {
+        this.stockreviewRepository = stockreviewRepository;
+        this.stockreviewdetailRepository = stockreviewdetailRepository;
         this.batchRepository = batchRepository;
         this.accountRepository = accountRepository;
         this.workflowNotificationService = workflowNotificationService;
     }
 
     @Transactional(readOnly = true)
-    public Page<StockCountListItemResponse> search(String keyword,
-                                                   String fromDate,
-                                                   String toDate,
-                                                   String status,
-                                                   Pageable pageable) {
+    public Page<StockReviewListItemResponse> search(String keyword,
+                                                    String fromDate,
+                                                    String toDate,
+                                                    String status,
+                                                    Pageable pageable) {
         String normalizedKeyword = normalize(keyword);
         LocalDate from = parseDate(fromDate);
         LocalDate to = parseDate(toDate);
 
-        List<Stockcount> counts = stockcountRepository.findAllWithRelations();
+        List<Stockreview> counts = stockreviewRepository.findAllWithRelations();
 
-        Map<Integer, List<Stockcountdetail>> detailMap = stockcountdetailRepository.findAllWithRelations()
+        Map<Integer, List<Stockreviewdetail>> detailMap = stockreviewdetailRepository.findAllWithRelations()
                 .stream()
-                .filter(detail -> detail.getStockCountID() != null && detail.getStockCountID().getId() != null)
-                .collect(Collectors.groupingBy(detail -> detail.getStockCountID().getId()));
+                .filter(detail -> detail.getStockReviewID() != null && detail.getStockReviewID().getId() != null)
+                .collect(Collectors.groupingBy(detail -> detail.getStockReviewID().getId()));
 
-        List<StockCountListItemResponse> rows = counts.stream()
+        List<StockReviewListItemResponse> rows = counts.stream()
                 .filter(count -> matchesKeyword(count, detailMap.getOrDefault(count.getId(), List.of()), normalizedKeyword))
                 .filter(count -> matchesDate(count, from, to))
                 .filter(count -> status == null || status.isBlank() || isStatus(count.getStatus(), status))
@@ -70,7 +70,7 @@ public class StockcountService {
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), rows.size());
 
-        List<StockCountListItemResponse> content = start >= rows.size()
+        List<StockReviewListItemResponse> content = start >= rows.size()
                 ? List.of()
                 : rows.subList(start, end);
 
@@ -78,10 +78,10 @@ public class StockcountService {
     }
 
     @Transactional(readOnly = true)
-    public StockCountStatsResponse getStats() {
-        List<Stockcount> counts = stockcountRepository.findAllWithRelations();
+    public StockReviewStatsResponse getStats() {
+        List<Stockreview> counts = stockreviewRepository.findAllWithRelations();
 
-        return new StockCountStatsResponse(
+        return new StockReviewStatsResponse(
                 counts.size(),
                 countByStatus(counts, StockCountStatus.DRAFT),
                 countByStatus(counts, StockCountStatus.PENDING),
@@ -95,11 +95,11 @@ public class StockcountService {
     }
 
     @Transactional(readOnly = true)
-    public StockCountCreateRequest buildDefaultForm() {
-        StockCountCreateRequest form = new StockCountCreateRequest();
+    public StockReviewCreateRequest buildDefaultForm() {
+        StockReviewCreateRequest form = new StockReviewCreateRequest();
 
-        for (StockCountBatchCandidateResponse batch : listCountableBatches(null)) {
-            StockCountItemRequest item = new StockCountItemRequest();
+        for (StockReviewBatchCandidateResponse batch : listCountableBatches(null)) {
+            StockReviewItemRequest item = new StockReviewItemRequest();
             item.setBatchId(batch.getBatchId());
             item.setActualQty(batch.getSystemQty());
             form.getItems().add(item);
@@ -109,7 +109,7 @@ public class StockcountService {
     }
 
     @Transactional(readOnly = true)
-    public List<StockCountBatchCandidateResponse> listCountableBatches(String keyword) {
+    public List<StockReviewBatchCandidateResponse> listCountableBatches(String keyword) {
         String normalizedKeyword = normalize(keyword);
 
         return batchRepository.findAvailableBatchesForDestroy()
@@ -120,7 +120,7 @@ public class StockcountService {
     }
 
     @Transactional
-    public Integer create(StockCountCreateRequest request,
+    public Integer create(StockReviewCreateRequest request,
                           Integer currentAccountId,
                           boolean isOwner,
                           boolean asDraft) {
@@ -129,10 +129,10 @@ public class StockcountService {
         Account creator = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
-        Map<Integer, StockCountItemRequest> itemMap = request.getItems()
+        Map<Integer, StockReviewItemRequest> itemMap = request.getItems()
                 .stream()
                 .collect(Collectors.toMap(
-                        StockCountItemRequest::getBatchId,
+                        StockReviewItemRequest::getBatchId,
                         item -> item,
                         (first, second) -> second,
                         LinkedHashMap::new
@@ -147,9 +147,9 @@ public class StockcountService {
         String status = resolveCreateStatus(isOwner, asDraft);
         boolean approvedNow = isStatus(status, StockCountStatus.APPROVED);
 
-        Stockcount stockCount = new Stockcount();
+        Stockreview stockCount = new Stockreview();
         stockCount.setStockCountCode(generateCode());
-        stockCount.setCountDate(Instant.now());
+        stockCount.setReviewDate(Instant.now());
         stockCount.setCreatedBy(creator);
         stockCount.setStatus(status);
         stockCount.setNote(trimToNull(request.getNote()));
@@ -159,16 +159,16 @@ public class StockcountService {
             stockCount.setApprovedAt(Instant.now());
         }
 
-        Stockcount saved = stockcountRepository.save(stockCount);
+        Stockreview saved = stockreviewRepository.save(stockCount);
 
         for (Batch batch : batches) {
-            StockCountItemRequest item = itemMap.get(batch.getId());
+            StockReviewItemRequest item = itemMap.get(batch.getId());
 
             int systemQty = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             int actualQty = item.getActualQty() == null ? systemQty : item.getActualQty();
 
-            Stockcountdetail detail = new Stockcountdetail();
-            detail.setStockCountID(saved);
+            Stockreviewdetail detail = new Stockreviewdetail();
+            detail.setStockReviewID(saved);
             detail.setProductID(batch.getProductID());
             detail.setBatchID(batch);
             detail.setSystemQty(systemQty);
@@ -176,7 +176,7 @@ public class StockcountService {
             detail.setDiscrepancy(actualQty - systemQty);
             detail.setNote(trimToNull(item.getNote()));
 
-            stockcountdetailRepository.save(detail);
+            stockreviewdetailRepository.save(detail);
         }
         if (isStatus(saved.getStatus(), StockCountStatus.PENDING)) {
             workflowNotificationService
@@ -194,13 +194,13 @@ public class StockcountService {
     }
 
     @Transactional(readOnly = true)
-    public StockCountDetailPageResponse getDetail(Integer stockCountId) {
-        Stockcount count = stockcountRepository.findByIdWithRelations(stockCountId)
+    public StockReviewDetailPageResponse getDetail(Integer stockCountId) {
+        Stockreview count = stockreviewRepository.findByIdWithRelations(stockCountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
 
-        List<Stockcountdetail> details = stockcountdetailRepository.findByStockCountIdWithRelations(stockCountId);
+        List<Stockreviewdetail> details = stockreviewdetailRepository.findByStockCountIdWithRelations(stockCountId);
 
-        List<StockCountDetailItemResponse> items = details.stream()
+        List<StockReviewDetailItemResponse> items = details.stream()
                 .map(this::toDetailItem)
                 .toList();
 
@@ -213,22 +213,22 @@ public class StockcountService {
         long matchedItems = totalItems - discrepancyItems;
 
         int totalSystemQty = details.stream()
-                .map(Stockcountdetail::getSystemQty)
+                .map(Stockreviewdetail::getSystemQty)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
 
         int totalActualQty = details.stream()
-                .map(Stockcountdetail::getActualQty)
+                .map(Stockreviewdetail::getActualQty)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        return new StockCountDetailPageResponse(
+        return new StockReviewDetailPageResponse(
                 count.getId(),
                 count.getStockCountCode(),
-                count.getCountDate(),
-                formatInstant(count.getCountDate()),
+                count.getReviewDate(),
+                formatInstant(count.getReviewDate()),
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
                 count.getApprovedBy() != null ? count.getApprovedBy().getName() : "Chưa có",
                 formatInstant(count.getApprovedAt()),
@@ -247,7 +247,7 @@ public class StockcountService {
 
     @Transactional
     public void submit(Integer stockCountId, Integer currentAccountId, boolean isOwner) {
-        Stockcount count = stockcountRepository.findByIdWithRelations(stockCountId)
+        Stockreview count = stockreviewRepository.findByIdWithRelations(stockCountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
 
         if (!isStatus(count.getStatus(), StockCountStatus.DRAFT)) {
@@ -265,7 +265,7 @@ public class StockcountService {
             count.setStatus(StockCountStatus.PENDING);
         }
 
-        stockcountRepository.save(count);
+        stockreviewRepository.save(count);
         if (!isOwner) {
             workflowNotificationService
                     .stockCountPending(count);
@@ -274,7 +274,7 @@ public class StockcountService {
 
     @Transactional
     public void approve(Integer stockCountId, Integer ownerAccountId) {
-        Stockcount count = stockcountRepository.findByIdWithRelations(stockCountId)
+        Stockreview count = stockreviewRepository.findByIdWithRelations(stockCountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
 
         if (!isStatus(count.getStatus(), StockCountStatus.PENDING)) {
@@ -288,13 +288,13 @@ public class StockcountService {
         count.setApprovedBy(owner);
         count.setApprovedAt(Instant.now());
 
-        stockcountRepository.save(count);
+        stockreviewRepository.save(count);
         workflowNotificationService.stockCountApproved(count);
     }
 
     @Transactional
     public void reject(Integer stockCountId, Integer ownerAccountId) {
-        Stockcount count = stockcountRepository.findByIdWithRelations(stockCountId)
+        Stockreview count = stockreviewRepository.findByIdWithRelations(stockCountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
 
         if (!isStatus(count.getStatus(), StockCountStatus.PENDING)) {
@@ -308,18 +308,18 @@ public class StockcountService {
         count.setApprovedBy(owner);
         count.setApprovedAt(Instant.now());
 
-        stockcountRepository.save(count);
+        stockreviewRepository.save(count);
         workflowNotificationService.stockCountRejected(count);
     }
 
     @Transactional(readOnly = true)
-    public StockCountPrintPageResponse getPrintPage(String printedByName) {
-        List<StockCountPrintLineResponse> lines = batchRepository.findAvailableBatchesForDestroy()
+    public StockReviewPrintPageResponse getPrintPage(String printedByName) {
+        List<StockReviewPrintLineResponse> lines = batchRepository.findAvailableBatchesForDestroy()
                 .stream()
                 .map(batch -> {
                     Product product = batch.getProductID();
 
-                    return new StockCountPrintLineResponse(
+                    return new StockReviewPrintLineResponse(
                             product != null ? product.getProductID() : null,
                             product != null ? product.getCode() : "",
                             product != null ? product.getName() : "Không rõ",
@@ -330,7 +330,7 @@ public class StockcountService {
                 })
                 .toList();
 
-        return new StockCountPrintPageResponse(
+        return new StockReviewPrintPageResponse(
                 LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
                 printedByName,
                 lines.size(),
@@ -338,16 +338,16 @@ public class StockcountService {
         );
     }
 
-    private StockCountListItemResponse toListItem(Stockcount count, List<Stockcountdetail> details) {
+    private StockReviewListItemResponse toListItem(Stockreview count, List<Stockreviewdetail> details) {
         long discrepancyItems = details.stream()
                 .filter(detail -> detail.getDiscrepancy() != null && detail.getDiscrepancy() != 0)
                 .count();
 
-        return new StockCountListItemResponse(
+        return new StockReviewListItemResponse(
                 count.getId(),
                 count.getStockCountCode(),
-                count.getCountDate(),
-                formatInstant(count.getCountDate()),
+                count.getReviewDate(),
+                formatInstant(count.getReviewDate()),
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
                 count.getApprovedBy() != null ? count.getApprovedBy().getName() : "Chưa có",
                 formatInstant(count.getApprovedAt()),
@@ -359,7 +359,7 @@ public class StockcountService {
         );
     }
 
-    private StockCountDetailItemResponse toDetailItem(Stockcountdetail detail) {
+    private StockReviewDetailItemResponse toDetailItem(Stockreviewdetail detail) {
         Product product = detail.getProductID();
         Batch batch = detail.getBatchID();
 
@@ -367,7 +367,7 @@ public class StockcountService {
                 ? safe(detail.getActualQty()) - safe(detail.getSystemQty())
                 : detail.getDiscrepancy();
 
-        return new StockCountDetailItemResponse(
+        return new StockReviewDetailItemResponse(
                 product != null ? product.getProductID() : null,
                 product != null ? product.getCode() : "",
                 product != null ? product.getName() : "Không rõ",
@@ -383,10 +383,10 @@ public class StockcountService {
         );
     }
 
-    private StockCountBatchCandidateResponse toBatchCandidate(Batch batch) {
+    private StockReviewBatchCandidateResponse toBatchCandidate(Batch batch) {
         Product product = batch.getProductID();
 
-        return new StockCountBatchCandidateResponse(
+        return new StockReviewBatchCandidateResponse(
                 batch.getId(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getCode() : "",
@@ -399,14 +399,14 @@ public class StockcountService {
     }
 
     @Transactional(readOnly = true)
-    public StockCountVoucherPrintPageResponse getVoucherPrintPage(Integer stockCountId) {
-        Stockcount count = stockcountRepository.findByIdWithRelations(stockCountId)
+    public StockReviewVoucherPrintPageResponse getVoucherPrintPage(Integer stockCountId) {
+        Stockreview count = stockreviewRepository.findByIdWithRelations(stockCountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
 
-        List<Stockcountdetail> details =
-                stockcountdetailRepository.findByStockCountIdWithRelations(stockCountId);
+        List<Stockreviewdetail> details =
+                stockreviewdetailRepository.findByStockCountIdWithRelations(stockCountId);
 
-        List<StockCountVoucherPrintLineResponse> items = details.stream()
+        List<StockReviewVoucherPrintLineResponse> items = details.stream()
                 .map(detail -> {
                     Product product = detail.getProductID();
                     Batch batch = detail.getBatchID();
@@ -424,7 +424,7 @@ public class StockcountService {
 
                     BigDecimal discrepancyValue = unitCost.multiply(BigDecimal.valueOf(Math.abs(discrepancy)));
 
-                    return new StockCountVoucherPrintLineResponse(
+                    return new StockReviewVoucherPrintLineResponse(
                             product != null ? product.getProductID() : null,
                             product != null ? product.getCode() : "",
                             product != null ? product.getName() : "Không rõ",
@@ -439,26 +439,26 @@ public class StockcountService {
                 .toList();
 
         int totalSystemQty = details.stream()
-                .map(Stockcountdetail::getSystemQty)
+                .map(Stockreviewdetail::getSystemQty)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
 
         int totalActualQty = details.stream()
-                .map(Stockcountdetail::getActualQty)
+                .map(Stockreviewdetail::getActualQty)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
 
         int totalExcessQty = items.stream()
-                .map(StockCountVoucherPrintLineResponse::getDiscrepancy)
+                .map(StockReviewVoucherPrintLineResponse::getDiscrepancy)
                 .filter(Objects::nonNull)
                 .filter(value -> value > 0)
                 .mapToInt(Integer::intValue)
                 .sum();
 
         int totalShortageQty = items.stream()
-                .map(StockCountVoucherPrintLineResponse::getDiscrepancy)
+                .map(StockReviewVoucherPrintLineResponse::getDiscrepancy)
                 .filter(Objects::nonNull)
                 .filter(value -> value < 0)
                 .mapToInt(Integer::intValue)
@@ -467,14 +467,14 @@ public class StockcountService {
         int totalDiscrepancyQty = totalActualQty - totalSystemQty;
 
         BigDecimal totalDiscrepancyValue = items.stream()
-                .map(StockCountVoucherPrintLineResponse::getDiscrepancyValue)
+                .map(StockReviewVoucherPrintLineResponse::getDiscrepancyValue)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return new StockCountVoucherPrintPageResponse(
+        return new StockReviewVoucherPrintPageResponse(
                 count.getId(),
                 count.getStockCountCode(),
-                formatInstant(count.getCountDate()),
+                formatInstant(count.getReviewDate()),
                 count.getStatus(),
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
                 count.getApprovedBy() != null ? count.getApprovedBy().getName() : "Chưa có",
@@ -491,12 +491,12 @@ public class StockcountService {
         );
     }
 
-    private void validateCreateRequest(StockCountCreateRequest request) {
+    private void validateCreateRequest(StockReviewCreateRequest request) {
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một lô hàng để kiểm kê");
         }
 
-        for (StockCountItemRequest item : request.getItems()) {
+        for (StockReviewItemRequest item : request.getItems()) {
             if (item.getBatchId() == null) {
                 throw new IllegalArgumentException("Dữ liệu lô hàng không hợp lệ");
             }
@@ -507,8 +507,8 @@ public class StockcountService {
         }
     }
 
-    private boolean matchesKeyword(Stockcount count,
-                                   List<Stockcountdetail> details,
+    private boolean matchesKeyword(Stockreview count,
+                                   List<Stockreviewdetail> details,
                                    String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return true;
@@ -549,16 +549,16 @@ public class StockcountService {
                         || containsNormalized(product.getBarcode(), keyword));
     }
 
-    private boolean matchesDate(Stockcount count, LocalDate from, LocalDate to) {
+    private boolean matchesDate(Stockreview count, LocalDate from, LocalDate to) {
         if (from == null && to == null) {
             return true;
         }
 
-        if (count.getCountDate() == null) {
+        if (count.getReviewDate() == null) {
             return false;
         }
 
-        LocalDate countDate = toLocalDate(count.getCountDate());
+        LocalDate countDate = toLocalDate(count.getReviewDate());
 
         if (from != null && countDate.isBefore(from)) {
             return false;
@@ -567,7 +567,7 @@ public class StockcountService {
         return to == null || !countDate.isAfter(to);
     }
 
-    private long countByStatus(List<Stockcount> counts, String status) {
+    private long countByStatus(List<Stockreview> counts, String status) {
         return counts.stream()
                 .filter(count -> isStatus(count.getStatus(), status))
                 .count();
@@ -606,9 +606,9 @@ public class StockcountService {
     }
 
     private String generateCode() {
-        int nextId = stockcountRepository.findAll()
+        int nextId = stockreviewRepository.findAll()
                 .stream()
-                .map(Stockcount::getId)
+                .map(Stockreview::getId)
                 .filter(Objects::nonNull)
                 .max(Integer::compareTo)
                 .orElse(0) + 1;

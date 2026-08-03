@@ -83,8 +83,8 @@ public class StockadjustmentService {
     private final ProductunitRepository productunitRepository;
     // Stock Count is owned by another module — we consume it read-only via these bare repositories
     // (findAll / findById / save) and never add query methods to their files.
-    private final StockcountRepository stockcountRepository;
-    private final StockcountdetailRepository stockcountdetailRepository;
+    private final StockreviewRepository stockreviewRepository;
+    private final StockreviewdetailRepository stockreviewdetailRepository;
     // Income (module Thu/Chi của teammate) và Invoicedetail (module Bán hàng) — chỉ ĐỌC.
     private final IncomeRepository incomeRepository;
     private final InvoicedetailRepository invoicedetailRepository;
@@ -93,16 +93,16 @@ public class StockadjustmentService {
                                   StockadjustmentdetailRepository stockadjustmentdetailRepository,
                                   BatchRepository batchRepository,
                                   ProductunitRepository productunitRepository,
-                                  StockcountRepository stockcountRepository,
-                                  StockcountdetailRepository stockcountdetailRepository,
+                                  StockreviewRepository stockreviewRepository,
+                                  StockreviewdetailRepository stockreviewdetailRepository,
                                   IncomeRepository incomeRepository,
                                   InvoicedetailRepository invoicedetailRepository) {
         this.stockadjustmentRepository = stockadjustmentRepository;
         this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
         this.batchRepository = batchRepository;
         this.productunitRepository = productunitRepository;
-        this.stockcountRepository = stockcountRepository;
-        this.stockcountdetailRepository = stockcountdetailRepository;
+        this.stockreviewRepository = stockreviewRepository;
+        this.stockreviewdetailRepository = stockreviewdetailRepository;
         this.incomeRepository = incomeRepository;
         this.invoicedetailRepository = invoicedetailRepository;
     }
@@ -254,7 +254,6 @@ public class StockadjustmentService {
                 totalItems,
                 totalQuantity,
                 estimatedValue,
-                costImpactDisplay(adjustment),
                 itemResponses,
                 VAT_OUTPUT_TYPES.contains(adjustment.getAdjustmentType()),
                 totalOutputVat,
@@ -350,7 +349,7 @@ public class StockadjustmentService {
             assertBatchesUntouchedSince(adjustment, details);
             reverseStockEffect(details);
             // Trả phiếu kiểm kê về "Đã duyệt" để có thể lập lại phiếu điều chỉnh khác cho nó.
-            revertStockCountAdjusted(adjustment.getStockCountID());
+            revertStockCountAdjusted(adjustment.getStockReviewID());
         }
 
         adjustment.setStatus(StockAdjustmentStatus.CANCELLED);
@@ -467,28 +466,28 @@ public class StockadjustmentService {
     @Transactional(readOnly = true)
     public List<StockAdjustmentCountOptionResponse> listApprovedStockCounts() {
         Set<Integer> consumedCountIds = stockadjustmentRepository.findAllWithRelations().stream()
-                .filter(adj -> adj.getStockCountID() != null && adj.getStockCountID().getId() != null)
+                .filter(adj -> adj.getStockReviewID() != null && adj.getStockReviewID().getId() != null)
                 .filter(adj -> !isStatus(getStatusName(adj), StockAdjustmentStatus.CANCELLED))
-                .map(adj -> adj.getStockCountID().getId())
+                .map(adj -> adj.getStockReviewID().getId())
                 .collect(Collectors.toSet());
 
-        Map<Integer, List<Stockcountdetail>> detailsByCount = stockcountdetailRepository.findAll().stream()
-                .filter(detail -> detail.getStockCountID() != null && detail.getStockCountID().getId() != null)
-                .collect(Collectors.groupingBy(detail -> detail.getStockCountID().getId()));
+        Map<Integer, List<Stockreviewdetail>> detailsByCount = stockreviewdetailRepository.findAll().stream()
+                .filter(detail -> detail.getStockReviewID() != null && detail.getStockReviewID().getId() != null)
+                .collect(Collectors.groupingBy(detail -> detail.getStockReviewID().getId()));
 
-        return stockcountRepository.findAll().stream()
+        return stockreviewRepository.findAll().stream()
                 .filter(count -> isStatus(count.getStatus(), COUNT_STATUS_APPROVED))
                 .filter(count -> !consumedCountIds.contains(count.getId()))
                 .map(count -> new StockAdjustmentCountOptionResponse(
                         count.getId(),
                         count.getStockCountCode(),
-                        formatInstant(count.getCountDate()),
+                        formatInstant(count.getReviewDate()),
                         (int) detailsByCount.getOrDefault(count.getId(), List.of()).stream()
                                 .filter(this::isAdjustableCountDetail)
                                 .count(),
                         count.getNote()))
                 .filter(option -> option.getDiscrepancyLineCount() > 0)
-                .sorted(Comparator.comparing(StockAdjustmentCountOptionResponse::getStockCountId,
+                .sorted(Comparator.comparing(StockAdjustmentCountOptionResponse::getStockReviewId,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
@@ -500,22 +499,22 @@ public class StockadjustmentService {
      */
     @Transactional(readOnly = true)
     public List<StockAdjustmentCountLineResponse> loadStockCountLines(Integer stockCountId) {
-        Stockcount count = stockcountRepository.findById(stockCountId)
+        Stockreview count = stockreviewRepository.findById(stockCountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
         if (!isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
             throw new IllegalArgumentException("Chỉ chọn được phiếu kiểm kê đã duyệt");
         }
 
-        return stockcountdetailRepository.findAll().stream()
-                .filter(detail -> detail.getStockCountID() != null
-                        && stockCountId.equals(detail.getStockCountID().getId()))
+        return stockreviewdetailRepository.findAll().stream()
+                .filter(detail -> detail.getStockReviewID() != null
+                        && stockCountId.equals(detail.getStockReviewID().getId()))
                 .filter(this::isAdjustableCountDetail)
                 .map(this::toCountLine)
                 .toList();
     }
 
     /** A detail is adjustable when it has a batch and a non-zero, non-null discrepancy. */
-    private boolean isAdjustableCountDetail(Stockcountdetail detail) {
+    private boolean isAdjustableCountDetail(Stockreviewdetail detail) {
         if (detail.getBatchID() == null || detail.getBatchID().getId() == null) {
             return false;
         }
@@ -524,7 +523,7 @@ public class StockadjustmentService {
         return systemQty != null && actualQty != null && !systemQty.equals(actualQty);
     }
 
-    private StockAdjustmentCountLineResponse toCountLine(Stockcountdetail detail) {
+    private StockAdjustmentCountLineResponse toCountLine(Stockreviewdetail detail) {
         Batch batch = detail.getBatchID();
         Product product = batch.getProductID() != null ? batch.getProductID() : detail.getProductID();
         Productunit unit = resolveCandidateUnit(batch, product);
@@ -610,7 +609,6 @@ public class StockadjustmentService {
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(request.getReason().trim());
-        adjustment.setExpenseID(null);
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
@@ -666,7 +664,7 @@ public class StockadjustmentService {
             throw new IllegalArgumentException("Vui lòng chọn phiếu kiểm kê");
         }
 
-        Stockcount count = stockcountRepository.findById(request.getStockCountId())
+        Stockreview count = stockreviewRepository.findById(request.getStockCountId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
         if (!isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
             throw new IllegalArgumentException("Phiếu kiểm kê không ở trạng thái Đã duyệt");
@@ -679,8 +677,8 @@ public class StockadjustmentService {
                     + (count.getStockCountCode() != null ? count.getStockCountCode() : "");
 
         boolean alreadyConsumed = stockadjustmentRepository.findAllWithRelations().stream()
-                .anyMatch(adj -> adj.getStockCountID() != null
-                        && request.getStockCountId().equals(adj.getStockCountID().getId())
+                .anyMatch(adj -> adj.getStockReviewID() != null
+                        && request.getStockCountId().equals(adj.getStockReviewID().getId())
                         && !isStatus(getStatusName(adj), StockAdjustmentStatus.CANCELLED));
         if (alreadyConsumed) {
             throw new IllegalArgumentException("Phiếu kiểm kê này đã có phiếu điều chỉnh");
@@ -717,7 +715,7 @@ public class StockadjustmentService {
 
     private Integer persistCountSlip(String adjustmentType,
                                      List<StockAdjustmentCountLineResponse> lines,
-                                     Stockcount count,
+                                     Stockreview count,
                                      String status,
                                      String reason,
                                      StockAdjustmentCreateRequest request) {
@@ -728,8 +726,7 @@ public class StockadjustmentService {
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(reason);
-        adjustment.setStockCountID(count);
-        adjustment.setExpenseID(null);
+        adjustment.setStockReviewID(count);
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
@@ -789,7 +786,7 @@ public class StockadjustmentService {
      * <p>Số lô / hạn dùng chép từ lô được đếm: hai thông tin này ảnh hưởng FEFO lẫn an toàn dược nên
      * không được để trống. Tồn khởi tạo = 0 vì tồn chỉ cộng vào lúc phiếu {@code Hoàn thành}.</p>
      */
-    private Batch createSurplusBatch(Batch sourceBatch, Stockadjustment adjustment, Stockcount count) {
+    private Batch createSurplusBatch(Batch sourceBatch, Stockadjustment adjustment, Stockreview count) {
         BigDecimal estimatedCost = estimateImportPricePerBase(sourceBatch);
 
         Batch batch = new Batch();
@@ -846,24 +843,24 @@ public class StockadjustmentService {
     }
 
     /** Flips a linked count {@code Đã duyệt → Đã điều chỉnh}. No-op if it is not currently approved. */
-    private void markStockCountAdjusted(Stockcount count) {
+    private void markStockCountAdjusted(Stockreview count) {
         if (count == null) {
             return;
         }
         if (isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
             count.setStatus(COUNT_STATUS_ADJUSTED);
-            stockcountRepository.save(count);
+            stockreviewRepository.save(count);
         }
     }
 
     /** Đảo lại {@link #markStockCountAdjusted}: {@code Đã điều chỉnh → Đã duyệt} khi hủy phiếu. */
-    private void revertStockCountAdjusted(Stockcount count) {
+    private void revertStockCountAdjusted(Stockreview count) {
         if (count == null) {
             return;
         }
         if (isStatus(count.getStatus(), COUNT_STATUS_ADJUSTED)) {
             count.setStatus(COUNT_STATUS_APPROVED);
-            stockcountRepository.save(count);
+            stockreviewRepository.save(count);
         }
     }
 
@@ -884,7 +881,7 @@ public class StockadjustmentService {
         adjustment.setStatus(StockAdjustmentStatus.COMPLETED);
         applyStockEffect(adjustment,
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId));
-        markStockCountAdjusted(adjustment.getStockCountID());
+        markStockCountAdjusted(adjustment.getStockReviewID());
         // TODO(finance): auto-create an Expense (and link expenseID) for DESTROY with lineCost total > 0.
         //   Deferred — the Expense entity/vocabulary is owned by the finance module.
 
@@ -1248,13 +1245,6 @@ public class StockadjustmentService {
             return existing;
         }
         return trimToNull(existing) == null ? addition.trim() : existing.trim() + " | " + addition.trim();
-    }
-
-    private String costImpactDisplay(Stockadjustment adjustment) {
-        if (adjustment.getExpenseID() != null) {
-            return "Có ghi nhận chi phí";
-        }
-        return "Chưa ghi nhận chi phí";
     }
 
     private String formatAdjustmentType(String type) {
