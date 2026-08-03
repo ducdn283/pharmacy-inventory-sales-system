@@ -193,6 +193,12 @@
         .product-line {
             padding: 10px 14px;
             border-bottom: 1px solid #f3f4f6;
+            align-items: center;
+        }
+
+        .product-line > * {
+            align-self: center;
+            min-width: 0;
         }
 
         .product-line:last-child { border-bottom: none; }
@@ -225,6 +231,60 @@
 
         .product-info-block {
             min-width: 0;
+            align-self: center;
+        }
+
+        .product-unit-chain {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            max-width: 100%;
+            padding: 3px 8px 3px 6px;
+            border-radius: 6px;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            font-size: 11px;
+            line-height: 1.3;
+            color: #047857;
+            font-weight: 500;
+        }
+
+        .product-unit-chain-icon {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            background: #d1fae5;
+            color: #059669;
+            font-size: 11px;
+            line-height: 1;
+        }
+
+        .product-unit-chain-text {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .product-unit-chain-qty {
+            color: #059669;
+            font-weight: 700;
+        }
+
+        .product-unit-chain-unit {
+            color: #065f46;
+            font-weight: 600;
+        }
+
+        .product-unit-chain-eq {
+            color: #6ee7b7;
+            font-weight: 700;
+            margin: 0 1px;
         }
 
         .product-title {
@@ -415,10 +475,6 @@
             padding: 24px 12px;
         }
 
-        .product-line > * {
-            min-width: 0;
-        }
-
         .unit-badge-display {
             display: flex;
             align-items: center;
@@ -466,25 +522,9 @@
         .unit-cell {
             display: flex;
             flex-direction: column;
-            align-items: stretch;
+            align-items: center;
             justify-content: center;
-            gap: 4px;
             width: 100%;
-        }
-
-        .unit-conversion-hint {
-            display: block;
-            padding: 3px 6px;
-            border-radius: 4px;
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #047857;
-            font-size: 10px;
-            font-weight: 500;
-            line-height: 1.35;
-            text-align: center;
-            white-space: normal;
-            word-break: break-word;
         }
 
         .qty-cell,
@@ -767,6 +807,9 @@
                 grid-template-columns: 1fr;
                 gap: 10px;
             }
+            .product-unit-chain-text {
+                white-space: normal;
+            }
         }
     </style>
 </head>
@@ -778,6 +821,7 @@
 <main id="content" class="content owner-page-content">
     <div class="container-fluid">
 
+        <div id="completionValidationAlert" class="alert alert-danger d-none" role="alert"></div>
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
 
         <div th:if="${viewOnly}" class="view-only-banner">
@@ -945,6 +989,7 @@
     const initialCompleted = /*[[${procurementPlan.status == 'Đã hoàn thành'}]]*/ false;
     const COMPLETED_STATUS = 'Đã hoàn thành';
     const COMPLETED_CONFIRM_MESSAGE = 'Sau khi đánh dấu "Đã hoàn thành", dự trù mua hàng sẽ không thể cập nhật hoặc xóa. Bạn có chắc chắn muốn tiếp tục?';
+    const COMPLETION_VALIDATION_MESSAGE = 'Nhập đầy đủ nhà cung cấp và giá ước tính cho tất cả sản phẩm để đánh dấu hoàn thành.';
 
     const productMap = {};
     initialProducts.forEach(product => productMap[product.productID] = product);
@@ -1042,16 +1087,83 @@
         return num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
     }
 
-    function buildUnitConversionHint(product, unitName) {
-        if (!product) return '';
-        const stockUnit = product.stockUnit;
-        const unit = unitName || product.unit;
-        const ratio = product.unitRatio;
-        if (!unit || !stockUnit || ratio == null) return '';
-        const ratioNum = Number(ratio);
-        if (!Number.isFinite(ratioNum) || ratioNum <= 0) return '';
-        if (unit === stockUnit && ratioNum === 1) return '';
-        return '1 ' + unit + ' = ' + formatUnitRatio(ratioNum) + ' ' + stockUnit;
+    function normalizeProductUnits(product) {
+        const stockUnit = product && product.stockUnit;
+        const byName = new Map();
+        const units = Array.isArray(product && product.units) ? product.units : [];
+
+        units.forEach(unitRow => {
+            const unitName = unitRow.unitName;
+            const ratioNum = Number(unitRow.ratio);
+            if (!unitName || !Number.isFinite(ratioNum) || ratioNum <= 0) return;
+
+            const existing = byName.get(unitName);
+            if (!existing || ratioNum > existing.ratio) {
+                byName.set(unitName, { unitName, ratio: ratioNum });
+            }
+        });
+
+        const ordered = Array.from(byName.values()).sort((a, b) => {
+            if (a.ratio !== b.ratio) return a.ratio - b.ratio;
+            return a.unitName.localeCompare(b.unitName, 'vi');
+        });
+
+        if (ordered.length > 0) {
+            return ordered;
+        }
+
+        const unit = product.unit;
+        const ratioNum = Number(product.unitRatio);
+        if (!unit || !Number.isFinite(ratioNum) || ratioNum <= 0) return [];
+        if (stockUnit && unit === stockUnit && ratioNum === 1) return [];
+
+        return [{ unitName: unit, ratio: ratioNum }];
+    }
+
+    /** Các bước quy đổi liên tiếp từ đơn vị lớn → nhỏ. */
+    function buildUnitConversionSegments(product) {
+        const ordered = normalizeProductUnits(product);
+        if (ordered.length <= 1) return [];
+
+        const largest = ordered[ordered.length - 1];
+        const segments = [{ amount: '1', unitName: largest.unitName }];
+        for (let i = ordered.length - 2; i >= 0; i--) {
+            segments.push({
+                amount: formatUnitRatio(largest.ratio / ordered[i].ratio),
+                unitName: ordered[i].unitName
+            });
+        }
+        return segments;
+    }
+
+    /** Chuỗi quy đổi liên tiếp, ví dụ: 1 Hộp = 10 Vỉ = 100 Viên. */
+    function buildUnitConversionChain(product) {
+        const segments = buildUnitConversionSegments(product);
+        if (!segments.length) return '';
+
+        return segments
+            .map((seg, index) => (index === 0 ? '' : ' = ')
+                + seg.amount + ' ' + seg.unitName)
+            .join('');
+    }
+
+    function renderUnitConversionHints(product) {
+        const segments = buildUnitConversionSegments(product);
+        if (!segments.length) return '';
+
+        const chainHtml = segments.map((seg, index) => {
+            const part = `<span class="product-unit-chain-qty">${escapeHtml(seg.amount)}</span>`
+                + ` <span class="product-unit-chain-unit">${escapeHtml(seg.unitName)}</span>`;
+            if (index === 0) return part;
+            return `<span class="product-unit-chain-eq">=</span>` + part;
+        }).join('');
+
+        const title = buildUnitConversionChain(product);
+        return `<div class="product-unit-chain" title="${escapeHtml(title)}">`
+            + `<span class="product-unit-chain-icon" aria-hidden="true">`
+            + `<i class="ti ti-arrows-left-right"></i></span>`
+            + `<span class="product-unit-chain-text">${chainHtml}</span>`
+            + `</div>`;
     }
 
     function cacheSearchProducts(items) {
@@ -1406,7 +1518,7 @@
         const stockUnit = product.stockUnit || getStockUnit(product.productID);
         const quantity = detail.requestedQuantity != null ? detail.requestedQuantity : 1;
         const unit = detail.unit || '';
-        const conversionHint = buildUnitConversionHint(product, unit);
+        const conversionHintsHtml = renderUnitConversionHints(product);
         const supplierId = detail.supplierId != null ? detail.supplierId : '';
         const unitPrice = resolveUnitPriceFromDetail(detail);
         const lineTotalFromDb = detail.estimatedPrice != null ? Number(detail.estimatedPrice) : 0;
@@ -1430,6 +1542,7 @@
                         <div class="product-title-code">${escapeHtml(product.code)}</div>
                         <div class="product-title-name">${escapeHtml(product.name)}</div>
                     </div>
+                    ${conversionHintsHtml}
                 </div>
                 <div class="stock-cell">
                     <span class="stock-display">${currentStock}</span>
@@ -1442,7 +1555,6 @@
                 </div>
                 <div class="unit-cell">
                     <span class="unit-badge-display">${escapeHtml(unit || '—')}</span>
-                    ${conversionHint ? `<span class="unit-conversion-hint" title="${escapeHtml(conversionHint)}">${escapeHtml(conversionHint)}</span>` : ''}
                 </div>
                 <div>
                     <span class="view-only-text">${escapeHtml(supplierName || '—')}</span>
@@ -1471,6 +1583,7 @@
                         <div class="product-title-code">${escapeHtml(product.code)}</div>
                         <div class="product-title-name">${escapeHtml(product.name)}</div>
                     </div>
+                    ${conversionHintsHtml}
                 </div>
                 <div class="stock-cell">
                     <span class="stock-display">${currentStock}</span>
@@ -1485,7 +1598,6 @@
                 </div>
                 <div class="unit-cell">
                     <span class="unit-badge-display">${escapeHtml(unit || '—')}</span>
-                    ${conversionHint ? `<span class="unit-conversion-hint" title="${escapeHtml(conversionHint)}">${escapeHtml(conversionHint)}</span>` : ''}
                     <input type="hidden" data-field="unit" value="${escapeHtml(unit)}">
                 </div>
                 <div>
@@ -1577,6 +1689,86 @@
 
         document.getElementById('itemCountDisplay').textContent = rows.length;
         document.getElementById('totalAmountDisplay').textContent = formatMoney(totalAmount);
+        if (!viewOnly) {
+            updateCompletionToggleState();
+        }
+    }
+
+    function getCompletionBlockers() {
+        const rows = document.querySelectorAll('#detailLines .product-line');
+        const blockers = [];
+
+        if (!rows.length) {
+            blockers.push('Phải có ít nhất một sản phẩm');
+            return blockers;
+        }
+
+        rows.forEach((row, index) => {
+            const lineNo = index + 1;
+            const supplierInput = row.querySelector('[data-field="supplierId"]');
+            const supplierId = supplierInput && supplierInput.value ? String(supplierInput.value).trim() : '';
+            if (!supplierId) {
+                blockers.push('Dòng ' + lineNo + ': chưa chọn nhà cung cấp');
+            }
+
+            const quantity = numberValue(row.querySelector('.quantity-input'));
+            if (quantity <= 0) {
+                blockers.push('Dòng ' + lineNo + ': số lượng chưa hợp lệ');
+            }
+
+            if (getLineEstimatedTotal(row) <= 0) {
+                blockers.push('Dòng ' + lineNo + ': chưa nhập giá ước tính');
+            }
+        });
+
+        return blockers;
+    }
+
+    function isReadyForCompletion() {
+        return getCompletionBlockers().length === 0;
+    }
+
+    function syncProcurementStatusFromToggle() {
+        const toggle = document.getElementById('statusCompletedToggle');
+        const statusInput = document.getElementById('procurementStatusInput');
+        const statusText = document.getElementById('statusCheckText');
+        if (!toggle || !statusInput || !statusText) return;
+
+        const DEFAULT_STATUS = 'Đang thực hiện';
+        const completed = toggle.checked;
+        statusInput.value = completed ? COMPLETED_STATUS : DEFAULT_STATUS;
+        statusText.textContent = completed ? COMPLETED_STATUS : DEFAULT_STATUS;
+    }
+
+    function showCompletionHint() {
+        const alertEl = document.getElementById('completionValidationAlert');
+        if (!alertEl) return;
+        alertEl.textContent = COMPLETION_VALIDATION_MESSAGE;
+        alertEl.classList.remove('d-none');
+        alertEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function hideCompletionHint() {
+        const alertEl = document.getElementById('completionValidationAlert');
+        if (!alertEl) return;
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+    }
+
+    function updateCompletionToggleState() {
+        if (initialCompleted || viewOnly) return;
+
+        const toggle = document.getElementById('statusCompletedToggle');
+        if (!toggle) return;
+
+        if (toggle.checked && !isReadyForCompletion()) {
+            toggle.checked = false;
+            syncProcurementStatusFromToggle();
+        }
+
+        if (isReadyForCompletion()) {
+            hideCompletionHint();
+        }
     }
 
     function renderSearchResults(items, options = {}) {
@@ -1769,20 +1961,24 @@
 
     if (!viewOnly) {
     (function initStatusToggle() {
-        const DEFAULT_STATUS = 'Đang thực hiện';
         const toggle = document.getElementById('statusCompletedToggle');
         const statusInput = document.getElementById('procurementStatusInput');
         const statusText = document.getElementById('statusCheckText');
         if (!toggle || !statusInput || !statusText) return;
 
-        function syncStatus() {
-            const completed = toggle.checked;
-            statusInput.value = completed ? COMPLETED_STATUS : DEFAULT_STATUS;
-            statusText.textContent = completed ? COMPLETED_STATUS : DEFAULT_STATUS;
-        }
+        toggle.addEventListener('change', function () {
+            if (toggle.checked && !isReadyForCompletion()) {
+                toggle.checked = false;
+                syncProcurementStatusFromToggle();
+                showCompletionHint();
+                return;
+            }
 
-        toggle.addEventListener('change', syncStatus);
-        syncStatus();
+            hideCompletionHint();
+            syncProcurementStatusFromToggle();
+        });
+
+        syncProcurementStatusFromToggle();
     })();
 
     (function initCompletedSubmitConfirm() {
@@ -1792,6 +1988,14 @@
 
         form.addEventListener('submit', function (event) {
             syncLineAmountsBeforeSubmit();
+
+            if (toggle.checked && !isReadyForCompletion()) {
+                event.preventDefault();
+                toggle.checked = false;
+                syncProcurementStatusFromToggle();
+                showCompletionHint();
+                return;
+            }
 
             if (initialCompleted || !toggle.checked || form.dataset.confirmed === '1') {
                 return;

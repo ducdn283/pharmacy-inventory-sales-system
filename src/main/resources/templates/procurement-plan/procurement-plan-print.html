@@ -82,6 +82,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 8px;
+            font-size: 12px;
         }
 
         th, td {
@@ -101,6 +102,21 @@
 
         .text-right {
             text-align: right;
+        }
+
+        .product-name-cell {
+            min-width: 120px;
+            line-height: 1.35;
+        }
+
+        .unit-conversion-col {
+            width: 128px;
+            min-width: 108px;
+            padding: 4px 4px;
+            vertical-align: middle;
+            color: #000;
+            font-size: 11px;
+            line-height: 1.35;
         }
 
         .note {
@@ -186,14 +202,16 @@
         <thead>
         <tr>
             <th style="width: 40px;">STT</th>
-            <th style="width: 90px;">Mã hàng</th>
-            <th>Tên hàng</th>
-            <th style="width: 60px;">Tồn</th>
-            <th style="width: 70px;">SL dự trù</th>
-            <th style="width: 70px;">ĐVT</th>
-            <th style="width: 100px;">Đơn giá ước tính</th>
-            <th style="width: 110px;">Thành tiền ước tính</th>
-            <th style="width: 120px;">Nhà cung cấp</th>
+            <th style="width: 82px;">Mã hàng</th>
+            <th style="min-width: 120px;">Tên hàng</th>
+            <th style="width: 118px;">Quy đổi ĐVT</th>
+            <th style="width: 48px;">Tồn</th>
+            <th style="width: 58px;">ĐVT tồn</th>
+            <th style="width: 58px;">SL dự trù</th>
+            <th style="width: 48px;">ĐVT</th>
+            <th style="width: 88px;">ĐG ước tính</th>
+            <th style="width: 96px;">TT ước tính</th>
+            <th style="width: 100px;">NCC</th>
         </tr>
         </thead>
 
@@ -201,8 +219,14 @@
         <tr th:each="line, iterStat : ${printData.lines}">
             <td class="text-center" th:text="${iterStat.index + 1}">1</td>
             <td th:text="${line.productCode}">MED001</td>
-            <td th:text="${line.productName}">Paracetamol 500mg</td>
+            <td class="product-name-cell" th:text="${line.productName}">Paracetamol 500mg</td>
+            <td class="text-center unit-conversion-col"
+                th:text="${line.unitConversionHint != null && !line.unitConversionHint.isBlank() ? line.unitConversionHint : '—'}">
+                1 Hộp = 10 Vỉ = 100 Viên
+            </td>
             <td class="text-center" th:text="${line.currentStock != null ? line.currentStock : '—'}">0</td>
+            <td class="text-center"
+                th:text="${line.stockUnit != null && !line.stockUnit.isBlank() ? line.stockUnit : '—'}">Viên</td>
             <td class="text-center" th:text="${line.requestedQuantity}">1</td>
             <td class="text-center" th:text="${line.unit != null && !line.unit.isBlank() ? line.unit : '—'}">Hộp</td>
             <td class="text-right"
@@ -217,7 +241,7 @@
         </tr>
 
         <tr th:if="${#lists.isEmpty(printData.lines)}">
-            <td colspan="9" class="text-center">Không có dữ liệu.</td>
+            <td colspan="11" class="text-center">Không có dữ liệu.</td>
         </tr>
         </tbody>
     </table>

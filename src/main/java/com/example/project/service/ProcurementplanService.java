@@ -5,6 +5,7 @@ import com.example.project.dto.request.ProcurementPlanDetailCreateRequest;
 import com.example.project.dto.response.ProcurementPlanPrintLineResponse;
 import com.example.project.dto.response.ProcurementPlanPrintPageResponse;
 import com.example.project.dto.response.ProcurementProductSearchResponse;
+import com.example.project.dto.response.ProcurementProductUnitResponse;
 import com.example.project.dto.response.ProcurementSupplierSearchResponse;
 import com.example.project.dto.response.ProcurementplanResponse;
 import com.example.project.entity.Procurementplan;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -186,8 +188,11 @@ public class ProcurementplanService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dự trù mua hàng"));
 
         List<Procurementplandetail> details = procurementplandetailRepository.findByProcurementID_IdWithRelations(id);
+        Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
+        Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
+        Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
         List<ProcurementPlanPrintLineResponse> lines = details.stream()
-                .map(this::toPrintLine)
+                .map(detail -> toPrintLine(detail, baseUnitByProduct, mainUnitByProduct, unitsByProduct))
                 .toList();
 
         BigDecimal totalEstimated = details.stream()
@@ -209,7 +214,10 @@ public class ProcurementplanService {
 
     /* Chuyển một Procurementplandetail (Entity) thành ProcurementPlanPrintLineResponse (DTO)
        để hiển thị trên trang in. */
-    private ProcurementPlanPrintLineResponse toPrintLine(Procurementplandetail detail) {
+    private ProcurementPlanPrintLineResponse toPrintLine(Procurementplandetail detail,
+                                                         Map<Integer, Productunit> baseUnitByProduct,
+                                                         Map<Integer, Productunit> mainUnitByProduct,
+                                                         Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
         Product product = detail.getProductID();
         Supplier supplier = detail.getSupplierID();
         Integer quantity = detail.getRequestedQuantity();
@@ -220,16 +228,106 @@ public class ProcurementplanService {
             unitPrice = estimatedPrice.divide(BigDecimal.valueOf(quantity.longValue()), 2, RoundingMode.HALF_UP);
         }
 
+        String stockUnit = null;
+        String unitConversionHint = null;
+        if (product != null && product.getProductID() != null) {
+            Productunit baseUnit = baseUnitByProduct.get(product.getProductID());
+            stockUnit = baseUnit != null ? baseUnit.getUnitName() : null;
+            Productunit mainUnit = mainUnitByProduct.get(product.getProductID());
+            unitConversionHint = buildUnitConversionChain(
+                    product.getProductID(), stockUnit, mainUnit, unitsByProduct);
+        }
+
         return new ProcurementPlanPrintLineResponse(
                 product != null ? product.getCode() : "",
                 product != null ? product.getName() : "Không rõ",
                 detail.getCurrentStock(),
+                stockUnit,
+                unitConversionHint,
                 quantity,
                 detail.getUnit(),
                 unitPrice,
                 estimatedPrice,
                 supplier != null ? supplier.getName() : "—"
         );
+    }
+
+    /** Chuỗi quy đổi liên tiếp, ví dụ: 1 Hộp = 10 Vỉ = 100 Viên. */
+    private String buildUnitConversionChain(Integer productId,
+                                            String stockUnit,
+                                            Productunit mainUnit,
+                                            Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
+        List<ProcurementProductUnitResponse> ordered =
+                normalizeProductUnits(productId, stockUnit, mainUnit, unitsByProduct);
+        if (ordered.size() <= 1) {
+            return null;
+        }
+
+        ProcurementProductUnitResponse largest = ordered.get(ordered.size() - 1);
+        StringBuilder chain = new StringBuilder("1 ").append(largest.getUnitName());
+
+        for (int i = ordered.size() - 2; i >= 0; i--) {
+            ProcurementProductUnitResponse unit = ordered.get(i);
+            BigDecimal amount = largest.getRatio().divide(unit.getRatio(), 4, RoundingMode.HALF_UP);
+            chain.append(" = ")
+                    .append(formatUnitRatio(amount))
+                    .append(' ')
+                    .append(unit.getUnitName());
+        }
+        return chain.toString();
+    }
+
+    private List<ProcurementProductUnitResponse> normalizeProductUnits(Integer productId,
+                                                                       String stockUnit,
+                                                                       Productunit mainUnit,
+                                                                       Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
+        Map<String, ProcurementProductUnitResponse> byName = new LinkedHashMap<>();
+        for (ProcurementProductUnitResponse unitRow : unitsByProduct.getOrDefault(productId, List.of())) {
+            String unitName = unitRow.getUnitName();
+            BigDecimal ratio = unitRow.getRatio();
+            if (unitName == null || unitName.isBlank() || ratio == null || ratio.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            ProcurementProductUnitResponse existing = byName.get(unitName);
+            if (existing == null || ratio.compareTo(existing.getRatio()) > 0) {
+                byName.put(unitName, unitRow);
+            }
+        }
+
+        List<ProcurementProductUnitResponse> ordered = new ArrayList<>(byName.values());
+        ordered.sort(Comparator
+                .comparing(ProcurementProductUnitResponse::getRatio, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(ProcurementProductUnitResponse::getUnitName,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
+
+        if (!ordered.isEmpty()) {
+            return ordered;
+        }
+
+        if (mainUnit == null) {
+            return List.of();
+        }
+
+        String unit = mainUnit.getUnitName();
+        BigDecimal ratio = mainUnit.getRatio();
+        if (unit == null || unit.isBlank() || ratio == null || ratio.compareTo(BigDecimal.ZERO) <= 0) {
+            return List.of();
+        }
+        if (stockUnit != null && unit.equals(stockUnit) && ratio.compareTo(BigDecimal.ONE) == 0) {
+            return List.of();
+        }
+
+        return List.of(new ProcurementProductUnitResponse(
+                unit, ratio, Boolean.TRUE.equals(mainUnit.getIsBaseUnit())));
+    }
+
+    private String formatUnitRatio(BigDecimal value) {
+        if (value == null) {
+            return "";
+        }
+        BigDecimal normalized = value.setScale(4, RoundingMode.HALF_UP).stripTrailingZeros();
+        return normalized.toPlainString();
     }
 
     // thanh tìm sản phẩm (hiện tồn theo đơn vị nhỏ nhất, hiện đơn vị nhập từ nhà cung cấp )
@@ -248,6 +346,7 @@ public class ProcurementplanService {
         Map<Integer, Long> stockByProduct = buildStockByProduct();
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
+        Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
 
         return productRepository.findAllWithRelations()
                 .stream()
@@ -256,7 +355,7 @@ public class ProcurementplanService {
                 .filter(product -> matchesKeyword(product, normalizedKeyword))
                 .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
                 .limit(maxResults)
-                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct))
+                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
                 .toList();
     }
 
@@ -282,13 +381,36 @@ public class ProcurementplanService {
         Map<Integer, Long> stockByProduct = buildStockByProduct();
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
+        Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
 
         return productRepository.findAllById(productIds)
                 .stream()
-                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct))
+                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
                 .toList();
     }
 
+    /** Tất cả đơn vị đang hoạt động của sản phẩm (bé → lớn theo ratio). */
+    private Map<Integer, List<ProcurementProductUnitResponse>> loadUnitsByProduct() {
+        Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = new HashMap<>();
+        for (Productunit unit : productunitRepository.findAllWithProduct()) {
+            if (!Boolean.TRUE.equals(unit.getIsActive()) || unit.getProductID() == null) {
+                continue;
+            }
+
+            Integer productId = unit.getProductID().getProductID();
+            unitsByProduct.computeIfAbsent(productId, ignored -> new ArrayList<>())
+                    .add(new ProcurementProductUnitResponse(
+                            unit.getUnitName(),
+                            unit.getRatio(),
+                            Boolean.TRUE.equals(unit.getIsBaseUnit())));
+        }
+
+        unitsByProduct.values().forEach(units -> units.sort(Comparator
+                .comparing(ProcurementProductUnitResponse::getRatio, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(ProcurementProductUnitResponse::getUnitName,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))));
+        return unitsByProduct;
+    }
 
     // lấy đơn vị (nhập từ nhà cung cấp) của sản phẩm
     private Map<Integer, Productunit> loadMainUnitByProduct() {
@@ -335,10 +457,12 @@ public class ProcurementplanService {
     private ProcurementProductSearchResponse toSearchResponse(Product product,
                                                               Map<Integer, Long> stockByProduct,
                                                               Map<Integer, Productunit> mainUnitByProduct,
-                                                              Map<Integer, Productunit> baseUnitByProduct) {
+                                                              Map<Integer, Productunit> baseUnitByProduct,
+                                                              Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
         Productunit mainUnit = mainUnitByProduct.get(product.getProductID());
         Productunit baseUnit = baseUnitByProduct.get(product.getProductID());
         int stock = stockByProduct.getOrDefault(product.getProductID(), 0L).intValue();
+        List<ProcurementProductUnitResponse> units = unitsByProduct.getOrDefault(product.getProductID(), List.of());
 
         return new ProcurementProductSearchResponse(
                 product.getProductID(),
@@ -349,7 +473,8 @@ public class ProcurementplanService {
                 baseUnit != null ? baseUnit.getUnitName() : null,
                 mainUnit != null ? mainUnit.getUnitName() : null,
                 mainUnit != null ? mainUnit.getRatio() : null,
-                mainUnit != null ? mainUnit.getSellPrice() : null
+                mainUnit != null ? mainUnit.getSellPrice() : null,
+                units
         );
     }
 
@@ -474,7 +599,11 @@ public class ProcurementplanService {
         validateCreateRequest(details);
 
         plan.setNote(trimToNull(request.getNote()));
-        plan.setStatus(normalizeStatus(request.getStatus()));
+        String status = normalizeStatus(request.getStatus());
+        if (COMPLETED_STATUS.equals(status)) {
+            validateReadyForCompletion(details);
+        }
+        plan.setStatus(status);
         plan.setDate(LocalDateTime.now(VN_ZONE));
         procurementplanRepository.save(plan);
 
@@ -556,7 +685,7 @@ public class ProcurementplanService {
                 .toList();
     }
 
-    //kiểm tra dữ liệu (validation) trước khi lưu Procurement Plan vào database
+    // kiểm tra dữ liệu (validation) trước khi lưu Procurement Plan vào database
     private void validateCreateRequest(List<ProcurementPlanDetailCreateRequest> details) {
         if (details.isEmpty()) {
             throw new IllegalArgumentException("Dự trù mua hàng phải có ít nhất một sản phẩm");
@@ -575,6 +704,27 @@ public class ProcurementplanService {
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm"));
             if (isComboProduct(product)) {
                 throw new IllegalArgumentException("Không thể dự trù sản phẩm loại combo");
+            }
+        }
+    }
+
+    /** Bắt buộc trước khi chuyển sang {@link #COMPLETED_STATUS}. */
+    private void validateReadyForCompletion(List<ProcurementPlanDetailCreateRequest> details) {
+        if (details.isEmpty()) {
+            throw new IllegalArgumentException("Dự trù mua hàng phải có ít nhất một sản phẩm trước khi hoàn thành");
+        }
+
+        for (int i = 0; i < details.size(); i++) {
+            ProcurementPlanDetailCreateRequest detail = details.get(i);
+            int lineNo = i + 1;
+
+            if (detail.getSupplierId() == null) {
+                throw new IllegalArgumentException("Dòng " + lineNo + ": vui lòng chọn nhà cung cấp trước khi hoàn thành");
+            }
+
+            BigDecimal estimatedPrice = detail.getEstimatedPrice();
+            if (estimatedPrice == null || estimatedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("Dòng " + lineNo + ": vui lòng nhập giá ước tính trước khi hoàn thành");
             }
         }
     }
