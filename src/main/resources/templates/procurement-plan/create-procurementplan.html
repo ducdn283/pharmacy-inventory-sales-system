@@ -1196,16 +1196,16 @@
     function sortDetailLinesBySupplier() {
         const container = document.getElementById('detailLines');
         const rows = Array.from(container.querySelectorAll('.product-line'));
-        if (rows.length <= 1) return;
+        if (rows.length > 1) {
+            rows.sort((a, b) => {
+                const bySupplier = getSupplierGroupKey(getRowSupplierId(a))
+                    .localeCompare(getSupplierGroupKey(getRowSupplierId(b)), 'vi');
+                if (bySupplier !== 0) return bySupplier;
+                return (Number(a.dataset.lineOrder) || 0) - (Number(b.dataset.lineOrder) || 0);
+            });
 
-        rows.sort((a, b) => {
-            const bySupplier = getSupplierGroupKey(getRowSupplierId(a))
-                .localeCompare(getSupplierGroupKey(getRowSupplierId(b)), 'vi');
-            if (bySupplier !== 0) return bySupplier;
-            return (Number(a.dataset.lineOrder) || 0) - (Number(b.dataset.lineOrder) || 0);
-        });
-
-        rows.forEach(row => container.appendChild(row));
+            rows.forEach(row => container.appendChild(row));
+        }
         reindexDetailLines();
     }
 
