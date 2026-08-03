@@ -39,8 +39,7 @@ public class Purchaseinvoice {
     @JoinColumn(name = "employeeID")
     private Account employeeID;
 
-    @NotNull
-    @Column(name = "approvedAt", nullable = false)
+    @Column(name = "approvedAt")
     private LocalDateTime approvedAt;
 
     @Column(name = "additionCost", precision = 15, scale = 2)
