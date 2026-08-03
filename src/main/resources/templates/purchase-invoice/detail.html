@@ -132,7 +132,9 @@
 
         <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
-        <div th:if="${!detail.validForDeduction && detail.paymentStatus != 'Đã hủy'}" class="alert alert-warning">
+        <div th:if="${!detail.validForDeduction && detail.paymentStatus != 'Đã hủy'
+                       && detail.paymentStatus != 'Nháp' && detail.paymentStatus != 'Chờ duyệt'}"
+             class="alert alert-warning">
             <i class="ti ti-alert-triangle me-1"></i>
             Phiếu nhập đã quá hạn thanh toán (<span th:text="${detail.dueDateDisplay}"></span>) mà vẫn chưa
             thanh toán đủ và có giá trị từ 5.000.000đ trở lên — không còn hợp lệ để tạm khấu trừ GTGT đầu vào
@@ -392,8 +394,36 @@
                         In phiếu nhập
                     </button>
 
+                    <button type="button" class="btn btn-purchase-primary w-100 mb-3"
+                            th:if="${canApprove}"
+                            data-bs-toggle="modal" data-bs-target="#approvePurchaseInvoiceModal">
+                        <i class="ti ti-check me-1"></i>
+                        Duyệt phiếu nhập
+                    </button>
+
                     <button type="button" class="btn btn-outline-danger w-100 mb-3"
-                            th:if="${basePath != '/accountant/purchase-invoices' && detail.paymentStatus != 'Đã hủy'}"
+                            th:if="${canReject}"
+                            data-bs-toggle="modal" data-bs-target="#rejectPurchaseInvoiceModal">
+                        <i class="ti ti-x me-1"></i>
+                        Từ chối
+                    </button>
+
+                    <a th:if="${canEditDraft}"
+                       th:href="${basePath + '/' + detail.id + '/edit'}"
+                       class="btn btn-purchase-primary w-100 mb-3">
+                        <i class="ti ti-pencil me-1"></i>
+                        Sửa phiếu nháp
+                    </a>
+
+                    <button type="button" class="btn btn-outline-danger w-100 mb-3"
+                            th:if="${canDeleteDraft}"
+                            data-bs-toggle="modal" data-bs-target="#deleteDraftPurchaseInvoiceModal">
+                        <i class="ti ti-trash me-1"></i>
+                        Xóa phiếu nháp
+                    </button>
+
+                    <button type="button" class="btn btn-outline-danger w-100 mb-3"
+                            th:if="${basePath != '/accountant/purchase-invoices' && !canApprove && !canReject && !canEditDraft && !canDeleteDraft && detail.paymentStatus != 'Đã hủy'}"
                             data-bs-toggle="modal" data-bs-target="#cancelPurchaseInvoiceModal">
                         <i class="ti ti-ban me-1"></i>
                         Hủy phiếu nhập
@@ -411,7 +441,8 @@
     </div>
 </main>
 
-<div class="modal fade" id="cancelPurchaseInvoiceModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="cancelPurchaseInvoiceModal" tabindex="-1" aria-hidden="true"
+     th:if="${basePath != '/accountant/purchase-invoices' && !canApprove && !canReject && !canEditDraft && !canDeleteDraft && detail.paymentStatus != 'Đã hủy'}">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:16px;">
             <form th:action="${basePath + '/' + detail.id + '/cancel'}" method="post">
@@ -439,6 +470,100 @@
                     <button type="submit" class="btn btn-danger px-4">
                         <i class="ti ti-ban me-1"></i>
                         Xác nhận hủy phiếu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="approvePurchaseInvoiceModal" tabindex="-1" aria-hidden="true" th:if="${canApprove}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:16px;">
+            <form th:action="${basePath + '/' + detail.id + '/approve'}" method="post">
+                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 mb-0">Duyệt phiếu nhập <span th:text="${detail.purchaseCode}"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-success small mb-0">
+                        <i class="ti ti-check me-1"></i>
+                        Hàng sẽ được cộng vào kho (tạo lô mới) và phiếu chuyển sang trạng thái "Nợ" ngay khi duyệt.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-purchase-primary px-4">
+                        <i class="ti ti-check me-1"></i>
+                        Xác nhận duyệt
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rejectPurchaseInvoiceModal" tabindex="-1" aria-hidden="true" th:if="${canReject}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:16px;">
+            <form th:action="${basePath + '/' + detail.id + '/reject'}" method="post">
+                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 mb-0">Từ chối phiếu nhập <span th:text="${detail.purchaseCode}"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-warning small mb-3">
+                        <i class="ti ti-alert-triangle me-1"></i>
+                        Phiếu sẽ quay về trạng thái Nháp để Kế toán sửa lại và nộp duyệt lại.
+                    </div>
+
+                    <label for="rejectReason" class="form-label">Lý do từ chối</label>
+                    <textarea id="rejectReason" name="reason" class="form-control" rows="3"
+                              placeholder="VD: Sai giá nhập, thiếu số lô..."></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-danger px-4">
+                        <i class="ti ti-x me-1"></i>
+                        Xác nhận từ chối
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteDraftPurchaseInvoiceModal" tabindex="-1" aria-hidden="true" th:if="${canDeleteDraft}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:16px;">
+            <form th:action="${basePath + '/' + detail.id + '/delete'}" method="post">
+                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                <div class="modal-header">
+                    <h5 class="modal-title fs-6 mb-0">Xóa phiếu nháp <span th:text="${detail.purchaseCode}"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-warning small mb-0">
+                        <i class="ti ti-alert-triangle me-1"></i>
+                        Xóa hẳn phiếu nháp này, không thể khôi phục.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-danger px-4">
+                        <i class="ti ti-trash me-1"></i>
+                        Xác nhận xóa
                     </button>
                 </div>
             </form>

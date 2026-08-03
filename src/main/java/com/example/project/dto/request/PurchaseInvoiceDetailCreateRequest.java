@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,8 +25,11 @@ public class PurchaseInvoiceDetailCreateRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá nhập phải lớn hơn 0")
     private BigDecimal importPrice;
 
+    // Xem PurchaseInvoiceCreateRequest.vatInvoiceDate cho lý do cần @DateTimeFormat trên LocalDate.
+    @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate productionDate;
 
+    @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate expirationDate;
 
     /**
