@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.PurchaseInvoiceStatus;
+import com.example.project.constant.RoleConstants;
 import com.example.project.dto.request.PurchaseInvoiceCreateRequest;
 import com.example.project.dto.request.PurchaseInvoiceDetailCreateRequest;
 import com.example.project.dto.response.*;
@@ -23,10 +24,27 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Creating a Purchase Invoice creates its {@link Batch} rows in the same transaction — per the
- * team's own process spec (sheet "Thay đổi Quy trình Phê duyệt", row "Duyệt Phiếu nhập hàng"):
- * the old 3-step flow (tạo hóa đơn → duyệt → chuyển thành lô) is "đã gộp thành 1 use case
- * 'Create Goods Receipt Note'". There is no separate "to-batch" confirmation step any more.
+ * Who creates a purchase invoice, and whether it receives stock immediately, now depends on
+ * whether the pharmacy has an active Accountant (BA, 2026-08-03 evening — supersedes the older
+ * "always one step" note this javadoc used to carry, from the process spec sheet "Thay đổi Quy
+ * trình Phê duyệt"):
+ *
+ * <ul>
+ *   <li><strong>No active Accountant</strong> — the Owner creates directly via
+ *       {@link #createPurchaseInvoice}, one step, exactly as before: {@link Batch} rows are
+ *       created in the same transaction and {@code approvedAt} is stamped to the creation moment
+ *       (the Owner is, in effect, both creator and approver).</li>
+ *   <li><strong>Active Accountant</strong> — the Owner can no longer create at all
+ *       ({@link #canCreatePurchaseInvoice}); the Accountant creates via
+ *       {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval}, optionally
+ *       edits a Nháp ({@link #updatePurchaseInvoiceDraft}/{@link #submitPurchaseInvoiceDraft}) or
+ *       deletes it ({@link #deletePurchaseInvoiceDraft}), and the Owner approves
+ *       ({@link #approvePurchaseInvoice}) or rejects ({@link #rejectPurchaseInvoice}) it. Stock is
+ *       received — {@link Batch} rows created, supplier cost price refreshed — and
+ *       {@code approvedAt} stamped ONLY at {@link #approvePurchaseInvoice}, never before; a
+ *       rejected invoice goes back to Nháp with nothing to reverse, since nothing was ever
+ *       received.</li>
+ * </ul>
  */
 @Service
 public class PurchaseinvoiceService {
@@ -41,6 +59,7 @@ public class PurchaseinvoiceService {
     private final SupplierproductRepository supplierproductRepository;
     private final ProcurementplanRepository procurementplanRepository;
     private final ProcurementplandetailRepository procurementplandetailRepository;
+    private final AccountpermissionRepository accountpermissionRepository;
 
     public PurchaseinvoiceService(PurchaseinvoiceRepository purchaseinvoiceRepository,
                                   PurchasedetailRepository purchasedetailRepository,
@@ -51,7 +70,8 @@ public class PurchaseinvoiceService {
                                   ProductunitRepository productunitRepository,
                                   SupplierproductRepository supplierproductRepository,
                                   ProcurementplanRepository procurementplanRepository,
-                                  ProcurementplandetailRepository procurementplandetailRepository) {
+                                  ProcurementplandetailRepository procurementplandetailRepository,
+                                  AccountpermissionRepository accountpermissionRepository) {
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.purchasedetailRepository = purchasedetailRepository;
         this.supplierRepository = supplierRepository;
@@ -62,6 +82,34 @@ public class PurchaseinvoiceService {
         this.supplierproductRepository = supplierproductRepository;
         this.procurementplandetailRepository = procurementplandetailRepository;
         this.procurementplanRepository = procurementplanRepository;
+        this.accountpermissionRepository = accountpermissionRepository;
+    }
+
+    // ------------------------------------------------------------------ who may create
+
+    /**
+     * Whether the pharmacy currently employs an accountant with an enabled account — same live-data
+     * question {@code TaxperiodsnapshotService.hasActiveAccountant()} answers for "who closes a tax
+     * period", reused here for "who creates a purchase invoice" (BA: khi có Kế toán, Kế toán đảm
+     * nhiệm việc tạo phiếu nhập; Chủ nhà thuốc chỉ còn duyệt).
+     */
+    @Transactional(readOnly = true)
+    public boolean hasActiveAccountant() {
+        return accountpermissionRepository.existsActiveByRole(RoleConstants.ACCOUNTANT);
+    }
+
+    /**
+     * Whether the given role may create a purchase invoice right now. The Accountant may always
+     * create (when reachable at all — the {@code /accountant/**} URL prefix already implies an
+     * active accountant account); the Owner may only create directly while there is no active
+     * Accountant, otherwise their role is limited to approving/rejecting what the Accountant submits.
+     */
+    @Transactional(readOnly = true)
+    public boolean canCreatePurchaseInvoice(String role) {
+        if (RoleConstants.ACCOUNTANT.equals(role)) {
+            return true;
+        }
+        return RoleConstants.OWNER.equals(role) && !hasActiveAccountant();
     }
 
     /**
@@ -312,8 +360,17 @@ public class PurchaseinvoiceService {
         return result;
     }
 
-    @Transactional
-    public Integer createPurchaseInvoice(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
+    /**
+     * Everything about a submitted request that can be resolved/validated before the invoice's
+     * first save, shared by every creation and draft-edit path below.
+     */
+    private record PreparedInvoiceHeader(Supplier supplier, Account employee, Procurementplan procurementPlan,
+                                          List<PreparedPurchaseLine> lines, BigDecimal additionCost,
+                                          BigDecimal discount, BigDecimal totalAmount,
+                                          BigDecimal totalVATInput) {
+    }
+
+    private PreparedInvoiceHeader prepareInvoiceHeader(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
         validateCreateRequest(request);
 
         Supplier supplier = supplierRepository.findById(request.getSupplierId())
@@ -351,41 +408,51 @@ public class PurchaseinvoiceService {
             throw new IllegalArgumentException("Tổng tiền phiếu nhập không hợp lệ");
         }
 
-        // A new import invoice always starts unpaid, i.e. "Nợ". Receiving goods and paying for them
-        // are separate events: the money only moves when an Expense slip is raised against this
-        // invoice, and applyPayment() is the single door it comes through — one path to
-        // paid/status instead of two that could disagree, and why the create form asks for no
-        // amount already paid.
+        return new PreparedInvoiceHeader(supplier, employee, procurementPlan, lines, additionCost, discount,
+                totalAmount, totalVATInput);
+    }
+
+    /** Builds a not-yet-persisted {@link Purchaseinvoice} — always unpaid, see the field's own note below. */
+    private Purchaseinvoice buildInvoiceEntity(PurchaseInvoiceCreateRequest request, PreparedInvoiceHeader header,
+                                               String status, LocalDateTime approvedAt) {
+        // A new import invoice always starts unpaid. Receiving goods and paying for them are separate
+        // events: the money only moves when an Expense slip is raised against this invoice, and
+        // applyPayment() is the single door it comes through — one path to paid/status instead of two
+        // that could disagree, and why the create form asks for no amount already paid.
         BigDecimal paid = BigDecimal.ZERO;
 
         Purchaseinvoice invoice = new Purchaseinvoice();
         invoice.setPurchaseInvoiceCode(generatePurchaseInvoiceCode());
         invoice.setDate(Instant.now());
-        invoice.setSupplierID(supplier);
-        invoice.setEmployeeID(employee);
-        invoice.setProcurementID(procurementPlan);
-        invoice.setAdditionCost(additionCost);
-        invoice.setDiscount(discount);
-        invoice.setTotalAmount(totalAmount);
+        invoice.setSupplierID(header.supplier());
+        invoice.setEmployeeID(header.employee());
+        invoice.setProcurementID(header.procurementPlan());
+        invoice.setAdditionCost(header.additionCost());
+        invoice.setDiscount(header.discount());
+        invoice.setTotalAmount(header.totalAmount());
         invoice.setPaid(paid);
-        invoice.setStatus(resolveInvoiceStatus(totalAmount, paid));
+        invoice.setStatus(status);
         invoice.setReturnStatus("NONE");
         invoice.setNote(request.getNote());
         invoice.setVatInvoiceNumber(trimToNull(request.getVatInvoiceNumber()));
         invoice.setVatInvoiceDate(request.getVatInvoiceDate());
-        invoice.setTotalVATInput(totalVATInput);
+        invoice.setTotalVATInput(header.totalVATInput());
         invoice.setDueDate(request.getDueDate());
-        invoice.setIsValidForDeduction(isValidForDeduction(totalAmount, paid, request.getDueDate()));
+        invoice.setIsValidForDeduction(isValidForDeduction(header.totalAmount(), paid, request.getDueDate()));
+        invoice.setApprovedAt(approvedAt);
+        return invoice;
+    }
 
-        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+    /** Persists one {@link Purchasedetail} row per prepared line — no {@link Batch}, see {@link #receiveStockForInvoice}. */
+    private List<Purchasedetail> persistDetailLines(Purchaseinvoice savedInvoice, List<PreparedPurchaseLine> lines) {
+        List<Purchasedetail> saved = new ArrayList<>();
 
         for (PreparedPurchaseLine line : lines) {
             PurchaseInvoiceDetailCreateRequest item = line.item();
-            Product product = line.product();
 
             Purchasedetail detail = new Purchasedetail();
             detail.setPurchaseID(savedInvoice);
-            detail.setProductID(product);
+            detail.setProductID(line.product());
             detail.setQuantity(item.getQuantity());
             detail.setImportPrice(item.getImportPrice());
             detail.setProductionDate(item.getProductionDate());
@@ -396,13 +463,240 @@ public class PurchaseinvoiceService {
             detail.setVatAmount(line.vatAmount());
             detail.setReturnQty(0);
 
-            Purchasedetail savedDetail = purchasedetailRepository.save(detail);
-
-            createBatchForDetail(savedInvoice, savedDetail, product);
-            upsertSupplierProductCostPrice(supplier, product, item.getImportPrice());
+            saved.add(purchasedetailRepository.save(detail));
         }
 
+        return saved;
+    }
+
+    /**
+     * The actual "hàng về kho" side effect — creates one {@link Batch} per line and refreshes the
+     * supplier's reference cost price. Called exactly once per invoice, at the moment it becomes
+     * official: immediately for a direct Owner creation (no active Accountant, so the Owner IS the
+     * approval), or from {@link #approvePurchaseInvoice} once the Owner approves an Accountant's
+     * submission. Never called for a Nháp/Chờ duyệt row — see the class javadoc.
+     */
+    private void receiveStockForInvoice(Purchaseinvoice invoice, List<Purchasedetail> details) {
+        Supplier supplier = invoice.getSupplierID();
+        for (Purchasedetail detail : details) {
+            Product product = detail.getProductID();
+            createBatchForDetail(invoice, detail, product);
+            upsertSupplierProductCostPrice(supplier, product, detail.getImportPrice());
+        }
+    }
+
+    /**
+     * Direct, one-step creation — only valid while there is no active Accountant
+     * ({@link #canCreatePurchaseInvoice}), in which case the Owner both creates and, in effect,
+     * approves in the same action: stock is received immediately and {@code approvedAt} is stamped
+     * to the creation moment. When an Accountant is active, use
+     * {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval} instead.
+     */
+    @Transactional
+    public Integer createPurchaseInvoice(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
+        PreparedInvoiceHeader header = prepareInvoiceHeader(request, currentAccountId);
+        LocalDateTime now = LocalDateTime.now();
+
+        Purchaseinvoice invoice = buildInvoiceEntity(request, header,
+                resolveInvoiceStatus(header.totalAmount(), BigDecimal.ZERO), now);
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
+        receiveStockForInvoice(savedInvoice, savedDetails);
+
         return savedInvoice.getId();
+    }
+
+    /**
+     * Accountant "Lưu Nháp" — persists the header and lines so the Accountant can come back later,
+     * but nothing else: no stock, no cost-price refresh, no {@code approvedAt}. Editable/deletable
+     * only while it stays {@link PurchaseInvoiceStatus#DRAFT}.
+     */
+    @Transactional
+    public Integer createPurchaseInvoiceDraft(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
+        PreparedInvoiceHeader header = prepareInvoiceHeader(request, currentAccountId);
+
+        Purchaseinvoice invoice = buildInvoiceEntity(request, header, PurchaseInvoiceStatus.DRAFT, null);
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        persistDetailLines(savedInvoice, header.lines());
+        return savedInvoice.getId();
+    }
+
+    /**
+     * Accountant "Nộp duyệt" straight from the create form — same as {@link #createPurchaseInvoiceDraft}
+     * but lands directly on {@link PurchaseInvoiceStatus#PENDING_APPROVAL}, awaiting the Owner.
+     */
+    @Transactional
+    public Integer createPurchaseInvoiceForApproval(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
+        PreparedInvoiceHeader header = prepareInvoiceHeader(request, currentAccountId);
+
+        Purchaseinvoice invoice = buildInvoiceEntity(request, header, PurchaseInvoiceStatus.PENDING_APPROVAL, null);
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        persistDetailLines(savedInvoice, header.lines());
+        return savedInvoice.getId();
+    }
+
+    /**
+     * Shared body for editing an existing Nháp: re-validates/re-resolves the posted form exactly
+     * like a fresh create, replaces every {@link Purchasedetail} line (a Draft never has a
+     * {@link Batch} yet, so there is nothing to reconcile), and leaves everything else about the
+     * row — code, original creator ({@code employeeID}), creation {@code date} — untouched.
+     * {@code currentAccountId} is only used to confirm the editing account still exists; it does
+     * NOT reassign {@code employeeID}, which stays the account that first saved the Draft.
+     */
+    private Purchaseinvoice applyDraftEdit(Integer purchaseId, PurchaseInvoiceCreateRequest request,
+                                           Integer currentAccountId, String targetStatus) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Chỉ có thể sửa phiếu nhập đang ở trạng thái Nháp");
+        }
+
+        PreparedInvoiceHeader header = prepareInvoiceHeader(request, currentAccountId);
+
+        invoice.setSupplierID(header.supplier());
+        invoice.setProcurementID(header.procurementPlan());
+        invoice.setAdditionCost(header.additionCost());
+        invoice.setDiscount(header.discount());
+        invoice.setTotalAmount(header.totalAmount());
+        invoice.setNote(request.getNote());
+        invoice.setVatInvoiceNumber(trimToNull(request.getVatInvoiceNumber()));
+        invoice.setVatInvoiceDate(request.getVatInvoiceDate());
+        invoice.setTotalVATInput(header.totalVATInput());
+        invoice.setDueDate(request.getDueDate());
+        invoice.setIsValidForDeduction(isValidForDeduction(header.totalAmount(), BigDecimal.ZERO, request.getDueDate()));
+        invoice.setStatus(targetStatus);
+
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        purchasedetailRepository.deleteAll(purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId));
+        persistDetailLines(savedInvoice, header.lines());
+
+        return savedInvoice;
+    }
+
+    /** Accountant edits a Nháp and saves it as a Nháp again. */
+    @Transactional
+    public Integer updatePurchaseInvoiceDraft(Integer purchaseId, PurchaseInvoiceCreateRequest request,
+                                              Integer currentAccountId) {
+        return applyDraftEdit(purchaseId, request, currentAccountId, PurchaseInvoiceStatus.DRAFT).getId();
+    }
+
+    /** Accountant edits a Nháp and submits it for approval in the same action. */
+    @Transactional
+    public Integer submitPurchaseInvoiceDraft(Integer purchaseId, PurchaseInvoiceCreateRequest request,
+                                              Integer currentAccountId) {
+        return applyDraftEdit(purchaseId, request, currentAccountId, PurchaseInvoiceStatus.PENDING_APPROVAL).getId();
+    }
+
+    /**
+     * Accountant deletes a Nháp outright — the only status this is allowed from, since nothing else
+     * (no {@link Batch}, no debt, no payment) has ever been attached to it yet.
+     */
+    @Transactional
+    public void deletePurchaseInvoiceDraft(Integer purchaseId) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Chỉ có thể xóa phiếu nhập đang ở trạng thái Nháp");
+        }
+
+        purchasedetailRepository.deleteAll(purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId));
+        purchaseinvoiceRepository.delete(invoice);
+    }
+
+    /**
+     * Owner duyệt một phiếu Chờ duyệt: đây là thời điểm DUY NHẤT hàng thật sự về kho đối với luồng
+     * Kế toán tạo phiếu — {@link #receiveStockForInvoice} chỉ chạy ở đây (và ở
+     * {@link #createPurchaseInvoice}'s tự-duyệt khi không có Kế toán). {@code paid} luôn là 0 tại
+     * thời điểm này (chưa có phiếu chi nào nối vào một phiếu chưa từng "Nợ"), nên status luôn suy ra
+     * {@link PurchaseInvoiceStatus#DEBT} trừ phi tổng tiền là 0.
+     */
+    @Transactional
+    public void approvePurchaseInvoice(Integer purchaseId) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.PENDING_APPROVAL.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Phiếu nhập không ở trạng thái chờ duyệt");
+        }
+
+        BigDecimal totalAmount = safe(invoice.getTotalAmount());
+        BigDecimal paid = safe(invoice.getPaid());
+
+        invoice.setStatus(resolveInvoiceStatus(totalAmount, paid));
+        invoice.setApprovedAt(LocalDateTime.now());
+
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        List<Purchasedetail> details = purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId);
+        receiveStockForInvoice(savedInvoice, details);
+    }
+
+    /**
+     * Owner từ chối một phiếu Chờ duyệt — quay về Nháp để Kế toán sửa lại và nộp lại, KHÔNG hủy.
+     * Vì chưa từng cộng kho ({@link #receiveStockForInvoice} chưa chạy), không có gì để đảo ngược.
+     */
+    @Transactional
+    public void rejectPurchaseInvoice(Integer purchaseId, String reason) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.PENDING_APPROVAL.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Phiếu nhập không ở trạng thái chờ duyệt");
+        }
+
+        invoice.setStatus(PurchaseInvoiceStatus.DRAFT);
+        invoice.setNote(appendNote(invoice.getNote(),
+                "Bị từ chối" + (trimToNull(reason) != null ? ": " + reason.trim() : "")));
+
+        savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+    }
+
+    /**
+     * Rehydrates an existing Nháp's header + lines into the same request DTO the create form binds
+     * to, so "Sửa phiếu nhập" is literally the create form pre-filled — same fields, same
+     * validation, same JS. Only ever called for a {@link PurchaseInvoiceStatus#DRAFT} row.
+     */
+    @Transactional(readOnly = true)
+    public PurchaseInvoiceCreateRequest getDraftEditForm(Integer purchaseId) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Chỉ có thể sửa phiếu nhập đang ở trạng thái Nháp");
+        }
+
+        PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
+        form.setSupplierId(invoice.getSupplierID() != null ? invoice.getSupplierID().getId() : null);
+        form.setRequisitionId(invoice.getProcurementID() != null ? invoice.getProcurementID().getId() : null);
+        form.setAdditionCost(invoice.getAdditionCost());
+        form.setDiscount(invoice.getDiscount());
+        form.setNote(invoice.getNote());
+        form.setVatInvoiceNumber(invoice.getVatInvoiceNumber());
+        form.setVatInvoiceDate(invoice.getVatInvoiceDate());
+        form.setDueDate(invoice.getDueDate());
+
+        List<PurchaseInvoiceDetailCreateRequest> details = new ArrayList<>();
+        for (Purchasedetail detail : purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId)) {
+            PurchaseInvoiceDetailCreateRequest item = new PurchaseInvoiceDetailCreateRequest();
+            item.setProductId(detail.getProductID() != null ? detail.getProductID().getProductID() : null);
+            item.setQuantity(detail.getQuantity());
+            item.setImportPrice(detail.getImportPrice());
+            item.setProductionDate(detail.getProductionDate());
+            item.setExpirationDate(detail.getExpirationDate());
+            item.setNoExpirationDate(detail.getExpirationDate() == null);
+            item.setLotNumber(detail.getLotNumber());
+            item.setVatRate(detail.getVatRate());
+            details.add(item);
+        }
+        form.setDetails(details);
+
+        return form;
     }
 
     /**
@@ -419,6 +713,12 @@ public class PurchaseinvoiceService {
 
         if (PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
             throw new IllegalArgumentException("Phiếu nhập đã bị hủy trước đó");
+        }
+        if (PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Phiếu nhập đang ở trạng thái Nháp — vui lòng xóa thay vì hủy");
+        }
+        if (PurchaseInvoiceStatus.PENDING_APPROVAL.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Phiếu nhập đang chờ duyệt — vui lòng từ chối thay vì hủy");
         }
 
         List<Purchasedetail> details = purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId);
@@ -1160,7 +1460,8 @@ public class PurchaseinvoiceService {
             case PurchaseInvoiceStatus.COMPLETED -> "status-completed";
             case PurchaseInvoiceStatus.PARTIAL_DEBT -> "status-partial";
             case PurchaseInvoiceStatus.CANCELLED -> "status-cancelled";
-            case PurchaseInvoiceStatus.DEBT, PurchaseInvoiceStatus.DRAFT -> "status-pending";
+            case PurchaseInvoiceStatus.DEBT, PurchaseInvoiceStatus.DRAFT, PurchaseInvoiceStatus.PENDING_APPROVAL ->
+                    "status-pending";
             default -> "status-unknown";
         };
     }

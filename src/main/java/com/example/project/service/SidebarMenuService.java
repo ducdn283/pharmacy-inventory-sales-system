@@ -213,6 +213,9 @@ public class SidebarMenuService {
                         i("Danh sách khoản chi", "/accountant/expenses", "ti ti-cash"),
                         i("Kỳ thuế", "/accountant/tax-periods", "ti ti-receipt-tax")),
 
+                linkGroup("Hàng hóa", ICON_PRODUCTS,
+                        i("Hàng hóa", "/accountant/products", ICON_PRODUCTS)),
+
                 menuGroup("Cung ứng", ICON_SUPPLY,
                         i("Danh sách phiếu nhập", "/accountant/purchase-invoices", "ti ti-receipt")),
 
