@@ -8,6 +8,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -19,6 +20,7 @@ public class PurchaseinvoiceResponse {
     private Instant date;
     private Integer supplierId;
     private Integer employeeId;
+    private LocalDateTime approvedAt;
     private BigDecimal additionCost;
     private BigDecimal discount;
     private BigDecimal totalAmount;
@@ -40,6 +42,7 @@ public class PurchaseinvoiceResponse {
                 purchaseinvoice.getDate(),
                 purchaseinvoice.getSupplierID() != null ? purchaseinvoice.getSupplierID().getId() : null,
                 purchaseinvoice.getEmployeeID() != null ? purchaseinvoice.getEmployeeID().getId() : null,
+                purchaseinvoice.getApprovedAt(),
                 purchaseinvoice.getAdditionCost(),
                 purchaseinvoice.getDiscount(),
                 purchaseinvoice.getTotalAmount(),
