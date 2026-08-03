@@ -35,8 +35,7 @@
             background: #ffffff;
             border: 1px solid #e9edf2;
             border-radius: 14px;
-            box-shadow:
-                    0 1px 2px rgba(16, 24, 40, .035);
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .035);
         }
 
         .welcome-card {
@@ -106,9 +105,7 @@
 
         .metric-link:hover .metric-card {
             transform: translateY(-2px);
-            box-shadow:
-                    0 8px 20px
-                    rgba(16, 24, 40, .07);
+            box-shadow: 0 8px 20px rgba(16, 24, 40, .07);
         }
 
         .metric-heading {
@@ -190,6 +187,49 @@
             color: #253042;
             font-size: 15px;
             font-weight: 700;
+        }
+
+        .overview-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .overview-filter {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .overview-filter select,
+        .overview-filter input {
+            height: 36px;
+            padding: 6px 10px;
+            border: 1px solid #dfe4ea;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #374151;
+            font-size: 12px;
+        }
+
+        .overview-filter button {
+            height: 36px;
+            padding: 6px 14px;
+            border: 1px solid #059669;
+            border-radius: 8px;
+            background: #059669;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .period-description {
+            margin-top: 4px;
+            color: #8a94a3;
+            font-size: 11px;
         }
 
         .chart-container {
@@ -285,20 +325,17 @@
             font-size: 14px;
         }
 
-        .accounting-alert-warning
-        .alert-icon {
+        .accounting-alert-warning .alert-icon {
             background: #fff3d7;
             color: #f59e0b;
         }
 
-        .accounting-alert-danger
-        .alert-icon {
+        .accounting-alert-danger .alert-icon {
             background: #fee7e7;
             color: #ef4444;
         }
 
-        .accounting-alert-success
-        .alert-icon {
+        .accounting-alert-success .alert-icon {
             background: #dff7ef;
             color: #0aa878;
         }
@@ -325,8 +362,7 @@
             vertical-align: middle;
         }
 
-        .activity-table tbody
-        tr:last-child td {
+        .activity-table tbody tr:last-child td {
             border-bottom: 0;
         }
 
@@ -414,12 +450,10 @@
 
 <body>
 
-<div th:replace=
-             "~{fragments/topbar :: topbar}">
+<div th:replace="~{fragments/topbar :: topbar}">
 </div>
 
-<aside th:replace=
-               "~{fragments/sidebar :: sidebar}">
+<aside th:replace="~{fragments/sidebar :: sidebar}">
 </aside>
 
 <main id="content"
@@ -427,36 +461,28 @@
 
     <div class="container-fluid">
 
-        <div class=
-                     "dashboard-card welcome-card mb-3">
+        <div class="dashboard-card welcome-card mb-3">
 
             <div class="welcome-title">
                 Xin chào,
 
-                <span th:text=
-                              "${dashboard.greetingName ?: 'Kế toán'}">
+                <span th:text="${dashboard.greetingName ?: 'Kế toán'}">
                     Kế toán
                 </span>
             </div>
 
-            <div class=
-                         "welcome-subtitle mt-1"
+            <div class="welcome-subtitle mt-1"
                  th:text="${dashboard.subtitle}">
 
-                Đối chiếu và kiểm duyệt
-                tài chính hôm nay
+                Đối chiếu và kiểm duyệt tài chính hôm nay
             </div>
 
             <div class="quick-actions">
 
-                <a th:each=
-                           "action : ${dashboard.quickActions}"
+                <a th:each="action : ${dashboard.quickActions}"
                    th:href="${action.url}"
                    class="quick-action"
-                   th:classappend=
-                           "${action.primary}
-                           ? ' primary'
-                           : ''"
+                   th:classappend="${action.primary} ? ' primary' : ''"
                    th:text="${action.label}">
 
                     Hành động
@@ -466,26 +492,16 @@
 
         <div class="row g-3 mb-3">
 
-            <div class=
-                         "col-12 col-sm-6 col-xl-2"
-                 th:each=
-                         "metric : ${dashboard.metrics}">
+            <div class="col-12 col-sm-6 col-xl-2"
+                 th:each="metric : ${dashboard.metrics}">
 
                 <a class="metric-link"
                    th:href="${metric.url}">
 
-                    <div class=
-                                 "dashboard-card
-                                  metric-card h-100"
-                         th:classappend=
-                                 "${' tone-'
-                                 + metric.tone}">
+                    <div class="dashboard-card metric-card h-100"
+                         th:classappend="${' tone-' + metric.tone}">
 
-                        <div class=
-                                     "d-flex
-                                      justify-content-between
-                                      align-items-start
-                                      gap-2">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
 
                             <div class="metric-heading"
                                  th:text="${metric.title}">
@@ -493,8 +509,7 @@
                             </div>
 
                             <div class="metric-icon">
-                                <i th:class=
-                                           "${metric.icon}">
+                                <i th:class="${metric.icon}">
                                 </i>
                             </div>
                         </div>
@@ -517,20 +532,69 @@
 
             <div class="col-12 col-xl-8">
 
-                <section class=
-                                 "dashboard-card
-                                  section-card h-100">
+                <section class="dashboard-card section-card h-100">
 
-                    <h2 class="section-title"
-                        th:text=
-                                "${dashboard.weeklyChart.title}">
+                    <div class="overview-header">
 
-                        Tổng quan thu - chi -
-                        công nợ trong tuần
-                    </h2>
+                        <div>
+                            <h2 class="section-title"
+                                th:text="${dashboard.overviewChart.title}">
 
-                    <div id=
-                                 "accountantWeeklyChart"
+                                Tổng quan thu - chi - công nợ
+                            </h2>
+
+                            <div class="period-description"
+                                 th:text="${dashboard.periodDescription}">
+
+                                Tuần hiện tại
+                            </div>
+                        </div>
+
+                        <form class="overview-filter"
+                              method="get"
+                              th:action="@{/accountant/dashboard}">
+
+                            <select name="period"
+                                    aria-label="Kiểu thời gian">
+
+                                <option value="day"
+                                        th:selected="${dashboard.selectedPeriod == 'day'}">
+                                    Ngày
+                                </option>
+
+                                <option value="week"
+                                        th:selected="${dashboard.selectedPeriod == 'week'}">
+                                    Tuần
+                                </option>
+
+                                <option value="month"
+                                        th:selected="${dashboard.selectedPeriod == 'month'}">
+                                    Tháng
+                                </option>
+
+                                <option value="quarter"
+                                        th:selected="${dashboard.selectedPeriod == 'quarter'}">
+                                    Quý
+                                </option>
+
+                                <option value="year"
+                                        th:selected="${dashboard.selectedPeriod == 'year'}">
+                                    Năm
+                                </option>
+                            </select>
+
+                            <input type="date"
+                                   name="date"
+                                   aria-label="Ngày tham chiếu"
+                                   th:value="${dashboard.selectedDate}">
+
+                            <button type="submit">
+                                Áp dụng
+                            </button>
+                        </form>
+                    </div>
+
+                    <div id="accountantOverviewChart"
                          class="chart-container">
                     </div>
                 </section>
@@ -538,9 +602,7 @@
 
             <div class="col-12 col-xl-4">
 
-                <section class=
-                                 "dashboard-card
-                                  section-card h-100">
+                <section class="dashboard-card section-card h-100">
 
                     <h2 class="section-title">
                         Cảnh báo kế toán
@@ -548,18 +610,14 @@
 
                     <div class="alert-list">
 
-                        <a th:each=
-                                   "alert : ${dashboard.alerts}"
+                        <a th:each="alert : ${dashboard.alerts}"
                            th:href="${alert.url}"
                            class="accounting-alert"
-                           th:classappend=
-                                   "${' accounting-alert-'
-                                   + alert.tone}">
+                           th:classappend="${' accounting-alert-' + alert.tone}">
 
                             <span class="alert-icon">
 
-                                <i th:class=
-                                           "${alert.tone == 'danger'
+                                <i th:class="${alert.tone == 'danger'
                                            ? 'ti ti-alert-triangle'
                                            : (alert.tone == 'success'
                                            ? 'ti ti-circle-check'
@@ -567,8 +625,7 @@
                                 </i>
                             </span>
 
-                            <span th:text=
-                                          "${alert.message}">
+                            <span th:text="${alert.message}">
                                 Cảnh báo
                             </span>
                         </a>
@@ -577,8 +634,7 @@
             </div>
         </div>
 
-        <section class=
-                         "dashboard-card section-card">
+        <section class="dashboard-card section-card">
 
             <h2 class="section-title mb-3">
                 Hoạt động gần đây
@@ -586,8 +642,7 @@
 
             <div class="table-responsive">
 
-                <table class=
-                               "table activity-table">
+                <table class="table activity-table">
 
                     <thead>
                     <tr>
@@ -598,6 +653,7 @@
                         <th>Số tiền</th>
                         <th>Phương thức</th>
                         <th>Trạng thái</th>
+
                         <th class="text-end">
                             Thao tác
                         </th>
@@ -606,9 +662,7 @@
 
                     <tbody>
 
-                    <tr th:each=
-                                "activity :
-                                ${dashboard.recentActivities}">
+                    <tr th:each="activity : ${dashboard.recentActivities}">
 
                         <td class="document-code"
                             th:text="${activity.code}">
@@ -623,8 +677,7 @@
                             01/08/2026 10:30
                         </td>
 
-                        <td th:text=
-                                    "${activity.relatedParty}">
+                        <td th:text="${activity.relatedParty}">
                             Khách hàng
                         </td>
 
@@ -633,19 +686,16 @@
                             0đ
                         </td>
 
-                        <td th:text=
-                                    "${activity.paymentMethod}">
+                        <td th:text="${activity.paymentMethod}">
                             Chuyển khoản
                         </td>
 
                         <td>
                             <span class="soft-badge"
-                                  th:classappend=
-                                          "${' badge-'
-                                          + activity.tone
-                                          + '-soft'}"
-                                  th:text=
-                                          "${activity.status}">
+                                  th:classappend="${' badge-'
+                                                  + activity.tone
+                                                  + '-soft'}"
+                                  th:text="${activity.status}">
 
                                 Hoàn thành
                             </span>
@@ -656,8 +706,7 @@
                             <a class="view-link"
                                th:href="${activity.url}">
 
-                                <i class=
-                                           "ti ti-eye me-1">
+                                <i class="ti ti-eye me-1">
                                 </i>
 
                                 Xem
@@ -665,18 +714,12 @@
                         </td>
                     </tr>
 
-                    <tr th:if=
-                                "${#lists.isEmpty(
-                                dashboard.recentActivities)}">
+                    <tr th:if="${#lists.isEmpty(dashboard.recentActivities)}">
 
                         <td colspan="8"
-                            class=
-                                    "text-center
-                                    text-secondary
-                                    py-4">
+                            class="text-center text-secondary py-4">
 
-                            Chưa có hoạt động kế toán
-                            gần đây.
+                            Chưa có hoạt động kế toán gần đây.
                         </td>
                     </tr>
 
@@ -689,8 +732,8 @@
 
 <script th:inline="javascript">
 
-    const weeklyChart =
-        /*[[${dashboard.weeklyChart}]]*/
+    const overviewChart =
+        /*[[${dashboard.overviewChart}]]*/
         null;
 
     const chartColors = [
@@ -750,25 +793,18 @@
 
     function normalizeChart(rawChart) {
         return {
-            labels: Array.isArray(
-                rawChart?.labels
-            )
+            labels: Array.isArray(rawChart?.labels)
                 ? rawChart.labels
                 : [],
 
-            series: Array.isArray(
-                rawChart?.series
-            )
+            series: Array.isArray(rawChart?.series)
                 ? rawChart.series.map(
                     series => ({
                         name: series?.name || '',
 
-                        data: Array.isArray(
-                            series?.data
-                        )
+                        data: Array.isArray(series?.data)
                             ? series.data.map(
-                                value =>
-                                    Number(value || 0)
+                                value => Number(value || 0)
                             )
                             : []
                     })
@@ -797,11 +833,11 @@
     function renderAccountantChart() {
         const container =
             document.getElementById(
-                'accountantWeeklyChart'
+                'accountantOverviewChart'
             );
 
         const chart =
-            normalizeChart(weeklyChart);
+            normalizeChart(overviewChart);
 
         if (
             !container
@@ -831,14 +867,18 @@
             );
 
         const rawMax =
-            Math.max(...allValues, 1);
+            Math.max(
+                ...allValues,
+                1
+            );
 
-        const magnitude = Math.pow(
-            10,
-            Math.floor(
-                Math.log10(rawMax)
-            )
-        );
+        const magnitude =
+            Math.pow(
+                10,
+                Math.floor(
+                    Math.log10(rawMax)
+                )
+            );
 
         const maxValue =
             Math.ceil(
@@ -859,7 +899,11 @@
             + height
             + '" preserveAspectRatio="none">';
 
-        for (let row = 0; row <= 4; row++) {
+        for (
+            let row = 0;
+            row <= 4;
+            row++
+        ) {
             const y =
                 top
                 + (plotHeight / 4) * row;
@@ -893,8 +937,22 @@
                 + '</text>';
         }
 
+        const labelInterval =
+            chart.labels.length > 16
+                ? Math.ceil(
+                    chart.labels.length / 12
+                )
+                : 1;
+
         chart.labels.forEach(
             (label, index) => {
+                if (
+                    index % labelInterval !== 0
+                    && index !== chart.labels.length - 1
+                ) {
+                    return;
+                }
+
                 const x =
                     left + stepX * index;
 
@@ -967,34 +1025,36 @@
                     + path
                     + '"></path>';
 
-                points.forEach(point => {
-                    svg +=
-                        '<circle class="chart-point" '
-                        + 'cx="'
-                        + point.x
-                        + '" cy="'
-                        + point.y
-                        + '" r="4" fill="'
-                        + color
-                        + '">'
+                points.forEach(
+                    point => {
+                        svg +=
+                            '<circle class="chart-point" '
+                            + 'cx="'
+                            + point.x
+                            + '" cy="'
+                            + point.y
+                            + '" r="4" fill="'
+                            + color
+                            + '">'
 
-                        + '<title>'
-                        + escapeHtml(
-                            series.name
-                            + ' - '
-                            + point.label
-                            + ': '
-                            + Number(
-                                point.value
-                            ).toLocaleString(
-                                'vi-VN'
+                            + '<title>'
+                            + escapeHtml(
+                                series.name
+                                + ' - '
+                                + point.label
+                                + ': '
+                                + Number(
+                                    point.value
+                                ).toLocaleString(
+                                    'vi-VN'
+                                )
+                                + 'đ'
                             )
-                            + 'đ'
-                        )
-                        + '</title>'
+                            + '</title>'
 
-                        + '</circle>';
-                });
+                            + '</circle>';
+                    }
+                );
             }
         );
 

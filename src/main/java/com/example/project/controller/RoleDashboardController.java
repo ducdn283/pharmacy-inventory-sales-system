@@ -6,15 +6,13 @@ import com.example.project.service.DashboardService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
 public class RoleDashboardController {
 
     private final DashboardService dashboardService;
-
-    private final AccountantDashboardService
-            accountantDashboardService;
-
+    private final AccountantDashboardService accountantDashboardService;
     private final CurrentUserContext currentUserContext;
 
     public RoleDashboardController(
@@ -29,7 +27,9 @@ public class RoleDashboardController {
     }
 
     @GetMapping("/owner/dashboard")
-    public String ownerDashboard(Model model) {
+    public String ownerDashboard(
+            Model model
+    ) {
         model.addAttribute(
                 "dashboard",
                 dashboardService.ownerDashboard(
@@ -47,12 +47,28 @@ public class RoleDashboardController {
     }
 
     @GetMapping("/accountant/dashboard")
-    public String accountantDashboard(Model model) {
+    public String accountantDashboard(
+            @RequestParam(
+                    name = "period",
+                    defaultValue = "week"
+            )
+            String period,
+
+            @RequestParam(
+                    name = "date",
+                    required = false
+            )
+            String date,
+
+            Model model
+    ) {
         model.addAttribute(
                 "dashboard",
                 accountantDashboardService.getDashboard(
                         currentUserContext
-                                .getCurrentAccountName()
+                                .getCurrentAccountName(),
+                        period,
+                        date
                 )
         );
 
@@ -65,7 +81,9 @@ public class RoleDashboardController {
     }
 
     @GetMapping("/pharmacist/dashboard")
-    public String pharmacistDashboard(Model model) {
+    public String pharmacistDashboard(
+            Model model
+    ) {
         model.addAttribute(
                 "dashboard",
                 dashboardService.pharmacistDashboard(
