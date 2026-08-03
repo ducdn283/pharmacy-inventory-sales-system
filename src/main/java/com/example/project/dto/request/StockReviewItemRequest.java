@@ -5,7 +5,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class StockCountItemRequest {
+public class StockReviewItemRequest {
 
     private Integer batchId;
 

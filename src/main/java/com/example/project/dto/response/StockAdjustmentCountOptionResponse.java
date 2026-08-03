@@ -12,8 +12,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public class StockAdjustmentCountOptionResponse {
 
-    private Integer stockCountId;
-    private String stockCountCode;
+    private Integer stockReviewId;
+    private String stockReviewCode;
 
     private String countDateDisplay;
 

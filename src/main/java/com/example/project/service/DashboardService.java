@@ -1,9 +1,7 @@
 package com.example.project.service;
 
-import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
-import com.example.project.constant.StockAdjustmentStatus;
 import com.example.project.constant.StockCountStatus;
 import com.example.project.dto.response.ApprovalItemResponse;
 import com.example.project.dto.response.DashboardView.MetricCard;
@@ -17,16 +15,13 @@ import com.example.project.dto.response.DashboardView.DashboardChart;
 import com.example.project.entity.Income;
 import com.example.project.repository.IncomeRepository;
 import com.example.project.entity.Account;
-import com.example.project.entity.Batch;
-import com.example.project.entity.Customer;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Invoicedetail;
 import com.example.project.entity.Product;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
-import com.example.project.entity.Stockadjustment;
-import com.example.project.entity.Stockcount;
+import com.example.project.entity.Stockreview;
 import com.example.project.repository.BatchRepository;
 import com.example.project.repository.CustomerRepository;
 import com.example.project.repository.InvoiceRepository;
@@ -36,7 +31,7 @@ import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.ShiftreportRepository;
 import com.example.project.repository.StockadjustmentRepository;
-import com.example.project.repository.StockcountRepository;
+import com.example.project.repository.StockreviewRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,7 +53,6 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.time.Instant;
 
 @Service
 public class DashboardService {
@@ -78,7 +72,7 @@ public class DashboardService {
     private final BatchRepository batchRepository;
     private final CustomerRepository customerRepository;
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
-    private final StockcountRepository stockcountRepository;
+    private final StockreviewRepository stockreviewRepository;
     private final StockadjustmentRepository stockadjustmentRepository;
     private final ShiftreportRepository shiftreportRepository;
     private final ApprovalService approvalService;
@@ -91,7 +85,7 @@ public class DashboardService {
                             BatchRepository batchRepository,
                             CustomerRepository customerRepository,
                             PurchaseinvoiceRepository purchaseinvoiceRepository,
-                            StockcountRepository stockcountRepository,
+                            StockreviewRepository stockreviewRepository,
                             StockadjustmentRepository stockadjustmentRepository,
                             ShiftreportRepository shiftreportRepository,
                             ApprovalService approvalService) {
@@ -103,7 +97,7 @@ public class DashboardService {
         this.batchRepository = batchRepository;
         this.customerRepository = customerRepository;
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
-        this.stockcountRepository = stockcountRepository;
+        this.stockreviewRepository = stockreviewRepository;
         this.stockadjustmentRepository = stockadjustmentRepository;
         this.shiftreportRepository = shiftreportRepository;
         this.approvalService = approvalService;
@@ -264,8 +258,8 @@ public class DashboardService {
         List<Income> incomes = incomeRepository.findAllWithRelations();
         List<Shiftreport> shiftReports =
                 shiftreportRepository.findAllWithRelations();
-        List<Stockcount> stockCounts =
-                stockcountRepository.findAllWithRelations();
+        List<Stockreview> stockCounts =
+                stockreviewRepository.findAllWithRelations();
         List<Return> returns =
                 returnRepository.findAllWithRelations();
 
@@ -562,7 +556,7 @@ public class DashboardService {
 
     private List<TodoItem> pharmacistTodoItems(List<Shiftreport> shifts,
                                                List<Invoice> myInvoices,
-                                               List<Stockcount> stockCounts,
+                                               List<Stockreview> stockCounts,
                                                List<Return> returns,
                                                Integer accountId) {
         List<TodoItem> items = new ArrayList<>();
@@ -597,11 +591,11 @@ public class DashboardService {
                 .filter(count -> sameAccount(count.getCreatedBy(), accountId))
                 .filter(count -> isStatus(count.getStatus(), StockCountStatus.DRAFT)
                         || isStatus(count.getStatus(), StockCountStatus.REJECTED))
-                .sorted(Comparator.comparing(Stockcount::getCountDate, Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted(Comparator.comparing(Stockreview::getReviewDate, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(2)
                 .forEach(count -> items.add(new TodoItem(
                         "Phiếu kiểm kê cần xử lý",
-                        count.getStockCountCode() + " • " + formatInstant(count.getCountDate()),
+                        count.getStockCountCode() + " • " + formatInstant(count.getReviewDate()),
                         count.getStatus(),
                         "warning",
                         "/pharmacist/stock-counts/" + count.getId()

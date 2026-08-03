@@ -7,7 +7,7 @@ import java.time.LocalDate;
 
 @Getter
 @AllArgsConstructor
-public class StockCountDetailItemResponse {
+public class StockReviewDetailItemResponse {
 
     private Integer productId;
 
