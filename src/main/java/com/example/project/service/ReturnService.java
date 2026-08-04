@@ -533,6 +533,13 @@ public class ReturnService {
      *   <li><b>phần giữ lại</b> — {@code quantity = 0}, thành tiền = phần nhà thuốc không hoàn.</li>
      * </ol>
      *
+     * <p><b>Bất biến của hóa đơn thay thế (05/08/2026):</b> dòng {@code quantity = 0} ⇔ <b>tiền không kèm
+     * hàng</b>. Khi một dòng đã hết hàng thì mọi đồng còn lại của nó — phần giữ lại của lần trả này CỘNG
+     * phần tiền vốn đã không gắn với hộp nào (dòng bán bị tách theo lô rồi làm tròn về SL 0, hoặc phần giữ
+     * lại của lần trả TRƯỚC) — được gộp vào đúng MỘT dòng ({@link #moneyOnlyLine}). Trước đây phần thứ hai
+     * bị bộ lọc bỏ rơi: tiền biến mất khỏi các dòng nhưng vẫn nằm trong tổng hóa đơn ⇒ tổng ≠ tổng các dòng,
+     * và trên màn chi tiết xuất hiện hai dòng "SL 0 mà vẫn có tiền" không phân biệt được với nhau.</p>
+     *
      * <p><b>Vì sao phải tách</b> (sửa 04/08/2026): trước đây một dòng ôm cả hai, thành tiền được tính
      * bằng {@code thành tiền cũ − số ĐÃ HOÀN}. Phần giữ lại vì thế nằm lẫn trong giá trị số hàng còn
      * lại, nên <b>lần trả sau lại hoàn tiếp một phần của chính khoản đã giữ</b> — trả 5 hộp làm 2 lần ở
@@ -552,7 +559,9 @@ public class ReturnService {
         // hoàn 100% ⇒ không còn dòng nào ⇒ không phát hành hóa đơn "Thay thế" rỗng (vừa rác danh sách,
         // vừa lọt lại vào danh sách chọn để trả tiếp).
         List<Invoicedetail> remainingLines = invoiceLinesOf(original.getId()).stream()
-                .filter(line -> remainingQtyOf(line) > 0 || retainedValueOf(line, returnedByLine).signum() > 0)
+                .filter(line -> remainingQtyOf(line) > 0
+                        || goodsValueOf(line, returnedByLine).signum() > 0
+                        || retainedValueOf(line, returnedByLine).signum() > 0)
                 .toList();
         if (remainingLines.isEmpty()) {
             return;
@@ -597,17 +606,19 @@ public class ReturnService {
 
         Invoice savedRepl = invoiceService.persistInvoice(repl);
 
+        // Tiền không kèm hàng được GỘP theo sản phẩm + đơn vị + lô rồi mới ghi, thay vì mỗi dòng nguồn một
+        // dòng: sau vài lần trả, hóa đơn sẽ có một loạt dòng "không kèm hàng" trông y hệt nhau của cùng một
+        // sản phẩm, đọc rất rối mà không nói thêm được gì (chúng đều là tiền đã thu, không trả tiếp được).
+        Map<String, Invoicedetail> moneyOnlyByKey = new LinkedHashMap<>();
+
         for (Invoicedetail line : remainingLines) {
             int remainingQty = remainingQtyOf(line);
             Returndetail matched = returnedByLine.get(line.getId());
 
-            // Giá trị 100% của phần vừa trả (TRƯỚC khi áp tỷ lệ hoàn) — trừ khỏi dòng để phần hàng còn
-            // lại mang ĐÚNG giá trị của nó, không ôm thêm phần nhà thuốc giữ lại.
-            BigDecimal returnedValue = matched != null ? nz(matched.getOriginalLineValue()) : BigDecimal.ZERO;
-            BigDecimal goodsSubtotal = nz(line.getSubtotal()).subtract(returnedValue).max(BigDecimal.ZERO);
+            BigDecimal goodsSubtotal = goodsValueOf(line, returnedByLine);
             BigDecimal retained = retainedValueOf(line, returnedByLine);
 
-            if (remainingQty > 0 || goodsSubtotal.signum() > 0) {
+            if (remainingQty > 0) {
                 Invoicedetail goods = cloneLine(savedRepl, line);
                 goods.setQuantity(remainingQty);
                 goods.setBaseQtyDeducted(Math.max(0, line.getBaseQtyDeducted()
@@ -615,16 +626,53 @@ public class ReturnService {
                                 ? matched.getBaseQtyRestored() : 0)));
                 goods.setSubtotal(goodsSubtotal);
                 invoicedetailRepository.save(goods);
+
+                addMoneyOnly(moneyOnlyByKey, savedRepl, line, retained);
+                continue;
             }
 
-            if (retained.signum() > 0) {
-                Invoicedetail fee = cloneLine(savedRepl, line);
-                fee.setQuantity(0);
-                fee.setBaseQtyDeducted(0);
-                fee.setSubtotal(retained);
-                invoicedetailRepository.save(fee);
-            }
+            // Không còn hộp nào trên dòng này ⇒ MỌI đồng còn lại của nó đều là tiền KHÔNG kèm hàng (phần
+            // giữ lại của lần trả này + phần vốn đã không gắn với hộp nào từ trước).
+            addMoneyOnly(moneyOnlyByKey, savedRepl, line, goodsSubtotal.add(retained));
         }
+
+        moneyOnlyByKey.values().forEach(invoicedetailRepository::save);
+    }
+
+    /** Cộng dồn tiền-không-kèm-hàng vào dòng gộp của cùng sản phẩm + đơn vị + lô. Bỏ qua khi bằng 0. */
+    private void addMoneyOnly(Map<String, Invoicedetail> moneyOnlyByKey, Invoice replacement,
+                              Invoicedetail source, BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            return;
+        }
+        String key = idOf(source.getProductID() != null ? source.getProductID().getProductID() : null)
+                + "|" + idOf(source.getProductUnitID() != null ? source.getProductUnitID().getId() : null)
+                + "|" + idOf(source.getBatchID() != null ? source.getBatchID().getId() : null);
+        Invoicedetail existing = moneyOnlyByKey.get(key);
+        if (existing == null) {
+            moneyOnlyByKey.put(key, moneyOnlyLine(replacement, source, amount));
+            return;
+        }
+        existing.setSubtotal(nz(existing.getSubtotal()).add(amount));
+    }
+
+    private String idOf(Integer id) {
+        return id == null ? "-" : id.toString();
+    }
+
+    /**
+     * Dòng TIỀN KHÔNG KÈM HÀNG của hóa đơn thay thế ({@code quantity = 0}): phần nhà thuốc giữ lại khi
+     * hoàn &lt; 100%, cộng phần tiền của dòng cũ vốn đã không gắn với hộp nào.
+     *
+     * <p>Dòng này không bao giờ trả tiếp được — {@code loadInvoiceLines} lọc bỏ dòng có số lượng trả được
+     * bằng 0 — nên tiền ở đây không bị hoàn thêm lần nữa.</p>
+     */
+    private Invoicedetail moneyOnlyLine(Invoice replacement, Invoicedetail source, BigDecimal amount) {
+        Invoicedetail fee = cloneLine(replacement, source);
+        fee.setQuantity(0);
+        fee.setBaseQtyDeducted(0);
+        fee.setSubtotal(amount);
+        return fee;
     }
 
     /**
@@ -685,6 +733,17 @@ public class ReturnService {
         int quantity = line.getQuantity() != null ? line.getQuantity() : 0;
         int returned = line.getReturnedQty() != null ? line.getReturnedQty() : 0;
         return Math.max(0, quantity - returned);
+    }
+
+    /**
+     * Giá trị của phần HÀNG còn lại trên dòng = thành tiền cũ − giá trị GỐC 100% của phần vừa trả (KHÔNG
+     * phải trừ số đã hoàn). Trừ theo giá trị gốc thì phần nhà thuốc giữ lại không nằm lẫn trong giá trị số
+     * hàng còn lại, nhờ đó lần trả sau tính trên đúng căn cứ — xem {@link #createReplacementInvoice}.
+     */
+    private BigDecimal goodsValueOf(Invoicedetail line, Map<Integer, Returndetail> returnedByLine) {
+        Returndetail matched = returnedByLine.get(line.getId());
+        BigDecimal returnedValue = matched != null ? nz(matched.getOriginalLineValue()) : BigDecimal.ZERO;
+        return nz(line.getSubtotal()).subtract(returnedValue).max(BigDecimal.ZERO);
     }
 
     /**

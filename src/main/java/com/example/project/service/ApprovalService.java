@@ -260,7 +260,7 @@ public class ApprovalService {
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
                 count.getReviewDate(),
                 formatInstant(count.getReviewDate()),
-                // Ba loại phiếu kiểm kê (đếm số lượng / hạn dùng / tình trạng) đều vào chung nhóm này,
+                // Ba loại phiếu rà soát kho (đếm số lượng / hạn dùng / tình trạng) đều vào chung nhóm này,
                 // mà hệ quả của chúng khác hẳn nhau — duyệt phiếu hạn dùng là cho phép ghi đè hạn dùng
                 // của lô. Nên loại phải hiện ngay trên dòng, không bắt người duyệt mở từng phiếu ra xem.
                 summaryOf(count),
@@ -343,7 +343,7 @@ public class ApprovalService {
         );
     }
 
-    /** "Kiểm tra hạn dùng" hoặc "Kiểm đếm số lượng — {ghi chú}" — loại luôn đứng trước ghi chú. */
+    /** "Rà soát hạn dùng" hoặc "Kiểm đếm số lượng — {ghi chú}" — loại luôn đứng trước ghi chú. */
     private String summaryOf(Stockreview count) {
         String typeLabel = StockReviewType.label(count.getType());
         String note = count.getNote();

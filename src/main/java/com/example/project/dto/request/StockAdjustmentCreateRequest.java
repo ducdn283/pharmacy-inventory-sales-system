@@ -19,10 +19,10 @@ public class StockAdjustmentCreateRequest {
     private String sourceMode;
 
     /**
-     * Phiếu kiểm kê đã duyệt được chọn. Mang hai nghĩa tùy ngữ cảnh:
+     * Phiếu rà soát kho đã duyệt được chọn. Mang hai nghĩa tùy ngữ cảnh:
      * <ul>
      *   <li>{@code sourceMode = STOCK_REVIEW} — phiếu NGUỒN, hệ thống dựng dòng điều chỉnh từ nó;</li>
-     *   <li>phiếu hủy hàng lập tay — phiếu kiểm tra tình trạng gắn kèm làm CĂN CỨ (tùy chọn).</li>
+     *   <li>phiếu hủy hàng lập tay — phiếu rà soát tình trạng gắn kèm làm CĂN CỨ (tùy chọn).</li>
      * </ul>
      * Hai ngữ cảnh loại trừ nhau nên dùng chung một trường.
      */
@@ -30,7 +30,7 @@ public class StockAdjustmentCreateRequest {
 
     /**
      * One of DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT.
-     * {@code COUNT} và {@code DATE_ADJUSTMENT} suy ra từ loại phiếu kiểm kê, không chọn tay.
+     * {@code COUNT} và {@code DATE_ADJUSTMENT} suy ra từ loại phiếu rà soát kho, không chọn tay.
      */
     private String adjustmentType;
 

@@ -177,13 +177,13 @@
                         </div>
 
                         <!-- Căn cứ của phiếu. Phiếu COUNT/DATE_ADJUSTMENT luôn có; phiếu hủy hàng chỉ có
-                             khi người lập gắn phiếu kiểm tra tình trạng (hủy do hỏng hóc). -->
+                             khi người lập gắn phiếu rà soát tình trạng (hủy do hỏng hóc). -->
                         <div class="info-row" th:if="${detail.stockReviewCode != null}">
-                            <div class="info-label">Phiếu kiểm kê căn cứ</div>
+                            <div class="info-label">Phiếu rà soát kho căn cứ</div>
                             <div>
                                 <span class="fw-semibold" th:text="${detail.stockReviewCode}">KK-000001</span>
                                 <span class="badge bg-info-subtle text-info ms-1"
-                                      th:text="${detail.stockReviewTypeDisplay}">Kiểm tra tình trạng</span>
+                                      th:text="${detail.stockReviewTypeDisplay}">Rà soát tình trạng</span>
                             </div>
                         </div>
 
@@ -344,7 +344,7 @@
                 </div>
 
                 <!-- Thất thoát có thể quy trách nhiệm nhân viên: chỉ 2 loại phiếu
-                     (Hủy hàng do lỗi nhân viên / Giảm theo kiểm kê) mới được liên kết phiếu thu đền bù.
+                     (Hủy hàng do lỗi nhân viên / Giảm theo rà soát kho) mới được liên kết phiếu thu đền bù.
                      Đền bù tính theo GIÁ BÁN niêm yết, không phải giá vốn — Dac_ta_Income_StockAdjustment
                      sheet 01. Phiếu thu do Kế toán/Chủ nhà thuốc lập bên màn Phiếu thu. -->
                 <div class="stock-card mb-4" th:if="${detail.employeeLiable}">

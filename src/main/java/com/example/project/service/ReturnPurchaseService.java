@@ -211,18 +211,28 @@ public class ReturnPurchaseService {
                 .filter(line -> line.getPurchaseID() != null)
                 .collect(Collectors.groupingBy(line -> line.getPurchaseID().getId()));
         Map<Integer, Integer> onHandByDetail = onHandByPurchaseDetail();
+        // Dựng MỘT lần cho cả danh sách: trạng thái trả được tính lại từ dữ liệu (xem isFullyReturned),
+        // gọi theo từng phiếu là quét lại cả bảng cho mỗi phiếu.
+        Map<Integer, Long> returnedByDetail = returnedQtyByPurchaseDetail();
+        Map<Integer, Integer> ratioByDetail = importRatioByPurchaseDetail();
 
         List<ReturnPurchaseInvoiceResponse> result = new ArrayList<>();
         for (Purchaseinvoice purchase : purchaseinvoiceRepository.findAllWithRelations()) {
             // Phiếu nhập nhà thuốc CÒN NỢ NCC vẫn trả hàng được (bỏ gate 28/07): giá trị hàng trả được cấn
             // trừ thẳng vào khoản nợ đó (netting — xem applyDebtOffset).
-            if (!isReceived(purchase) || isFullyReturned(purchase)) {
+            if (!isReceived(purchase)) {
+                continue;
+            }
+            List<Purchasedetail> lines = linesByPurchase.getOrDefault(purchase.getId(), List.of());
+            int returnedBase = returnedBaseQty(lines, returnedByDetail);
+            // Đã trả đủ SỐ ĐÃ NHẬP thì mới hết trả được — không phải "hết tồn kho" (BA 05/08/2026).
+            if (isFullyReturned(returnedBase, importedBaseQty(lines, ratioByDetail))) {
                 continue;
             }
             if (!matchesPurchaseKeyword(purchase, normalizedKeyword)) {
                 continue;
             }
-            long returnableLines = linesByPurchase.getOrDefault(purchase.getId(), List.of()).stream()
+            long returnableLines = lines.stream()
                     .filter(line -> onHandByDetail.getOrDefault(line.getId(), 0) > 0)
                     .count();
             if (returnableLines == 0) {
@@ -238,7 +248,9 @@ public class ReturnPurchaseService {
                     // Nhà thuốc còn nợ NCC bao nhiêu trên chính phiếu nhập này — số sẽ được cấn trừ.
                     outstandingDebt(purchase),
                     (int) returnableLines,
-                    returnStatusDisplay(purchase.getReturnStatus())));
+                    // Suy từ dữ liệu, không đọc cột đã lưu: phiếu bị luật cũ đánh nhầm "Đã trả toàn bộ"
+                    // mà vẫn nằm trong danh sách này thì nhãn phải nói đúng là mới trả một phần.
+                    returnStatusDisplay(returnedBase == 0 ? PURCHASE_RETURN_NONE : PURCHASE_RETURN_PARTIAL)));
         }
         return result;
     }
@@ -548,33 +560,79 @@ public class ReturnPurchaseService {
         debtService.recordPurchaseDebtOffset(purchase.getId(), offset);
     }
 
+    /**
+     * Chốt lại {@code returnStatus} / {@code returnQty} của phiếu nhập sau mỗi lần duyệt phiếu trả NCC.
+     *
+     * <p><b>"Trả toàn bộ" đo theo SỐ LƯỢNG ĐÃ NHẬP, không phải theo tồn kho còn lại</b> (BA chốt
+     * 05/08/2026). Ví dụ của BA: nhập 10, bán 2, trả NCC 8 ⇒ vẫn là <i>trả một phần</i> (mới trả 8/10);
+     * về sau khách trả lại 2 hộp, lập thêm phiếu trả 2 hộp đó cho NCC thì mới thành <i>trả toàn bộ</i>.</p>
+     *
+     * <p>Cách cũ đánh FULL khi "hết sạch tồn của phiếu nhập" nên khóa nhầm: bán hết phần còn lại là phiếu
+     * nhập bị coi như đã trả xong, tới lúc khách trả hàng (lô {@code RT-} trỏ về đúng dòng nhập gốc, có tồn
+     * thật) thì phiếu nhập đã bị loại khỏi danh sách chọn ⇒ không mang trả NCC được nữa. Đo theo số đã nhập
+     * thì trạng thái chỉ phụ thuộc lượng THỰC SỰ đã trả về NCC, hàng bán ra hay khách trả lại không làm
+     * đổi trạng thái — chỉ làm thay đổi phần còn có thể trả (tồn thật), do
+     * {@link #listReturnablePurchases} và {@link #loadPurchaseLines} lọc theo tồn.</p>
+     */
     private void recomputeReturnPurchaseStatus(Purchaseinvoice purchase) {
         if (purchase == null) {
             return;
         }
         Map<Integer, Long> returnedByDetail = returnedQtyByPurchaseDetail();   // base units (viên)
-        Map<Integer, Integer> onHandByDetail = onHandByPurchaseDetail();       // base units (viên)
         Map<Integer, Integer> ratioByDetail = importRatioByPurchaseDetail();   // base / đơn vị nhập
 
         List<Purchasedetail> lines = purchasedetailRepository.findByPurchaseIdWithProduct(purchase.getId());
         int totalReturnedBase = 0;
-        int totalOnHand = 0;
+        int totalImportedBase = 0;
         for (Purchasedetail line : lines) {
             int returnedBase = returnedByDetail.getOrDefault(line.getId(), 0L).intValue();
             totalReturnedBase += returnedBase;
-            totalOnHand += onHandByDetail.getOrDefault(line.getId(), 0);
 
             // returnQty nằm trên TỪNG Purchasedetail
             // Lưu theo ĐƠN VỊ NHẬP cho khớp purchasedetail.quantity (returndetail lưu base → chia tỉ lệ lô).
             int ratio = ratioByDetail.getOrDefault(line.getId(), 1);
-            line.setReturnQty(ratio > 0 ? returnedBase / ratio : returnedBase);
+            if (ratio <= 0) {
+                ratio = 1;
+            }
+            totalImportedBase += orZero(line.getQuantity()) * ratio;
+            line.setReturnQty(returnedBase / ratio);
             purchasedetailRepository.save(line);
         }
 
-        String status = totalReturnedBase == 0 ? PURCHASE_RETURN_NONE
-                : (totalOnHand == 0 ? PURCHASE_RETURN_FULL : PURCHASE_RETURN_PARTIAL);
+        String status;
+        if (totalReturnedBase == 0) {
+            status = PURCHASE_RETURN_NONE;
+        } else if (isFullyReturned(totalReturnedBase, totalImportedBase)) {
+            status = PURCHASE_RETURN_FULL;
+        } else {
+            status = PURCHASE_RETURN_PARTIAL;
+        }
         purchase.setReturnStatus(status);
         purchaseinvoiceService.persistPurchaseInvoice(purchase);
+    }
+
+    /** Tổng số lượng ĐÃ NHẬP của một phiếu nhập, quy về đơn vị cơ sở (viên). */
+    private int importedBaseQty(List<Purchasedetail> lines, Map<Integer, Integer> ratioByDetail) {
+        int total = 0;
+        for (Purchasedetail line : lines) {
+            int ratio = ratioByDetail.getOrDefault(line.getId(), 1);
+            total += orZero(line.getQuantity()) * (ratio > 0 ? ratio : 1);
+        }
+        return total;
+    }
+
+    /** Tổng số lượng ĐÃ TRẢ về NCC của một phiếu nhập (đơn vị cơ sở), chỉ tính phiếu trả đã duyệt. */
+    private int returnedBaseQty(List<Purchasedetail> lines, Map<Integer, Long> returnedByDetail) {
+        int total = 0;
+        for (Purchasedetail line : lines) {
+            total += returnedByDetail.getOrDefault(line.getId(), 0L).intValue();
+        }
+        return total;
+    }
+
+    /** Đã trả đủ số đã nhập hay chưa. Dùng {@code >=} phòng dữ liệu cũ trả dôi ra vì luật cũ. */
+    private boolean isFullyReturned(int returnedBase, int importedBase) {
+        return importedBase > 0 && returnedBase >= importedBase;
     }
 
     /** Tỉ lệ quy đổi (base / đơn vị nhập) cho mỗi dòng nhập — lấy từ BẤT KỲ lô nào của dòng (kể cả đã hết
@@ -720,8 +778,20 @@ public class ReturnPurchaseService {
         return !isStatus(purchase.getStatus(), PURCHASE_STATUS_DRAFT);
     }
 
+    /**
+     * Phiếu nhập đã trả HẾT số đã nhập cho NCC hay chưa — <b>tính lại từ dữ liệu, KHÔNG đọc cột
+     * {@code returnStatus} đã lưu</b>: dữ liệu cũ được ghi theo luật cũ ("hết tồn kho là trả toàn bộ") nên
+     * còn nhiều phiếu bị đánh FULL oan, đọc thẳng cột là chúng vĩnh viễn không trả tiếp được. Cột vẫn được
+     * ghi lại đúng ở {@link #recomputeReturnPurchaseStatus} mỗi lần duyệt phiếu trả, và vẫn dùng để hiển thị.
+     */
     private boolean isFullyReturned(Purchaseinvoice purchase) {
-        return PURCHASE_RETURN_FULL.equalsIgnoreCase(purchase.getReturnStatus());
+        if (purchase == null || purchase.getId() == null) {
+            return false;
+        }
+        List<Purchasedetail> lines = purchasedetailRepository.findByPurchaseIdWithProduct(purchase.getId());
+        return isFullyReturned(
+                returnedBaseQty(lines, returnedQtyByPurchaseDetail()),
+                importedBaseQty(lines, importRatioByPurchaseDetail()));
     }
 
     private void assertReturnable(Purchaseinvoice purchase) {

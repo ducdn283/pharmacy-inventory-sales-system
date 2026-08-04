@@ -43,7 +43,7 @@ public class StockAdjustmentDetailPageResponse {
      */
     private boolean dateAdjustment;
 
-    /** Mã phiếu kiểm kê làm căn cứ (null nếu phiếu lập tay không gắn phiếu nào) + nhãn loại của nó. */
+    /** Mã phiếu rà soát kho làm căn cứ (null nếu phiếu lập tay không gắn phiếu nào) + nhãn loại của nó. */
     private String stockReviewCode;
     private String stockReviewTypeDisplay;
 

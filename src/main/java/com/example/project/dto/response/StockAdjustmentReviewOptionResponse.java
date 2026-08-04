@@ -16,7 +16,7 @@ public class StockAdjustmentReviewOptionResponse {
     private String stockReviewCode;
 
     /**
-     * Loại phiếu kiểm kê: {@code COUNT} (đếm số lượng) / {@code DATE} (kiểm hạn dùng) /
+     * Loại phiếu rà soát kho: {@code COUNT} (đếm số lượng) / {@code DATE} (rà soát hạn dùng) /
      * {@code CONDITION} (kiểm tình trạng). Quyết định loại phiếu điều chỉnh được sinh ra, nên màn tạo
      * phải lọc đúng loại thay vì hiện chung một danh sách.
      */
