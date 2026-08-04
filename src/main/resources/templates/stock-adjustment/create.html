@@ -173,7 +173,7 @@
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
             <div>
                 <h1 class="fs-4 mb-1">Tạo phiếu điều chỉnh kho</h1>
-                <p class="text-secondary mb-0">Chọn nguồn điều chỉnh, sau đó chọn hàng hóa (thủ công) hoặc một phiếu kiểm kê đã duyệt.</p>
+                <p class="text-secondary mb-0">Chọn nguồn điều chỉnh, sau đó chọn hàng hóa (thủ công) hoặc một phiếu rà soát kho đã duyệt.</p>
             </div>
             <a th:href="${basePath}" class="btn btn-outline-secondary">
                 <i class="ti ti-arrow-left me-1"></i>
@@ -192,7 +192,7 @@
                 <div class="col-12 col-xl-9">
 
                     <!-- Nguồn gộp vào dropdown "Loại / Nguồn điều chỉnh"; 2 hidden field này mang
-                         nguồn đã chọn (và phiếu kiểm kê) sang server. -->
+                         nguồn đã chọn (và phiếu rà soát kho) sang server. -->
                     <input type="hidden" name="sourceMode" id="sourceModeInput"
                            th:value="${form.sourceMode != null ? form.sourceMode : 'MANUAL'}" value="MANUAL">
                     <input type="hidden" name="stockReviewId" id="stockReviewIdInput" th:value="${form.stockReviewId}">
@@ -229,40 +229,40 @@
                                                 th:value="${entry.key}"
                                                 th:text="${entry.value}">Hủy hàng</option>
                                     </optgroup>
-                                    <optgroup label="Theo phiếu kiểm kê">
+                                    <optgroup label="Theo phiếu rà soát kho">
                                         <!-- Loại phiếu sinh ra (điều chỉnh tồn kho hay sửa hạn dùng) do
-                                             LOẠI phiếu kiểm kê được chọn quyết định, không gõ tay. -->
-                                        <option value="STOCK_REVIEW">Theo phiếu kiểm kê (số lượng / hạn dùng)</option>
+                                             LOẠI phiếu rà soát kho được chọn quyết định, không gõ tay. -->
+                                        <option value="STOCK_REVIEW">Theo phiếu rà soát kho (số lượng / hạn dùng)</option>
                                     </optgroup>
                                 </select>
                             </div>
 
                             <div class="col-12 col-md-6" id="countPickerField" style="display: none;">
-                                <label class="form-label">Phiếu kiểm kê (đã duyệt) <span class="text-danger">*</span></label>
+                                <label class="form-label">Phiếu rà soát kho (đã duyệt) <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <input type="text" class="form-control auto-field" id="chosenCountDisplay"
-                                           placeholder="Chưa chọn phiếu kiểm kê" readonly tabindex="-1">
+                                           placeholder="Chưa chọn phiếu rà soát kho" readonly tabindex="-1">
                                     <button type="button" class="btn btn-outline-success" id="openReviewModalBtn"
                                             onclick="openReviewModal()">
                                         <i class="ti ti-clipboard-search me-1"></i>Chọn
                                     </button>
                                 </div>
                                 <div th:if="${#lists.isEmpty(approvedStockReviews)}" class="form-text text-warning">
-                                    <i class="ti ti-alert-triangle me-1"></i>Chưa có phiếu kiểm kê đã duyệt nào khả dụng.
+                                    <i class="ti ti-alert-triangle me-1"></i>Chưa có phiếu rà soát kho đã duyệt nào khả dụng.
                                 </div>
                                 <div class="form-text">
                                     <i class="ti ti-info-circle me-1"></i>Chỉ hiện phiếu <strong>đã duyệt</strong> và
                                     <strong>còn dòng cần xử lý</strong>. Loại phiếu điều chỉnh sinh ra do
-                                    <strong>loại phiếu kiểm kê</strong> quyết định: kiểm đếm số lượng → điều chỉnh tồn
+                                    <strong>loại phiếu rà soát kho</strong> quyết định: kiểm đếm số lượng → điều chỉnh tồn
                                     kho; kiểm tra hạn dùng → điều chỉnh hạn dùng.
                                 </div>
                             </div>
 
-                            <!-- Hủy hàng CÓ THỂ dựa trên một phiếu kiểm tra tình trạng: bắt buộc khi hủy vì hỏng
+                            <!-- Hủy hàng CÓ THỂ dựa trên một phiếu rà soát tình trạng: bắt buộc khi hủy vì hỏng
                                  hóc (phải có biên bản), không cần khi hủy vì hết hạn (hạn nằm sẵn trên lô). Hệ
                                  thống không đoán được lý do nên để tùy chọn, người lập tự gắn. -->
                             <div class="col-12 col-md-6" id="conditionPickerField" style="display: none;">
-                                <label class="form-label">Phiếu kiểm tra tình trạng</label>
+                                <label class="form-label">Phiếu rà soát tình trạng</label>
                                 <div class="input-group">
                                     <input type="text" class="form-control auto-field" id="chosenConditionDisplay"
                                            placeholder="Không gắn phiếu kiểm tra" readonly tabindex="-1">
@@ -277,14 +277,14 @@
                                 </div>
                                 <div class="form-text">
                                     <i class="ti ti-info-circle me-1"></i>Hủy vì <strong>hỏng hóc</strong> thì nên gắn
-                                    phiếu kiểm tra tình trạng làm căn cứ. Hủy vì <strong>hết hạn</strong> thì để trống —
+                                    phiếu rà soát tình trạng làm căn cứ. Hủy vì <strong>hết hạn</strong> thì để trống —
                                     hạn dùng đã có sẵn trên lô.
                                 </div>
                             </div>
 
                             <div class="col-12 col-md-6">
-                                <!-- Bắt buộc nhập tay với phiếu thủ công; chỉ nguồn "theo phiếu kiểm kê" mới
-                                     được để trống (server tự điền theo mã phiếu kiểm kê). JS bật/tắt theo nguồn. -->
+                                <!-- Bắt buộc nhập tay với phiếu thủ công; chỉ nguồn "theo phiếu rà soát kho" mới
+                                     được để trống (server tự điền theo mã phiếu rà soát kho). JS bật/tắt theo nguồn. -->
                                 <label class="form-label">Lý do
                                     <span class="text-danger" id="reasonRequiredMark">*</span></label>
                                 <input type="text" class="form-control" th:field="*{reason}" id="reasonInput"
@@ -382,13 +382,13 @@
                     </div>
                     </div><!-- /#itemsSection -->
 
-                    <!-- Nguồn STOCK_REVIEW: bảng xem trước (chỉ đọc) các dòng dựng từ phiếu kiểm kê đã chọn. -->
+                    <!-- Nguồn STOCK_REVIEW: bảng xem trước (chỉ đọc) các dòng dựng từ phiếu rà soát kho đã chọn. -->
                     <div id="reviewPreviewSection" style="display: none;">
                         <div class="destroy-card">
                             <div class="p-4 border-bottom">
                                 <div class="section-title">
                                     <i class="ti ti-list-check text-success me-1"></i>
-                                    <span id="reviewPreviewTitle">Dòng điều chỉnh từ phiếu kiểm kê</span>
+                                    <span id="reviewPreviewTitle">Dòng điều chỉnh từ phiếu rà soát kho</span>
                                     <span class="badge bg-success-subtle text-success ms-2" id="reviewLineCountBadge">0</span>
                                 </div>
                                 <p class="text-secondary small mb-0 mt-1" id="reviewPreviewHint">
@@ -402,7 +402,7 @@
                             <div class="table-responsive">
                                 <table class="table align-middle mb-0">
                                     <thead>
-                                    <!-- Hai bộ cột khác hẳn nhau: kiểm đếm nói về SỐ LƯỢNG, kiểm hạn dùng nói về
+                                    <!-- Hai bộ cột khác hẳn nhau: kiểm đếm nói về SỐ LƯỢNG, rà soát hạn dùng nói về
                                          NGÀY. Dùng chung một hàng tiêu đề thì nửa số cột luôn trống. -->
                                     <tr id="reviewPreviewHeadCount">
                                         <th>Mã hàng</th>
@@ -429,7 +429,7 @@
                                     <tbody id="reviewPreviewBody">
                                     <tr id="reviewEmptyRow">
                                         <td colspan="10" class="text-center text-secondary py-4">
-                                            Chọn phiếu kiểm kê để xem các dòng điều chỉnh.
+                                            Chọn phiếu rà soát kho để xem các dòng điều chỉnh.
                                         </td>
                                     </tr>
                                     </tbody>
@@ -493,7 +493,7 @@
                 <div class="p-4 border-bottom d-flex align-items-center justify-content-between">
                     <div class="section-title mb-0">
                         <i class="ti ti-clipboard-check text-success me-1"></i>
-                        <span id="reviewModalTitle">Chọn phiếu kiểm kê đã duyệt</span>
+                        <span id="reviewModalTitle">Chọn phiếu rà soát kho đã duyệt</span>
                     </div>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeReviewModal()">
                         <i class="ti ti-x"></i>
@@ -503,7 +503,7 @@
                 <div class="p-4">
                     <div class="alert alert-light border small d-flex align-items-start mb-3" role="alert">
                         <i class="ti ti-info-circle me-2 mt-1"></i>
-                        <span id="reviewModalHint">Danh sách chỉ gồm phiếu kiểm kê <strong>đã duyệt</strong> và
+                        <span id="reviewModalHint">Danh sách chỉ gồm phiếu rà soát kho <strong>đã duyệt</strong> và
                         <strong>còn dòng cần xử lý</strong>. Phiếu khớp hoàn toàn không cần điều chỉnh nên
                         sẽ không hiện ở đây.</span>
                     </div>
@@ -516,8 +516,8 @@
                             <thead>
                             <tr>
                                 <th>Mã phiếu</th>
-                                <th>Loại kiểm kê</th>
-                                <th>Ngày kiểm kê</th>
+                                <th>Loại rà soát</th>
+                                <th>Ngày rà soát</th>
                                 <th>Số dòng cần xử lý</th>
                                 <th>Ghi chú</th>
                                 <th class="text-end">Chọn</th>
@@ -547,7 +547,7 @@
                             </tr>
                             <tr id="reviewModalEmpty" style="display: none;">
                                 <td colspan="6" class="text-center text-secondary py-4">
-                                    Chưa có phiếu kiểm kê nào khả dụng cho loại điều chỉnh này — cần phiếu
+                                    Chưa có phiếu rà soát kho nào khả dụng cho loại điều chỉnh này — cần phiếu
                                     <strong>đã duyệt</strong> và <strong>còn dòng cần điều chỉnh</strong>.
                                 </td>
                             </tr>
@@ -835,9 +835,9 @@
     }
 
     /**
-     * Bỏ phiếu kiểm tra tình trạng đang gắn. Dùng CHUNG hidden field `stockReviewId` với nguồn kiểm kê —
+     * Bỏ phiếu rà soát tình trạng đang gắn. Dùng CHUNG hidden field `stockReviewId` với nguồn rà soát —
      * hai ngữ cảnh loại trừ nhau (nguồn STOCK_REVIEW thì loại phiếu không phải hủy hàng, và ngược lại),
-     * nên chỉ được xóa khi đang ở chế độ MANUAL, không thì sẽ xóa mất phiếu kiểm kê người dùng vừa chọn.
+     * nên chỉ được xóa khi đang ở chế độ MANUAL, không thì sẽ xóa mất phiếu rà soát kho người dùng vừa chọn.
      */
     function clearConditionReview() {
         if (currentMode() === 'STOCK_REVIEW') {
@@ -866,7 +866,7 @@
         const isCount = currentMode() === 'STOCK_REVIEW';
 
         document.getElementById('countPickerField').style.display = isCount ? '' : 'none';
-        // Ô "phiếu kiểm tra tình trạng" chỉ có nghĩa với 2 loại hủy hàng; loại khác thì ẩn VÀ xóa lựa
+        // Ô "phiếu rà soát tình trạng" chỉ có nghĩa với 2 loại hủy hàng; loại khác thì ẩn VÀ xóa lựa
         // chọn cũ — để sót id ở hidden field là server ném "chỉ phiếu Hủy hàng mới gắn được".
         const destroyType = isDestroyType();
         document.getElementById('conditionPickerField').style.display = destroyType ? '' : 'none';
@@ -887,7 +887,7 @@
     }
 
     /**
-     * Lý do CHỈ được để trống với nguồn "theo phiếu kiểm kê" (server tự điền theo mã phiếu); mọi loại
+     * Lý do CHỈ được để trống với nguồn "theo phiếu rà soát kho" (server tự điền theo mã phiếu); mọi loại
      * thủ công vẫn bắt buộc nhập — server chặn bằng validateRequest, đây chỉ là báo sớm.
      */
     function applyReasonRequirement(isCount) {
@@ -899,7 +899,7 @@
         if (mark) mark.style.display = isCount ? 'none' : '';
         if (hint) hint.style.display = isCount ? '' : 'none';
         input.placeholder = isCount
-            ? 'Có thể để trống để hệ thống tự điền theo phiếu kiểm kê'
+            ? 'Có thể để trống để hệ thống tự điền theo phiếu rà soát kho'
             : 'VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…';
     }
 
@@ -988,7 +988,7 @@
     // ------------------------------------------------ stock-review picker modal
 
     /**
-     * Loại phiếu kiểm kê được phép chọn ở lần mở modal hiện tại. Một modal dùng cho 2 ngữ cảnh khác
+     * Loại phiếu rà soát kho được phép chọn ở lần mở modal hiện tại. Một modal dùng cho 2 ngữ cảnh khác
      * hẳn nhau nên phải lọc, không thì người lập gắn nhầm phiếu đếm số lượng vào phiếu hủy hàng (server
      * chặn, nhưng để chọn được rồi mới báo lỗi là trải nghiệm tệ).
      */
@@ -996,7 +996,7 @@
 
     function openReviewModal() {
         modalReviewTypes = ['COUNT', 'DATE'];
-        document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu kiểm kê đã duyệt';
+        document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu rà soát kho đã duyệt';
         document.getElementById('reviewModalHint').innerHTML =
             'Danh sách chỉ gồm phiếu <strong>đã duyệt</strong> và <strong>còn dòng cần xử lý</strong>. '
             + 'Chọn phiếu <strong>kiểm đếm số lượng</strong> để điều chỉnh tồn kho, hoặc phiếu '
@@ -1006,9 +1006,9 @@
 
     function openConditionModal() {
         modalReviewTypes = ['CONDITION'];
-        document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu kiểm tra tình trạng';
+        document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu rà soát tình trạng';
         document.getElementById('reviewModalHint').innerHTML =
-            'Chỉ hiện phiếu <strong>kiểm tra tình trạng</strong> đã duyệt. Đây là căn cứ khi hủy hàng vì '
+            'Chỉ hiện phiếu <strong>rà soát tình trạng</strong> đã duyệt. Đây là căn cứ khi hủy hàng vì '
             + '<strong>hỏng hóc</strong>; hủy vì hết hạn thì không cần gắn phiếu nào.';
         showReviewModal();
     }
@@ -1044,7 +1044,7 @@
         document.getElementById('stockReviewIdInput').value = reviewId;
         closeReviewModal();
 
-        // Phiếu kiểm tra tình trạng chỉ được GẮN vào phiếu hủy hàng — không sinh dòng nào nên
+        // Phiếu rà soát tình trạng chỉ được GẮN vào phiếu hủy hàng — không sinh dòng nào nên
         // không gọi loadReviewLines (endpoint đó chỉ nhận phiếu loại COUNT).
         if (button.getAttribute('data-review-type') === 'CONDITION') {
             document.getElementById('chosenConditionDisplay').value = reviewCode;
@@ -1083,12 +1083,12 @@
             .catch(() => {
                 reviewLines = [];
                 document.getElementById('reviewPreviewBody').innerHTML =
-                    '<tr><td colspan="9" class="text-center text-danger py-4">Không tải được dòng kiểm kê.</td></tr>';
+                    '<tr><td colspan="9" class="text-center text-danger py-4">Không tải được dòng rà soát.</td></tr>';
                 updateReviewSummary();
             });
     }
 
-    /** Nguồn đang chọn là phiếu kiểm HẠN DÙNG (không phải kiểm đếm số lượng). */
+    /** Nguồn đang chọn là phiếu rà soát HẠN DÙNG (không phải kiểm đếm số lượng). */
     function isDatePreview() {
         return reviewLines.length > 0 && reviewLines[0].adjustmentType === 'DATE_ADJUSTMENT';
     }
@@ -1100,7 +1100,7 @@
         document.getElementById('reviewPreviewHeadCount').style.display = dateMode ? 'none' : '';
         document.getElementById('reviewPreviewHeadDate').style.display = dateMode ? '' : 'none';
         document.getElementById('reviewPreviewTitle').textContent = dateMode
-            ? 'Lô cần sửa hạn dùng' : 'Dòng điều chỉnh từ phiếu kiểm kê';
+            ? 'Lô cần sửa hạn dùng' : 'Dòng điều chỉnh từ phiếu rà soát kho';
         document.getElementById('reviewPreviewHint').innerHTML = dateMode
             ? 'Phiếu này <strong>không làm đổi tồn kho</strong> — chỉ ghi đè hạn dùng của lô bằng hạn '
               + 'thực tế đọc được lúc kiểm. Hạn cũ vẫn được lưu lại để đảo ngược nếu phải hủy phiếu.'
@@ -1111,7 +1111,7 @@
 
         if (!reviewLines.length) {
             body.innerHTML = '<tr id="reviewEmptyRow"><td colspan="10" class="text-center text-secondary py-4">'
-                + 'Phiếu kiểm kê chưa có dòng nào cần điều chỉnh.</td></tr>';
+                + 'Phiếu rà soát kho chưa có dòng nào cần điều chỉnh.</td></tr>';
             updateReviewSummary();
             return;
         }
@@ -1189,7 +1189,7 @@
     }
 
     function onFormChanged() {
-        // Nguồn kiểm kê tự dựng số liệu tóm tắt riêng ở trên; nguồn thủ công tính lại từ các dòng đang chọn.
+        // Nguồn rà soát tự dựng số liệu tóm tắt riêng ở trên; nguồn thủ công tính lại từ các dòng đang chọn.
         if (currentMode() !== 'STOCK_REVIEW') {
             calculateSummary();
         }
@@ -1256,7 +1256,7 @@
             document.getElementById('stockReviewIdInput').value = idStr;
             const btn = document.querySelector(`#reviewModalBody [data-count-id="${idStr}"]`);
             const code = draft.stockReviewCode || (btn ? btn.getAttribute('data-count-code') : null) || idStr;
-            // Cùng một id có thể là phiếu kiểm kê (nguồn) hoặc phiếu kiểm tra tình trạng (căn cứ hủy
+            // Cùng một id có thể là phiếu rà soát kho (nguồn) hoặc phiếu rà soát tình trạng (căn cứ hủy
             // hàng) — điền vào đúng ô, không thì người dùng nạp lại nháp và tưởng mất lựa chọn.
             if (btn && btn.getAttribute('data-review-type') === 'CONDITION') {
                 document.getElementById('chosenConditionDisplay').value = code;
@@ -1325,7 +1325,7 @@
         // Autosave any edit and refresh checks (mode-aware).
         form.addEventListener('input', onFormChanged);
 
-        // The type dropdown drives the whole flow (a real type vs "Theo phiếu kiểm kê").
+        // The type dropdown drives the whole flow (a real type vs "Theo phiếu rà soát kho").
         document.getElementById('adjustmentTypeSelect').addEventListener('change', onTypeChanged);
 
         // Close the picker modal on Escape.
@@ -1335,11 +1335,11 @@
             }
         });
 
-        // Nguồn phiếu kiểm kê: chặn submit tới khi chọn được phiếu; ngược lại xoá bản nháp tự lưu.
+        // Nguồn phiếu rà soát kho: chặn submit tới khi chọn được phiếu; ngược lại xoá bản nháp tự lưu.
         form.addEventListener('submit', function (event) {
             if (currentMode() === 'STOCK_REVIEW' && !document.getElementById('stockReviewIdInput').value) {
                 event.preventDefault();
-                notify('Vui lòng chọn phiếu kiểm kê.');
+                notify('Vui lòng chọn phiếu rà soát kho.');
                 return;
             }
             clearDraftLocal();
