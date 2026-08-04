@@ -6,6 +6,7 @@ import com.example.project.constant.PurchaseInvoiceStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
 import com.example.project.constant.StockCountStatus;
+import com.example.project.constant.StockReviewType;
 import com.example.project.dto.response.ApprovalItemResponse;
 import com.example.project.dto.response.ApprovalStatsResponse;
 import com.example.project.entity.Expense;
@@ -42,7 +43,7 @@ import java.util.Locale;
 public class ApprovalService {
 
     private static final String TYPE_RETURN = "Trả hàng";
-    private static final String TYPE_STOCK_COUNT = "Kiểm kê";
+    private static final String TYPE_STOCK_REVIEW = "Kiểm kê";
     private static final String TYPE_SHIFT_REPORT = "Báo cáo ca";
     private static final String TYPE_EXPENSE = "Phiếu chi";
     /**
@@ -55,7 +56,7 @@ public class ApprovalService {
     /** Short, stable codes for the bulk-approve checkbox value ("CODE:id") — distinct from the
      *  Vietnamese TYPE_* display labels used for the type filter dropdown. */
     private static final String TYPE_CODE_RETURN = "RETURN";
-    private static final String TYPE_CODE_STOCK_COUNT = "STOCK_COUNT";
+    private static final String TYPE_CODE_STOCK_REVIEW = "STOCK_REVIEW";
     private static final String TYPE_CODE_SHIFT_REPORT = "SHIFT_REPORT";
     private static final String TYPE_CODE_EXPENSE = "EXPENSE";
     private static final String TYPE_CODE_PURCHASE_INVOICE = "PURCHASE_INVOICE";
@@ -117,7 +118,7 @@ public class ApprovalService {
         // Điều chỉnh kho KHÔNG còn ở đây: BA bỏ bước duyệt (chỉ Owner tạo, tự chịu trách nhiệm) nên
         // phiếu đi thẳng Nháp → Hoàn thành, không bao giờ có trạng thái chờ duyệt để gom vào đây.
 
-        if (matchesType(typeFilter, TYPE_STOCK_COUNT)) {
+        if (matchesType(typeFilter, TYPE_STOCK_REVIEW)) {
             stockreviewRepository.findAllWithRelations().stream()
                     .filter(count -> !isStatus(count.getStatus(), StockCountStatus.DRAFT))
                     .map(this::toApprovalItem)
@@ -164,7 +165,7 @@ public class ApprovalService {
         long returnCount = returnRepository.findAllWithRelations().stream()
                 .filter(ret -> ret.getInvoiceID() != null && isStatus(ret.getStatus(), ReturnStatus.PENDING))
                 .count();
-        long stockCountCount = stockreviewRepository.findAllWithRelations().stream()
+        long stockReviewCount = stockreviewRepository.findAllWithRelations().stream()
                 .filter(count -> isStatus(count.getStatus(), StockCountStatus.PENDING))
                 .count();
         long shiftReportCount = shiftreportRepository.findAllWithRelations().stream()
@@ -178,9 +179,9 @@ public class ApprovalService {
                 .count();
 
         return new ApprovalStatsResponse(
-                returnCount + stockCountCount + shiftReportCount + expenseCount + purchaseInvoiceCount,
+                returnCount + stockReviewCount + shiftReportCount + expenseCount + purchaseInvoiceCount,
                 returnCount,
-                stockCountCount,
+                stockReviewCount,
                 shiftReportCount,
                 expenseCount,
                 purchaseInvoiceCount
@@ -188,7 +189,7 @@ public class ApprovalService {
     }
 
     public List<String> listTypes() {
-        return List.of(TYPE_RETURN, TYPE_PURCHASE_INVOICE, TYPE_STOCK_COUNT, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
+        return List.of(TYPE_RETURN, TYPE_PURCHASE_INVOICE, TYPE_STOCK_REVIEW, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
     }
 
     /** Approves every "CODE:id" selector the Owner checked, dispatching to each module's own approve().
@@ -208,7 +209,7 @@ public class ApprovalService {
                 Integer id = Integer.valueOf(parts[1]);
                 switch (parts[0]) {
                     case TYPE_CODE_RETURN -> returnService.approve(id);
-                    case TYPE_CODE_STOCK_COUNT -> stockreviewService.approve(id, ownerAccountId);
+                    case TYPE_CODE_STOCK_REVIEW -> stockreviewService.approve(id, ownerAccountId);
                     case TYPE_CODE_SHIFT_REPORT -> shiftreportService.approve(id, ownerAccountId);
                     case TYPE_CODE_EXPENSE -> expenseService.approve(id, ownerAccountId);
                     case TYPE_CODE_PURCHASE_INVOICE -> purchaseinvoiceService.approvePurchaseInvoice(id);
@@ -253,15 +254,16 @@ public class ApprovalService {
         String id = String.valueOf(count.getId());
         boolean pending = isStatus(count.getStatus(), StockCountStatus.PENDING);
         return new ApprovalItemResponse(
-                TYPE_STOCK_COUNT,
-                TYPE_CODE_STOCK_COUNT + ":" + id,
+                TYPE_STOCK_REVIEW,
+                TYPE_CODE_STOCK_REVIEW + ":" + id,
                 count.getStockCountCode(),
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
                 count.getReviewDate(),
                 formatInstant(count.getReviewDate()),
-                count.getNote() != null && !count.getNote().isBlank()
-                        ? truncate(count.getNote(), 60)
-                        : "Phiếu kiểm kê",
+                // Ba loại phiếu kiểm kê (đếm số lượng / hạn dùng / tình trạng) đều vào chung nhóm này,
+                // mà hệ quả của chúng khác hẳn nhau — duyệt phiếu hạn dùng là cho phép ghi đè hạn dùng
+                // của lô. Nên loại phải hiện ngay trên dòng, không bắt người duyệt mở từng phiếu ra xem.
+                summaryOf(count),
                 count.getStatus(),
                 statusCssClass(count.getStatus()),
                 pending,
@@ -341,6 +343,15 @@ public class ApprovalService {
         );
     }
 
+    /** "Kiểm tra hạn dùng" hoặc "Kiểm đếm số lượng — {ghi chú}" — loại luôn đứng trước ghi chú. */
+    private String summaryOf(Stockreview count) {
+        String typeLabel = StockReviewType.label(count.getType());
+        String note = count.getNote();
+        return note != null && !note.isBlank()
+                ? typeLabel + " — " + truncate(note, 45)
+                : typeLabel;
+    }
+
     private boolean matchesType(String typeFilter, String type) {
         return typeFilter == null || typeFilter.isBlank() || type.equals(typeFilter);
     }
@@ -361,7 +372,7 @@ public class ApprovalService {
     /**
      * Return.returnDate and Shiftreport.startTime/endTime are written via a "nowVn()" trick (VN
      * wall-clock digits stored as if they were UTC — see ReturnService/ShiftreportService) while
-     * Stockadjustment.date and Stockcount.countDate are genuine {@code Instant.now()} UTC values.
+     * Stockadjustment.date and Stockreview.reviewDate are genuine {@code Instant.now()} UTC values.
      * Undoing the VN encoding here means every {@code requestedAt} in this aggregator ends up as a
      * real UTC instant — required both to sort/window-filter the 4 sources together correctly and to
      * format them all the same way below.

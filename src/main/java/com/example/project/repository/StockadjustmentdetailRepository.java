@@ -48,22 +48,26 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
     List<Stockadjustmentdetail> findAllWithRelations();
 
     /**
-     * GTGT-inclusive value of stock given away rather than sold ({@code GIFT}/{@code SAMPLE}/
-     * {@code INTERNAL_USE} — {@code StockadjustmentService.VAT_OUTPUT_TYPES}) in {@code [from, to)},
-     * feeding tax-period revenue (mục C.2). {@code preTaxAmount + vatAmount} reconstructs the
-     * "grossValue" ({@code refSellPrice × quantity}, VAT-inclusive) that
-     * {@code StockadjustmentService.applyOutputVat} split into those two columns at creation time —
-     * summing {@code preTaxAmount} alone would under-count by the VAT portion. Only a completed slip
-     * ({@code StockAdjustmentStatus.COMPLETED}) actually happened; a draft or cancelled one is not
-     * real revenue.
+     * Giá trị (theo GIÁ BÁN) của hàng xuất đi mà không qua bán hàng — {@code GIFT}/{@code SAMPLE}/
+     * {@code INTERNAL_USE}, xem {@code StockadjustmentService.REF_SELL_PRICE_TYPES} — trong
+     * {@code [from, to)}, feeding tax-period revenue (mục C.2). Chỉ phiếu đã
+     * {@code StockAdjustmentStatus.COMPLETED} mới thật sự xảy ra; phiếu nháp hoặc đã hủy không phải
+     * doanh thu.
+     *
+     * <p><b>04/08/2026 — đổi nguồn tính:</b> trước đây cộng {@code preTaxAmount + vatAmount} để dựng
+     * lại giá trị gộp. Hai cột đó đã bị BỎ khỏi bảng (hộ kinh doanh không khấu trừ GTGT nên phiếu điều
+     * chỉnh kho không còn tách net/thuế), nên câu truy vấn cũ khiến ứng dụng không khởi động được.
+     * Nay tính thẳng {@code refSellPrice × quantity} — đúng bằng con số mà hai cột kia từng cộng lại
+     * thành, và {@code refSellPrice} vẫn được snapshot y như trước cho đúng 3 loại phiếu này.</p>
      */
     @Query("""
-           select coalesce(sum(d.preTaxAmount + d.vatAmount), 0)
+           select coalesce(sum(d.refSellPrice * d.quantity), 0)
            from Stockadjustmentdetail d
            where d.stockAdjustmentID.adjustmentType in :adjustmentTypes
              and d.stockAdjustmentID.status = :status
              and d.stockAdjustmentID.date >= :from
              and d.stockAdjustmentID.date < :to
+             and d.refSellPrice is not null
            """)
     BigDecimal sumGrossValueInPeriod(@Param("adjustmentTypes") Collection<String> adjustmentTypes,
                                      @Param("status") String status,
@@ -71,7 +75,7 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
                                      @Param("to") Instant to);
 
     /**
-     * Cost of surplus stock-count lines whose batch was created as unknown-origin, in {@code [from, to)}
+     * Cost of surplus stock-review lines whose batch was created as unknown-origin, in {@code [from, to)}
      * — feeds the taxable-income-only revenue add-on (mục D.2).
      *
      * <p>Nhận CẢ loại phiếu {@code COUNT} (bản gộp, từ 04/08/2026) lẫn {@code COUNT_INCREASE} (dữ liệu
