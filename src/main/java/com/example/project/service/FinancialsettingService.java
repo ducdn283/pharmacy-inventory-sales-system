@@ -4,7 +4,6 @@ import com.example.project.dto.request.FinancialSettingUpdateRequest;
 import com.example.project.dto.response.FinancialsettingResponse;
 import com.example.project.entity.Financialsetting;
 import com.example.project.repository.FinancialsettingRepository;
-import com.example.project.repository.TaxperiodsnapshotRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,36 +14,23 @@ import java.util.List;
 @Service
 public class FinancialsettingService {
     private final FinancialsettingRepository financialsettingRepository;
-    private final TaxperiodsnapshotRepository taxperiodsnapshotRepository;
 
-    public FinancialsettingService(FinancialsettingRepository financialsettingRepository,
-                                   TaxperiodsnapshotRepository taxperiodsnapshotRepository) {
+    public FinancialsettingService(FinancialsettingRepository financialsettingRepository) {
         this.financialsettingRepository = financialsettingRepository;
-        this.taxperiodsnapshotRepository = taxperiodsnapshotRepository;
     }
 
     /**
-     * Đã "Chốt thiết lập ban đầu" chưa — cột {@code setupConfirmed}. Đây là nguồn khoá chính cho cả
-     * ba trường {@code revenueGroup}/{@code cashSafeBalance}/{@code bankAccountBalance} MỘT LƯỢT,
-     * và cũng là điều kiện {@link com.example.project.config.SetupConfirmedInterceptor} dùng để chặn
-     * mọi màn hình khác cho tới khi Owner hoàn tất thiết lập lần đầu.
+     * Đã "Chốt thiết lập ban đầu" chưa — cột {@code setupConfirmed}. Đây là nguồn khoá cho hai quỹ
+     * {@code cashSafeBalance}/{@code bankAccountBalance} MỘT LƯỢT (không còn khoá {@code
+     * revenueGroup} — xem {@code saveSettings}), và cũng là điều kiện
+     * {@link com.example.project.config.SetupConfirmedInterceptor} dùng để chặn mọi màn hình khác
+     * cho tới khi Owner hoàn tất thiết lập lần đầu.
      */
     @Transactional(readOnly = true)
     public boolean isSetupConfirmed() {
         return financialsettingRepository.findFirstByOrderByIdAsc()
                 .map(entity -> Boolean.TRUE.equals(entity.getSetupConfirmed()))
                 .orElse(false);
-    }
-
-    /**
-     * Khoá khi ĐÃ chốt thiết lập ban đầu ({@link #isSetupConfirmed()}), HOẶC khi đã có kỳ thuế nào
-     * đóng — từ đó {@code TaxperiodsnapshotService} tự giữ đồng bộ {@code revenueGroup} theo chuỗi kỳ
-     * ({@code applyAutomaticGroupTransition}/{@code closePeriod}) bất kể cờ chốt thiết lập, con
-     * người không còn quyền sửa qua form nữa trong cả hai trường hợp.
-     */
-    @Transactional(readOnly = true)
-    public boolean isRevenueGroupLocked() {
-        return isSetupConfirmed() || taxperiodsnapshotRepository.count() > 0;
     }
 
     /**
@@ -88,11 +74,16 @@ public class FinancialsettingService {
         Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
                 .orElseGet(Financialsetting::new);
 
-        // Chốt sẵn trạng thái TRƯỚC khi sửa entity — cần cả hai giá trị "trước" và "sau" để biết đây
-        // có phải chính là lần lưu hoàn tất thiết lập ban đầu hay không (xem khối kiểm tra cuối hàm).
+        // Chốt sẵn trạng thái TRƯỚC khi sửa entity — cần để biết đây có phải chính là lần lưu hoàn
+        // tất thiết lập ban đầu hay không (xem khối kiểm tra cuối hàm).
         boolean wasSetupConfirmed = Boolean.TRUE.equals(entity.getSetupConfirmed());
-        boolean revenueGroupLocked = wasSetupConfirmed || taxperiodsnapshotRepository.count() > 0;
-        Integer revenueGroup = revenueGroupLocked ? entity.getRevenueGroup() : request.getRevenueGroup();
+        // Nhóm doanh thu KHÔNG bị khoá lại sau khi chốt thiết lập / sau khi đã có kỳ thuế đóng —
+        // khác với hai quỹ tiền. Chuyển từ Nhóm 2 lên Nhóm 3 cần cơ quan thuế chấp thuận trước, nên
+        // form phải luôn cho sửa tay được để phản ánh đúng thời điểm được chấp thuận, thay vì chỉ
+        // đổi được một lần lúc thiết lập ban đầu. Việc tự động đồng bộ theo chuỗi kỳ thuế cho chiều
+        // 1 → 2 (xem TaxperiodsnapshotService.applyAutomaticGroupTransition/closePeriod) vẫn chạy
+        // song song không đổi — đây chỉ là bỏ khoá trên form, không đụng tới cơ chế tự động đó.
+        Integer revenueGroup = request.getRevenueGroup();
 
         // Nhóm 3 (>ngưỡng 2) bắt buộc tính theo lợi nhuận — client JS đã khoá UI, nhưng chốt lại ở
         // server để không phụ thuộc vào JS phía client.

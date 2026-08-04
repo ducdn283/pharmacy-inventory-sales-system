@@ -555,8 +555,14 @@ public class TaxperiodsnapshotService {
             incomeTaxRate = group3 ? TaxRevenueGroup.GROUP3_PIT_RATE : TaxRevenueGroup.DEDUCTION_PIT_RATE;
             incomeTax = taxableIncome.multiply(incomeTaxRate);
         } else if (!exempt) {
+            // Nhóm 2, Cách 1 (theo doanh thu) — theo Tax-Invoice.xlsx, ngưỡng 1 (1 tỷ) được trừ
+            // trước khi nhân tỷ lệ, khác với Cách 2 (theo lợi nhuận) không trừ ngưỡng nào. Sàn 0 vì
+            // một quý mới chớm vượt ngưỡng 1 (đang giữa việc tự động chuyển từ Nhóm 1 sang Nhóm 2)
+            // có thể có doanh thu cả năm chưa vượt xa ngưỡng.
             incomeTaxRate = TaxRevenueGroup.DIRECT_PIT_RATE;
-            incomeTax = taxableIncomeRevenue.multiply(incomeTaxRate);
+            BigDecimal taxableRevenueAfterThreshold =
+                    taxableIncomeRevenue.subtract(TaxRevenueGroup.THRESHOLD_1).max(BigDecimal.ZERO);
+            incomeTax = taxableRevenueAfterThreshold.multiply(incomeTaxRate);
         }
 
         return new TaxPeriodComputationResponse(
