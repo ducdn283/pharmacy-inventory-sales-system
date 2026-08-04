@@ -9,6 +9,12 @@ public class StockReviewStatsResponse {
 
     private long totalCount;
 
+    private long countTypeCount;
+
+    private long dateTypeCount;
+
+    private long conditionTypeCount;
+
     private long draftCount;
 
     private long pendingCount;

@@ -69,8 +69,10 @@
             vertical-align: middle;
         }
 
-        /* Cột thẳng hàng theo tỉ lệ cố định — tránh "Mã phiếu" (vd CA-00005) bị đẩy hẹp và xuống dòng
-           khi "Tóm tắt" (chuỗi dài) chiếm hết chỗ trống dưới auto-layout mặc định của bảng. */
+        /*
+         * Cột thẳng hàng theo tỉ lệ cố định, tránh mã phiếu bị xuống dòng
+         * khi nội dung tóm tắt quá dài.
+         */
         .approval-table {
             table-layout: fixed;
         }
@@ -135,7 +137,6 @@
             opacity: .75;
         }
 
-        /* Filter row inside the table card — same look as invoice-list's filter bar. */
         .filter-row {
             display: flex;
             align-items: center;
@@ -215,7 +216,8 @@
             <div>
                 <h1 class="fs-4 mb-1">Danh sách phê duyệt</h1>
                 <p class="text-secondary mb-0">
-                    Phiếu đang chờ duyệt và các phiếu vừa xử lý gần đây (trả hàng, điều chỉnh kho, kiểm kê, báo cáo ca)
+                    Phiếu đang chờ duyệt và các phiếu vừa xử lý gần đây
+                    (trả hàng, rà soát kho, báo cáo ca, phiếu chi)
                 </p>
             </div>
         </div>
@@ -227,10 +229,18 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Tổng chờ duyệt</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.totalCount}">0</div>
-                            <div class="text-warning small">Cần Owner xử lý</div>
+                            <div class="text-secondary small mb-2">
+                                Tổng chờ duyệt
+                            </div>
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.totalCount}">
+                                0
+                            </div>
+                            <div class="text-warning small">
+                                Cần Owner xử lý
+                            </div>
                         </div>
+
                         <div class="stat-icon">
                             <i class="ti ti-clipboard-list"></i>
                         </div>
@@ -242,10 +252,18 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Trả hàng</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.returnCount}">0</div>
-                            <div class="text-secondary small">Phiếu trả chờ duyệt</div>
+                            <div class="text-secondary small mb-2">
+                                Trả hàng
+                            </div>
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.returnCount}">
+                                0
+                            </div>
+                            <div class="text-secondary small">
+                                Phiếu trả chờ duyệt
+                            </div>
                         </div>
+
                         <div class="stat-icon">
                             <i class="ti ti-rotate-2"></i>
                         </div>
@@ -257,11 +275,18 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <!-- Chỉ còn Kiểm kê: phiếu điều chỉnh kho bỏ bước duyệt từ 27/07/2026. -->
-                            <div class="text-secondary small mb-2">Kiểm kê</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.stockCountCount}">0</div>
-                            <div class="text-secondary small">Phiếu kho chờ duyệt</div>
+                            <div class="text-secondary small mb-2">
+                                Rà soát kho
+                            </div>
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.stockReviewCount}">
+                                0
+                            </div>
+                            <div class="text-secondary small">
+                                Phiếu rà soát chờ duyệt
+                            </div>
                         </div>
+
                         <div class="stat-icon">
                             <i class="ti ti-adjustments"></i>
                         </div>
@@ -273,10 +298,18 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Báo cáo ca</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.shiftReportCount}">0</div>
-                            <div class="text-secondary small">Ca chờ duyệt</div>
+                            <div class="text-secondary small mb-2">
+                                Báo cáo ca
+                            </div>
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.shiftReportCount}">
+                                0
+                            </div>
+                            <div class="text-secondary small">
+                                Ca chờ duyệt
+                            </div>
                         </div>
+
                         <div class="stat-icon">
                             <i class="ti ti-clock-dollar"></i>
                         </div>
@@ -288,10 +321,18 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Phiếu chi</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.expenseCount}">0</div>
-                            <div class="text-secondary small">Chi chờ duyệt</div>
+                            <div class="text-secondary small mb-2">
+                                Phiếu chi
+                            </div>
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.expenseCount}">
+                                0
+                            </div>
+                            <div class="text-secondary small">
+                                Chi chờ duyệt
+                            </div>
                         </div>
+
                         <div class="stat-icon">
                             <i class="ti ti-cash-banknote"></i>
                         </div>
@@ -300,10 +341,18 @@
             </div>
         </div>
 
-        <!-- Standalone bulk form (checkboxes + submit button reference it via the form attribute) —
-             kept as a sibling of the filter form so no form is ever nested inside another. -->
-        <form id="bulkApproveForm" th:action="@{/owner/approvals/bulk-approve}" method="post">
-            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <!--
+            Form phê duyệt hàng loạt đứng độc lập.
+            Checkbox và button liên kết với form này thông qua thuộc tính form.
+        -->
+        <form id="bulkApproveForm"
+              th:action="@{/owner/approvals/bulk-approve}"
+              method="post">
+
+            <input type="hidden"
+                   th:if="${_csrf}"
+                   th:name="${_csrf.parameterName}"
+                   th:value="${_csrf.token}">
         </form>
 
         <div class="stock-card">
@@ -311,8 +360,11 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
                     <div>
                         <h2 class="fs-6 mb-0">Danh sách phiếu</h2>
+
                         <div class="text-secondary small mt-1">
-                            Hiển thị <span th:text="${items.size()}">0</span> phiếu — gồm đang chờ duyệt và mới xử lý gần đây
+                            Hiển thị
+                            <span th:text="${items.size()}">0</span>
+                            phiếu — gồm đang chờ duyệt và mới xử lý gần đây
                         </div>
                     </div>
 
@@ -322,26 +374,40 @@
                             class="btn btn-stock-primary"
                             disabled
                             data-confirm="Duyệt tất cả phiếu đã chọn?">
+
                         <i class="ti ti-checks me-1"></i>
                         Duyệt phiếu đã chọn
                     </button>
                 </div>
 
-                <form method="get" th:action="@{/owner/approvals}">
+                <form method="get"
+                      th:action="@{/owner/approvals}">
+
                     <div class="filter-row">
-                        <select class="filter-select" name="type">
-                            <option value="">Tất cả loại phiếu</option>
+                        <select class="filter-select"
+                                name="type">
+
+                            <option value="">
+                                Tất cả loại phiếu
+                            </option>
+
                             <option th:each="typeItem : ${types}"
                                     th:value="${typeItem}"
                                     th:text="${typeItem}"
                                     th:selected="${typeItem == filterType}">
                             </option>
                         </select>
-                        <button type="submit" class="btn-search primary">
-                            <i class="ti ti-search"></i>Tìm kiếm
+
+                        <button type="submit"
+                                class="btn-search primary">
+                            <i class="ti ti-search"></i>
+                            Tìm kiếm
                         </button>
-                        <a th:href="@{/owner/approvals}" class="btn-search reset">
-                            <i class="ti ti-refresh"></i>Đặt lại
+
+                        <a th:href="@{/owner/approvals}"
+                           class="btn-search reset">
+                            <i class="ti ti-refresh"></i>
+                            Đặt lại
                         </a>
                     </div>
                 </form>
@@ -359,11 +425,15 @@
                         <col style="width:calc((100% - 44px) / 7);">
                         <col style="width:calc((100% - 44px) / 7);">
                     </colgroup>
+
                     <thead>
                     <tr>
-                        <th style="width:44px;text-align:center;">
-                            <input type="checkbox" id="selectAllApprovals" title="Chọn tất cả phiếu đang chờ duyệt">
+                        <th style="width:44px; text-align:center;">
+                            <input type="checkbox"
+                                   id="selectAllApprovals"
+                                   title="Chọn tất cả phiếu đang chờ duyệt">
                         </th>
+
                         <th>Loại</th>
                         <th>Mã phiếu</th>
                         <th>Người tạo</th>
@@ -375,7 +445,9 @@
                     </thead>
 
                     <tbody>
-                    <tr th:each="item : ${items}" th:classappend="${item.pending} ? '' : 'row-resolved'">
+                    <tr th:each="item : ${items}"
+                        th:classappend="${item.pending} ? '' : 'row-resolved'">
+
                         <td style="text-align:center;">
                             <input type="checkbox"
                                    class="approval-row-check"
@@ -386,23 +458,40 @@
                         </td>
 
                         <td class="col-nowrap">
-                            <span class="type-badge" th:text="${item.type}">Trả hàng</span>
+                            <span class="type-badge"
+                                  th:text="${item.type}">
+                                Trả hàng
+                            </span>
                         </td>
 
                         <td class="col-nowrap">
-                            <span class="fw-semibold text-success" th:text="${item.code}">TH-000001</span>
+                            <span class="fw-semibold text-success"
+                                  th:text="${item.code}">
+                                TH-000001
+                            </span>
                         </td>
 
-                        <td class="col-nowrap" th:text="${item.requesterName}">Nguyễn Văn A</td>
+                        <td class="col-nowrap"
+                            th:text="${item.requesterName}">
+                            Nguyễn Văn A
+                        </td>
 
-                        <td class="col-nowrap" th:text="${item.requestedAtDisplay}">01/06/2026 10:00</td>
+                        <td class="col-nowrap"
+                            th:text="${item.requestedAtDisplay}">
+                            01/06/2026 10:00
+                        </td>
 
-                        <td class="col-summary" th:text="${item.summary}">Hoàn 100.000đ</td>
+                        <td class="col-summary"
+                            th:text="${item.summary}">
+                            Hoàn 100.000đ
+                        </td>
 
                         <td class="col-nowrap">
                             <span class="status-badge"
                                   th:classappend="${' ' + item.statusCssClass}"
-                                  th:text="${item.status}">Chờ duyệt</span>
+                                  th:text="${item.status}">
+                                Chờ duyệt
+                            </span>
                         </td>
 
                         <td class="text-end">
@@ -416,8 +505,16 @@
                                 <form class="action-form"
                                       th:action="${item.approveUrl}"
                                       method="post">
-                                    <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                                    <input type="hidden" name="redirectTo" value="/owner/approvals">
+
+                                    <input type="hidden"
+                                           th:if="${_csrf}"
+                                           th:name="${_csrf.parameterName}"
+                                           th:value="${_csrf.token}">
+
+                                    <input type="hidden"
+                                           name="redirectTo"
+                                           value="/owner/approvals">
+
                                     <button type="submit"
                                             class="btn btn-sm btn-stock-primary me-1"
                                             title="Duyệt"
@@ -429,8 +526,16 @@
                                 <form class="action-form"
                                       th:action="${item.rejectUrl}"
                                       method="post">
-                                    <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                                    <input type="hidden" name="redirectTo" value="/owner/approvals">
+
+                                    <input type="hidden"
+                                           th:if="${_csrf}"
+                                           th:name="${_csrf.parameterName}"
+                                           th:value="${_csrf.token}">
+
+                                    <input type="hidden"
+                                           name="redirectTo"
+                                           value="/owner/approvals">
+
                                     <button type="submit"
                                             class="btn btn-sm btn-outline-danger"
                                             title="Từ chối"
@@ -443,7 +548,8 @@
                     </tr>
 
                     <tr th:if="${#lists.isEmpty(items)}">
-                        <td colspan="8" class="text-center text-secondary py-4">
+                        <td colspan="8"
+                            class="text-center text-secondary py-4">
                             Không có phiếu nào.
                         </td>
                     </tr>
@@ -459,19 +565,27 @@
     (function () {
         const selectAll = document.getElementById('selectAllApprovals');
         const bulkBtn = document.getElementById('btnBulkApprove');
-        if (!selectAll || !bulkBtn) return;
+
+        if (!selectAll || !bulkBtn) {
+            return;
+        }
 
         function checks() {
-            return Array.from(document.querySelectorAll('.approval-row-check'));
+            return Array.from(
+                document.querySelectorAll('.approval-row-check')
+            );
         }
 
         function selectedChecks() {
-            return checks().filter(function (c) { return c.checked; });
+            return checks().filter(function (checkbox) {
+                return checkbox.checked;
+            });
         }
 
         function refreshBulkState() {
             const all = checks();
             const selected = selectedChecks();
+
             bulkBtn.disabled = selected.length === 0;
 
             if (!all.length) {
@@ -479,17 +593,26 @@
                 selectAll.indeterminate = false;
                 return;
             }
+
             selectAll.checked = selected.length === all.length;
-            selectAll.indeterminate = selected.length > 0 && selected.length < all.length;
+            selectAll.indeterminate =
+                selected.length > 0 &&
+                selected.length < all.length;
         }
 
         selectAll.addEventListener('change', function () {
-            checks().forEach(function (c) { c.checked = selectAll.checked; });
+            checks().forEach(function (checkbox) {
+                checkbox.checked = selectAll.checked;
+            });
+
             refreshBulkState();
         });
 
-        checks().forEach(function (c) {
-            c.addEventListener('change', refreshBulkState);
+        checks().forEach(function (checkbox) {
+            checkbox.addEventListener(
+                'change',
+                refreshBulkState
+            );
         });
 
         refreshBulkState();

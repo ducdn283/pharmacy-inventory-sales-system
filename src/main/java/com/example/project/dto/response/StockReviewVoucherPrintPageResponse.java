@@ -14,7 +14,11 @@ public class StockReviewVoucherPrintPageResponse {
 
     private String stockReviewCode;
 
-    private String countDateDisplay;
+    private String reviewDateDisplay;
+
+    private String type;
+
+    private String typeDisplay;
 
     private String status;
 
@@ -27,6 +31,8 @@ public class StockReviewVoucherPrintPageResponse {
     private String note;
 
     private long totalItems;
+
+    private long issueItems;
 
     private Integer totalSystemQty;
 

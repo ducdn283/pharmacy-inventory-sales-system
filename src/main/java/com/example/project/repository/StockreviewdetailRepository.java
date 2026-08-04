@@ -7,7 +7,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface StockreviewdetailRepository extends JpaRepository<Stockreviewdetail, Integer> {
+public interface StockreviewdetailRepository
+        extends JpaRepository<Stockreviewdetail, Integer> {
 
     @Query("""
            select d
@@ -15,10 +16,12 @@ public interface StockreviewdetailRepository extends JpaRepository<Stockreviewde
            left join fetch d.stockReviewID
            left join fetch d.productID
            left join fetch d.batchID
-           where d.stockReviewID.id = :stockCountId
+           where d.stockReviewID.id = :stockReviewId
            order by d.id asc
            """)
-    List<Stockreviewdetail> findByStockCountIdWithRelations(@Param("stockCountId") Integer stockCountId);
+    List<Stockreviewdetail> findByStockReviewIdWithRelations(
+            @Param("stockReviewId") Integer stockReviewId
+    );
 
     @Query("""
            select d

@@ -6,7 +6,7 @@ public final class NotificationReferenceType {
     public static final String BATCH = "BATCH";
     public static final String RETURN = "RETURN";
     public static final String EXPENSE = "EXPENSE";
-    public static final String STOCK_COUNT = "STOCK_COUNT";
+    public static final String STOCK_REVIEW = "STOCK_REVIEW";
     public static final String STOCK_ADJUSTMENT = "STOCK_ADJUSTMENT";
     public static final String SHIFT_REPORT = "SHIFT_REPORT";
     public static final String INCOME = "INCOME";

@@ -4,7 +4,8 @@ import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ExpenseType;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
-import com.example.project.constant.StockCountStatus;
+import com.example.project.constant.StockReviewStatus;
+import com.example.project.constant.StockReviewType;
 import com.example.project.dto.response.ApprovalItemResponse;
 import com.example.project.dto.response.ApprovalStatsResponse;
 import com.example.project.entity.Expense;
@@ -30,49 +31,73 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Read-only aggregator for the Owner's unified Approve List. Approve/reject business logic still
- * lives in each module's own service (Return/StockCount/ShiftReport/Expense) — this class
- * only reads their PENDING + a recent window of resolved items for display, and dispatches the
- * bulk-approve action to each one's existing {@code approve(...)} method.
+ * Tổng hợp danh sách phê duyệt dành cho Owner.
+ *
+ * Nghiệp vụ duyệt và từ chối vẫn được xử lý tại service
+ * tương ứng của từng module.
  */
 @Service
 public class ApprovalService {
 
-    private static final String TYPE_RETURN = "Trả hàng";
-    private static final String TYPE_STOCK_COUNT = "Kiểm kê";
-    private static final String TYPE_SHIFT_REPORT = "Báo cáo ca";
-    private static final String TYPE_EXPENSE = "Phiếu chi";
+    private static final String TYPE_RETURN =
+            "Trả hàng";
 
-    /** Short, stable codes for the bulk-approve checkbox value ("CODE:id") — distinct from the
-     *  Vietnamese TYPE_* display labels used for the type filter dropdown. */
-    private static final String TYPE_CODE_RETURN = "RETURN";
-    private static final String TYPE_CODE_STOCK_COUNT = "STOCK_COUNT";
-    private static final String TYPE_CODE_SHIFT_REPORT = "SHIFT_REPORT";
-    private static final String TYPE_CODE_EXPENSE = "EXPENSE";
+    private static final String TYPE_STOCK_REVIEW =
+            "Rà soát kho";
 
-    /** How far back a resolved (Đã duyệt/Từ chối) item stays visible after being handled, so approving
-     *  something doesn't make it vanish immediately — purely a display window, not a data retention rule. */
-    private static final Duration RESOLVED_LOOKBACK = Duration.ofDays(3);
+    private static final String TYPE_SHIFT_REPORT =
+            "Báo cáo ca";
 
-    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final String TYPE_EXPENSE =
+            "Phiếu chi";
+
+    private static final String TYPE_CODE_RETURN =
+            "RETURN";
+
+    private static final String TYPE_CODE_STOCK_REVIEW =
+            "STOCK_REVIEW";
+
+    private static final String TYPE_CODE_SHIFT_REPORT =
+            "SHIFT_REPORT";
+
+    private static final String TYPE_CODE_EXPENSE =
+            "EXPENSE";
+
+    /**
+     * Phiếu đã xử lý tiếp tục xuất hiện trong ba ngày gần nhất.
+     */
+    private static final Duration RESOLVED_LOOKBACK =
+            Duration.ofDays(3);
+
+    private static final ZoneId VN_ZONE =
+            ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ReturnRepository returnRepository;
+
     private final StockreviewRepository stockreviewRepository;
+
     private final ShiftreportRepository shiftreportRepository;
+
     private final ExpenseRepository expenseRepository;
+
     private final ReturnService returnService;
+
     private final StockreviewService stockreviewService;
+
     private final ShiftreportService shiftreportService;
+
     private final ExpenseService expenseService;
 
-    public ApprovalService(ReturnRepository returnRepository,
-                           StockreviewRepository stockreviewRepository,
-                           ShiftreportRepository shiftreportRepository,
-                           ExpenseRepository expenseRepository,
-                           ReturnService returnService,
-                           StockreviewService stockreviewService,
-                           ShiftreportService shiftreportService,
-                           ExpenseService expenseService) {
+    public ApprovalService(
+            ReturnRepository returnRepository,
+            StockreviewRepository stockreviewRepository,
+            ShiftreportRepository shiftreportRepository,
+            ExpenseRepository expenseRepository,
+            ReturnService returnService,
+            StockreviewService stockreviewService,
+            ShiftreportService shiftreportService,
+            ExpenseService expenseService
+    ) {
         this.returnRepository = returnRepository;
         this.stockreviewRepository = stockreviewRepository;
         this.shiftreportRepository = shiftreportRepository;
@@ -84,265 +109,607 @@ public class ApprovalService {
     }
 
     @Transactional(readOnly = true)
-    public List<ApprovalItemResponse> list(String typeFilter) {
-        List<ApprovalItemResponse> items = new ArrayList<>();
-        Instant cutoff = Instant.now().minus(RESOLVED_LOOKBACK);
+    public List<ApprovalItemResponse> list(
+            String typeFilter
+    ) {
+        List<ApprovalItemResponse> items =
+                new ArrayList<>();
 
-        if (matchesType(typeFilter, TYPE_RETURN)) {
-            returnRepository.findAllWithRelations().stream()
-                    .filter(ret -> ret.getInvoiceID() != null)
-                    .filter(ret -> isStatus(ret.getStatus(), ReturnStatus.PENDING) || isStatus(ret.getStatus(), ReturnStatus.DEBT)
-                            || isStatus(ret.getStatus(), ReturnStatus.REJECTED))
+        Instant cutoff =
+                Instant.now().minus(RESOLVED_LOOKBACK);
+
+        if (matchesType(
+                typeFilter,
+                TYPE_RETURN
+        )) {
+            returnRepository
+                    .findAllWithRelations()
+                    .stream()
+                    .filter(ret ->
+                            ret.getInvoiceID() != null
+                    )
+                    .filter(ret ->
+                            isStatus(
+                                    ret.getStatus(),
+                                    ReturnStatus.PENDING
+                            )
+                                    || isStatus(
+                                    ret.getStatus(),
+                                    ReturnStatus.DEBT
+                            )
+                                    || isStatus(
+                                    ret.getStatus(),
+                                    ReturnStatus.REJECTED
+                            )
+                    )
                     .map(this::toApprovalItem)
-                    .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
+                    .filter(item ->
+                            item.isPending()
+                                    || isWithinLookback(
+                                    item.getRequestedAt(),
+                                    cutoff
+                            )
+                    )
                     .forEach(items::add);
         }
 
-        // Điều chỉnh kho KHÔNG còn ở đây: BA bỏ bước duyệt (chỉ Owner tạo, tự chịu trách nhiệm) nên
-        // phiếu đi thẳng Nháp → Hoàn thành, không bao giờ có trạng thái chờ duyệt để gom vào đây.
-
-        if (matchesType(typeFilter, TYPE_STOCK_COUNT)) {
-            stockreviewRepository.findAllWithRelations().stream()
-                    .filter(count -> !isStatus(count.getStatus(), StockCountStatus.DRAFT))
+        /*
+         * Stock Adjustment không nằm trong danh sách phê duyệt.
+         * Chỉ Stock Review được tổng hợp tại đây.
+         */
+        if (matchesType(
+                typeFilter,
+                TYPE_STOCK_REVIEW
+        )) {
+            stockreviewRepository
+                    .findAllWithRelations()
+                    .stream()
+                    .filter(review ->
+                            !isStatus(
+                                    review.getStatus(),
+                                    StockReviewStatus.DRAFT
+                            )
+                    )
                     .map(this::toApprovalItem)
-                    .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
+                    .filter(item ->
+                            item.isPending()
+                                    || isWithinLookback(
+                                    item.getRequestedAt(),
+                                    cutoff
+                            )
+                    )
                     .forEach(items::add);
         }
 
-        if (matchesType(typeFilter, TYPE_SHIFT_REPORT)) {
-            shiftreportRepository.findAllWithRelations().stream()
-                    .filter(shift -> !isStatus(shift.getStatus(), ShiftReportStatus.DRAFT))
+        if (matchesType(
+                typeFilter,
+                TYPE_SHIFT_REPORT
+        )) {
+            shiftreportRepository
+                    .findAllWithRelations()
+                    .stream()
+                    .filter(shift ->
+                            !isStatus(
+                                    shift.getStatus(),
+                                    ShiftReportStatus.DRAFT
+                            )
+                    )
                     .map(this::toApprovalItem)
-                    .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
+                    .filter(item ->
+                            item.isPending()
+                                    || isWithinLookback(
+                                    item.getRequestedAt(),
+                                    cutoff
+                            )
+                    )
                     .forEach(items::add);
         }
 
-        if (matchesType(typeFilter, TYPE_EXPENSE)) {
-            expenseRepository.findAll().stream()
-                    .filter(expense -> !isStatus(expense.getStatus(), ExpenseStatus.DRAFT))
+        if (matchesType(
+                typeFilter,
+                TYPE_EXPENSE
+        )) {
+            expenseRepository
+                    .findAll()
+                    .stream()
+                    .filter(expense ->
+                            !isStatus(
+                                    expense.getStatus(),
+                                    ExpenseStatus.DRAFT
+                            )
+                    )
                     .map(this::toApprovalItem)
-                    .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
+                    .filter(item ->
+                            item.isPending()
+                                    || isWithinLookback(
+                                    item.getRequestedAt(),
+                                    cutoff
+                            )
+                    )
                     .forEach(items::add);
         }
 
         return items.stream()
-                .sorted(Comparator.comparing(ApprovalItemResponse::isPending).reversed()
-                        .thenComparing(ApprovalItemResponse::getRequestedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted(
+                        Comparator
+                                .comparing(
+                                        ApprovalItemResponse::isPending
+                                )
+                                .reversed()
+                                .thenComparing(
+                                        ApprovalItemResponse
+                                                ::getRequestedAt,
+                                        Comparator.nullsLast(
+                                                Comparator.reverseOrder()
+                                        )
+                                )
+                )
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public ApprovalStatsResponse getStats() {
-        long returnCount = returnRepository.findAllWithRelations().stream()
-                .filter(ret -> ret.getInvoiceID() != null && isStatus(ret.getStatus(), ReturnStatus.PENDING))
-                .count();
-        long stockCountCount = stockreviewRepository.findAllWithRelations().stream()
-                .filter(count -> isStatus(count.getStatus(), StockCountStatus.PENDING))
-                .count();
-        long shiftReportCount = shiftreportRepository.findAllWithRelations().stream()
-                .filter(shift -> isStatus(shift.getStatus(), ShiftReportStatus.PENDING))
-                .count();
-        long expenseCount = expenseRepository.findAll().stream()
-                .filter(expense -> isStatus(expense.getStatus(), ExpenseStatus.PENDING))
-                .count();
+        long returnCount =
+                returnRepository
+                        .findAllWithRelations()
+                        .stream()
+                        .filter(ret ->
+                                ret.getInvoiceID() != null
+                                        && isStatus(
+                                        ret.getStatus(),
+                                        ReturnStatus.PENDING
+                                )
+                        )
+                        .count();
+
+        long stockReviewCount =
+                stockreviewRepository
+                        .findAllWithRelations()
+                        .stream()
+                        .filter(review ->
+                                isStatus(
+                                        review.getStatus(),
+                                        StockReviewStatus.PENDING
+                                )
+                        )
+                        .count();
+
+        long shiftReportCount =
+                shiftreportRepository
+                        .findAllWithRelations()
+                        .stream()
+                        .filter(shift ->
+                                isStatus(
+                                        shift.getStatus(),
+                                        ShiftReportStatus.PENDING
+                                )
+                        )
+                        .count();
+
+        long expenseCount =
+                expenseRepository
+                        .findAll()
+                        .stream()
+                        .filter(expense ->
+                                isStatus(
+                                        expense.getStatus(),
+                                        ExpenseStatus.PENDING
+                                )
+                        )
+                        .count();
 
         return new ApprovalStatsResponse(
-                returnCount + stockCountCount + shiftReportCount + expenseCount,
+                returnCount
+                        + stockReviewCount
+                        + shiftReportCount
+                        + expenseCount,
                 returnCount,
-                stockCountCount,
+                stockReviewCount,
                 shiftReportCount,
                 expenseCount
         );
     }
 
     public List<String> listTypes() {
-        return List.of(TYPE_RETURN, TYPE_STOCK_COUNT, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
+        return List.of(
+                TYPE_RETURN,
+                TYPE_STOCK_REVIEW,
+                TYPE_SHIFT_REPORT,
+                TYPE_EXPENSE
+        );
     }
 
-    /** Approves every "CODE:id" selector the Owner checked, dispatching to each module's own approve().
-     *  One bad/stale row doesn't abort the rest — returns how many actually succeeded. */
+    /**
+     * Duyệt các phiếu có selector dạng CODE:id.
+     *
+     * Một phiếu lỗi hoặc đã được người khác xử lý sẽ được bỏ qua,
+     * không làm dừng toàn bộ danh sách.
+     */
     @Transactional
-    public int bulkApprove(List<String> selectors, Integer ownerAccountId) {
+    public int bulkApprove(
+            List<String> selectors,
+            Integer ownerAccountId
+    ) {
         if (selectors == null) {
             return 0;
         }
+
         int approved = 0;
+
         for (String selector : selectors) {
-            if (selector == null || !selector.contains(":")) {
+            if (selector == null
+                    || !selector.contains(":")) {
                 continue;
             }
-            String[] parts = selector.split(":", 2);
+
+            String[] parts =
+                    selector.split(":", 2);
+
             try {
-                Integer id = Integer.valueOf(parts[1]);
+                Integer id =
+                        Integer.valueOf(parts[1]);
+
                 switch (parts[0]) {
-                    case TYPE_CODE_RETURN -> returnService.approve(id);
-                    case TYPE_CODE_STOCK_COUNT -> stockreviewService.approve(id, ownerAccountId);
-                    case TYPE_CODE_SHIFT_REPORT -> shiftreportService.approve(id, ownerAccountId);
-                    case TYPE_CODE_EXPENSE -> expenseService.approve(id, ownerAccountId);
+                    case TYPE_CODE_RETURN ->
+                            returnService.approve(id);
+
+                    case TYPE_CODE_STOCK_REVIEW ->
+                            stockreviewService.approve(
+                                    id,
+                                    ownerAccountId
+                            );
+
+                    case TYPE_CODE_SHIFT_REPORT ->
+                            shiftreportService.approve(
+                                    id,
+                                    ownerAccountId
+                            );
+
+                    case TYPE_CODE_EXPENSE ->
+                            expenseService.approve(
+                                    id,
+                                    ownerAccountId
+                            );
+
                     default -> {
                         continue;
                     }
                 }
+
                 approved++;
             } catch (IllegalArgumentException ignored) {
-                // Skip rows that are already resolved by someone else or otherwise no longer approvable.
+                /*
+                 * Bỏ qua phiếu không còn đủ điều kiện phê duyệt.
+                 */
             }
         }
+
         return approved;
     }
 
-    private boolean isWithinLookback(Instant requestedAt, Instant cutoff) {
-        return requestedAt != null && !requestedAt.isBefore(cutoff);
+    private boolean isWithinLookback(
+            Instant requestedAt,
+            Instant cutoff
+    ) {
+        return requestedAt != null
+                && !requestedAt.isBefore(cutoff);
     }
 
-    private ApprovalItemResponse toApprovalItem(Return ret) {
-        String id = String.valueOf(ret.getId());
-        Instant requestedAt = normalizeVnEncoded(ret.getReturnDate());
-        boolean pending = isStatus(ret.getStatus(), ReturnStatus.PENDING);
+    private ApprovalItemResponse toApprovalItem(
+            Return ret
+    ) {
+        String id =
+                String.valueOf(ret.getId());
+
+        Instant requestedAt =
+                normalizeVnEncoded(
+                        ret.getReturnDate()
+                );
+
+        boolean pending =
+                isStatus(
+                        ret.getStatus(),
+                        ReturnStatus.PENDING
+                );
+
         return new ApprovalItemResponse(
                 TYPE_RETURN,
                 TYPE_CODE_RETURN + ":" + id,
                 ret.getReturnCode(),
-                ret.getReturnedBy() != null ? ret.getReturnedBy().getName() : "Không rõ",
+                ret.getReturnedBy() != null
+                        ? ret.getReturnedBy().getName()
+                        : "Không rõ",
                 requestedAt,
                 formatInstant(requestedAt),
-                "Hoàn " + formatMoney(ret.getTotalRefund()),
+                "Hoàn "
+                        + formatMoney(
+                        ret.getTotalRefund()
+                ),
                 ret.getStatus(),
                 statusCssClass(ret.getStatus()),
                 pending,
                 "/owner/returns/" + id,
-                "/owner/returns/" + id + "/approve",
-                "/owner/returns/" + id + "/reject"
+                "/owner/returns/"
+                        + id
+                        + "/approve",
+                "/owner/returns/"
+                        + id
+                        + "/reject"
         );
     }
 
-    private ApprovalItemResponse toApprovalItem(Stockreview count) {
-        String id = String.valueOf(count.getId());
-        boolean pending = isStatus(count.getStatus(), StockCountStatus.PENDING);
+    private ApprovalItemResponse toApprovalItem(
+            Stockreview review
+    ) {
+        String id =
+                String.valueOf(review.getId());
+
+        boolean pending =
+                isStatus(
+                        review.getStatus(),
+                        StockReviewStatus.PENDING
+                );
+
+        String description =
+                StockReviewType.label(
+                        review.getType()
+                );
+
+        if (review.getNote() != null
+                && !review.getNote().isBlank()) {
+            description += " — "
+                    + truncate(
+                    review.getNote(),
+                    60
+            );
+        }
+
         return new ApprovalItemResponse(
-                TYPE_STOCK_COUNT,
-                TYPE_CODE_STOCK_COUNT + ":" + id,
-                count.getStockCountCode(),
-                count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
-                count.getReviewDate(),
-                formatInstant(count.getReviewDate()),
-                count.getNote() != null && !count.getNote().isBlank()
-                        ? truncate(count.getNote(), 60)
-                        : "Phiếu kiểm kê",
-                count.getStatus(),
-                statusCssClass(count.getStatus()),
+                TYPE_STOCK_REVIEW,
+                TYPE_CODE_STOCK_REVIEW + ":" + id,
+                review.getStockCountCode(),
+                review.getCreatedBy() != null
+                        ? review.getCreatedBy().getName()
+                        : "Không rõ",
+                review.getReviewDate(),
+                formatInstant(
+                        review.getReviewDate()
+                ),
+                description,
+                review.getStatus(),
+                statusCssClass(
+                        review.getStatus()
+                ),
                 pending,
-                "/owner/stock-counts/" + id,
-                "/owner/stock-counts/" + id + "/approve",
-                "/owner/stock-counts/" + id + "/reject"
+                "/owner/stock-reviews/" + id,
+                "/owner/stock-reviews/"
+                        + id
+                        + "/approve",
+                "/owner/stock-reviews/"
+                        + id
+                        + "/reject"
         );
     }
 
-    private ApprovalItemResponse toApprovalItem(Shiftreport shift) {
-        String id = String.valueOf(shift.getId());
-        Instant requestedAt = normalizeVnEncoded(shift.getEndTime() != null ? shift.getEndTime() : shift.getStartTime());
-        boolean pending = isStatus(shift.getStatus(), ShiftReportStatus.PENDING);
-        String discrepancy = shift.getCashDiscrepancy() != null
-                ? ", chênh lệch quỹ " + formatMoney(shift.getCashDiscrepancy())
-                : "";
+    private ApprovalItemResponse toApprovalItem(
+            Shiftreport shift
+    ) {
+        String id =
+                String.valueOf(shift.getId());
+
+        Instant requestedAt =
+                normalizeVnEncoded(
+                        shift.getEndTime() != null
+                                ? shift.getEndTime()
+                                : shift.getStartTime()
+                );
+
+        boolean pending =
+                isStatus(
+                        shift.getStatus(),
+                        ShiftReportStatus.PENDING
+                );
+
+        String discrepancy =
+                shift.getCashDiscrepancy() != null
+                        ? ", chênh lệch quỹ "
+                        + formatMoney(
+                        shift.getCashDiscrepancy()
+                )
+                        : "";
+
         return new ApprovalItemResponse(
                 TYPE_SHIFT_REPORT,
                 TYPE_CODE_SHIFT_REPORT + ":" + id,
                 shift.getShiftReportCode(),
-                shift.getCashierID() != null ? shift.getCashierID().getName() : "Không rõ",
+                shift.getCashierID() != null
+                        ? shift.getCashierID().getName()
+                        : "Không rõ",
                 requestedAt,
                 formatInstant(requestedAt),
-                "Doanh thu " + formatMoney(shift.getTotalRevenue()) + discrepancy,
+                "Doanh thu "
+                        + formatMoney(
+                        shift.getTotalRevenue()
+                )
+                        + discrepancy,
                 shift.getStatus(),
-                statusCssClass(shift.getStatus()),
+                statusCssClass(
+                        shift.getStatus()
+                ),
                 pending,
                 "/owner/shift-reports/" + id,
-                "/owner/shift-reports/" + id + "/approve",
-                "/owner/shift-reports/" + id + "/reject"
+                "/owner/shift-reports/"
+                        + id
+                        + "/approve",
+                "/owner/shift-reports/"
+                        + id
+                        + "/reject"
         );
     }
 
-    private ApprovalItemResponse toApprovalItem(Expense expense) {
-        String id = String.valueOf(expense.getId());
-        boolean pending = isStatus(expense.getStatus(), ExpenseStatus.PENDING);
+    private ApprovalItemResponse toApprovalItem(
+            Expense expense
+    ) {
+        String id =
+                String.valueOf(expense.getId());
+
+        boolean pending =
+                isStatus(
+                        expense.getStatus(),
+                        ExpenseStatus.PENDING
+                );
+
         return new ApprovalItemResponse(
                 TYPE_EXPENSE,
                 TYPE_CODE_EXPENSE + ":" + id,
-                "PC-" + String.format("%06d", expense.getId()),
-                expense.getApplicantID() != null ? expense.getApplicantID().getName() : "Không rõ",
+                "PC-"
+                        + String.format(
+                        "%06d",
+                        expense.getId()
+                ),
+                expense.getApplicantID() != null
+                        ? expense.getApplicantID().getName()
+                        : "Không rõ",
                 expense.getDate(),
                 formatInstant(expense.getDate()),
-                ExpenseType.vietnameseName(expense.getExpenseType()) + " — " + formatMoney(expense.getAmount()),
+                ExpenseType.vietnameseName(
+                        expense.getExpenseType()
+                )
+                        + " — "
+                        + formatMoney(
+                        expense.getAmount()
+                ),
                 expense.getStatus(),
-                statusCssClass(expense.getStatus()),
+                statusCssClass(
+                        expense.getStatus()
+                ),
                 pending,
                 "/owner/expenses/" + id,
-                "/owner/expenses/" + id + "/approve",
-                "/owner/expenses/" + id + "/reject"
+                "/owner/expenses/"
+                        + id
+                        + "/approve",
+                "/owner/expenses/"
+                        + id
+                        + "/reject"
         );
     }
 
-    private boolean matchesType(String typeFilter, String type) {
-        return typeFilter == null || typeFilter.isBlank() || type.equals(typeFilter);
+    private boolean matchesType(
+            String typeFilter,
+            String type
+    ) {
+        return typeFilter == null
+                || typeFilter.isBlank()
+                || type.equals(typeFilter);
     }
 
-    private String formatMoney(BigDecimal value) {
-        BigDecimal amount = value == null ? BigDecimal.ZERO : value;
-        return String.format(Locale.forLanguageTag("vi-VN"), "%,dđ", amount.longValue());
+    private String formatMoney(
+            BigDecimal value
+    ) {
+        BigDecimal amount =
+                value == null
+                        ? BigDecimal.ZERO
+                        : value;
+
+        return String.format(
+                Locale.forLanguageTag("vi-VN"),
+                "%,dđ",
+                amount.longValue()
+        );
     }
 
-    private String truncate(String value, int maxLength) {
+    private String truncate(
+            String value,
+            int maxLength
+    ) {
         if (value == null) {
             return "";
         }
+
         String trimmed = value.trim();
-        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength) + "…";
+
+        return trimmed.length() <= maxLength
+                ? trimmed
+                : trimmed.substring(0, maxLength)
+                + "…";
     }
 
     /**
-     * Return.returnDate and Shiftreport.startTime/endTime are written via a "nowVn()" trick (VN
-     * wall-clock digits stored as if they were UTC — see ReturnService/ShiftreportService) while
-     * Stockadjustment.date and Stockcount.countDate are genuine {@code Instant.now()} UTC values.
-     * Undoing the VN encoding here means every {@code requestedAt} in this aggregator ends up as a
-     * real UTC instant — required both to sort/window-filter the 4 sources together correctly and to
-     * format them all the same way below.
+     * Một số module cũ lưu giờ Việt Nam như thể là UTC.
+     * Stock Review sử dụng Instant thực tế nên không cần chuyển đổi.
      */
-    private Instant normalizeVnEncoded(Instant vnEncoded) {
-        return vnEncoded == null ? null : vnEncoded.minus(Duration.ofHours(7));
+    private Instant normalizeVnEncoded(
+            Instant vnEncoded
+    ) {
+        return vnEncoded == null
+                ? null
+                : vnEncoded.minus(
+                Duration.ofHours(7)
+        );
     }
 
-    private String formatInstant(Instant instant) {
+    private String formatInstant(
+            Instant instant
+    ) {
         if (instant == null) {
             return "";
         }
-        return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+
+        return DateTimeFormatter
+                .ofPattern("dd/MM/yyyy HH:mm")
                 .withZone(VN_ZONE)
                 .format(instant);
     }
 
-    private String statusCssClass(String status) {
+    private String statusCssClass(
+            String status
+    ) {
         String normalized = normalize(status);
-        // "Chờ thanh toán" (Expense approved, not fully paid yet) shows amber like a pending state.
-        if (normalized.contains("cho duyet") || normalized.contains("cho thanh toan")) {
+
+        if (normalized.contains("cho duyet")
+                || normalized.contains(
+                "cho thanh toan"
+        )) {
             return "status-pending";
         }
-        if (normalized.contains("tu choi") || normalized.contains("da huy")) {
+
+        if (normalized.contains("tu choi")
+                || normalized.contains("da huy")) {
             return "status-rejected";
         }
+
         return "status-approved";
     }
 
-    private boolean isStatus(String actual, String expected) {
-        return normalize(actual).equals(normalize(expected));
+    private boolean isStatus(
+            String actual,
+            String expected
+    ) {
+        return normalize(actual)
+                .equals(normalize(expected));
     }
 
     private String normalize(String value) {
         if (value == null) {
             return "";
         }
-        String normalized = Normalizer.normalize(value, Normalizer.Form.NFD);
-        normalized = normalized.replaceAll("\\p{M}", "");
-        normalized = normalized.replace("Đ", "D").replace("đ", "d");
-        return normalized.toLowerCase(Locale.ROOT).trim();
+
+        String normalized = Normalizer.normalize(
+                value,
+                Normalizer.Form.NFD
+        );
+
+        normalized = normalized.replaceAll(
+                "\\p{M}",
+                ""
+        );
+
+        normalized = normalized
+                .replace("Đ", "D")
+                .replace("đ", "d");
+
+        return normalized
+                .toLowerCase(Locale.ROOT)
+                .trim();
     }
 }

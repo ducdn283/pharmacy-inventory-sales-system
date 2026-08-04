@@ -13,6 +13,10 @@ public class StockReviewPrintPageResponse {
 
     private String printedByName;
 
+    private String type;
+
+    private String typeDisplay;
+
     private long totalItems;
 
     private List<StockReviewPrintLineResponse> items;

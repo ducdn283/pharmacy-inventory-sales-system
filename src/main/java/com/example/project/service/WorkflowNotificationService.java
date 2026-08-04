@@ -212,11 +212,11 @@ public class WorkflowNotificationService {
     }
 
     // =========================================================
-    // STOCK COUNT
+    // STOCK REVIEW
     // =========================================================
 
     @Transactional
-    public void stockCountPending(Stockreview value) {
+    public void stockReviewPending(Stockreview value) {
         if (value == null || value.getId() == null) {
             return;
         }
@@ -224,71 +224,73 @@ public class WorkflowNotificationService {
         String code = code(
                 value.getStockCountCode(),
                 value.getId(),
-                "KK"
+                "SR"
         );
 
         pendingToOwners(
-                "Phiếu kiểm kê " + code + " cần duyệt",
+                "Phiếu rà soát kho "
+                        + code
+                        + " cần duyệt",
                 accountName(value.getCreatedBy())
-                        + " đã gửi phiếu kiểm kê "
+                        + " đã gửi phiếu rà soát kho "
                         + code
                         + ".",
-                NotificationType.STOCK_COUNT_PENDING,
-                NotificationReferenceType.STOCK_COUNT,
+                NotificationType.STOCK_REVIEW_PENDING,
+                NotificationReferenceType.STOCK_REVIEW,
                 value.getId(),
-                "/owner/stock-counts/" + value.getId(),
-                "STOCK_COUNT_PENDING_" + value.getId()
+                "/owner/stock-reviews/" + value.getId(),
+                "STOCK_REVIEW_PENDING_" + value.getId()
         );
     }
 
     @Transactional
-    public void stockCountApproved(Stockreview value) {
+    public void stockReviewApproved(Stockreview value) {
         if (value == null || value.getId() == null) {
             return;
         }
 
         resolveAndSendResult(
                 value.getCreatedBy(),
-                "Phiếu kiểm kê "
+                "Phiếu rà soát kho "
                         + code(
                         value.getStockCountCode(),
                         value.getId(),
-                        "KK"
+                        "SR"
                 )
                         + " đã được duyệt",
-                "Phiếu kiểm kê của bạn đã được duyệt.",
-                NotificationType.STOCK_COUNT_APPROVED,
-                NotificationReferenceType.STOCK_COUNT,
+                "Phiếu rà soát kho của bạn đã được duyệt.",
+                NotificationType.STOCK_REVIEW_APPROVED,
+                NotificationReferenceType.STOCK_REVIEW,
                 value.getId(),
-                "stock-counts",
+                "stock-reviews",
                 NotificationSeverity.INFO,
-                "STOCK_COUNT_APPROVED_" + value.getId()
+                "STOCK_REVIEW_APPROVED_" + value.getId()
         );
     }
 
     @Transactional
-    public void stockCountRejected(Stockreview value) {
+    public void stockReviewRejected(Stockreview value) {
         if (value == null || value.getId() == null) {
             return;
         }
 
         resolveAndSendResult(
                 value.getCreatedBy(),
-                "Phiếu kiểm kê "
+                "Phiếu rà soát kho "
                         + code(
                         value.getStockCountCode(),
                         value.getId(),
-                        "KK"
+                        "SR"
                 )
                         + " bị từ chối",
-                "Phiếu kiểm kê của bạn đã bị từ chối. "
+                "Phiếu rà soát kho của bạn đã bị từ chối. "
                         + "Vui lòng mở phiếu để kiểm tra lại.",
-                NotificationType.STOCK_COUNT_REJECTED,
-                NotificationReferenceType.STOCK_COUNT,
+                NotificationType.STOCK_REVIEW_REJECTED,
+                NotificationReferenceType.STOCK_REVIEW,
                 value.getId(),
-                "stock-counts",
+                "stock-reviews",
                 NotificationSeverity.WARNING,
-                "STOCK_COUNT_REJECTED_" + value.getId()
+                "STOCK_REVIEW_REJECTED_" + value.getId()
         );
     }
 
@@ -647,7 +649,9 @@ public class WorkflowNotificationService {
     private boolean active(Account account) {
         return account != null
                 && account.getId() != null
-                && Boolean.TRUE.equals(account.getStatus());
+                && Boolean.TRUE.equals(
+                account.getStatus()
+        );
     }
 
     private String accountName(Account account) {
