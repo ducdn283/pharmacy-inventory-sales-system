@@ -3,9 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title th:text="${printData.showVatBreakdown ? 'Hóa đơn GTGT' : 'Hóa đơn bán hàng'} + ' | PharmaManager'">
-        Hóa đơn bán hàng | PharmaManager
-    </title>
+    <title>Hóa đơn bán hàng | PharmaManager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
@@ -280,10 +278,7 @@
         <div class="invoice-watermark">✦</div>
 
         <div class="invoice-content">
-            <div class="title"
-                 th:text="${printData.showVatBreakdown ? 'HÓA ĐƠN GTGT' : 'HÓA ĐƠN BÁN HÀNG'}">
-                HÓA ĐƠN BÁN HÀNG
-            </div>
+            <div class="title">HÓA ĐƠN BÁN HÀNG</div>
 
             <div class="date-line" th:text="${printData.dateLongDisplay}">
                 Ngày 24 tháng 06 năm 2026
@@ -364,7 +359,7 @@
                 </div>
             </div>
 
-            <table th:classappend="${printData.showVatBreakdown ? ' vat-table' : ''}">
+            <table>
                 <thead>
                 <tr>
                     <th style="width: 36px;">STT</th>
@@ -373,9 +368,6 @@
                     <th style="width: 56px;">Số lượng</th>
                     <th style="width: 88px;">Đơn giá</th>
                     <th style="width: 96px;">Thành tiền</th>
-                    <th th:if="${printData.showVatBreakdown}" style="width: 88px;">Thành tiền chưa thuế</th>
-                    <th th:if="${printData.showVatBreakdown}" style="width: 56px;">Thuế suất</th>
-                    <th th:if="${printData.showVatBreakdown}" style="width: 88px;">Thuế GTGT</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -388,38 +380,13 @@
                         th:text="${#numbers.formatDecimal(line.unitSellPrice, 1, 'COMMA', 0, 'POINT')}">10.000</td>
                     <td class="text-right"
                         th:text="${#numbers.formatDecimal(line.lineSubtotal, 1, 'COMMA', 0, 'POINT')}">10.000</td>
-                    <td th:if="${printData.showVatBreakdown}" class="text-right"
-                        th:text="${line.preTaxAmount != null ? #numbers.formatDecimal(line.preTaxAmount, 1, 'COMMA', 0, 'POINT') : '—'}">
-                        9.524
-                    </td>
-                    <td th:if="${printData.showVatBreakdown}" class="text-center"
-                        th:text="${line.vatRate != null ? #numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%' : '—'}">
-                        5%
-                    </td>
-                    <td th:if="${printData.showVatBreakdown}" class="text-right"
-                        th:text="${line.vatAmount != null ? #numbers.formatDecimal(line.vatAmount, 1, 'COMMA', 0, 'POINT') : '—'}">
-                        476
-                    </td>
                 </tr>
 
                 <tr th:if="${#lists.isEmpty(printData.lines)}">
-                    <td th:colspan="${printData.showVatBreakdown ? 9 : 6}" class="text-center">Không có dữ liệu.</td>
+                    <td colspan="6" class="text-center">Không có dữ liệu.</td>
                 </tr>
 
-                <tr class="total-row"
-                    th:if="${printData.showVatBreakdown and !#lists.isEmpty(printData.lines)}">
-                    <td colspan="5">Tổng cộng</td>
-                    <td class="text-right"
-                        th:text="${#numbers.formatDecimal(printData.subtotal, 1, 'COMMA', 0, 'POINT')}">10.000</td>
-                    <td class="text-right"
-                        th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 1, 'COMMA', 0, 'POINT')}">9.524</td>
-                    <td></td>
-                    <td class="text-right"
-                        th:text="${#numbers.formatDecimal(printData.totalVATOutput, 1, 'COMMA', 0, 'POINT')}">476</td>
-                </tr>
-
-                <tr class="total-row"
-                    th:if="${!printData.showVatBreakdown and !#lists.isEmpty(printData.lines)}">
+                <tr class="total-row" th:if="${!#lists.isEmpty(printData.lines)}">
                     <td colspan="5">Cộng tiền bán hàng hóa, dịch vụ</td>
                     <td class="text-right"
                         th:text="${#numbers.formatDecimal(printData.subtotal, 1, 'COMMA', 0, 'POINT')}">
@@ -428,21 +395,6 @@
                 </tr>
                 </tbody>
             </table>
-
-            <div class="vat-summary" th:if="${printData.showVatBreakdown and !#lists.isEmpty(printData.lines)}">
-                <div class="vat-summary-row">
-                    <span>Cộng tiền chưa thuế</span>
-                    <span th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 1, 'COMMA', 0, 'POINT')}">9.524</span>
-                </div>
-                <div class="vat-summary-row">
-                    <span>Tiền thuế GTGT</span>
-                    <span th:text="${#numbers.formatDecimal(printData.totalVATOutput, 1, 'COMMA', 0, 'POINT')}">476</span>
-                </div>
-                <div class="vat-summary-row">
-                    <span><strong>Tổng tiền thanh toán</strong></span>
-                    <span><strong th:text="${#numbers.formatDecimal(printData.total, 1, 'COMMA', 0, 'POINT')}">10.000</strong></span>
-                </div>
-            </div>
 
             <div class="amount-words">
                 Số tiền viết bằng chữ:

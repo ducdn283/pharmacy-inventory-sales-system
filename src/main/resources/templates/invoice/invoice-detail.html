@@ -434,6 +434,15 @@
                         </div>
 
                         <div class="info-row" th:if="${detail.originalInvoiceId != null}">
+                            <div class="info-label">Hóa đơn gốc</div>
+                            <div>
+                                <a th:href="${basePath + '/' + detail.originalInvoiceId}"
+                                   class="text-success fw-semibold text-decoration-none"
+                                   th:text="${detail.originalInvoiceCode}">HD000040</a>
+                            </div>
+                        </div>
+
+                        <div class="info-row">
                             <div class="info-label">Khách hàng</div>
                             <div th:text="${detail.customerName}">Khách lẻ</div>
                         </div>
@@ -513,9 +522,6 @@
                                 <th class="col-qty">SL</th>
                                 <th class="col-price">Giá bán</th>
                                 <th class="col-line-total">Thành tiền</th>
-                                <th class="col-pretax" th:if="${detail.showVatBreakdown}">Chưa thuế</th>
-                                <th class="col-vat-rate" th:if="${detail.showVatBreakdown}">Thuế suất</th>
-                                <th class="col-vat" th:if="${detail.showVatBreakdown}">Thuế GTGT</th>
                                 <th class="col-total">Tổng</th>
                             </tr>
                             </thead>
@@ -567,18 +573,6 @@
                                         th:text="${#numbers.formatDecimal(line.lineSubtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                         0đ
                                     </td>
-                                    <td class="unit-total-cell text-secondary" th:if="${detail.showVatBreakdown}"
-                                        th:text="${line.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(line.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                        0đ
-                                    </td>
-                                    <td class="text-center" th:if="${detail.showVatBreakdown}"
-                                        th:text="${line.vatRate == null} ? '—' : ${#numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">
-                                        5%
-                                    </td>
-                                    <td class="unit-total-cell" th:if="${detail.showVatBreakdown}"
-                                        th:text="${line.vatAmount == null} ? '—' : ${#numbers.formatDecimal(line.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                        0đ
-                                    </td>
                                     <td th:if="${stat.first}"
                                         th:rowspan="${#lists.size(group.lines)}"
                                         class="col-total">
@@ -589,18 +583,8 @@
                                     </td>
                                 </tr>
                             </th:block>
-                            <tr th:if="${detail.showVatBreakdown and !#lists.isEmpty(detail.productGroups)}"
-                                class="fw-semibold">
-                                <td colspan="5">Tổng cộng</td>
-                                <td th:text="${#numbers.formatDecimal(detail.subtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                                <td class="text-secondary"
-                                    th:text="${#numbers.formatDecimal(detail.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                                <td></td>
-                                <td th:text="${#numbers.formatDecimal(detail.totalVATOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                                <td></td>
-                            </tr>
                             <tr th:if="${#lists.isEmpty(detail.productGroups)}" class="sell-items-empty">
-                                <td th:colspan="${detail.showVatBreakdown ? 10 : 7}" class="text-center text-secondary">Không có hàng hóa</td>
+                                <td colspan="7" class="text-center text-secondary">Không có hàng hóa</td>
                             </tr>
                             </tbody>
                         </table>
@@ -635,20 +619,6 @@
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Giảm giá</span>
                             <strong th:text="${#numbers.formatDecimal(detail.discount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                0đ
-                            </strong>
-                        </div>
-
-                        <div class="d-flex justify-content-between mb-3" th:if="${detail.showVatBreakdown}">
-                            <span class="text-secondary">Tiền hàng (chưa thuế)</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                0đ
-                            </strong>
-                        </div>
-
-                        <div class="d-flex justify-content-between mb-3" th:if="${detail.showVatBreakdown}">
-                            <span class="text-secondary">Thuế GTGT đầu ra</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.totalVATOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                 0đ
                             </strong>
                         </div>
