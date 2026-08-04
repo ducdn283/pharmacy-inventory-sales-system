@@ -331,27 +331,12 @@
                                     <strong id="summaryPayout">0đ</strong>
                                 </div>
                             </div>
-                            <hr>
-                            <!-- Tách net/thuế NGAY TỪ tiền hoàn theo thuế suất của dòng hóa đơn gốc
-                                 (net = hoàn ÷ (1+t), thuế = hoàn − net). Số chốt do server tính lại khi lưu.
-                                 Nhóm 1 miễn thuế thì không kê khai gì ⇒ ẩn hẳn khối này. -->
-                            <th:block th:unless="${taxExempt}">
-                                <div class="summary-line">
-                                    <span class="text-secondary">Doanh thu giảm trừ (chưa thuế)</span>
-                                    <span id="summaryPreTax">0đ</span>
-                                </div>
-                                <div class="summary-line">
-                                    <span class="text-secondary">Thuế GTGT đầu ra giảm trừ</span>
-                                    <strong id="summaryVat">0đ</strong>
-                                </div>
-                            </th:block>
+                            <!-- 2 dòng thuế (doanh thu giảm trừ / GTGT đầu ra giảm trừ) đã bỏ hẳn 04/08/2026:
+                                 hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ % ở mọi nhóm, không khấu trừ
+                                 đầu ra ⇒ phiếu trả không phát sinh số thuế nào. -->
                             <div class="form-text mb-3">
                                 Phiếu trả chỉ tính tiền và cấn trừ công nợ, KHÔNG chi tiền mặt — việc chi trả phần
                                 còn lại cho khách thực hiện ở phiếu chi bên Kế toán.
-                                <span th:unless="${taxExempt}">Phần thuế trên đây được ghi
-                                    giảm vào kỳ tính thuế của ngày trả hàng, không sửa lại kỳ bán gốc.</span>
-                                <span th:if="${taxExempt}">Nhà thuốc đang thuộc Nhóm 1 (miễn thuế) nên phiếu trả
-                                    không phát sinh thuế GTGT để giảm trừ.</span>
                             </div>
 
                             <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
@@ -448,8 +433,6 @@
         const emptyRow = document.getElementById('emptyRow');
         const summaryItems = document.getElementById('summaryItems');
         const summaryRefund = document.getElementById('summaryRefund');
-        const summaryPreTax = document.getElementById('summaryPreTax');
-        const summaryVat = document.getElementById('summaryVat');
         const summaryOriginal = document.getElementById('summaryOriginal');
         const summaryRetained = document.getElementById('summaryRetained');
         const retainedRow = document.getElementById('retainedRow');
@@ -562,7 +545,6 @@
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
                                 '" value="' + qty + '" data-price="' + line.unitSellPrice +
-                                '" data-vat-rate="' + (line.vatRate == null ? 0 : line.vatRate) +
                                 '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
@@ -619,7 +601,6 @@
             const rate = currentRate();
             let totalOriginal = 0;
             let totalRefund = 0;
-            let totalVat = 0;
             let itemCount = 0;
             lineBody.querySelectorAll('.qty-input').forEach(inp => {
                 let qty = parseInt(inp.value, 10) || 0;
@@ -636,12 +617,6 @@
                 if (qty > 0) itemCount++;
                 totalOriginal += originalValue;
                 totalRefund += lineRefund;
-                // Đơn giá bán là giá GỘP → tách thuế từ trong TIỀN HOÀN (không phải giá trị gốc), không
-                // cộng thêm lên trên: hoàn 80% thì chỉ giảm trừ thuế trên đúng 80% đó.
-                const vatRate = parseFloat(inp.getAttribute('data-vat-rate')) || 0;
-                if (vatRate > 0) {
-                    totalVat += lineRefund - (lineRefund / (1 + vatRate / 100));
-                }
             });
             summaryItems.textContent = itemCount;
             summaryOriginal.textContent = formatMoney(totalOriginal);
@@ -656,14 +631,6 @@
                 const offset = Math.min(Math.round(totalRefund), Math.round(pickedDebt));
                 summaryOffset.textContent = formatMoney(offset);
                 summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offset);
-            }
-
-            // Làm tròn thuế trước rồi lấy net = tổng − thuế, để 2 dòng luôn cộng đúng bằng tổng tiền hoàn
-            // (làm tròn độc lập 2 số có thể lệch 1đ). Nhóm 1 miễn thuế thì 2 ô này không render.
-            if (summaryPreTax && summaryVat) {
-                const vatRounded = Math.round(totalVat);
-                summaryPreTax.textContent = formatMoney(Math.round(totalRefund) - vatRounded);
-                summaryVat.textContent = formatMoney(vatRounded);
             }
         }
 

@@ -141,8 +141,6 @@ public class ReturnController {
         model.addAttribute("returnWindowLabel", returnService.getReturnWindowLabel());
         model.addAttribute("defaultRefundRate", returnService.getDefaultRefundRate());
         model.addAttribute("autoOffsetDebt", returnService.isAutoOffsetDebt());
-        // Nhóm 1 miễn thuế ⇒ không kê khai gì, ẩn hẳn phần thuế GTGT thay vì hiện hai dòng luôn bằng 0.
-        model.addAttribute("taxExempt", returnService.isTaxExempt());
         model.addAttribute("basePath", resolveBasePath(request));
     }
 
