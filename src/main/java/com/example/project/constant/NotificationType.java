@@ -15,9 +15,9 @@ public final class NotificationType {
     public static final String EXPENSE_APPROVED = "EXPENSE_APPROVED";
     public static final String EXPENSE_REJECTED = "EXPENSE_REJECTED";
 
-    public static final String STOCK_COUNT_PENDING = "STOCK_COUNT_PENDING";
-    public static final String STOCK_COUNT_APPROVED = "STOCK_COUNT_APPROVED";
-    public static final String STOCK_COUNT_REJECTED = "STOCK_COUNT_REJECTED";
+    public static final String STOCK_REVIEW_PENDING = "STOCK_REVIEW_PENDING";
+    public static final String STOCK_REVIEW_APPROVED = "STOCK_REVIEW_APPROVED";
+    public static final String STOCK_REVIEW_REJECTED = "STOCK_REVIEW_REJECTED";
 
     public static final String STOCK_ADJUSTMENT_CREATED = "STOCK_ADJUSTMENT_CREATED";
     public static final String STOCK_ADJUSTMENT_COMPLETED = "STOCK_ADJUSTMENT_COMPLETED";

@@ -15,7 +15,11 @@ public class StockReviewListItemResponse {
 
     private Instant reviewDate;
 
-    private String countDateDisplay;
+    private String reviewDateDisplay;
+
+    private String type;
+
+    private String typeDisplay;
 
     private String createdByName;
 
@@ -25,7 +29,7 @@ public class StockReviewListItemResponse {
 
     private long totalItems;
 
-    private long discrepancyItems;
+    private long issueItems;
 
     private String status;
 

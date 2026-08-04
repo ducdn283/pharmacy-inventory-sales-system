@@ -1,5 +1,6 @@
 package com.example.project.dto.response;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class AccountantDashboardResponse {
@@ -8,16 +9,55 @@ public class AccountantDashboardResponse {
     private final String subtitle;
     private final List<QuickAction> quickActions;
     private final List<MetricCard> metrics;
-    private final DashboardView.DashboardChart weeklyChart;
+    private final DashboardView.DashboardChart overviewChart;
+    private final String selectedPeriod;
+    private final String selectedDate;
+    private final String periodDescription;
     private final List<AlertItem> alerts;
     private final List<ActivityRow> recentActivities;
 
+    /**
+     * Constructor tương thích với các test và đoạn code cũ
+     * trước khi dashboard có bộ lọc thời gian.
+     *
+     * Mặc định hiển thị theo tuần và lấy ngày hiện tại
+     * làm ngày tham chiếu.
+     */
     public AccountantDashboardResponse(
             String greetingName,
             String subtitle,
             List<QuickAction> quickActions,
             List<MetricCard> metrics,
-            DashboardView.DashboardChart weeklyChart,
+            DashboardView.DashboardChart overviewChart,
+            List<AlertItem> alerts,
+            List<ActivityRow> recentActivities
+    ) {
+        this(
+                greetingName,
+                subtitle,
+                quickActions,
+                metrics,
+                overviewChart,
+                "WEEK",
+                LocalDate.now().toString(),
+                "Tuần hiện tại",
+                alerts,
+                recentActivities
+        );
+    }
+
+    /**
+     * Constructor mới, có đầy đủ thông tin bộ lọc thời gian.
+     */
+    public AccountantDashboardResponse(
+            String greetingName,
+            String subtitle,
+            List<QuickAction> quickActions,
+            List<MetricCard> metrics,
+            DashboardView.DashboardChart overviewChart,
+            String selectedPeriod,
+            String selectedDate,
+            String periodDescription,
             List<AlertItem> alerts,
             List<ActivityRow> recentActivities
     ) {
@@ -25,7 +65,10 @@ public class AccountantDashboardResponse {
         this.subtitle = subtitle;
         this.quickActions = quickActions;
         this.metrics = metrics;
-        this.weeklyChart = weeklyChart;
+        this.overviewChart = overviewChart;
+        this.selectedPeriod = selectedPeriod;
+        this.selectedDate = selectedDate;
+        this.periodDescription = periodDescription;
         this.alerts = alerts;
         this.recentActivities = recentActivities;
     }
@@ -46,8 +89,20 @@ public class AccountantDashboardResponse {
         return metrics;
     }
 
-    public DashboardView.DashboardChart getWeeklyChart() {
-        return weeklyChart;
+    public DashboardView.DashboardChart getOverviewChart() {
+        return overviewChart;
+    }
+
+    public String getSelectedPeriod() {
+        return selectedPeriod;
+    }
+
+    public String getSelectedDate() {
+        return selectedDate;
+    }
+
+    public String getPeriodDescription() {
+        return periodDescription;
     }
 
     public List<AlertItem> getAlerts() {

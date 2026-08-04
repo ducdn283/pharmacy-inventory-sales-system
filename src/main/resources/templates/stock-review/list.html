@@ -3,14 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Danh sách phiếu kiểm kê | PharmaManager</title>
+    <title>Rà soát kho | PharmaManager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
     <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
 
     <style>
-        .stock-count-content {
+        .stock-review-content {
             padding-top: 96px !important;
             padding-bottom: 48px;
         }
@@ -117,7 +117,7 @@
         }
 
         @media (max-width: 991.98px) {
-            .stock-count-content {
+            .stock-review-content {
                 padding-top: 84px !important;
             }
         }
@@ -128,24 +128,29 @@
 <div th:replace="~{fragments/topbar :: topbar}"></div>
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 
-<main id="content" class="content stock-count-content">
+<main id="content" class="content stock-review-content">
     <div class="container-fluid">
-
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
             <div>
-                <h1 class="fs-4 mb-1">Danh sách phiếu kiểm kê</h1>
-                <p class="text-secondary mb-0">Quản lý các phiếu kiểm kê tồn kho trong hệ thống</p>
+                <h1 class="fs-4 mb-1">Rà soát kho</h1>
+                <p class="text-secondary mb-0">
+                    Rà soát số lượng, hạn dùng và tình trạng hàng trong kho
+                </p>
             </div>
 
             <div class="d-flex gap-2">
-                <a th:href="${basePath + '/print'}" class="btn btn-outline-secondary">
+                <a th:href="@{${basePath + '/print'}(type='COUNT')}"
+                   class="btn btn-outline-secondary">
+
                     <i class="ti ti-printer me-1"></i>
-                    In bảng kiểm kê
+                    In mẫu rà soát
                 </a>
 
-                <a th:href="${basePath + '/create'}" class="btn btn-stock-primary">
+                <a th:href="${basePath + '/create'}"
+                   class="btn btn-stock-primary">
+
                     <i class="ti ti-plus me-1"></i>
-                    Tạo phiếu kiểm kê
+                    Tạo phiếu rà soát
                 </a>
             </div>
         </div>
@@ -157,10 +162,21 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Tổng phiếu</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.totalCount}">0</div>
-                            <div class="text-success small">Tất cả phiếu kiểm kê</div>
+                            <div class="text-secondary small mb-2">
+                                Tổng phiếu
+                            </div>
+
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.totalCount}">
+                                0
+                            </div>
+
+                            <div class="text-warning small"
+                                 th:text="${stats.pendingCount + ' phiếu đang chờ duyệt'}">
+                                0 phiếu đang chờ duyệt
+                            </div>
                         </div>
+
                         <div class="stat-icon">
                             <i class="ti ti-clipboard-list"></i>
                         </div>
@@ -172,43 +188,72 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <div class="text-secondary small mb-2">Bản nháp</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.draftCount}">0</div>
-                            <div class="text-secondary small">Chưa gửi duyệt</div>
-                        </div>
-                        <div class="stat-icon">
-                            <i class="ti ti-file-pencil"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                            <div class="text-secondary small mb-2">
+                                Kiểm đếm số lượng
+                            </div>
 
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="stock-card stat-card p-4">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <div class="text-secondary small mb-2">Chờ duyệt</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.pendingCount}">0</div>
-                            <div class="text-warning small">Đang chờ Owner duyệt</div>
-                        </div>
-                        <div class="stat-icon">
-                            <i class="ti ti-clock"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="stock-card stat-card p-4">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <div class="text-secondary small mb-2">Đã duyệt / điều chỉnh</div>
                             <div class="fs-3 fw-bold"
-                                 th:text="${stats.approvedCount + stats.adjustedCount}">0</div>
-                            <div class="text-success small">Có thể tạo điều chỉnh</div>
+                                 th:text="${stats.countTypeCount}">
+                                0
+                            </div>
+
+                            <div class="text-secondary small">
+                                Đối chiếu tồn kho thực tế
+                            </div>
                         </div>
+
                         <div class="stat-icon">
-                            <i class="ti ti-check"></i>
+                            <i class="ti ti-calculator"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">
+                                Rà soát hạn dùng
+                            </div>
+
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.dateTypeCount}">
+                                0
+                            </div>
+
+                            <div class="text-warning small">
+                                Đối chiếu hạn dùng của lô
+                            </div>
+                        </div>
+
+                        <div class="stat-icon">
+                            <i class="ti ti-calendar-check"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-secondary small mb-2">
+                                Rà soát tình trạng
+                            </div>
+
+                            <div class="fs-3 fw-bold"
+                                 th:text="${stats.conditionTypeCount}">
+                                0
+                            </div>
+
+                            <div class="text-danger small">
+                                Đánh giá chất lượng thực tế
+                            </div>
+                        </div>
+
+                        <div class="stat-icon">
+                            <i class="ti ti-shield-check"></i>
                         </div>
                     </div>
                 </div>
@@ -218,29 +263,52 @@
         <div class="stock-card p-4 mb-4">
             <form method="get" th:action="${basePath}">
                 <div class="row g-3 align-items-end">
-                    <div class="col-12 col-xl-4">
+                    <div class="col-12 col-xl-3">
                         <label class="form-label">Từ khóa</label>
+
                         <input type="text"
                                class="form-control"
                                name="keyword"
                                th:value="${keyword}"
-                               placeholder="Tìm theo mã phiếu, người lập, sản phẩm, số lô">
+                               placeholder="Mã phiếu, người lập, sản phẩm, số lô">
                     </div>
 
                     <div class="col-12 col-md-4 col-xl-2">
                         <label class="form-label">Từ ngày</label>
-                        <input type="date" class="form-control" name="fromDate" th:value="${fromDate}">
+                        <input type="date"
+                               class="form-control"
+                               name="fromDate"
+                               th:value="${fromDate}">
                     </div>
 
                     <div class="col-12 col-md-4 col-xl-2">
                         <label class="form-label">Đến ngày</label>
-                        <input type="date" class="form-control" name="toDate" th:value="${toDate}">
+                        <input type="date"
+                               class="form-control"
+                               name="toDate"
+                               th:value="${toDate}">
+                    </div>
+
+                    <div class="col-12 col-md-4 col-xl-2">
+                        <label class="form-label">Loại rà soát</label>
+
+                        <select class="form-select" name="type">
+                            <option value="">Tất cả loại</option>
+
+                            <option th:each="typeItem : ${typeLabels}"
+                                    th:value="${typeItem.key}"
+                                    th:text="${typeItem.value}"
+                                    th:selected="${typeItem.key == filterType}">
+                            </option>
+                        </select>
                     </div>
 
                     <div class="col-12 col-md-4 col-xl-2">
                         <label class="form-label">Trạng thái</label>
+
                         <select class="form-select" name="status">
                             <option value="">Tất cả trạng thái</option>
+
                             <option th:each="statusItem : ${statuses}"
                                     th:value="${statusItem}"
                                     th:text="${statusItem}"
@@ -249,10 +317,12 @@
                         </select>
                     </div>
 
-                    <div class="col-12 col-xl-2 d-grid">
-                        <button type="submit" class="btn btn-stock-primary">
+                    <div class="col-12 col-xl-1 d-grid">
+                        <button type="submit"
+                                class="btn btn-stock-primary">
+
                             <i class="ti ti-search me-1"></i>
-                            Tìm kiếm
+                            Lọc
                         </button>
                     </div>
                 </div>
@@ -262,10 +332,16 @@
         <div class="stock-card">
             <div class="p-4 border-bottom d-flex justify-content-between align-items-center">
                 <div>
-                    <h2 class="fs-6 mb-0">Danh sách phiếu kiểm kê</h2>
+                    <h2 class="fs-6 mb-0">
+                        Danh sách phiếu rà soát kho
+                    </h2>
+
                     <div class="text-secondary small mt-1">
-                        Hiển thị <span th:text="${counts.size()}">0</span> /
-                        <span th:text="${totalItems}">0</span> phiếu
+                        Hiển thị
+                        <span th:text="${reviews.size()}">0</span>
+                        /
+                        <span th:text="${totalItems}">0</span>
+                        phiếu
                     </div>
                 </div>
             </div>
@@ -275,36 +351,57 @@
                     <thead>
                     <tr>
                         <th>Mã phiếu</th>
-                        <th>Ngày kiểm kê</th>
+                        <th>Ngày rà soát</th>
+                        <th>Loại rà soát</th>
                         <th>Người lập</th>
                         <th>Người duyệt</th>
-                        <th>Số mặt hàng</th>
-                        <th>Có chênh lệch</th>
+                        <th>Số lô</th>
+                        <th>Có vấn đề</th>
                         <th>Trạng thái</th>
                         <th class="text-end">Thao tác</th>
                     </tr>
                     </thead>
 
                     <tbody>
-                    <tr th:each="item : ${counts}">
+                    <tr th:each="item : ${reviews}">
                         <td>
-                            <span class="fw-semibold text-success" th:text="${item.stockCountCode}">SC-000001</span>
+                            <span class="fw-semibold text-success"
+                                  th:text="${item.stockReviewCode}">
+                                SR-000001
+                            </span>
                         </td>
 
-                        <td th:text="${item.countDateDisplay}">01/06/2026 10:00</td>
+                        <td th:text="${item.reviewDateDisplay}">
+                            01/06/2026 10:00
+                        </td>
 
-                        <td th:text="${item.createdByName}">Nguyễn Văn A</td>
+                        <td>
+                            <span class="badge bg-light text-dark"
+                                  th:text="${item.typeDisplay}">
+                                Kiểm đếm số lượng
+                            </span>
+                        </td>
 
-                        <td th:text="${item.approvedByName}">Chưa có</td>
+                        <td th:text="${item.createdByName}">
+                            Nguyễn Văn A
+                        </td>
+
+                        <td th:text="${item.approvedByName}">
+                            Chưa có
+                        </td>
 
                         <td>
                             <span class="badge bg-success-subtle text-success"
-                                  th:text="${item.totalItems}">0</span>
+                                  th:text="${item.totalItems}">
+                                0
+                            </span>
                         </td>
 
                         <td>
                             <span class="badge bg-warning-subtle text-warning"
-                                  th:text="${item.discrepancyItems}">0</span>
+                                  th:text="${item.issueItems}">
+                                0
+                            </span>
                         </td>
 
                         <td>
@@ -317,28 +414,34 @@
 
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary"
-                               th:href="${basePath + '/' + item.stockCountId}">
+                               th:href="${basePath + '/' + item.stockReviewId}">
+
                                 <i class="ti ti-eye me-1"></i>
                                 Xem
                             </a>
                         </td>
                     </tr>
 
-                    <tr th:if="${#lists.isEmpty(counts)}">
-                        <td colspan="8" class="text-center text-secondary py-4">
-                            Không tìm thấy phiếu kiểm kê nào.
+                    <tr th:if="${#lists.isEmpty(reviews)}">
+                        <td colspan="9"
+                            class="text-center text-secondary py-4">
+                            Không tìm thấy phiếu rà soát kho nào.
                         </td>
                     </tr>
                     </tbody>
                 </table>
             </div>
 
-            <div class="p-4 border-top" th:if="${totalPages > 1}">
-                <nav>
+            <div class="p-4 border-top"
+                 th:if="${totalPages > 1}">
+
+                <nav aria-label="Phân trang danh sách rà soát kho">
                     <ul class="pagination justify-content-end mb-0">
-                        <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
+                        <li class="page-item"
+                            th:classappend="${currentPage == 0} ? 'disabled'">
+
                             <a class="page-link"
-                               th:href="@{${basePath}(page=${currentPage - 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}">
+                               th:href="@{${basePath}(page=${currentPage - 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, type=${filterType}, status=${filterStatus})}">
                                 Trước
                             </a>
                         </li>
@@ -346,16 +449,19 @@
                         <li class="page-item"
                             th:each="pageNumber : ${#numbers.sequence(0, totalPages - 1)}"
                             th:classappend="${pageNumber == currentPage} ? 'active'">
+
                             <a class="page-link"
-                               th:href="@{${basePath}(page=${pageNumber}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}"
+                               th:href="@{${basePath}(page=${pageNumber}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, type=${filterType}, status=${filterStatus})}"
                                th:text="${pageNumber + 1}">
                                 1
                             </a>
                         </li>
 
-                        <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? 'disabled'">
+                        <li class="page-item"
+                            th:classappend="${currentPage + 1 >= totalPages} ? 'disabled'">
+
                             <a class="page-link"
-                               th:href="@{${basePath}(page=${currentPage + 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, status=${filterStatus})}">
+                               th:href="@{${basePath}(page=${currentPage + 1}, size=${pageSize}, keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, type=${filterType}, status=${filterStatus})}">
                                 Sau
                             </a>
                         </li>
@@ -363,7 +469,6 @@
                 </nav>
             </div>
         </div>
-
     </div>
 </main>
 

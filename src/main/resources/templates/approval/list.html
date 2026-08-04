@@ -216,7 +216,7 @@
                 <h1 class="fs-4 mb-1">Danh sách phê duyệt</h1>
                 <p class="text-secondary mb-0">
                     Phiếu đang chờ duyệt và các phiếu vừa xử lý gần đây
-                    (trả hàng, phiếu nhập, kiểm kê, báo cáo ca, phiếu chi)
+                    (trả hàng, phiếu nhập, rà soát kho, báo cáo ca, phiếu chi)
                 </p>
             </div>
         </div>
@@ -276,11 +276,11 @@
                     <div class="d-flex justify-content-between">
                         <div>
                             <!-- Phiếu điều chỉnh kho KHÔNG nằm ở đây (bỏ bước duyệt từ 27/07/2026).
-                                 Gộp cả 3 loại phiếu kiểm kê: đếm số lượng / hạn dùng / tình trạng —
+                                 Gộp cả 3 loại phiếu rà soát kho: đếm số lượng / hạn dùng / tình trạng —
                                  loại cụ thể hiện ở cột Tóm tắt của từng dòng. -->
-                            <div class="text-secondary small mb-2">Kiểm kê</div>
+                            <div class="text-secondary small mb-2">Rà soát kho</div>
                             <div class="fs-3 fw-bold" th:text="${stats.stockReviewCount}">0</div>
-                            <div class="text-secondary small">Phiếu kiểm kê chờ duyệt</div>
+                            <div class="text-secondary small">Phiếu rà soát chờ duyệt</div>
                         </div>
                         <div class="stat-icon">
                             <i class="ti ti-adjustments"></i>

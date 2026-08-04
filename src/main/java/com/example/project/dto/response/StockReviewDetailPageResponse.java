@@ -16,7 +16,11 @@ public class StockReviewDetailPageResponse {
 
     private Instant reviewDate;
 
-    private String countDateDisplay;
+    private String reviewDateDisplay;
+
+    private String type;
+
+    private String typeDisplay;
 
     private String createdByName;
 
@@ -34,7 +38,7 @@ public class StockReviewDetailPageResponse {
 
     private long matchedItems;
 
-    private long discrepancyItems;
+    private long issueItems;
 
     private int totalSystemQty;
 

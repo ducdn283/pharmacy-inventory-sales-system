@@ -5,7 +5,7 @@ import com.example.project.constant.ExpenseType;
 import com.example.project.constant.PurchaseInvoiceStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
-import com.example.project.constant.StockCountStatus;
+import com.example.project.constant.StockReviewStatus;
 import com.example.project.constant.StockReviewType;
 import com.example.project.dto.response.ApprovalItemResponse;
 import com.example.project.dto.response.ApprovalStatsResponse;
@@ -43,7 +43,7 @@ import java.util.Locale;
 public class ApprovalService {
 
     private static final String TYPE_RETURN = "Trả hàng";
-    private static final String TYPE_STOCK_REVIEW = "Kiểm kê";
+    private static final String TYPE_STOCK_REVIEW = "Rà soát kho";
     private static final String TYPE_SHIFT_REPORT = "Báo cáo ca";
     private static final String TYPE_EXPENSE = "Phiếu chi";
     /**
@@ -120,7 +120,7 @@ public class ApprovalService {
 
         if (matchesType(typeFilter, TYPE_STOCK_REVIEW)) {
             stockreviewRepository.findAllWithRelations().stream()
-                    .filter(count -> !isStatus(count.getStatus(), StockCountStatus.DRAFT))
+                    .filter(count -> !isStatus(count.getStatus(), StockReviewStatus.DRAFT))
                     .map(this::toApprovalItem)
                     .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
                     .forEach(items::add);
@@ -166,7 +166,7 @@ public class ApprovalService {
                 .filter(ret -> ret.getInvoiceID() != null && isStatus(ret.getStatus(), ReturnStatus.PENDING))
                 .count();
         long stockReviewCount = stockreviewRepository.findAllWithRelations().stream()
-                .filter(count -> isStatus(count.getStatus(), StockCountStatus.PENDING))
+                .filter(count -> isStatus(count.getStatus(), StockReviewStatus.PENDING))
                 .count();
         long shiftReportCount = shiftreportRepository.findAllWithRelations().stream()
                 .filter(shift -> isStatus(shift.getStatus(), ShiftReportStatus.PENDING))
@@ -252,7 +252,7 @@ public class ApprovalService {
 
     private ApprovalItemResponse toApprovalItem(Stockreview count) {
         String id = String.valueOf(count.getId());
-        boolean pending = isStatus(count.getStatus(), StockCountStatus.PENDING);
+        boolean pending = isStatus(count.getStatus(), StockReviewStatus.PENDING);
         return new ApprovalItemResponse(
                 TYPE_STOCK_REVIEW,
                 TYPE_CODE_STOCK_REVIEW + ":" + id,
@@ -267,9 +267,9 @@ public class ApprovalService {
                 count.getStatus(),
                 statusCssClass(count.getStatus()),
                 pending,
-                "/owner/stock-counts/" + id,
-                "/owner/stock-counts/" + id + "/approve",
-                "/owner/stock-counts/" + id + "/reject"
+                "/owner/stock-reviews/" + id,
+                "/owner/stock-reviews/" + id + "/approve",
+                "/owner/stock-reviews/" + id + "/reject"
         );
     }
 
