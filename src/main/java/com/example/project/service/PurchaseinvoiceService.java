@@ -217,7 +217,7 @@ public class PurchaseinvoiceService {
         BigDecimal subtotal = calculateSubtotal(details);
         BigDecimal additionCost = safe(invoice.getAdditionCost());
         BigDecimal discount = safe(invoice.getDiscount());
-        BigDecimal totalVATInput = safe(invoice.getTotalVATInput());
+        BigDecimal totalVATInput = calculateTotalVATInput(details);
         BigDecimal totalAmount = safeTotalAmount(invoice);
         BigDecimal paid = safePaid(invoice);
         BigDecimal debtAmount = totalAmount.subtract(paid);
@@ -282,7 +282,7 @@ public class PurchaseinvoiceService {
         BigDecimal subtotal = calculateSubtotal(details);
         BigDecimal additionCost = safe(invoice.getAdditionCost());
         BigDecimal discount = safe(invoice.getDiscount());
-        BigDecimal totalVATInput = safe(invoice.getTotalVATInput());
+        BigDecimal totalVATInput = calculateTotalVATInput(details);
         BigDecimal totalAmount = safeTotalAmount(invoice);
 
         int totalQuantity = details.stream()
@@ -366,8 +366,7 @@ public class PurchaseinvoiceService {
      */
     private record PreparedInvoiceHeader(Supplier supplier, Account employee, Procurementplan procurementPlan,
                                           List<PreparedPurchaseLine> lines, BigDecimal additionCost,
-                                          BigDecimal discount, BigDecimal totalAmount,
-                                          BigDecimal totalVATInput) {
+                                          BigDecimal discount, BigDecimal totalAmount) {
     }
 
     private PreparedInvoiceHeader prepareInvoiceHeader(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
@@ -395,10 +394,6 @@ public class PurchaseinvoiceService {
                 .map(PreparedPurchaseLine::grossAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal totalVATInput = lines.stream()
-                .map(PreparedPurchaseLine::vatAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         BigDecimal additionCost = safe(request.getAdditionCost());
         BigDecimal discount = safe(request.getDiscount());
         // importPrice is already VAT-inclusive (gross) — nothing is added on top of subtotal.
@@ -409,7 +404,7 @@ public class PurchaseinvoiceService {
         }
 
         return new PreparedInvoiceHeader(supplier, employee, procurementPlan, lines, additionCost, discount,
-                totalAmount, totalVATInput);
+                totalAmount);
     }
 
     /** Builds a not-yet-persisted {@link Purchaseinvoice} — always unpaid, see the field's own note below. */
@@ -436,9 +431,7 @@ public class PurchaseinvoiceService {
         invoice.setNote(request.getNote());
         invoice.setVatInvoiceNumber(trimToNull(request.getVatInvoiceNumber()));
         invoice.setVatInvoiceDate(request.getVatInvoiceDate());
-        invoice.setTotalVATInput(header.totalVATInput());
         invoice.setDueDate(request.getDueDate());
-        invoice.setIsValidForDeduction(isValidForDeduction(header.totalAmount(), paid, request.getDueDate()));
         invoice.setApprovedAt(approvedAt);
         return invoice;
     }
@@ -565,9 +558,7 @@ public class PurchaseinvoiceService {
         invoice.setNote(request.getNote());
         invoice.setVatInvoiceNumber(trimToNull(request.getVatInvoiceNumber()));
         invoice.setVatInvoiceDate(request.getVatInvoiceDate());
-        invoice.setTotalVATInput(header.totalVATInput());
         invoice.setDueDate(request.getDueDate());
-        invoice.setIsValidForDeduction(isValidForDeduction(header.totalAmount(), BigDecimal.ZERO, request.getDueDate()));
         invoice.setStatus(targetStatus);
 
         Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
@@ -1275,6 +1266,13 @@ public class PurchaseinvoiceService {
         return details.stream()
                 .map(detail -> safe(detail.getImportPrice())
                         .multiply(BigDecimal.valueOf(detail.getQuantity() == null ? 0 : detail.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Total input VAT for display — summed live from {@link Purchasedetail#getVatAmount()} per line. */
+    private BigDecimal calculateTotalVATInput(List<Purchasedetail> details) {
+        return details.stream()
+                .map(detail -> safe(detail.getVatAmount()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
