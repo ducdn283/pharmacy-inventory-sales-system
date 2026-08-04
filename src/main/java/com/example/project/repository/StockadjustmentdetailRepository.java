@@ -71,14 +71,18 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
                                      @Param("to") Instant to);
 
     /**
-     * Cost of {@code COUNT_INCREASE} lines whose batch was created as unknown-origin stock-count
-     * surplus, in {@code [from, to)} — feeds the taxable-income-only revenue add-on (mục D.2).
+     * Cost of surplus stock-count lines whose batch was created as unknown-origin, in {@code [from, to)}
+     * — feeds the taxable-income-only revenue add-on (mục D.2).
+     *
+     * <p>Nhận CẢ loại phiếu {@code COUNT} (bản gộp, từ 04/08/2026) lẫn {@code COUNT_INCREASE} (dữ liệu
+     * cũ trước khi gộp). Vì phiếu {@code COUNT} chứa cả dòng thừa lẫn dòng thiếu nên phải lọc thêm
+     * {@code direction = 'IN'} — không có điều kiện này thì dòng THIẾU cũng bị cộng vào thu nhập.</p>
      *
      * <p>No dedicated flag exists on {@code Stockadjustmentdetail}/{@code Batch} for "unknown
      * origin", so this relies on the one structural signal {@code StockadjustmentService
      * .createSurplusBatch} leaves behind: the batch code is prefixed {@code "KK-"} <strong>only</strong>
-     * when a new batch was created for unknown-origin surplus (a known-origin {@code COUNT_INCREASE}
-     * line reuses the counted batch as-is, never creating one), and {@code purchaseDetailID} is
+     * when a new batch was created for unknown-origin surplus (a known-origin surplus line reuses the
+     * counted batch as-is, never creating one), and {@code purchaseDetailID} is
      * always {@code null} on it (no real purchase behind it). Verified 2026-08 that no other flow in
      * the codebase produces a {@code "KK-"}-prefixed batch code ({@code PurchaseinvoiceService} uses
      * {@code "BATCH-"}, {@code ReturnService.cloneReturnBatch} uses {@code "RT-"}).</p>
@@ -87,7 +91,8 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
            select coalesce(sum(d.lineCost), 0)
            from Stockadjustmentdetail d
            join d.batchID b
-           where d.stockAdjustmentID.adjustmentType = 'COUNT_INCREASE'
+           where d.stockAdjustmentID.adjustmentType in ('COUNT', 'COUNT_INCREASE')
+             and d.direction = 'IN'
              and d.stockAdjustmentID.status = :status
              and d.stockAdjustmentID.date >= :from
              and d.stockAdjustmentID.date < :to
