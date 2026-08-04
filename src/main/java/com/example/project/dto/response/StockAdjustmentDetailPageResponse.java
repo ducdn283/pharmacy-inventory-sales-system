@@ -37,11 +37,15 @@ public class StockAdjustmentDetailPageResponse {
 
     private List<StockAdjustmentDetailItemResponse> items;
 
-    /** True chỉ khi loại phiếu là INTERNAL_USE/GIFT/SAMPLE → hiện cột thuế GTGT đầu ra trên màn chi tiết. */
-    private boolean showOutputVat;
+    /**
+     * Phiếu loại {@code DATE_ADJUSTMENT} — màn chi tiết đổi hẳn bộ cột (hạn cũ → hạn mới thay cho
+     * chênh lệch số lượng) vì phiếu này KHÔNG làm đổi tồn kho.
+     */
+    private boolean dateAdjustment;
 
-    /** Tổng thuế GTGT đầu ra của phiếu (0 nếu loại không phát sinh). */
-    private BigDecimal totalOutputVat;
+    /** Mã phiếu kiểm kê làm căn cứ (null nếu phiếu lập tay không gắn phiếu nào) + nhãn loại của nó. */
+    private String stockReviewCode;
+    private String stockReviewTypeDisplay;
 
     /**
      * True khi loại phiếu là {@code DESTROY_EMPLOYEE_FAULT} / {@code COUNT_DECREASE} — hai loại thất

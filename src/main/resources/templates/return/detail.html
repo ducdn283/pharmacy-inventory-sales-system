@@ -220,11 +220,9 @@
                                 <th>Đơn giá</th>
                                 <th>Giá trị gốc</th>
                                 <th>Tiền hoàn</th>
-                                <!-- Nhóm 1 miễn thuế: không kê khai gì nên 3 cột thuế bị ẩn cả bảng
-                                     (mỗi cột vẫn giữ đúng một khái niệm, xem cách làm ở return-purchase). -->
-                                <th th:unless="${detail.taxExempt}">Chưa thuế</th>
-                                <th th:unless="${detail.taxExempt}">Thuế suất</th>
-                                <th th:unless="${detail.taxExempt}">Thuế GTGT</th>
+                                <!-- 3 cột thuế (Chưa thuế / Thuế suất / Thuế GTGT) đã bỏ hẳn 04/08/2026:
+                                     hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ % ở MỌI nhóm, không
+                                     khấu trừ đầu ra nên phiếu trả không có số thuế nào để giảm trừ. -->
                                 <th>Nhập lại kho</th>
                             </tr>
                             </thead>
@@ -245,12 +243,6 @@
                                     th:text="${item.originalLineValue == null} ? '—' : ${#numbers.formatDecimal(item.originalLineValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="fw-semibold"
                                     th:text="${#numbers.formatDecimal(item.lineRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
-                                <td class="text-secondary" th:unless="${detail.taxExempt}"
-                                    th:text="${item.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(item.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
-                                <td th:unless="${detail.taxExempt}"
-                                    th:text="${item.vatRate == null} ? '—' : ${#numbers.formatDecimal(item.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
-                                <td th:unless="${detail.taxExempt}"
-                                    th:text="${item.vatAmount == null} ? '—' : ${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
                                 <td>
                                     <span class="badge"
                                           th:classappend="${item.restockable} ? ' bg-success-subtle text-success' : ' bg-secondary-subtle text-secondary'"
@@ -265,11 +257,6 @@
                                 <td th:text="${#numbers.formatDecimal(detail.totalOriginalValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">150.000đ</td>
                                 <td class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.totalRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">120.000đ</td>
-                                <th:block th:unless="${detail.taxExempt}">
-                                    <td th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</td>
-                                    <td></td>
-                                    <td th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</td>
-                                </th:block>
                                 <td></td>
                             </tr>
 
@@ -279,14 +266,14 @@
                                 <td colspan="8" class="text-secondary">Đã cấn trừ công nợ hóa đơn</td>
                                 <td class="text-danger"
                                     th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</td>
-                                <td th:colspan="${detail.taxExempt} ? 1 : 4"></td>
+                                <td></td>
                             </tr>
                             <tr class="fw-semibold"
                                 th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
                                 <td colspan="8">Còn phải hoàn khách (tiền thật)</td>
                                 <td class="text-warning"
                                     th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</td>
-                                <td th:colspan="${detail.taxExempt} ? 1 : 4"></td>
+                                <td></td>
                             </tr>
                             </tbody>
                         </table>
@@ -353,30 +340,10 @@
                             <strong th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
                         </div>
 
-                        <!-- Phiếu trả không chi tiền, nhưng vẫn phải kê thuế: doanh thu và thuế GTGT đầu ra
-                             được giảm trừ vào KỲ TRẢ HÀNG (không hồi tố kỳ bán gốc). Số này là căn cứ cho
-                             phiếu chi / báo cáo thuế lấy chi tiết. Nhóm 1 miễn thuế thì không có gì để kê. -->
-                        <th:block th:unless="${detail.taxExempt}">
-                            <div class="d-flex justify-content-between mt-3">
-                                <span class="text-secondary">Doanh thu giảm trừ (chưa thuế)</span>
-                                <span th:text="${#numbers.formatDecimal(detail.totalPreTaxRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">114.286đ</span>
-                            </div>
-
-                            <div class="d-flex justify-content-between mt-2">
-                                <span class="text-secondary">Thuế GTGT đầu ra giảm trừ</span>
-                                <strong th:text="${#numbers.formatDecimal(detail.totalVATRefund, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.714đ</strong>
-                            </div>
-
-                            <p class="text-secondary small mb-0 mt-2">
-                                Ghi giảm vào kỳ tính thuế của ngày trả hàng, không sửa lại kỳ bán gốc.
-                                Thuế chỉ tính trên phần THỰC hoàn, phần giữ lại vẫn chịu thuế như doanh thu bán hàng.
-                            </p>
-                        </th:block>
-
-                        <p class="text-secondary small mb-0 mt-2" th:if="${detail.taxExempt}">
-                            Nhà thuốc đang thuộc Nhóm 1 (dưới ngưỡng 1 — miễn thuế) nên phiếu trả không phát sinh
-                            thuế GTGT để giảm trừ.
-                        </p>
+                        <!-- Phiếu trả KHÔNG còn kê thuế. Hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ %
+                             ở mọi nhóm (không khấu trừ đầu ra), nên doanh thu tính thuế của kỳ được suy từ
+                             tổng các hóa đơn CÒN HIỆU LỰC — hóa đơn thay thế do phiếu này sinh ra đã mang
+                             giá trị mới, không cần trừ riêng phần trả hàng nữa. -->
                     </div>
                 </div>
 

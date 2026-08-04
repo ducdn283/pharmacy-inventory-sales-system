@@ -98,28 +98,9 @@ public class ReturnPurchaseService {
         this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
-    /** Current tax revenue group of the household (1/2/3/4), read from the financial setting singleton. */
-    private int revenueGroup() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
-                .map(Financialsetting::getRevenueGroup)
-                .orElse(2);
-    }
-
-    /** Nhóm 3/4 = deduction method → the reversed input VAT is tracked on the slip; Nhóm 2 has nothing to reverse. */
-    @Transactional(readOnly = true)
-    public boolean isDeductionGroup() {
-        return revenueGroup() >= 3;
-    }
-
-    /**
-     * Nhóm 1 = dưới ngưỡng 1, miễn thuế hoàn toàn. Cũng không có thuế đầu vào để đảo như Nhóm 2, nhưng
-     * LÝ DO khác hẳn (Nhóm 2 có kê khai, chỉ là tính trực tiếp trên doanh thu) nên màn hình phải chú
-     * thích đúng nhóm thay vì mặc định "đang ở Nhóm 2".
-     */
-    @Transactional(readOnly = true)
-    public boolean isTaxExempt() {
-        return TaxRevenueGroup.isTaxExempt(revenueGroup());
-    }
+    // revenueGroup() / isDeductionGroup() / isTaxExempt() đã bỏ 04/08/2026: hộ kinh doanh KHÔNG khấu trừ
+    // GTGT đầu vào ở bất kỳ nhóm nào, nên trả hàng NCC không có khoản thuế nào để đảo — nhóm doanh thu
+    // không còn ảnh hưởng gì tới màn này.
 
     /**
      * Tỷ lệ hoàn MẶC ĐỊNH, từ {@code Financialsetting.returnProductOnInvoiceValueRate}. Ở chiều NCC đây là
@@ -302,8 +283,7 @@ public class ReturnPurchaseService {
                     returnedUnit,                 // Đã trả (theo đơn vị nhập)
                     onHandUnit,                   // Tồn / SL trả tối đa (theo đơn vị nhập)
                     grossPerUnit,                 // Đơn giá nhập (gross / đơn vị nhập)
-                    grossPerUnit,                 // Tiền hoàn/đơn vị = 100% gross (NCC hoàn đúng số đã trả)
-                    line.getVatRate()));          // Thuế suất dòng nhập gốc — để tạm tính thuế đầu vào đảo lại
+                    grossPerUnit));               // Tiền hoàn/đơn vị = 100% gross (NCC hoàn đúng số đã trả)
         }
         return lines;
     }
@@ -390,7 +370,7 @@ public class ReturnPurchaseService {
                 if (take <= 0) {
                     continue;
                 }
-                chunks.add(new Chunk(line, batch, take, importPricePerBase(batch), line.getVatRate(), refundRate));
+                chunks.add(new Chunk(line, batch, take, importPricePerBase(batch), refundRate));
                 remaining -= take;
             }
         }
@@ -403,14 +383,6 @@ public class ReturnPurchaseService {
         BigDecimal totalRefund = chunks.stream()
                 .map(Chunk::lineRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        // Nhóm 3 (khấu trừ): ghi giảm thuế GTGT đầu vào đã khấu trừ; Nhóm 2 chưa từng khấu trừ → 0.
-        // Cờ này quyết định CẢ dòng chi tiết lẫn tổng phiếu — nếu chỉ zero ở tổng mà dòng vẫn tách thuế
-        // thì màn chi tiết tự mâu thuẫn (dòng ghi thuế, tổng ghi 0) và báo cáo trừ nhầm số.
-        boolean deductionGroup = isDeductionGroup();
-        BigDecimal totalVATRefund = deductionGroup
-                ? chunks.stream().map(Chunk::vatAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
-                : BigDecimal.ZERO;
-
         String status = asDraft ? ReturnPurchaseStatus.DRAFT : ReturnPurchaseStatus.APPROVED;
 
         Return ret = new Return();
@@ -424,7 +396,6 @@ public class ReturnPurchaseService {
         // phiếu thu bên Kế toán. 3 cột refundCash/refundBanking/refundCredit đã bị bỏ khỏi
         // bảng `return` — phiếu trả chỉ còn lưu tổng NCC phải hoàn (totalRefund/offsetDebtAmount).
         ret.setTotalRefund(totalRefund);
-        ret.setTotalVATRefund(totalVATRefund);
         ret.setAppliedRefundRate(refundRate);
         // Số dự kiến cấn trừ vào công nợ đang nợ NCC; chốt lại theo dư nợ tại thời điểm DUYỆT.
         ret.setOffsetDebtAmount(computeDebtOffset(purchase, totalRefund));
@@ -455,14 +426,10 @@ public class ReturnPurchaseService {
             // Chênh lệch giữa 2 cột = khoản LỖ khi NCC không hoàn đủ — tính động vào chi phí hợp lý TNCN
             // của kỳ (đặc tả bổ sung 27/07 mục 1.3 + 4.5), KHÔNG tạo Expense riêng.
             detail.setOriginalLineValue(chunk.grossRefund());
-            // importPricePerBase là GROSS (chốt nhóm) → Nhóm 3 tách net/VAT TỪ TRONG gross: preTax = net,
-            // vatAmount = phần thuế đầu vào phải đảo lại.
-            // Nhóm 1/2 KHÔNG khấu trừ đầu vào ⇒ không có gì để đảo: ghi vatRate/vatAmount = 0 và
-            // preTaxAmount = trọn số hoàn (giá vốn của các nhóm này là giá GỘP). Nhờ vậy
-            // Σ preTaxAmount = totalRefund và Σ vatAmount = totalVATRefund = 0 — dòng và tổng luôn khớp.
-            detail.setVatRate(deductionGroup && chunk.vatRate() != null ? chunk.vatRate() : BigDecimal.ZERO);
-            detail.setPreTaxAmount(deductionGroup ? chunk.preTaxAmount() : chunk.lineRefund());
-            detail.setVatAmount(deductionGroup ? chunk.vatAmount() : BigDecimal.ZERO);
+            // KHÔNG còn tách net/VAT trên dòng trả: 3 cột vatRate/preTaxAmount/vatAmount đã bị bỏ khỏi
+            // `returndetail`. Hộ kinh doanh (mọi nhóm) tính GTGT bằng doanh thu × tỷ lệ %, không khấu trừ
+            // đầu vào ⇒ trả hàng NCC không có khoản thuế nào để đảo ngược. `importPricePerBase` vẫn là
+            // giá GỘP nên lineRefund đã là số tiền NCC thực hoàn, không phải cộng thêm thuế.
             detail.setRestockable(false);
             returndetailRepository.save(detail);
         }
@@ -669,13 +636,6 @@ public class ReturnPurchaseService {
                 ret.getAppliedRefundRate(),
                 totalOriginalValue,
                 totalOriginalValue.subtract(nzMoney(ret.getTotalRefund())).max(BigDecimal.ZERO),
-                details.stream()
-                        .map(Returndetail::getPreTaxAmount)
-                        .filter(Objects::nonNull)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add),
-                ret.getTotalVATRefund(),
-                isDeductionGroup(),
-                isTaxExempt(),
                 items);
     }
 
@@ -721,10 +681,7 @@ public class ReturnPurchaseService {
                 qtyUnit,
                 pricePerUnit,
                 detail.getOriginalLineValue(),
-                detail.getLineRefund(),
-                detail.getVatRate(),
-                detail.getPreTaxAmount(),
-                detail.getVatAmount());
+                detail.getLineRefund());
     }
 
     // ------------------------------------------------------------------ purchase read-only access
@@ -1006,10 +963,11 @@ public class ReturnPurchaseService {
      * <p>"Giá nhập" bên phiếu nhập là
      * GIÁ CUỐI ĐÃ GỒM THUẾ (gross) → {@code batch.importPricePerBase} lưu gross/đơn vị cơ sở → {@code
      * unitImportPrice} là GROSS. Vì vậy tiền hoàn NCC = gross = ĐÚNG số nhà thuốc đã trả (không cộng thêm
-     * VAT lên trên); net/VAT được TÁCH RA từ trong gross để ghi sổ thuế (giảm GTGT đầu vào Nhóm 3).</p>
+     * VAT lên trên). Từ 04/08/2026 KHÔNG còn tách net/VAT: hộ kinh doanh không khấu trừ GTGT đầu vào nên
+     * không có gì để ghi sổ đảo ngược.</p>
      */
     private record Chunk(Purchasedetail line, Batch batch, int qty, BigDecimal unitImportPrice,
-                         BigDecimal vatRate, BigDecimal refundRate) {
+                         BigDecimal refundRate) {
         /** Giá trị nhập GỐC 100% của chunk = importPricePerBase × qty (originalLineValue). */
         BigDecimal grossRefund() {
             return unitImportPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
@@ -1021,21 +979,6 @@ public class ReturnPurchaseService {
                 return grossRefund();
             }
             return grossRefund().multiply(refundRate).divide(FULL_REFUND_RATE, 2, RoundingMode.HALF_UP);
-        }
-
-        /** Net (pre-tax) portion tách từ SỐ THỰC HOÀN = lineRefund ÷ (1 + vatRate%). */
-        BigDecimal preTaxAmount() {
-            BigDecimal rate = vatRate != null ? vatRate : BigDecimal.ZERO;
-            if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-                return lineRefund();
-            }
-            BigDecimal divisor = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
-            return lineRefund().divide(divisor, 2, RoundingMode.HALF_UP);
-        }
-
-        /** Input VAT tách từ số thực hoàn = lineRefund − net (đầu vào đã khấu trừ, dùng cho Nhóm 3). */
-        BigDecimal vatAmount() {
-            return lineRefund().subtract(preTaxAmount());
         }
 
         /** Gross unit import price (per base) — đã gồm thuế, dùng làm đơn giá dòng chi tiết. */

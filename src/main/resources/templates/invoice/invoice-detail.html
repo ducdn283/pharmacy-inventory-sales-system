@@ -685,6 +685,29 @@
                             </strong>
                         </div>
 
+                        <!--
+                          Khách đã đưa NHIỀU HƠN giá trị hóa đơn. Chỉ xảy ra trên hóa đơn THAY THẾ: bản
+                          thay thế kế thừa nguyên số tiền khách đã thanh toán cho hóa đơn gốc, trong khi
+                          tổng tiền đã trừ đi phần hàng trả lại ⇒ phần dư chính là số nhà thuốc nợ ngược
+                          khách.
+
+                          Tình trạng chi trả thật theo dõi ở phiếu trả hàng
+                          — mã phiếu nằm ngay ô "Mã trả hàng" phía trên.
+                        -->
+                        <th:block th:if="${detail.total != null and detail.paidByCash != null and detail.paidByBanking != null}"
+                                  th:with="excessPaid=${detail.paidByCash.add(detail.paidByBanking).subtract(detail.total)}">
+                            <div class="d-flex justify-content-between mb-1" th:if="${excessPaid.signum() > 0}">
+                                <span class="text-secondary">Khách đã trả dư</span>
+                                <strong class="text-danger"
+                                        th:text="${#numbers.formatDecimal(excessPaid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                    0đ
+                                </strong>
+                            </div>
+                            <div class="text-secondary small mb-3" th:if="${excessPaid.signum() > 0}">
+                                Phần chênh do trả hàng — nhà thuốc hoàn lại khách bằng phiếu chi.
+                            </div>
+                        </th:block>
+
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Hình thức TT</span>
                             <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
