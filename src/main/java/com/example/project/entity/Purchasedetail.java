@@ -49,15 +49,12 @@ public class Purchasedetail {
     @Column(name = "returnQty", nullable = false)
     private Integer returnQty;
 
-    @NotNull
-    @Column(name = "vatRate", nullable = false, precision = 5, scale = 2)
+    @Column(name = "vatRate", precision = 5, scale = 2)
     private BigDecimal vatRate;
 
-    @NotNull
-    @Column(name = "preTaxAmount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "preTaxAmount", precision = 15, scale = 2)
     private BigDecimal preTaxAmount;
 
-    @NotNull
-    @Column(name = "vatAmount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "vatAmount", precision = 15, scale = 2)
     private BigDecimal vatAmount;
 }

@@ -26,7 +26,7 @@ public class FinancialSettingPageController {
         this.financialsettingService = financialsettingService;
     }
 
-    @GetMapping({"/owner/financial-setting", "/accountant/financial-setting"})
+    @GetMapping({"/owner/financial-setting", "/accountant/financial-setting", "/pharmacist/financial-setting"})
     public String view(HttpServletRequest request, Model model) {
         boolean editable = request.getRequestURI().startsWith("/owner/");
 
@@ -35,7 +35,7 @@ public class FinancialSettingPageController {
             model.addAttribute("financialSettingForm", toForm(settings));
         }
         model.addAttribute("editable", editable);
-        model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+        model.addAttribute("setupConfirmed", financialsettingService.isSetupConfirmed());
         model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
         model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
         model.addAttribute("balanceUpdatedAtDisplay", formatBalanceUpdatedAt(settings.getBalanceUpdatedAt()));
@@ -50,7 +50,7 @@ public class FinancialSettingPageController {
                         RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             model.addAttribute("editable", true);
-            model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+            model.addAttribute("setupConfirmed", financialsettingService.isSetupConfirmed());
             model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
             model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
             model.addAttribute("balanceUpdatedAtDisplay",
@@ -73,8 +73,6 @@ public class FinancialSettingPageController {
         FinancialSettingUpdateRequest form = new FinancialSettingUpdateRequest();
         form.setTaxCalculationMethod(response.getTaxCalculationMethod());
         form.setRevenueGroup(response.getRevenueGroup());
-        form.setAnnualRevenueThreshold1(response.getAnnualRevenueThreshold1());
-        form.setAnnualRevenueThreshold2(response.getAnnualRevenueThreshold2());
         form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate());
         form.setAutoGenerateVATInvoice(response.getAutoGenerateVATInvoice());
         form.setVatInvoiceSeries(response.getVatInvoiceSeries());

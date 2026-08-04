@@ -24,8 +24,8 @@ public class Taxperiodsnapshot {
     @Column(name = "periodLabel", length = 10)
     private String periodLabel;
 
-    @Column(name = "nextPeriodTaxType")
-    private Integer nextPeriodTaxType;
+    @Column(name = "periodTaxType")
+    private Integer periodTaxType;
 
     @Column(name = "startDate")
     private LocalDate startDate;
@@ -38,15 +38,6 @@ public class Taxperiodsnapshot {
 
     @Column(name = "vatOutput", precision = 15, scale = 2)
     private BigDecimal vatOutput;
-
-    @Column(name = "vatInput", precision = 15, scale = 2)
-    private BigDecimal vatInput;
-
-    @Column(name = "vatCarryforwardIn", precision = 15, scale = 2)
-    private BigDecimal vatCarryforwardIn;
-
-    @Column(name = "vatCarryforwardOut", precision = 15, scale = 2)
-    private BigDecimal vatCarryforwardOut;
 
     @Column(name = "quarterlyRevenue", precision = 15, scale = 2)
     private BigDecimal quarterlyRevenue;

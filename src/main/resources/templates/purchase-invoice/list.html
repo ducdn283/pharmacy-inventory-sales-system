@@ -260,7 +260,7 @@
                 <p class="text-secondary mb-0">Quản lý các phiếu nhập hàng từ nhà cung cấp</p>
             </div>
 
-            <a th:if="${basePath == '/owner/purchase-invoices' or basePath == '/pharmacist/purchase-invoices'}"
+            <a th:if="${canCreate}"
                th:href="${basePath + '/create'}"
                class="btn btn-purchase-primary">
                 <i class="ti ti-plus me-1"></i>

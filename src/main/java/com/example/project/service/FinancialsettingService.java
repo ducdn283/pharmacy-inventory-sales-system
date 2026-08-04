@@ -4,7 +4,6 @@ import com.example.project.dto.request.FinancialSettingUpdateRequest;
 import com.example.project.dto.response.FinancialsettingResponse;
 import com.example.project.entity.Financialsetting;
 import com.example.project.repository.FinancialsettingRepository;
-import com.example.project.repository.TaxperiodsnapshotRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,42 +14,42 @@ import java.util.List;
 @Service
 public class FinancialsettingService {
     private final FinancialsettingRepository financialsettingRepository;
-    private final TaxperiodsnapshotRepository taxperiodsnapshotRepository;
 
-    public FinancialsettingService(FinancialsettingRepository financialsettingRepository,
-                                   TaxperiodsnapshotRepository taxperiodsnapshotRepository) {
+    public FinancialsettingService(FinancialsettingRepository financialsettingRepository) {
         this.financialsettingRepository = financialsettingRepository;
-        this.taxperiodsnapshotRepository = taxperiodsnapshotRepository;
     }
 
     /**
-     * Khoá khi đã có kỳ thuế nào đóng — từ đó {@code TaxperiodsnapshotService} tự giữ đồng bộ
-     * {@code revenueGroup} theo chuỗi kỳ ({@code applyAutomaticGroupTransition}/{@code
-     * closePeriod}), con người không còn quyền sửa qua form nữa.
+     * Đã "Chốt thiết lập ban đầu" chưa — cột {@code setupConfirmed}. Đây là nguồn khoá cho hai quỹ
+     * {@code cashSafeBalance}/{@code bankAccountBalance} MỘT LƯỢT (không còn khoá {@code
+     * revenueGroup} — xem {@code saveSettings}), và cũng là điều kiện
+     * {@link com.example.project.config.SetupConfirmedInterceptor} dùng để chặn mọi màn hình khác
+     * cho tới khi Owner hoàn tất thiết lập lần đầu.
      */
     @Transactional(readOnly = true)
-    public boolean isRevenueGroupLocked() {
-        return taxperiodsnapshotRepository.count() > 0;
+    public boolean isSetupConfirmed() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(entity -> Boolean.TRUE.equals(entity.getSetupConfirmed()))
+                .orElse(false);
     }
 
     /**
-     * Số dư quỹ tiền mặt là số khởi tạo nhập MỘT LẦN DUY NHẤT — không giống {@code revenueGroup},
-     * việc khoá ở đây không phụ thuộc một bảng khác mà chỉ dựa vào chính cột này: hễ đã có giá trị
-     * (khác {@code null}) là coi như người dùng đã xác nhận khoá, vì từ lúc đó
-     * {@code ExpenseService} bắt đầu cộng trừ số dư này theo thời gian thực — cho sửa tay đè lên sẽ
+     * Số dư quỹ tiền mặt khoá khi ĐÃ chốt thiết lập ban đầu, hoặc (để tương thích với dữ liệu cũ từ
+     * trước khi có {@code setupConfirmed}) khi cột này đã khác {@code null} — từ lúc đó
+     * {@code ExpenseService} bắt đầu cộng trừ số dư này theo thời gian thực, cho sửa tay đè lên sẽ
      * làm sai lệch dữ liệu đang được theo dõi tự động.
      */
     @Transactional(readOnly = true)
     public boolean isCashSafeBalanceLocked() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
+        return isSetupConfirmed() || financialsettingRepository.findFirstByOrderByIdAsc()
                 .map(entity -> entity.getCashSafeBalance() != null)
                 .orElse(false);
     }
 
-    /** Tương tự {@link #isCashSafeBalanceLocked()} nhưng cho quỹ ngân hàng — khoá độc lập với quỹ tiền mặt. */
+    /** Tương tự {@link #isCashSafeBalanceLocked()} nhưng cho quỹ ngân hàng. */
     @Transactional(readOnly = true)
     public boolean isBankAccountBalanceLocked() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
+        return isSetupConfirmed() || financialsettingRepository.findFirstByOrderByIdAsc()
                 .map(entity -> entity.getBankAccountBalance() != null)
                 .orElse(false);
     }
@@ -75,10 +74,16 @@ public class FinancialsettingService {
         Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
                 .orElseGet(Financialsetting::new);
 
-        // Khoá vì kỳ thuế đã đóng — xem isRevenueGroupLocked(). Tính trực tiếp trên biến đếm thay vì
-        // gọi lại isRevenueGroupLocked() để khỏi fetch hai lần trong cùng một transaction.
-        boolean revenueGroupLocked = taxperiodsnapshotRepository.count() > 0;
-        Integer revenueGroup = revenueGroupLocked ? entity.getRevenueGroup() : request.getRevenueGroup();
+        // Chốt sẵn trạng thái TRƯỚC khi sửa entity — cần để biết đây có phải chính là lần lưu hoàn
+        // tất thiết lập ban đầu hay không (xem khối kiểm tra cuối hàm).
+        boolean wasSetupConfirmed = Boolean.TRUE.equals(entity.getSetupConfirmed());
+        // Nhóm doanh thu KHÔNG bị khoá lại sau khi chốt thiết lập / sau khi đã có kỳ thuế đóng —
+        // khác với hai quỹ tiền. Chuyển từ Nhóm 2 lên Nhóm 3 cần cơ quan thuế chấp thuận trước, nên
+        // form phải luôn cho sửa tay được để phản ánh đúng thời điểm được chấp thuận, thay vì chỉ
+        // đổi được một lần lúc thiết lập ban đầu. Việc tự động đồng bộ theo chuỗi kỳ thuế cho chiều
+        // 1 → 2 (xem TaxperiodsnapshotService.applyAutomaticGroupTransition/closePeriod) vẫn chạy
+        // song song không đổi — đây chỉ là bỏ khoá trên form, không đụng tới cơ chế tự động đó.
+        Integer revenueGroup = request.getRevenueGroup();
 
         // Nhóm 3 (>ngưỡng 2) bắt buộc tính theo lợi nhuận — client JS đã khoá UI, nhưng chốt lại ở
         // server để không phụ thuộc vào JS phía client.
@@ -89,8 +94,8 @@ public class FinancialsettingService {
 
         entity.setTaxCalculationMethod(taxCalculationMethod);
         entity.setRevenueGroup(revenueGroup);
-        entity.setAnnualRevenueThreshold1(request.getAnnualRevenueThreshold1());
-        entity.setAnnualRevenueThreshold2(request.getAnnualRevenueThreshold2());
+        // annualRevenueThreshold1/2: KHÔNG còn đọc từ request nữa — đã ẩn khỏi UI, cố định vĩnh viễn
+        // theo giá trị đã seed (V13). Không set lại ở đây để giữ nguyên giá trị đang lưu.
         entity.setReturnProductOnInvoiceValueRate(request.getReturnProductOnInvoiceValueRate());
         entity.setAutoGenerateVATInvoice(Boolean.TRUE.equals(request.getAutoGenerateVATInvoice()));
         entity.setVatInvoiceSeries(request.getVatInvoiceSeries());
@@ -110,7 +115,8 @@ public class FinancialsettingService {
         // isBankAccountBalanceLocked), giá trị đăng lên bị bỏ qua hoàn toàn — kể cả khi ai đó lách
         // control đã disable ở client để cố gửi lên một số khác — vì từ lúc khoá, ExpenseService là
         // nơi DUY NHẤT còn được phép đổi số này (cộng trừ theo thời gian thực mỗi khi phiếu chi giải
-        // ngân/bị hủy). Hai quỹ khoá độc lập nhau.
+        // ngân/bị hủy). Hai quỹ khoá độc lập nhau ở CƠ CHẾ, nhưng cùng bị khoá một lượt bởi
+        // setupConfirmed bên dưới.
         boolean balanceChanged = false;
         if (entity.getCashSafeBalance() == null && request.getCashSafeBalance() != null) {
             entity.setCashSafeBalance(request.getCashSafeBalance());
@@ -122,6 +128,22 @@ public class FinancialsettingService {
         }
         if (balanceChanged) {
             entity.setBalanceUpdatedAt(LocalDateTime.now());
+        }
+
+        // Chốt thiết lập ban đầu: chừng nào chưa chốt, lần lưu NÀY phải để lại đủ nhóm doanh thu (đã
+        // được @NotNull chặn từ DTO) VÀ cả hai số dư quỹ — thiếu một trong hai thì từ chối toàn bộ
+        // (rollback nhờ @Transactional) thay vì chốt dở dang rồi không còn cách nào sửa lại. Đủ cả ba
+        // thì đánh dấu setupConfirmed = true, khoá luôn cả ba trường từ lần lưu kế tiếp.
+        if (!wasSetupConfirmed) {
+            if (entity.getCashSafeBalance() == null) {
+                throw new IllegalArgumentException(
+                        "Vui lòng nhập số dư quỹ tiền mặt trước khi hoàn tất thiết lập ban đầu");
+            }
+            if (entity.getBankAccountBalance() == null) {
+                throw new IllegalArgumentException(
+                        "Vui lòng nhập số dư quỹ ngân hàng trước khi hoàn tất thiết lập ban đầu");
+            }
+            entity.setSetupConfirmed(true);
         }
 
         return FinancialsettingResponse.from(financialsettingRepository.save(entity));
@@ -204,8 +226,6 @@ public class FinancialsettingService {
                 "",
                 "",
                 1,
-                BigDecimal.valueOf(1_000_000_000L),
-                BigDecimal.valueOf(3_000_000_000L),
                 true,
                 null,
                 null,

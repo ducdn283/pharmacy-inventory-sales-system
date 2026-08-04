@@ -1,5 +1,6 @@
 package com.example.project.controller;
 
+import com.example.project.constant.RoleConstants;
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.PurchaseInvoiceCreateRequest;
 import com.example.project.dto.request.PurchaseInvoiceDetailCreateRequest;
@@ -9,6 +10,7 @@ import com.example.project.dto.response.PurchaseInvoicePrintPageResponse;
 import com.example.project.dto.response.ProductOptionResponse;
 import com.example.project.dto.response.SupplierOptionResponse;
 import com.example.project.dto.response.ProcurementPlanDetailOptionResponse;
+import com.example.project.constant.PurchaseInvoiceStatus;
 import com.example.project.service.PurchaseinvoiceService;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +28,9 @@ import java.util.stream.Collectors;
 
 @Controller
 public class PurchaseInvoicePageController {
+
+    private static final String MSG_ACCOUNTANT_HANDLES_CREATE =
+            "Đã có Kế toán phụ trách tạo phiếu nhập — vui lòng vào phiếu \"Chờ duyệt\" để duyệt.";
 
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final CurrentUserContext currentUserContext;
@@ -89,37 +94,44 @@ public class PurchaseInvoicePageController {
         model.addAttribute("totalItems", invoicePage.getTotalElements());
 
         model.addAttribute("basePath", resolveBasePath(request));
+        model.addAttribute("canCreate", purchaseinvoiceService.canCreatePurchaseInvoice(currentUserContext.getCurrentRole()));
 
         return "purchase-invoice/list";
     }
 
-    @GetMapping({
-            "/owner/purchase-invoices/create",
-            "/pharmacist/purchase-invoices/create"
-    })
-    public String createPage(HttpServletRequest request, Model model) {
-        PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
+    // ------------------------------------------------------------------ Owner: direct one-step create
+    // Only reachable while there is no active Accountant — see PurchaseinvoiceService class javadoc.
 
+    @GetMapping("/owner/purchase-invoices/create")
+    public String createPage(HttpServletRequest request, Model model, RedirectAttributes redirectAttributes) {
+        if (!purchaseinvoiceService.canCreatePurchaseInvoice(RoleConstants.OWNER)) {
+            redirectAttributes.addFlashAttribute("errorMessage", MSG_ACCOUNTANT_HANDLES_CREATE);
+            return "redirect:/owner/purchase-invoices";
+        }
+
+        PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
         PurchaseInvoiceDetailCreateRequest firstItem = new PurchaseInvoiceDetailCreateRequest();
         form.getDetails().add(firstItem);
 
         model.addAttribute("form", form);
-        addCreatePageData(request, model);
+        addCreatePageData(request, model, "/owner/purchase-invoices/create", false, false);
 
         return "purchase-invoice/create";
     }
 
-    @PostMapping({
-            "/owner/purchase-invoices/create",
-            "/pharmacist/purchase-invoices/create"
-    })
+    @PostMapping("/owner/purchase-invoices/create")
     public String createPurchaseInvoice(@Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
                                         BindingResult bindingResult,
                                         HttpServletRequest request,
                                         Model model,
                                         RedirectAttributes redirectAttributes) {
+        if (!purchaseinvoiceService.canCreatePurchaseInvoice(RoleConstants.OWNER)) {
+            redirectAttributes.addFlashAttribute("errorMessage", MSG_ACCOUNTANT_HANDLES_CREATE);
+            return "redirect:/owner/purchase-invoices";
+        }
+
         if (bindingResult.hasErrors()) {
-            addCreatePageData(request, model);
+            addCreatePageData(request, model, "/owner/purchase-invoices/create", false, false);
             return "purchase-invoice/create";
         }
 
@@ -130,12 +142,145 @@ public class PurchaseInvoicePageController {
             );
 
             redirectAttributes.addFlashAttribute("successMessage", "Tạo phiếu nhập thành công");
-            return "redirect:" + resolveBasePath(request) + "/" + purchaseId;
+            return "redirect:/owner/purchase-invoices/" + purchaseId;
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
-            addCreatePageData(request, model);
+            addCreatePageData(request, model, "/owner/purchase-invoices/create", false, false);
             return "purchase-invoice/create";
         }
+    }
+
+    // ------------------------------------------------------------------ Accountant: draft -> submit -> Owner duyệt
+
+    @GetMapping("/accountant/purchase-invoices/create")
+    public String accountantCreatePage(HttpServletRequest request, Model model) {
+        PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
+        PurchaseInvoiceDetailCreateRequest firstItem = new PurchaseInvoiceDetailCreateRequest();
+        form.getDetails().add(firstItem);
+
+        model.addAttribute("form", form);
+        addCreatePageData(request, model, "/accountant/purchase-invoices/create", false, true);
+
+        return "purchase-invoice/create";
+    }
+
+    @PostMapping("/accountant/purchase-invoices/create")
+    public String accountantCreatePurchaseInvoice(@Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
+                                                   BindingResult bindingResult,
+                                                   @RequestParam(name = "action", defaultValue = "submit") String action,
+                                                   HttpServletRequest request,
+                                                   Model model,
+                                                   RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            addCreatePageData(request, model, "/accountant/purchase-invoices/create", false, true);
+            return "purchase-invoice/create";
+        }
+
+        boolean saveAsDraft = "draft".equals(action);
+
+        try {
+            Integer accountId = currentUserContext.getCurrentAccountId();
+            Integer purchaseId = saveAsDraft
+                    ? purchaseinvoiceService.createPurchaseInvoiceDraft(form, accountId)
+                    : purchaseinvoiceService.createPurchaseInvoiceForApproval(form, accountId);
+
+            redirectAttributes.addFlashAttribute("successMessage",
+                    saveAsDraft ? "Đã lưu nháp phiếu nhập" : "Đã nộp phiếu nhập, chờ Chủ nhà thuốc duyệt");
+            return "redirect:/accountant/purchase-invoices/" + purchaseId;
+        } catch (IllegalArgumentException exception) {
+            model.addAttribute("errorMessage", exception.getMessage());
+            addCreatePageData(request, model, "/accountant/purchase-invoices/create", false, true);
+            return "purchase-invoice/create";
+        }
+    }
+
+    @GetMapping("/accountant/purchase-invoices/{purchaseId}/edit")
+    public String accountantEditDraftPage(@PathVariable Integer purchaseId,
+                                          HttpServletRequest request,
+                                          Model model,
+                                          RedirectAttributes redirectAttributes) {
+        try {
+            model.addAttribute("form", purchaseinvoiceService.getDraftEditForm(purchaseId));
+            addCreatePageData(request, model,
+                    "/accountant/purchase-invoices/" + purchaseId + "/edit", true, true);
+            return "purchase-invoice/create";
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:/accountant/purchase-invoices/" + purchaseId;
+        }
+    }
+
+    @PostMapping("/accountant/purchase-invoices/{purchaseId}/edit")
+    public String accountantEditDraft(@PathVariable Integer purchaseId,
+                                      @Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
+                                      BindingResult bindingResult,
+                                      @RequestParam(name = "action", defaultValue = "submit") String action,
+                                      HttpServletRequest request,
+                                      Model model,
+                                      RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            addCreatePageData(request, model,
+                    "/accountant/purchase-invoices/" + purchaseId + "/edit", true, true);
+            return "purchase-invoice/create";
+        }
+
+        boolean saveAsDraft = "draft".equals(action);
+
+        try {
+            Integer accountId = currentUserContext.getCurrentAccountId();
+            Integer savedId = saveAsDraft
+                    ? purchaseinvoiceService.updatePurchaseInvoiceDraft(purchaseId, form, accountId)
+                    : purchaseinvoiceService.submitPurchaseInvoiceDraft(purchaseId, form, accountId);
+
+            redirectAttributes.addFlashAttribute("successMessage",
+                    saveAsDraft ? "Đã lưu lại bản nháp" : "Đã nộp phiếu nhập, chờ Chủ nhà thuốc duyệt");
+            return "redirect:/accountant/purchase-invoices/" + savedId;
+        } catch (IllegalArgumentException exception) {
+            model.addAttribute("errorMessage", exception.getMessage());
+            addCreatePageData(request, model,
+                    "/accountant/purchase-invoices/" + purchaseId + "/edit", true, true);
+            return "purchase-invoice/create";
+        }
+    }
+
+    @PostMapping("/accountant/purchase-invoices/{purchaseId}/delete")
+    public String accountantDeleteDraft(@PathVariable Integer purchaseId, RedirectAttributes redirectAttributes) {
+        try {
+            purchaseinvoiceService.deletePurchaseInvoiceDraft(purchaseId);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã xóa phiếu nháp");
+            return "redirect:/accountant/purchase-invoices";
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:/accountant/purchase-invoices/" + purchaseId;
+        }
+    }
+
+    // ------------------------------------------------------------------ Owner: duyệt / từ chối
+
+    @PostMapping("/owner/purchase-invoices/{purchaseId}/approve")
+    public String approvePurchaseInvoice(@PathVariable Integer purchaseId, RedirectAttributes redirectAttributes) {
+        try {
+            purchaseinvoiceService.approvePurchaseInvoice(purchaseId);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã duyệt phiếu nhập, hàng đã được cộng vào kho");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+        }
+
+        return "redirect:/owner/purchase-invoices/" + purchaseId;
+    }
+
+    @PostMapping("/owner/purchase-invoices/{purchaseId}/reject")
+    public String rejectPurchaseInvoice(@PathVariable Integer purchaseId,
+                                        @RequestParam(name = "reason", required = false) String reason,
+                                        RedirectAttributes redirectAttributes) {
+        try {
+            purchaseinvoiceService.rejectPurchaseInvoice(purchaseId, reason);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã từ chối, phiếu quay về trạng thái Nháp");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+        }
+
+        return "redirect:/owner/purchase-invoices/" + purchaseId;
     }
 
     @GetMapping({
@@ -147,9 +292,18 @@ public class PurchaseInvoicePageController {
                              HttpServletRequest request,
                              Model model) {
         PurchaseInvoiceDetailPageResponse detail = purchaseinvoiceService.getDetail(purchaseId);
+        String basePath = resolveBasePath(request);
+        String role = currentUserContext.getCurrentRole();
+
+        boolean isPending = PurchaseInvoiceStatus.PENDING_APPROVAL.equals(detail.getPaymentStatus());
+        boolean isDraft = PurchaseInvoiceStatus.DRAFT.equals(detail.getPaymentStatus());
 
         model.addAttribute("detail", detail);
-        model.addAttribute("basePath", resolveBasePath(request));
+        model.addAttribute("basePath", basePath);
+        model.addAttribute("canApprove", isPending && RoleConstants.OWNER.equals(role));
+        model.addAttribute("canReject", isPending && RoleConstants.OWNER.equals(role));
+        model.addAttribute("canEditDraft", isDraft && RoleConstants.ACCOUNTANT.equals(role));
+        model.addAttribute("canDeleteDraft", isDraft && RoleConstants.ACCOUNTANT.equals(role));
 
         return "purchase-invoice/detail";
     }
@@ -190,7 +344,7 @@ public class PurchaseInvoicePageController {
 
     @GetMapping({
             "/owner/purchase-invoices/procurement-plan-details",
-            "/pharmacist/purchase-invoices/procurement-plan-details"
+            "/accountant/purchase-invoices/procurement-plan-details"
     })
     @ResponseBody
     public List<ProcurementPlanDetailOptionResponse> getProcurementPlanDetails(
@@ -199,7 +353,8 @@ public class PurchaseInvoicePageController {
         return purchaseinvoiceService.getProcurementPlanDetailsForSupplier(procurementId, supplierId);
     }
 
-    private void addCreatePageData(HttpServletRequest request, Model model) {
+    private void addCreatePageData(HttpServletRequest request, Model model,
+                                   String formAction, boolean editMode, boolean dualSubmit) {
         List<SupplierOptionResponse> suppliers = purchaseinvoiceService.listSupplierOptions();
         model.addAttribute("suppliers", suppliers);
         model.addAttribute("supplierNameById", toSupplierNameById(suppliers));
@@ -215,6 +370,10 @@ public class PurchaseInvoicePageController {
         model.addAttribute("importUnitByProduct", purchaseinvoiceService.getImportUnitNameByProduct());
         model.addAttribute("sellPriceByProduct", purchaseinvoiceService.getSellPriceByProduct());
         model.addAttribute("basePath", resolveBasePath(request));
+
+        model.addAttribute("formAction", formAction);
+        model.addAttribute("editMode", editMode);
+        model.addAttribute("dualSubmit", dualSubmit);
     }
 
     /**

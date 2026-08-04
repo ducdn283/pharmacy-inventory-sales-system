@@ -26,9 +26,6 @@ public class TaxPeriodDetailResponse {
     private boolean taxExempt;
 
     private BigDecimal vatOutput;
-    private BigDecimal vatInput;
-    private BigDecimal vatCarryforwardIn;
-    private BigDecimal vatCarryforwardOut;
     private BigDecimal vatPayable;
 
     /** Thuế TNCN của kỳ. Stored, not re-derived — see {@code TaxPeriodUpdateRequest}. */

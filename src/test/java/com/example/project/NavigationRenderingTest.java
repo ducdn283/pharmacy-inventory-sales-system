@@ -15,6 +15,7 @@ import com.example.project.view.PermissionAccountRow;
 import com.example.project.view.PermissionPageView;
 import com.example.project.dto.response.AccountantDashboardResponse;
 import com.example.project.service.AccountantDashboardService;
+import com.example.project.service.FinancialsettingService;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,12 @@ class NavigationRenderingTest {
     @MockitoBean
     AccountantDashboardService accountantDashboardService;
 
+    // WebConfig gained SetupConfirmedInterceptor's dependency (2026-08-03) — this test authenticates
+    // real principals per request, so the interceptor genuinely runs. Default to "already confirmed"
+    // so the existing sidebar/permission-rendering assertions aren't redirected to /financial-setting.
+    @MockitoBean
+    FinancialsettingService financialsettingService;
+
     @BeforeEach
     void setUp() {
         // Default: a valid empty page so the Thymeleaf template renders without NPEs.
@@ -86,6 +93,7 @@ class NavigationRenderingTest {
                 .thenReturn(emptyPage());
         when(accountantDashboardService.getDashboard(any()))
                 .thenReturn(emptyAccountantDashboard());
+        when(financialsettingService.isSetupConfirmed()).thenReturn(true);
     }
 
     private static PermissionPageView emptyPage() {

@@ -31,8 +31,6 @@ public class PurchaseinvoiceResponse {
     private String note;
     private String vatInvoiceNumber;
     private LocalDate vatInvoiceDate;
-    private BigDecimal totalVATInput;
-    private Boolean isValidForDeduction;
     private LocalDate dueDate;
 
     public static PurchaseinvoiceResponse from(Purchaseinvoice purchaseinvoice) {
@@ -53,8 +51,6 @@ public class PurchaseinvoiceResponse {
                 purchaseinvoice.getNote(),
                 purchaseinvoice.getVatInvoiceNumber(),
                 purchaseinvoice.getVatInvoiceDate(),
-                purchaseinvoice.getTotalVATInput(),
-                purchaseinvoice.getIsValidForDeduction(),
                 purchaseinvoice.getDueDate()
         );
     }

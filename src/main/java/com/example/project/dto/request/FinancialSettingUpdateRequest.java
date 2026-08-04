@@ -28,11 +28,12 @@ public class FinancialSettingUpdateRequest {
     @Max(value = 3, message = "Nhóm doanh thu không hợp lệ")
     private Integer revenueGroup;
 
-    @NotNull(message = "Ngưỡng doanh thu miễn thuế không được để trống")
+    // annualRevenueThreshold1/2: đã ẩn khỏi form, cố định vĩnh viễn theo giá trị seed — không còn
+    // trường nhập nào submit hai giá trị này nữa, nên KHÔNG được @NotNull (mọi lần lưu khác sẽ luôn
+    // thất bại nếu bắt buộc). FinancialsettingService.saveSettings() không đọc hai field này nữa.
     @DecimalMin(value = "0", message = "Ngưỡng doanh thu không được nhỏ hơn 0")
     private BigDecimal annualRevenueThreshold1;
 
-    @NotNull(message = "Ngưỡng doanh thu bắt buộc tính theo lợi nhuận không được để trống")
     @DecimalMin(value = "0", message = "Ngưỡng doanh thu không được nhỏ hơn 0")
     private BigDecimal annualRevenueThreshold2;
 
