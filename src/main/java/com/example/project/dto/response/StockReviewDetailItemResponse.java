@@ -19,9 +19,13 @@ public class StockReviewDetailItemResponse {
 
     private String lotNumber;
 
-    private LocalDate expirationDate;
+    private LocalDate recordedExpirationDate;
 
-    private String expirationDateDisplay;
+    private String recordedExpirationDateDisplay;
+
+    private LocalDate actualExpirationDate;
+
+    private String actualExpirationDateDisplay;
 
     private Integer systemQty;
 
@@ -30,6 +34,14 @@ public class StockReviewDetailItemResponse {
     private Integer discrepancy;
 
     private String discrepancyCssClass;
+
+    private String conditionStatus;
+
+    private String conditionStatusDisplay;
+
+    private String conditionCssClass;
+
+    private boolean issue;
 
     private String note;
 }

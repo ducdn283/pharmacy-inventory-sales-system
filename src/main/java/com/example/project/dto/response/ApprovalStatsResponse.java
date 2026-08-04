@@ -11,14 +11,9 @@ public class ApprovalStatsResponse {
 
     private long returnCount;
 
-    // Không còn stockAdjustmentCount: phiếu điều chỉnh kho bỏ bước duyệt từ 2026-07-27.
-
-    private long stockCountCount;
+    private long stockReviewCount;
 
     private long shiftReportCount;
 
     private long expenseCount;
-
-    /** Phiếu nhập đang "Chờ duyệt" — bước soát lại trước khi hàng thật sự vào kho (thêm 04/08/2026). */
-    private long purchaseInvoiceCount;
 }

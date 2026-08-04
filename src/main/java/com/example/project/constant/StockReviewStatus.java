@@ -2,7 +2,7 @@ package com.example.project.constant;
 
 import java.util.List;
 
-public final class StockCountStatus {
+public final class StockReviewStatus {
 
     public static final String DRAFT = "Nháp";
     public static final String PENDING = "Chờ duyệt";
@@ -18,6 +18,6 @@ public final class StockCountStatus {
             ADJUSTED
     );
 
-    private StockCountStatus() {
+    private StockReviewStatus() {
     }
 }
