@@ -2,7 +2,7 @@ package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.StockAdjustmentCreateRequest;
-import com.example.project.dto.response.StockAdjustmentCountLineResponse;
+import com.example.project.dto.response.StockAdjustmentReviewLineResponse;
 import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
 import com.example.project.dto.response.StockAdjustmentListItemResponse;
 import com.example.project.service.StockadjustmentService;
@@ -91,7 +91,7 @@ public class StockadjustmentController {
         model.addAttribute("form", new StockAdjustmentCreateRequest());
         model.addAttribute("candidates", stockadjustmentService.listAvailableBatches(keyword));
         model.addAttribute("creatableTypeLabels", stockadjustmentService.creatableTypeLabels());
-        model.addAttribute("approvedStockCounts", stockadjustmentService.listApprovedStockCounts());
+        model.addAttribute("approvedStockReviews", stockadjustmentService.listApprovedStockReviews());
         // Mã dự kiến, chỉ để xem — mã thật sinh lúc lưu (xem previewNextCode).
         model.addAttribute("nextCode", stockadjustmentService.previewNextCode());
         model.addAttribute("keyword", keyword);
@@ -101,11 +101,11 @@ public class StockadjustmentController {
     }
 
     /** JSON: the prospective COUNT lines of an approved stock count, for the create screen's dropdown. */
-    @GetMapping(value = OWNER_BASE + "/stock-counts/{stockCountId}/lines",
+    @GetMapping(value = OWNER_BASE + "/stock-reviews/{stockReviewId}/lines",
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public List<StockAdjustmentCountLineResponse> stockCountLines(@PathVariable Integer stockCountId) {
-        return stockadjustmentService.loadStockCountLines(stockCountId);
+    public List<StockAdjustmentReviewLineResponse> stockReviewLines(@PathVariable Integer stockReviewId) {
+        return stockadjustmentService.loadStockReviewLines(stockReviewId);
     }
 
     @PostMapping(OWNER_BASE + "/create")
@@ -128,7 +128,7 @@ public class StockadjustmentController {
             model.addAttribute("form", form);
             model.addAttribute("candidates", stockadjustmentService.listAvailableBatches(null));
             model.addAttribute("creatableTypeLabels", stockadjustmentService.creatableTypeLabels());
-            model.addAttribute("approvedStockCounts", stockadjustmentService.listApprovedStockCounts());
+            model.addAttribute("approvedStockReviews", stockadjustmentService.listApprovedStockReviews());
                 model.addAttribute("nextCode", stockadjustmentService.previewNextCode());
             model.addAttribute("keyword", null);
             model.addAttribute("basePath", basePath);

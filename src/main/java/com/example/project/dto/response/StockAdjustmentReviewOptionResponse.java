@@ -10,7 +10,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public class StockAdjustmentCountOptionResponse {
+public class StockAdjustmentReviewOptionResponse {
 
     private Integer stockReviewId;
     private String stockReviewCode;

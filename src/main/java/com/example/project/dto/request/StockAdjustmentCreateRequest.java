@@ -9,26 +9,33 @@ import java.util.List;
 /**
  * Form backing the "create stock adjustment" screen. Carries the slip-level adjustment type,
  * reason/note plus the per-batch lines the user picked (manual source) — or a chosen stock count
- * (stock-count source), from which the server rebuilds the lines itself.
+ * (stock-review source), from which the server rebuilds the lines itself.
  */
 @Getter
 @Setter
 public class StockAdjustmentCreateRequest {
 
-    /** Source of the lines: {@code MANUAL} (default, user picks batches) or {@code STOCK_COUNT}. */
+    /** Source of the lines: {@code MANUAL} (default, user picks batches) or {@code STOCK_REVIEW}. */
     private String sourceMode;
 
-    /** When {@code sourceMode == STOCK_COUNT}: the approved stock count to adjust from. */
-    private Integer stockCountId;
+    /**
+     * Phiếu kiểm kê đã duyệt được chọn. Mang hai nghĩa tùy ngữ cảnh:
+     * <ul>
+     *   <li>{@code sourceMode = STOCK_REVIEW} — phiếu NGUỒN, hệ thống dựng dòng điều chỉnh từ nó;</li>
+     *   <li>phiếu hủy hàng lập tay — phiếu kiểm tra tình trạng gắn kèm làm CĂN CỨ (tùy chọn).</li>
+     * </ul>
+     * Hai ngữ cảnh loại trừ nhau nên dùng chung một trường.
+     */
+    private Integer stockReviewId;
 
     /**
-     * One of DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT
-     * (COUNT_* is derived from the stock count).
+     * One of DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT.
+     * {@code COUNT} và {@code DATE_ADJUSTMENT} suy ra từ loại phiếu kiểm kê, không chọn tay.
      */
     private String adjustmentType;
 
     /**
-     * Nguồn STOCK_COUNT, các dòng THỪA: id lô mà người lập đánh dấu <em>không xác định được nguồn
+     * Nguồn STOCK_REVIEW, các dòng THỪA: id lô mà người lập đánh dấu <em>không xác định được nguồn
      * gốc</em>. Với những lô này hệ thống <strong>tạo lô MỚI</strong> (không có hóa đơn mua thật)
      * thay vì cộng thẳng vào lô cũ — {@code Dac_ta_Income_StockAdjustment.xlsx} sheet 06 mục 1.
      *

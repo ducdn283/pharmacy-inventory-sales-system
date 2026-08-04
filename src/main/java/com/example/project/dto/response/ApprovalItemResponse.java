@@ -5,7 +5,7 @@ import lombok.Getter;
 
 import java.time.Instant;
 
-/** One row in the unified Approve List — aggregates Return/StockAdjustment/StockCount/ShiftReport items
+/** One row in the unified Approve List — aggregates Return/PurchaseInvoice/StockReview/ShiftReport/Expense items
  *  (PENDING plus a recent window of APPROVED/REJECTED, so a just-handled item stays visible for tracking). */
 @Getter
 @AllArgsConstructor

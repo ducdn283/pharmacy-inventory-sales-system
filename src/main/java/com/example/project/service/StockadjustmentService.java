@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.StockAdjustmentStatus;
+import com.example.project.constant.StockReviewType;
 import com.example.project.dto.request.StockAdjustmentCreateRequest;
 import com.example.project.dto.request.StockAdjustmentItemRequest;
 import com.example.project.dto.response.*;
@@ -59,9 +60,9 @@ public class StockadjustmentService {
     private static final String TYPE_COUNT_DECREASE_LEGACY = "COUNT_DECREASE";
 
     /** Ba loại phiếu kiểm kê ({@code StockReview.type}) — nguồn của 2 loại phiếu điều chỉnh tự sinh. */
-    private static final String REVIEW_TYPE_COUNT = "COUNT";
-    private static final String REVIEW_TYPE_DATE = "DATE";
-    private static final String REVIEW_TYPE_CONDITION = "CONDITION";
+    private static final String REVIEW_TYPE_COUNT = StockReviewType.COUNT;
+    private static final String REVIEW_TYPE_DATE = StockReviewType.DATE;
+    private static final String REVIEW_TYPE_CONDITION = StockReviewType.CONDITION;
 
     /**
      * Loại phiếu mà giá trị hàng mất được phép đòi nhân viên đền bù — nguồn của phiếu thu
@@ -79,8 +80,8 @@ public class StockadjustmentService {
      * canonical spelling; we mirror only the two we need and match them accent-insensitively, so a
      * spelling difference is a one-line fix here.
      */
-    private static final String COUNT_STATUS_APPROVED = "Đã duyệt";
-    private static final String COUNT_STATUS_ADJUSTED = "Đã điều chỉnh";
+    private static final String REVIEW_STATUS_APPROVED = "Đã duyệt";
+    private static final String REVIEW_STATUS_ADJUSTED = "Đã điều chỉnh";
 
     /**
      * Loại phiếu người dùng tự chọn khi lập tay. {@code COUNT} và {@code DATE_ADJUSTMENT} KHÔNG nằm ở
@@ -456,7 +457,7 @@ public class StockadjustmentService {
                 reverseStockEffect(details);
             }
             // Trả phiếu kiểm kê về "Đã duyệt" để có thể lập lại phiếu điều chỉnh khác cho nó.
-            revertStockCountAdjusted(adjustment.getStockReviewID());
+            revertStockReviewAdjusted(adjustment.getStockReviewID());
         }
 
         adjustment.setStatus(StockAdjustmentStatus.CANCELLED);
@@ -575,7 +576,7 @@ public class StockadjustmentService {
      * hình tự lọc theo loại phiếu đang lập — xem {@link #listApprovedStockReviews(String)}.</p>
      */
     @Transactional(readOnly = true)
-    public List<StockAdjustmentCountOptionResponse> listApprovedStockCounts() {
+    public List<StockAdjustmentReviewOptionResponse> listApprovedStockReviews() {
         Set<Integer> consumedCountIds = stockadjustmentRepository.findAllWithRelations().stream()
                 .filter(adj -> adj.getStockReviewID() != null && adj.getStockReviewID().getId() != null)
                 .filter(adj -> !isStatus(getStatusName(adj), StockAdjustmentStatus.CANCELLED))
@@ -587,12 +588,12 @@ public class StockadjustmentService {
                 .collect(Collectors.groupingBy(detail -> detail.getStockReviewID().getId()));
 
         return stockreviewRepository.findAll().stream()
-                .filter(count -> isStatus(count.getStatus(), COUNT_STATUS_APPROVED))
+                .filter(count -> isStatus(count.getStatus(), REVIEW_STATUS_APPROVED))
                 .filter(count -> !consumedCountIds.contains(count.getId()))
                 .map(count -> {
                     String reviewType = reviewTypeOf(count);
                     List<Stockreviewdetail> details = detailsByCount.getOrDefault(count.getId(), List.of());
-                    return new StockAdjustmentCountOptionResponse(
+                    return new StockAdjustmentReviewOptionResponse(
                             count.getId(),
                             count.getStockCountCode(),
                             reviewType,
@@ -602,15 +603,15 @@ public class StockadjustmentService {
                             count.getNote());
                 })
                 .filter(option -> option.getDiscrepancyLineCount() > 0)
-                .sorted(Comparator.comparing(StockAdjustmentCountOptionResponse::getStockReviewId,
+                .sorted(Comparator.comparing(StockAdjustmentReviewOptionResponse::getStockReviewId,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
     /** Chỉ những phiếu kiểm kê thuộc {@code reviewType} — dùng cho từng ngữ cảnh của màn tạo. */
     @Transactional(readOnly = true)
-    public List<StockAdjustmentCountOptionResponse> listApprovedStockReviews(String reviewType) {
-        return listApprovedStockCounts().stream()
+    public List<StockAdjustmentReviewOptionResponse> listApprovedStockReviews(String reviewType) {
+        return listApprovedStockReviews().stream()
                 .filter(option -> option.getReviewType().equals(reviewType))
                 .toList();
     }
@@ -632,10 +633,10 @@ public class StockadjustmentService {
      * the create flow rebuilds these server-side.
      */
     @Transactional(readOnly = true)
-    public List<StockAdjustmentCountLineResponse> loadStockCountLines(Integer stockCountId) {
-        Stockreview count = stockreviewRepository.findById(stockCountId)
+    public List<StockAdjustmentReviewLineResponse> loadStockReviewLines(Integer stockReviewId) {
+        Stockreview count = stockreviewRepository.findById(stockReviewId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
-        if (!isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
+        if (!isStatus(count.getStatus(), REVIEW_STATUS_APPROVED)) {
             throw new IllegalArgumentException("Chỉ chọn được phiếu kiểm kê đã duyệt");
         }
         String reviewType = reviewTypeOf(count);
@@ -646,14 +647,14 @@ public class StockadjustmentService {
 
         return stockreviewdetailRepository.findAll().stream()
                 .filter(detail -> detail.getStockReviewID() != null
-                        && stockCountId.equals(detail.getStockReviewID().getId()))
+                        && stockReviewId.equals(detail.getStockReviewID().getId()))
                 .filter(detail -> isAdjustableDetail(detail, reviewType))
                 .map(detail -> dateSource ? toDateLine(detail) : toCountLine(detail))
                 .toList();
     }
 
     /** Dòng xem trước của phiếu sửa hạn dùng: không đụng tồn, chỉ nêu hạn cũ → hạn mới. */
-    private StockAdjustmentCountLineResponse toDateLine(Stockreviewdetail detail) {
+    private StockAdjustmentReviewLineResponse toDateLine(Stockreviewdetail detail) {
         Batch batch = detail.getBatchID();
         Product product = batch.getProductID() != null ? batch.getProductID() : detail.getProductID();
         Productunit unit = resolveCandidateUnit(batch, product);
@@ -661,7 +662,7 @@ public class StockadjustmentService {
         int affectedQty = batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0;
         BigDecimal unitCost = resolveUnitCost(batch);
 
-        return new StockAdjustmentCountLineResponse(
+        return new StockAdjustmentReviewLineResponse(
                 batch.getId(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
@@ -690,7 +691,7 @@ public class StockadjustmentService {
         return systemQty != null && actualQty != null && !systemQty.equals(actualQty);
     }
 
-    private StockAdjustmentCountLineResponse toCountLine(Stockreviewdetail detail) {
+    private StockAdjustmentReviewLineResponse toCountLine(Stockreviewdetail detail) {
         Batch batch = detail.getBatchID();
         Product product = batch.getProductID() != null ? batch.getProductID() : detail.getProductID();
         Productunit unit = resolveCandidateUnit(batch, product);
@@ -702,7 +703,7 @@ public class StockadjustmentService {
         BigDecimal unitCost = resolveUnitCost(batch);
         BigDecimal lineCost = unitCost.multiply(BigDecimal.valueOf(quantity));
 
-        return new StockAdjustmentCountLineResponse(
+        return new StockAdjustmentReviewLineResponse(
                 batch.getId(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
@@ -728,7 +729,7 @@ public class StockadjustmentService {
      *   <li><b>MANUAL</b> — one slip of a {@link #CREATABLE_TYPES} type from the batches the user picked.
      *       Phiếu hủy hàng có thể gắn kèm một phiếu kiểm tra tình trạng ({@code StockReview.type =
      *       CONDITION}) làm căn cứ — bắt buộc khi hủy vì hỏng hóc, không cần khi hủy vì hết hạn.</li>
-     *   <li><b>STOCK_COUNT</b> — MỘT phiếu dựng lại từ phiếu kiểm kê đã duyệt, loại suy ra từ
+     *   <li><b>STOCK_REVIEW</b> — MỘT phiếu dựng lại từ phiếu kiểm kê đã duyệt, loại suy ra từ
      *       {@code StockReview.type} ({@code COUNT} hoặc {@code DATE_ADJUSTMENT}).</li>
      * </ul>
      *
@@ -741,8 +742,8 @@ public class StockadjustmentService {
      */
     @Transactional
     public Integer createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
-        if (isStockCountSource(request)) {
-            return createFromStockCount(request, asDraft);
+        if (isStockReviewSource(request)) {
+            return createFromStockReview(request, asDraft);
         }
 
         validateRequest(request);
@@ -781,7 +782,7 @@ public class StockadjustmentService {
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(request.getReason().trim());
-        adjustment.setStockReviewID(resolveConditionReview(request.getStockCountId(), adjustmentType));
+        adjustment.setStockReviewID(resolveConditionReview(request.getStockReviewId(), adjustmentType));
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
@@ -821,8 +822,8 @@ public class StockadjustmentService {
         return savedAdjustment.getId();
     }
 
-    private boolean isStockCountSource(StockAdjustmentCreateRequest request) {
-        return "STOCK_COUNT".equalsIgnoreCase(request.getSourceMode());
+    private boolean isStockReviewSource(StockAdjustmentCreateRequest request) {
+        return "STOCK_REVIEW".equalsIgnoreCase(request.getSourceMode());
     }
 
     /**
@@ -844,7 +845,7 @@ public class StockadjustmentService {
         Stockreview review = stockreviewRepository.findById(reviewId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm tra tình trạng"));
         assertReviewTypeMatches(review, REVIEW_TYPE_CONDITION);
-        if (!isStatus(review.getStatus(), COUNT_STATUS_APPROVED)) {
+        if (!isStatus(review.getStatus(), REVIEW_STATUS_APPROVED)) {
             throw new IllegalArgumentException("Phiếu kiểm tra tình trạng chưa được duyệt");
         }
         return review;
@@ -861,16 +862,11 @@ public class StockadjustmentService {
 
     /** Nhãn tiếng Việt của {@code StockReview.type} — dùng trong câu thông báo và trên màn hình. */
     public String reviewTypeLabel(String reviewType) {
-        return switch (reviewType == null ? "" : reviewType.trim().toUpperCase(Locale.ROOT)) {
-            case REVIEW_TYPE_COUNT -> "Kiểm đếm số lượng";
-            case REVIEW_TYPE_DATE -> "Kiểm tra hạn dùng";
-            case REVIEW_TYPE_CONDITION -> "Kiểm tra tình trạng";
-            default -> reviewType;
-        };
+        return StockReviewType.label(reviewType);
     }
 
     /**
-     * Nguồn STOCK_COUNT: dựng lại các dòng từ phiếu kiểm kê đã duyệt được chọn. Loại phiếu điều chỉnh
+     * Nguồn STOCK_REVIEW: dựng lại các dòng từ phiếu kiểm kê đã duyệt được chọn. Loại phiếu điều chỉnh
      * SUY RA từ {@code StockReview.type}, người lập không chọn được:
      * <ul>
      *   <li>{@code type = COUNT} → <b>MỘT</b> phiếu {@link #TYPE_COUNT} chứa cả dòng thừa ({@code IN})
@@ -883,14 +879,14 @@ public class StockadjustmentService {
      * <p>Dòng do client gửi lên bị BỎ QUA — số lượng chỉ tin từ phiếu kiểm kê. Khi phiếu được lập thẳng
      * ở trạng thái {@code Hoàn thành}, phiếu kiểm kê được lật sang {@code Đã điều chỉnh} ngay tại đây.</p>
      */
-    private Integer createFromStockCount(StockAdjustmentCreateRequest request, boolean asDraft) {
-        if (request.getStockCountId() == null) {
+    private Integer createFromStockReview(StockAdjustmentCreateRequest request, boolean asDraft) {
+        if (request.getStockReviewId() == null) {
             throw new IllegalArgumentException("Vui lòng chọn phiếu kiểm kê");
         }
 
-        Stockreview count = stockreviewRepository.findById(request.getStockCountId())
+        Stockreview count = stockreviewRepository.findById(request.getStockReviewId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
-        if (!isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
+        if (!isStatus(count.getStatus(), REVIEW_STATUS_APPROVED)) {
             throw new IllegalArgumentException("Phiếu kiểm kê không ở trạng thái Đã duyệt");
         }
 
@@ -912,7 +908,7 @@ public class StockadjustmentService {
 
         boolean alreadyConsumed = stockadjustmentRepository.findAllWithRelations().stream()
                 .anyMatch(adj -> adj.getStockReviewID() != null
-                        && request.getStockCountId().equals(adj.getStockReviewID().getId())
+                        && request.getStockReviewId().equals(adj.getStockReviewID().getId())
                         && !isStatus(getStatusName(adj), StockAdjustmentStatus.CANCELLED));
         if (alreadyConsumed) {
             throw new IllegalArgumentException("Phiếu kiểm kê này đã có phiếu điều chỉnh");
@@ -923,7 +919,7 @@ public class StockadjustmentService {
                     reason, request);
         }
 
-        List<StockAdjustmentCountLineResponse> lines = loadStockCountLines(request.getStockCountId());
+        List<StockAdjustmentReviewLineResponse> lines = loadStockReviewLines(request.getStockReviewId());
         if (lines.isEmpty()) {
             throw new IllegalArgumentException("Phiếu kiểm kê không có dòng chênh lệch để điều chỉnh");
         }
@@ -934,10 +930,7 @@ public class StockadjustmentService {
 
     /** {@code StockReview.type} chuẩn hóa về chữ hoa; mặc định {@code COUNT} cho dữ liệu cũ chưa có type. */
     private String reviewTypeOf(Stockreview review) {
-        if (review == null || review.getType() == null || review.getType().isBlank()) {
-            return REVIEW_TYPE_COUNT;
-        }
-        return review.getType().trim().toUpperCase(Locale.ROOT);
+        return StockReviewType.normalize(review == null ? null : review.getType());
     }
 
     /**
@@ -1016,7 +1009,7 @@ public class StockadjustmentService {
     }
 
     private Integer persistCountSlip(String adjustmentType,
-                                     List<StockAdjustmentCountLineResponse> lines,
+                                     List<StockAdjustmentReviewLineResponse> lines,
                                      Stockreview count,
                                      String status,
                                      String reason,
@@ -1039,7 +1032,7 @@ public class StockadjustmentService {
                 ? Set.of()
                 : new HashSet<>(request.getUnknownOriginBatchIds());
 
-        for (StockAdjustmentCountLineResponse line : lines) {
+        for (StockAdjustmentReviewLineResponse line : lines) {
             Batch sourceBatch = batchRepository.findById(line.getBatchId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lô hàng của phiếu kiểm kê"));
             Product product = sourceBatch.getProductID();
@@ -1147,23 +1140,23 @@ public class StockadjustmentService {
     }
 
     /** Flips a linked count {@code Đã duyệt → Đã điều chỉnh}. No-op if it is not currently approved. */
-    private void markStockCountAdjusted(Stockreview count) {
+    private void markStockReviewAdjusted(Stockreview count) {
         if (count == null) {
             return;
         }
-        if (isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
-            count.setStatus(COUNT_STATUS_ADJUSTED);
+        if (isStatus(count.getStatus(), REVIEW_STATUS_APPROVED)) {
+            count.setStatus(REVIEW_STATUS_ADJUSTED);
             stockreviewRepository.save(count);
         }
     }
 
-    /** Đảo lại {@link #markStockCountAdjusted}: {@code Đã điều chỉnh → Đã duyệt} khi hủy phiếu. */
-    private void revertStockCountAdjusted(Stockreview count) {
+    /** Đảo lại {@link #markStockReviewAdjusted}: {@code Đã điều chỉnh → Đã duyệt} khi hủy phiếu. */
+    private void revertStockReviewAdjusted(Stockreview count) {
         if (count == null) {
             return;
         }
-        if (isStatus(count.getStatus(), COUNT_STATUS_ADJUSTED)) {
-            count.setStatus(COUNT_STATUS_APPROVED);
+        if (isStatus(count.getStatus(), REVIEW_STATUS_ADJUSTED)) {
+            count.setStatus(REVIEW_STATUS_APPROVED);
             stockreviewRepository.save(count);
         }
     }
@@ -1185,7 +1178,7 @@ public class StockadjustmentService {
         adjustment.setStatus(StockAdjustmentStatus.COMPLETED);
         applyStockEffect(adjustment,
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId));
-        markStockCountAdjusted(adjustment.getStockReviewID());
+        markStockReviewAdjusted(adjustment.getStockReviewID());
         // TODO(finance): auto-create an Expense (and link expenseID) for DESTROY with lineCost total > 0.
         //   Deferred — the Expense entity/vocabulary is owned by the finance module.
 
@@ -1205,7 +1198,7 @@ public class StockadjustmentService {
 
     /**
      * Validate cho phiếu THỦ CÔNG (DESTROY/INTERNAL_USE/SAMPLE/GIFT). Lý do là BẮT BUỘC ở đây —
-     * chỉ nguồn "theo phiếu kiểm kê" ({@code createFromStockCount}) mới được để trống và tự điền theo
+     * chỉ nguồn "theo phiếu kiểm kê" ({@code createFromStockReview}) mới được để trống và tự điền theo
      * mã phiếu kiểm kê.
      */
     private void validateRequest(StockAdjustmentCreateRequest request) {

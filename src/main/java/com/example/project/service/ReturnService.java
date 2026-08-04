@@ -526,9 +526,23 @@ public class ReturnService {
      * {@link #isSupersededByReturn}).
      *
      * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ (ví dụ BA mục
-     * 1.2: mua 500.000, hoàn 400.000 ⇒ thay thế 100.000) — nên dòng đã trả HẾT số lượng vẫn được giữ
-     * với {@code quantity = 0} và {@code subtotal} = phần giữ lại, để tổng hóa đơn luôn bằng tổng các
-     * dòng. Chỉ khi trả hết + hoàn 100% mới không phát hành gì.</p>
+     * 1.2: mua 500.000, hoàn 400.000 ⇒ thay thế 100.000). Một dòng hàng vừa bị trả một phần sẽ được
+     * tách thành <b>HAI</b> dòng:</p>
+     * <ol>
+     *   <li><b>hàng còn lại</b> — số lượng còn lại, thành tiền = giá trị gốc của đúng số hàng đó;</li>
+     *   <li><b>phần giữ lại</b> — {@code quantity = 0}, thành tiền = phần nhà thuốc không hoàn.</li>
+     * </ol>
+     *
+     * <p><b>Vì sao phải tách</b> (sửa 04/08/2026): trước đây một dòng ôm cả hai, thành tiền được tính
+     * bằng {@code thành tiền cũ − số ĐÃ HOÀN}. Phần giữ lại vì thế nằm lẫn trong giá trị số hàng còn
+     * lại, nên <b>lần trả sau lại hoàn tiếp một phần của chính khoản đã giữ</b> — trả 5 hộp làm 2 lần ở
+     * mức 80% thì nhà thuốc chỉ còn giữ 13,6% thay vì 20%, trả từng hộp một thì tụt còn 5,9%. Tách ra
+     * thì căn cứ tính của lần sau là giá trị thật của hàng còn lại, hoàn nhiều lần bằng hoàn một lần.</p>
+     *
+     * <p>Dòng "phần giữ lại" không bao giờ trả tiếp được: {@code loadInvoiceLines} lọc bỏ dòng có số
+     * lượng trả được bằng 0. Tổng hóa đơn vẫn luôn bằng tổng các dòng.</p>
+     *
+     * <p>Chỉ khi trả hết + hoàn 100% mới không phát hành gì.</p>
      */
     private void createReplacementInvoice(Return ret, Invoice original, List<Returndetail> details) {
         Map<Integer, Returndetail> returnedByLine = details.stream()
@@ -587,24 +601,46 @@ public class ReturnService {
             int remainingQty = remainingQtyOf(line);
             Returndetail matched = returnedByLine.get(line.getId());
 
-            Invoicedetail clone = new Invoicedetail();
-            clone.setInvoiceID(savedRepl);
-            clone.setProductID(line.getProductID());
-            clone.setProductUnitID(line.getProductUnitID());
-            clone.setBatchID(line.getBatchID());
-            // remainingQty = 0 nghĩa là dòng đã trả hết, chỉ còn phần tiền giữ lại (hoàn < 100%) — dòng
-            // "0 số lượng, còn tiền" này là cách duy nhất giữ phần doanh thu đó trên hóa đơn thay thế.
-            clone.setQuantity(remainingQty);
-            clone.setUnitName(line.getUnitName());
-            clone.setBaseQtyDeducted(Math.max(0, line.getBaseQtyDeducted()
-                    - (matched != null && matched.getBaseQtyRestored() != null ? matched.getBaseQtyRestored() : 0)));
-            clone.setUnitSellPrice(line.getUnitSellPrice());
-            clone.setSubtotal(nz(line.getSubtotal())
-                    .subtract(matched != null ? nz(matched.getLineRefund()) : BigDecimal.ZERO)
-                    .max(BigDecimal.ZERO));
-            clone.setReturnedQty(0);
-            invoicedetailRepository.save(clone);
+            // Giá trị 100% của phần vừa trả (TRƯỚC khi áp tỷ lệ hoàn) — trừ khỏi dòng để phần hàng còn
+            // lại mang ĐÚNG giá trị của nó, không ôm thêm phần nhà thuốc giữ lại.
+            BigDecimal returnedValue = matched != null ? nz(matched.getOriginalLineValue()) : BigDecimal.ZERO;
+            BigDecimal goodsSubtotal = nz(line.getSubtotal()).subtract(returnedValue).max(BigDecimal.ZERO);
+            BigDecimal retained = retainedValueOf(line, returnedByLine);
+
+            if (remainingQty > 0 || goodsSubtotal.signum() > 0) {
+                Invoicedetail goods = cloneLine(savedRepl, line);
+                goods.setQuantity(remainingQty);
+                goods.setBaseQtyDeducted(Math.max(0, line.getBaseQtyDeducted()
+                        - (matched != null && matched.getBaseQtyRestored() != null
+                                ? matched.getBaseQtyRestored() : 0)));
+                goods.setSubtotal(goodsSubtotal);
+                invoicedetailRepository.save(goods);
+            }
+
+            if (retained.signum() > 0) {
+                Invoicedetail fee = cloneLine(savedRepl, line);
+                fee.setQuantity(0);
+                fee.setBaseQtyDeducted(0);
+                fee.setSubtotal(retained);
+                invoicedetailRepository.save(fee);
+            }
         }
+    }
+
+    /**
+     * Dòng hàng của hóa đơn thay thế, phần dùng chung giữa dòng HÀNG CÒN LẠI và dòng PHẦN GIỮ LẠI.
+     * Người gọi tự đặt {@code quantity / baseQtyDeducted / subtotal}.
+     */
+    private Invoicedetail cloneLine(Invoice replacement, Invoicedetail source) {
+        Invoicedetail clone = new Invoicedetail();
+        clone.setInvoiceID(replacement);
+        clone.setProductID(source.getProductID());
+        clone.setProductUnitID(source.getProductUnitID());
+        clone.setBatchID(source.getBatchID());
+        clone.setUnitName(source.getUnitName());
+        clone.setUnitSellPrice(source.getUnitSellPrice());
+        clone.setReturnedQty(0);
+        return clone;
     }
 
     // ------------------------------------------------------------------ bù trừ công nợ (netting)
@@ -719,7 +755,13 @@ public class ReturnService {
         batch.setBatchName(truncate("Hàng trả " + (original != null && original.getBatchName() != null
                 ? original.getBatchName() : ""), 50));
         batch.setProductID(original != null ? original.getProductID() : null);
-        batch.setPurchaseDetailID(null);
+        // Giữ liên kết về ĐÚNG dòng phiếu nhập mà hàng này ban đầu mua về (BA chốt 05/08/2026). Hàng
+        // khách trả lại vẫn là hàng của nhà cung cấp đó, giá nhập không đổi — nên phải trả về NCC đó
+        // được. Để null thì lô này vô hình với màn trả hàng NCC (bên đó chỉ nhìn lô có phiếu nhập).
+        //
+        // KHÔNG phải "nhập hàng lần hai": không cộng công nợ NCC, không sinh phiếu nhập mới. Chỉ là
+        // cùng một lô hàng gốc, tách ra mang mã riêng để phân biệt hàng đã qua tay khách.
+        batch.setPurchaseDetailID(original != null ? original.getPurchaseDetailID() : null);
         batch.setStorageQuantity(quantity);
         batch.setImportUnitID(original != null ? original.getImportUnitID() : null);
         batch.setImportQtyInUnit(original != null ? original.getImportQtyInUnit() : null);

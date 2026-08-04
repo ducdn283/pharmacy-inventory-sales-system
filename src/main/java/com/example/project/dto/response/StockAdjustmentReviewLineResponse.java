@@ -20,7 +20,7 @@ import java.time.LocalDate;
  */
 @Getter
 @AllArgsConstructor
-public class StockAdjustmentCountLineResponse {
+public class StockAdjustmentReviewLineResponse {
 
     private Integer batchId;
 
