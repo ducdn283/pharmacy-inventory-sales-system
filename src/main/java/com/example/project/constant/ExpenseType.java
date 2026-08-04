@@ -18,14 +18,13 @@ public final class ExpenseType {
     /** Tiền hàng trả nhà cung cấp — loại duy nhất gắn được phiếu nhập. Xem {@link #PURCHASE_LINKABLE}. */
     public static final String GOODS_PAYMENT = "GOODS_PAYMENT";
     public static final String OPERATIONAL = "OPERATIONAL";
-    public static final String DEBT_PAYMENT = "DEBT_PAYMENT";
     public static final String RETURN_REFUND_PAYOUT = "RETURN_REFUND_PAYOUT";
     public static final String EMPLOYEE_ADVANCE_REPAYMENT = "EMPLOYEE_ADVANCE_REPAYMENT";
     public static final String OTHER = "OTHER";
 
     /** All valid types, in display order. */
     public static final List<String> ALL = List.of(
-            GOODS_PAYMENT, OPERATIONAL, DEBT_PAYMENT, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
+            GOODS_PAYMENT, OPERATIONAL, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
 
     /**
      * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #GOODS_PAYMENT}
@@ -44,9 +43,6 @@ public final class ExpenseType {
      * lọc thêm điều kiện "không gắn phiếu nhập" để loại tiền hàng ra khỏi chi phí được trừ (tiền hàng
      * đã nằm trong giá vốn) — điều kiện đó chỉ còn cần cho các phiếu cũ lưu trước khi tách loại.
      * <strong>Đừng thêm {@link #GOODS_PAYMENT} vào danh sách được trừ.</strong></p>
-     *
-     * <p>{@link #DEBT_PAYMENT} vẫn cố tình không nằm ở đây: nó dành cho khoản nợ phát sinh ở chỗ khác,
-     * không có chứng từ nào trong hệ thống để trỏ tới.</p>
      *
      * <p>Các phiếu cũ mang {@code OPERATIONAL} kèm {@code purchaseID} vẫn còn trong DB và vẫn hiển thị
      * bình thường — theo lệ "màn hình đọc đúng cột trong DB".</p>
@@ -73,7 +69,6 @@ public final class ExpenseType {
         return switch (type) {
             case GOODS_PAYMENT -> "Thanh toán hàng";
             case OPERATIONAL -> "Chi phí vận hành";
-            case DEBT_PAYMENT -> "Trả nợ";
             case RETURN_REFUND_PAYOUT -> "Hoàn tiền trả hàng";
             case EMPLOYEE_ADVANCE_REPAYMENT -> "Lương ứng của nhân viên";
             case OTHER -> "Chi khác";

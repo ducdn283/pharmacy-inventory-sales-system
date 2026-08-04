@@ -76,8 +76,8 @@
         <div class="fw-semibold" th:unless="${editable}">Hệ thống chưa được thiết lập</div>
         <div class="small" th:if="${editable}">
           Điền đầy đủ thông tin bên dưới rồi bấm "Hoàn tất thiết lập" để bắt đầu sử dụng hệ thống —
-          nhóm doanh thu và số dư quỹ chỉ chọn được MỘT LẦN ở bước này, sau đó sẽ khoá vĩnh viễn.
-          Mọi màn hình khác đều bị chặn cho tới khi hoàn tất bước này.
+          số dư quỹ chỉ nhập được MỘT LẦN ở bước này, sau đó sẽ khoá vĩnh viễn. Nhóm doanh thu vẫn
+          sửa được sau này. Mọi màn hình khác đều bị chặn cho tới khi hoàn tất bước này.
         </div>
         <div class="small" th:unless="${editable}">
           Chủ nhà thuốc chưa hoàn tất thiết lập tài chính ban đầu. Vui lòng chờ Chủ nhà thuốc thiết
@@ -101,19 +101,15 @@
                 <select id="fsRevenueGroup" class="form-select"
                         th:field="*{revenueGroup}"
                         th:classappend="${#fields.hasErrors('revenueGroup')} ? ' is-invalid'"
-                        th:disabled="${!editable or revenueGroupLocked}">
+                        th:disabled="${!editable}">
                   <option value="1">Nhóm 1 — dưới ngưỡng 1 (miễn thuế)</option>
                   <option value="2">Nhóm 2 — từ ngưỡng 1 đến ngưỡng 2 (được chọn phương thức)</option>
                   <option value="3">Nhóm 3 — trên ngưỡng 2 (bắt buộc theo lợi nhuận)</option>
                 </select>
-                <!-- Một select bị disabled không được submit — gửi kèm giá trị hiện tại qua ô ẩn để
-                     validate vẫn qua; server luôn bỏ qua giá trị này khi đã khoá (xem
-                     FinancialsettingService.saveSettings), nên có bị sửa tay trên DOM cũng vô hại. -->
-                <input type="hidden" th:if="${revenueGroupLocked}" name="revenueGroup" th:value="*{revenueGroup}">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('revenueGroup')}" th:errors="*{revenueGroup}"></div>
-                <div class="form-text" th:if="${revenueGroupLocked}">
-                  Đã khoá — chỉ chọn được một lần khi hoàn tất thiết lập ban đầu, sau đó hệ thống tự
-                  cập nhật nhóm này theo Kỳ thuế.
+                <div class="form-text">
+                  Hệ thống tự chuyển Nhóm 1 → 2 khi doanh thu vượt ngưỡng. Chuyển Nhóm 2 → 3 cần cơ
+                  quan thuế chấp thuận trước — chọn tay ở đây sau khi đã được chấp thuận.
                 </div>
               </div>
             </div>
@@ -403,10 +399,11 @@
   })();
 
   // Chốt thiết lập ban đầu: chừng nào setupConfirmed còn false, lần lưu HỢP LỆ (đủ nhóm doanh thu +
-  // cả hai quỹ) chính là hành động khoá vĩnh viễn cả ba trường cùng lúc (xem
-  // FinancialsettingService.saveSettings) — hỏi lại một lần, liệt kê rõ từng phần sẽ bị khoá, trước
-  // khi submit thật. Sau khi đã chốt (setupConfirmed = true) thì không còn gì mới bị khoá nữa, nên
-  // không cần hỏi lại — mọi lần lưu sau chỉ còn là sửa các thiết lập khác.
+  // cả hai quỹ) chính là hành động khoá vĩnh viễn hai quỹ (xem FinancialsettingService.saveSettings)
+  // — nhóm doanh thu KHÔNG bị khoá theo, vẫn sửa tay được sau này (chuyển Nhóm 2 → 3 cần cơ quan
+  // thuế chấp thuận trước). Hỏi lại một lần, liệt kê rõ phần sẽ bị khoá, trước khi submit thật. Sau
+  // khi đã chốt (setupConfirmed = true) thì không còn gì mới bị khoá nữa, nên không cần hỏi lại —
+  // mọi lần lưu sau chỉ còn là sửa các thiết lập khác.
   (function () {
     var form = document.getElementById('financialSettingForm');
     var setupConfirmed = /*[[${setupConfirmed}]]*/ false;
@@ -422,9 +419,10 @@
       }
 
       event.preventDefault();
-      var message = 'Hoàn tất thiết lập ban đầu sẽ khoá VĨNH VIỄN "Nhóm doanh thu hộ kinh doanh",'
-          + ' "Số dư quỹ tiền mặt" và "Số dư quỹ ngân hàng" — không thể sửa lại qua màn này nữa.'
-          + ' Vui lòng kiểm tra kỹ trước khi tiếp tục. Bạn có chắc chắn muốn hoàn tất thiết lập?';
+      var message = 'Hoàn tất thiết lập ban đầu sẽ khoá VĨNH VIỄN "Số dư quỹ tiền mặt" và'
+          + ' "Số dư quỹ ngân hàng" — không thể sửa lại qua màn này nữa (Nhóm doanh thu vẫn sửa'
+          + ' được sau này). Vui lòng kiểm tra kỹ trước khi tiếp tục. Bạn có chắc chắn muốn hoàn'
+          + ' tất thiết lập?';
       if (typeof window.pmConfirm === 'function') {
         window.pmConfirm(message, function () {
           confirmed = true;

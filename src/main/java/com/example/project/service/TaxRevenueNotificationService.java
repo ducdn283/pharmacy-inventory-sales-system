@@ -7,9 +7,7 @@ import com.example.project.constant.NotificationType;
 import com.example.project.constant.RoleConstants;
 import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.entity.Account;
-import com.example.project.entity.Financialsetting;
 import com.example.project.repository.AccountpermissionRepository;
-import com.example.project.repository.FinancialsettingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +16,6 @@ import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 @Service
 public class TaxRevenueNotificationService {
@@ -27,16 +24,13 @@ public class TaxRevenueNotificationService {
     private static final Locale VIETNAM = Locale.forLanguageTag("vi-VN");
 
     private final TaxperiodsnapshotService taxperiodsnapshotService;
-    private final FinancialsettingRepository financialsettingRepository;
     private final AccountpermissionRepository accountpermissionRepository;
     private final NotificationService notificationService;
 
     public TaxRevenueNotificationService(TaxperiodsnapshotService taxperiodsnapshotService,
-                                         FinancialsettingRepository financialsettingRepository,
                                          AccountpermissionRepository accountpermissionRepository,
                                          NotificationService notificationService) {
         this.taxperiodsnapshotService = taxperiodsnapshotService;
-        this.financialsettingRepository = financialsettingRepository;
         this.accountpermissionRepository = accountpermissionRepository;
         this.notificationService = notificationService;
     }
@@ -74,10 +68,7 @@ public class TaxRevenueNotificationService {
             return;
         }
 
-        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc()
-                .orElse(null);
-
-        BigDecimal threshold = nextThreshold(setting, currentGroup);
+        BigDecimal threshold = nextThreshold(currentGroup);
 
         if (threshold == null || threshold.compareTo(BigDecimal.ZERO) <= 0) {
             return;
@@ -255,21 +246,13 @@ public class TaxRevenueNotificationService {
         }
     }
 
-    private BigDecimal nextThreshold(Financialsetting setting, Integer currentGroup) {
-        BigDecimal threshold1 = Optional.ofNullable(setting)
-                .map(Financialsetting::getAnnualRevenueThreshold1)
-                .orElse(new BigDecimal("1000000000.00"));
-
-        BigDecimal threshold2 = Optional.ofNullable(setting)
-                .map(Financialsetting::getAnnualRevenueThreshold2)
-                .orElse(new BigDecimal("3000000000.00"));
-
+    private BigDecimal nextThreshold(Integer currentGroup) {
         if (TaxRevenueGroup.EXEMPT == currentGroup) {
-            return threshold1;
+            return TaxRevenueGroup.THRESHOLD_1;
         }
 
         if (TaxRevenueGroup.DIRECT == currentGroup) {
-            return threshold2;
+            return TaxRevenueGroup.THRESHOLD_2;
         }
 
         return null;

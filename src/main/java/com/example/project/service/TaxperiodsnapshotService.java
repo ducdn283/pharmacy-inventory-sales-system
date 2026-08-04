@@ -285,16 +285,15 @@ public class TaxperiodsnapshotService {
      * (December) — exactly when the caller is deciding the group for next year's first quarter.</p>
      */
     private Integer autoNextGroup(TaxPeriod period, Integer groupOfPeriod) {
-        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         int year = period.startDate().getYear();
 
         if (Integer.valueOf(TaxRevenueGroup.EXEMPT).equals(groupOfPeriod)) {
-            if (revenueForYear(year).compareTo(threshold1(setting)) >= 0) {
+            if (revenueForYear(year).compareTo(TaxRevenueGroup.THRESHOLD_1) >= 0) {
                 return TaxRevenueGroup.DIRECT;
             }
         } else if (Integer.valueOf(TaxRevenueGroup.DIRECT).equals(groupOfPeriod)
                 && period.endDate().getMonthValue() == 12) {
-            if (revenueForYear(year).compareTo(threshold2(setting)) >= 0) {
+            if (revenueForYear(year).compareTo(TaxRevenueGroup.THRESHOLD_2) >= 0) {
                 return TaxRevenueGroup.DEDUCTION;
             }
         }
@@ -366,18 +365,6 @@ public class TaxperiodsnapshotService {
         financialsettingRepository.save(setting);
     }
 
-    private BigDecimal threshold1(Financialsetting setting) {
-        return setting != null && setting.getAnnualRevenueThreshold1() != null
-                ? setting.getAnnualRevenueThreshold1()
-                : new BigDecimal("1000000000.00");
-    }
-
-    private BigDecimal threshold2(Financialsetting setting) {
-        return setting != null && setting.getAnnualRevenueThreshold2() != null
-                ? setting.getAnnualRevenueThreshold2()
-                : new BigDecimal("3000000000.00");
-    }
-
     // ------------------------------------------------------------------ live computation
 
     // ------------------------------------------------------------------ revenue
@@ -404,8 +391,9 @@ public class TaxperiodsnapshotService {
 
     /**
      * Revenue of a whole calendar year — what the revenue-threshold warning compares against
-     * {@code Financialsetting.annualRevenueThreshold1/2}. The thresholds are annual, and the group
-     * a household belongs to is decided by the year's revenue, not by any single quarter's.
+     * {@link TaxRevenueGroup#THRESHOLD_1}/{@link TaxRevenueGroup#THRESHOLD_2}. The thresholds are
+     * annual, and the group a household belongs to is decided by the year's revenue, not by any
+     * single quarter's.
      */
     @Transactional(readOnly = true)
     public BigDecimal revenueForYear(int year) {
@@ -567,8 +555,14 @@ public class TaxperiodsnapshotService {
             incomeTaxRate = group3 ? TaxRevenueGroup.GROUP3_PIT_RATE : TaxRevenueGroup.DEDUCTION_PIT_RATE;
             incomeTax = taxableIncome.multiply(incomeTaxRate);
         } else if (!exempt) {
+            // Nhóm 2, Cách 1 (theo doanh thu) — theo Tax-Invoice.xlsx, ngưỡng 1 (1 tỷ) được trừ
+            // trước khi nhân tỷ lệ, khác với Cách 2 (theo lợi nhuận) không trừ ngưỡng nào. Sàn 0 vì
+            // một quý mới chớm vượt ngưỡng 1 (đang giữa việc tự động chuyển từ Nhóm 1 sang Nhóm 2)
+            // có thể có doanh thu cả năm chưa vượt xa ngưỡng.
             incomeTaxRate = TaxRevenueGroup.DIRECT_PIT_RATE;
-            incomeTax = taxableIncomeRevenue.multiply(incomeTaxRate);
+            BigDecimal taxableRevenueAfterThreshold =
+                    taxableIncomeRevenue.subtract(TaxRevenueGroup.THRESHOLD_1).max(BigDecimal.ZERO);
+            incomeTax = taxableRevenueAfterThreshold.multiply(incomeTaxRate);
         }
 
         return new TaxPeriodComputationResponse(
@@ -827,8 +821,6 @@ public class TaxperiodsnapshotService {
 
     private TaxPeriodListItemResponse toListItem(Taxperiodsnapshot snapshot, Integer newestId) {
         BigDecimal vatOutput = safe(snapshot.getVatOutput());
-        BigDecimal vatInput = safe(snapshot.getVatInput());
-        BigDecimal carryIn = safe(snapshot.getVatCarryforwardIn());
         Integer group = storedGroup(snapshot);
 
         return new TaxPeriodListItemResponse(
@@ -838,7 +830,7 @@ public class TaxperiodsnapshotService {
                 formatDate(snapshot.getEndDate()),
                 group,
                 TaxRevenueGroup.shortLabel(group),
-                scaled(vatPayable(vatOutput, vatInput, carryIn)),
+                scaled(vatPayable(vatOutput, BigDecimal.ZERO, BigDecimal.ZERO)),
                 scaled(snapshot.getIncomeTax()),
                 formatDateTime(snapshot.getRecordedAt()),
                 snapshot.getId() != null && snapshot.getId().equals(newestId));
@@ -852,8 +844,6 @@ public class TaxperiodsnapshotService {
 
         Integer group = storedGroup(snapshot);
         BigDecimal vatOutput = safe(snapshot.getVatOutput());
-        BigDecimal vatInput = safe(snapshot.getVatInput());
-        BigDecimal carryIn = safe(snapshot.getVatCarryforwardIn());
 
         Optional<Taxperiodsnapshot> previous = snapshot.getStartDate() == null
                 ? Optional.empty()
@@ -875,10 +865,7 @@ public class TaxperiodsnapshotService {
                 TaxRevenueGroup.isDeductionGroup(group),
                 TaxRevenueGroup.isTaxExempt(group),
                 scaled(vatOutput),
-                scaled(vatInput),
-                scaled(carryIn),
-                scaled(safe(snapshot.getVatCarryforwardOut())),
-                scaled(vatPayable(vatOutput, vatInput, carryIn)),
+                scaled(vatPayable(vatOutput, BigDecimal.ZERO, BigDecimal.ZERO)),
                 scaled(snapshot.getIncomeTax()),
                 snapshot.getQuarterlyRevenue() == null
                         ? null

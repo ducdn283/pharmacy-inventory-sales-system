@@ -36,7 +36,6 @@ public class FinancialSettingPageController {
         }
         model.addAttribute("editable", editable);
         model.addAttribute("setupConfirmed", financialsettingService.isSetupConfirmed());
-        model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
         model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
         model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
         model.addAttribute("balanceUpdatedAtDisplay", formatBalanceUpdatedAt(settings.getBalanceUpdatedAt()));
@@ -52,7 +51,6 @@ public class FinancialSettingPageController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("editable", true);
             model.addAttribute("setupConfirmed", financialsettingService.isSetupConfirmed());
-            model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
             model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
             model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
             model.addAttribute("balanceUpdatedAtDisplay",
