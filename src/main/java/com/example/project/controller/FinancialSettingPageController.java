@@ -75,8 +75,6 @@ public class FinancialSettingPageController {
         FinancialSettingUpdateRequest form = new FinancialSettingUpdateRequest();
         form.setTaxCalculationMethod(response.getTaxCalculationMethod());
         form.setRevenueGroup(response.getRevenueGroup());
-        form.setAnnualRevenueThreshold1(response.getAnnualRevenueThreshold1());
-        form.setAnnualRevenueThreshold2(response.getAnnualRevenueThreshold2());
         form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate());
         form.setAutoGenerateVATInvoice(response.getAutoGenerateVATInvoice());
         form.setVatInvoiceSeries(response.getVatInvoiceSeries());

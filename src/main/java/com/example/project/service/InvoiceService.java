@@ -23,7 +23,6 @@ import com.example.project.entity.Invoice;
 import com.example.project.entity.Invoicedetail;
 import com.example.project.entity.Product;
 import com.example.project.entity.Productunit;
-import com.example.project.entity.Type;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.BatchRepository;
 import com.example.project.repository.CustomerRepository;
@@ -64,8 +63,8 @@ public class InvoiceService {
 
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
-    /** Hóa đơn GTGT — chỉ gán cho hóa đơn bán tạo khi nhà thuốc đang ở Nhóm 3+. */
-    private static final String INVOICE_TYPE_VAT = "Hóa đơn GTGT";
+    /** Legacy type from older data — displayed as "Bán hàng". */
+    private static final String INVOICE_TYPE_VAT_LEGACY = "Hóa đơn GTGT";
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
     private static final String INVOICE_TYPE_ADJUSTMENT_LEGACY = "adjustment";
     private static final String INVOICE_TYPE_RETURN = "return";
@@ -76,7 +75,6 @@ public class InvoiceService {
     private static final String PAYMENT_DEBT = "DEBT";
 
     private static final String STATUS_COMPLETED = "Hoàn thành";
-    /** Product {@link Type#getName()} that requires a prescription code before sale. */
     private static final String PRESCRIPTION_PRODUCT_TYPE = "Thuốc kê đơn";
     private static final String STATUS_DEBT = "Còn nợ";
     private static final String STATUS_SIGNED = "Đã ký";
@@ -381,9 +379,6 @@ public class InvoiceService {
         invoice.setDate(invoiceDateTime);
         invoice.setEmployeeID(employee);
         invoice.setCustomerID(customer);
-        // Nhóm 3 không còn phát hành "Hóa đơn GTGT" nữa — GTGT giờ tính trực tiếp trên doanh thu cho
-        // mọi nhóm chịu thuế, giống nhóm 2 (xem TaxRevenueGroup.DEDUCTION javadoc); INVOICE_TYPE_VAT
-        // chỉ còn dùng để ĐỌC những hóa đơn cũ đã phát hành trước khi đổi (isVatSaleInvoice).
         invoice.setInvoiceType(INVOICE_TYPE_NORMAL);
         invoice.setPrescriptionRequired(prescriptionRequired);
         invoice.setPrescriptionCode(prescriptionCode);
@@ -401,11 +396,8 @@ public class InvoiceService {
         Invoice savedInvoice = saveInvoiceGuardingConcurrentEdit(invoice);
 
         BigDecimal subtotal = BigDecimal.ZERO;
-        BigDecimal totalVATOutput = BigDecimal.ZERO;
         for (InvoiceDetailCreateRequest item : request.getDetails()) {
-            SavedLineTotals lineTotals = saveLineAndDeductStock(savedInvoice, item);
-            subtotal = subtotal.add(lineTotals.subtotal());
-            totalVATOutput = totalVATOutput.add(lineTotals.vatAmount());
+            subtotal = subtotal.add(saveLineAndDeductStock(savedInvoice, item));
         }
 
         BigDecimal discount = maxZero(request.getDiscount());
@@ -435,7 +427,6 @@ public class InvoiceService {
         savedInvoice.setPaidByCash(paidByCash);
         savedInvoice.setPaidByBanking(paidByBanking);
         savedInvoice.setDebtAmount(debt);
-        savedInvoice.setTotalVATOutput(totalVATOutput);
         savedInvoice.setStatus(debt.compareTo(BigDecimal.ZERO) > 0 ? STATUS_DEBT : STATUS_COMPLETED);
 
         // A sale is a real transaction the instant it's recorded, regardless of payment mix —
@@ -449,7 +440,7 @@ public class InvoiceService {
         return savedInvoice.getId();
     }
 
-    private SavedLineTotals saveLineAndDeductStock(Invoice invoice, InvoiceDetailCreateRequest item) {
+    private BigDecimal saveLineAndDeductStock(Invoice invoice, InvoiceDetailCreateRequest item) {
         if (item.getProductId() == null || item.getProductUnitId() == null) {
             throw new IllegalArgumentException("Dòng hàng chưa chọn sản phẩm hoặc đơn vị bán");
         }
@@ -472,9 +463,6 @@ public class InvoiceService {
 
         BigDecimal unitSellPrice = unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO;
         BigDecimal lineSubtotal = unitSellPrice.multiply(BigDecimal.valueOf(quantity));
-        BigDecimal vatRate = resolveVatRateSnapshot(product);
-        BigDecimal preTaxAmount = calculateSaleLinePreTaxAmount(lineSubtotal, vatRate);
-        BigDecimal vatAmount = calculateSaleLineVatAmount(preTaxAmount, vatRate);
 
         List<BatchAllocation> allocations = deductStock(
                 product, baseQty, quantity, ratio, unit.getUnitName(), item.getBatchId());
@@ -492,19 +480,11 @@ public class InvoiceService {
             detail.setUnitSellPrice(unitSellPrice);
             detail.setSubtotal(lineSubtotal);
             detail.setReturnedQty(0);
-            detail.setVatRate(vatRate);
-            detail.setPreTaxAmount(preTaxAmount);
-            detail.setVatAmount(vatAmount);
             invoicedetailRepository.save(detail);
-            return new SavedLineTotals(lineSubtotal, vatAmount);
+            return lineSubtotal;
         }
 
-        // Deduction spanned more than one batch — persist one row per batch actually touched, keeping
-        // the sale unit the cashier chose so invoice detail matches the POS screen. Money and sale
-        // quantity are split proportionally by base quantity; the last chunk absorbs rounding remainders.
         BigDecimal remainingSubtotal = lineSubtotal;
-        BigDecimal remainingPreTax = preTaxAmount;
-        BigDecimal remainingVat = vatAmount;
         int remainingBaseQty = baseQty;
         int remainingSellQty = quantity;
 
@@ -527,19 +507,13 @@ public class InvoiceService {
             }
 
             BigDecimal chunkSubtotal;
-            BigDecimal chunkPreTax;
-            BigDecimal chunkVat;
             if (lastChunk) {
                 chunkSubtotal = remainingSubtotal;
-                chunkPreTax = remainingPreTax;
-                chunkVat = remainingVat;
             } else {
                 BigDecimal share = BigDecimal.valueOf(chunkBaseQty)
                         .divide(BigDecimal.valueOf(remainingBaseQty == 0 ? 1 : remainingBaseQty),
                                 10, RoundingMode.HALF_UP);
                 chunkSubtotal = lineSubtotal.multiply(share).setScale(2, RoundingMode.HALF_UP);
-                chunkPreTax = preTaxAmount.multiply(share).setScale(2, RoundingMode.HALF_UP);
-                chunkVat = vatAmount.multiply(share).setScale(2, RoundingMode.HALF_UP);
             }
 
             Invoicedetail detail = new Invoicedetail();
@@ -553,61 +527,15 @@ public class InvoiceService {
             detail.setUnitSellPrice(unitSellPrice);
             detail.setSubtotal(chunkSubtotal);
             detail.setReturnedQty(0);
-            detail.setVatRate(vatRate);
-            detail.setPreTaxAmount(chunkPreTax);
-            detail.setVatAmount(chunkVat);
             invoicedetailRepository.save(detail);
 
             remainingSubtotal = remainingSubtotal.subtract(chunkSubtotal);
-            remainingPreTax = remainingPreTax.subtract(chunkPreTax);
-            remainingVat = remainingVat.subtract(chunkVat);
             remainingBaseQty -= chunkBaseQty;
             remainingSellQty -= chunkSellQty;
         }
 
-        return new SavedLineTotals(lineSubtotal, vatAmount);
+        return lineSubtotal;
     }
-
-    /**
-     * Snapshot thuế suất GTGT tại thời điểm bán: {@code Product.vatRateOverride} nếu có,
-     * ngược lại {@code Type.defaultVATRate}; lưu vào dòng hóa đơn, không tham chiếu động tới Product.
-     */
-    private BigDecimal resolveVatRateSnapshot(Product product) {
-        if (product.getVatRateOverride() != null) {
-            return product.getVatRateOverride();
-        }
-        Type type = product.getTypeID();
-        if (type != null && type.getDefaultVATRate() != null) {
-            return type.getDefaultVATRate();
-        }
-        return BigDecimal.ZERO;
-    }
-
-    /** Giá trị dòng hàng chưa gồm thuế GTGT — subtotal đã gồm thuế: subtotal ÷ (1 + vatRate/100). */
-    private BigDecimal calculateSaleLinePreTaxAmount(BigDecimal grossSubtotal, BigDecimal vatRatePercent) {
-        if (grossSubtotal == null || grossSubtotal.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        BigDecimal rate = vatRatePercent != null ? vatRatePercent : BigDecimal.ZERO;
-        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-            return grossSubtotal.setScale(2, RoundingMode.HALF_UP);
-        }
-        BigDecimal divisor = BigDecimal.ONE.add(
-                rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
-        return grossSubtotal.divide(divisor, 2, RoundingMode.HALF_UP);
-    }
-
-    /** Số tiền thuế GTGT đầu ra của dòng hàng — preTaxAmount × vatRate / 100. */
-    private BigDecimal calculateSaleLineVatAmount(BigDecimal preTaxAmount, BigDecimal vatRatePercent) {
-        BigDecimal preTax = preTaxAmount != null ? preTaxAmount : BigDecimal.ZERO;
-        BigDecimal rate = vatRatePercent != null ? vatRatePercent : BigDecimal.ZERO;
-        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        return preTax.multiply(rate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-    }
-
-    private record SavedLineTotals(BigDecimal subtotal, BigDecimal vatAmount) {}
 
     /** One batch's contribution to a single line's FEFO deduction. */
     private record BatchAllocation(Batch batch, int baseQtyTaken) {}
@@ -718,28 +646,10 @@ public class InvoiceService {
                     "Hai ký tự cuối của ký hiệu mẫu số hóa đơn phải là chữ cái (VD: AA, YY)");
         }
 
-        // '2' = mẫu hóa đơn bán hàng thông thường — mọi hóa đơn mới phát hành đều dùng ký hiệu này
-        // từ nay, kể cả nhóm 3 (không còn phát hành "1"K/"Hóa đơn GTGT" nữa, xem setInvoiceType ở
-        // createSaleInvoice).
+        // '2' = mẫu hóa đơn bán hàng thông thường.
         char kindPrefix = '2';
         String yearPart = String.format("%02d", date.getYear() % 100);
         return kindPrefix + "K" + yearPart + "M" + sellerSuffix;
-    }
-
-    /**
-     * Hóa đơn GTGT (Nhóm 3+) hay hóa đơn bán hàng thường — dựa trên dữ liệu đã lưu trên hóa đơn,
-     * không theo nhóm hiện tại (hóa đơn cũ vẫn giữ dạng cũ sau khi đổi nhóm).
-     */
-    private boolean isVatSaleInvoice(Invoice invoice) {
-        if (invoice == null) {
-            return false;
-        }
-        String type = invoice.getInvoiceType();
-        if (INVOICE_TYPE_VAT.equals(type)) {
-            return true;
-        }
-        String pattern = invoice.getInvoicePattern();
-        return pattern != null && !pattern.isEmpty() && pattern.charAt(0) == '1';
     }
 
     /** Chuyển ký hiệu K (không mã CQT) → C (có mã CQT) khi hóa đơn được ký. */
@@ -856,21 +766,8 @@ public class InvoiceService {
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        BigDecimal totalVATOutput = invoice.getTotalVATOutput();
-        if (totalVATOutput == null) {
-            totalVATOutput = lines.stream()
-                    .map(Invoicedetail::getVatAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-        BigDecimal totalPreTaxAmount = lines.stream()
-                .map(Invoicedetail::getPreTaxAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         Customer customer = invoice.getCustomerID();
         Invoice original = invoice.getOriginalInvoiceID();
-        Invoice root = invoice.getRootInvoiceID();
 
         Map<Integer, String> returnSlips = returnRepository
                 .findByInvoiceID_IdOrderByReturnDateDesc(invoiceId)
@@ -885,7 +782,6 @@ public class InvoiceService {
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         boolean signed = isStatus(statusName, STATUS_SIGNED);
         String taxCode = signed && setting != null ? trimToNull(setting.getTaxCode()) : null;
-        boolean showVatBreakdown = isVatSaleInvoice(invoice);
 
         return new InvoiceDetailPageResponse(
                 invoice.getId(),
@@ -898,7 +794,6 @@ public class InvoiceService {
                 customer != null ? customer.getPhoneNumber() : null,
                 invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
                 invoiceTypeDisplay(invoice.getInvoiceType()),
-                showVatBreakdown,
                 statusName,
                 statusCssClass(invoice.getStatus()),
                 Boolean.TRUE.equals(invoice.getPrescriptionRequired()),
@@ -908,12 +803,8 @@ public class InvoiceService {
                 returnSlips,
                 original != null ? original.getId() : null,
                 original != null ? invoiceCode(original) : null,
-                root != null ? root.getId() : null,
-                root != null ? invoiceCode(root) : null,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
-                totalPreTaxAmount,
-                totalVATOutput,
                 invoice.getTotal(),
                 invoice.getPaidByCash(),
                 invoice.getPaidByBanking(),
@@ -933,25 +824,12 @@ public class InvoiceService {
 
         List<Invoicedetail> lines = invoicedetailRepository.findByInvoiceIdWithRelations(invoiceId);
 
-        BigDecimal totalVATOutput = invoice.getTotalVATOutput();
-        if (totalVATOutput == null) {
-            totalVATOutput = lines.stream()
-                    .map(Invoicedetail::getVatAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-        BigDecimal totalPreTaxAmount = lines.stream()
-                .map(Invoicedetail::getPreTaxAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         int totalQuantity = lines.stream()
                 .map(Invoicedetail::getQuantity)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        boolean showVatBreakdown = isVatSaleInvoice(invoice);
         boolean signed = isStatus(invoice.getStatus(), STATUS_SIGNED);
 
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
@@ -990,7 +868,6 @@ public class InvoiceService {
                 invoice.getInvoicePattern(),
                 formatInvoiceSerialNumber(invoice),
                 invoiceTypeDisplay(invoice.getInvoiceType()),
-                showVatBreakdown,
                 signed,
                 formatDateLong(invoice.getDate()),
                 signed ? buildTaxAuthorityCode(invoice, setting) : null,
@@ -1014,8 +891,6 @@ public class InvoiceService {
                 totalQuantity,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
-                totalPreTaxAmount,
-                totalVATOutput,
                 printTotal,
                 invoice.getPaidByCash(),
                 invoice.getPaidByBanking(),
@@ -1033,10 +908,7 @@ public class InvoiceService {
                 line.getUnitName(),
                 line.getQuantity(),
                 line.getUnitSellPrice(),
-                line.getSubtotal(),
-                line.getVatRate(),
-                line.getPreTaxAmount(),
-                line.getVatAmount());
+                line.getSubtotal());
     }
 
     private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines) {
@@ -1082,9 +954,6 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getVatRate(),
-                line.getPreTaxAmount(),
-                line.getVatAmount(),
                 line.getReturnedQty() != null ? line.getReturnedQty() : 0,
                 formatBatchLabel(line.getBatchID()));
     }
@@ -1107,9 +976,6 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getVatRate(),
-                line.getPreTaxAmount(),
-                line.getVatAmount(),
                 line.getReturnedQty() != null ? line.getReturnedQty() : 0);
     }
 
@@ -1234,11 +1100,9 @@ public class InvoiceService {
             return "—";
         }
         if (INVOICE_TYPE_NORMAL.equalsIgnoreCase(invoiceType)
-                || INVOICE_TYPE_NORMAL_LEGACY.equalsIgnoreCase(invoiceType)) {
+                || INVOICE_TYPE_NORMAL_LEGACY.equalsIgnoreCase(invoiceType)
+                || INVOICE_TYPE_VAT_LEGACY.equals(invoiceType)) {
             return "Bán hàng";
-        }
-        if (INVOICE_TYPE_VAT.equals(invoiceType)) {
-            return "Hóa đơn GTGT";
         }
         if (INVOICE_TYPE_ADJUSTMENT.equalsIgnoreCase(invoiceType)
                 || INVOICE_TYPE_ADJUSTMENT_LEGACY.equalsIgnoreCase(invoiceType)) {

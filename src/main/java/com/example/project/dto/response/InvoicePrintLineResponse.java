@@ -15,7 +15,4 @@ public class InvoicePrintLineResponse {
     private Integer quantity;
     private BigDecimal unitSellPrice;
     private BigDecimal lineSubtotal;
-    private BigDecimal vatRate;
-    private BigDecimal preTaxAmount;
-    private BigDecimal vatAmount;
 }

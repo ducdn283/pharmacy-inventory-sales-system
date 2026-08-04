@@ -24,9 +24,6 @@ public class ReturndetailResponse {
     private BigDecimal unitSellPrice;
     private BigDecimal lineRefund;
     private Boolean restockable;
-    private BigDecimal vatRate;
-    private BigDecimal preTaxAmount;
-    private BigDecimal vatAmount;
     private BigDecimal originalLineValue;
 
     public static ReturndetailResponse from(Returndetail returndetail) {
@@ -43,9 +40,6 @@ public class ReturndetailResponse {
                 returndetail.getUnitSellPrice(),
                 returndetail.getLineRefund(),
                 returndetail.getRestockable(),
-                returndetail.getVatRate(),
-                returndetail.getPreTaxAmount(),
-                returndetail.getVatAmount(),
                 returndetail.getOriginalLineValue()
         );
     }

@@ -248,7 +248,7 @@ public class TaxperiodsnapshotService {
     @Transactional(readOnly = true)
     public Integer groupForPeriod(TaxPeriod period) {
         return previousSnapshot(period)
-                .map(Taxperiodsnapshot::getNextPeriodTaxType)
+                .map(Taxperiodsnapshot::getPeriodTaxType)
                 .orElseGet(this::settingRevenueGroup);
     }
 
@@ -342,7 +342,7 @@ public class TaxperiodsnapshotService {
         // anything has ever closed — there is nothing on the chain to retro-fix, so the seed itself
         // (Financialsetting.revenueGroup) is what needs to change instead.
         previousSnapshot(current).ifPresent(snapshot -> {
-            snapshot.setNextPeriodTaxType(TaxRevenueGroup.DIRECT);
+            snapshot.setPeriodTaxType(TaxRevenueGroup.DIRECT);
             taxperiodsnapshotRepository.save(snapshot);
         });
         syncFinancialSettingRevenueGroup(TaxRevenueGroup.DIRECT);
@@ -725,11 +725,8 @@ public class TaxperiodsnapshotService {
         snapshot.setStartDate(due.startDate());
         snapshot.setEndDate(due.endDate());
         snapshot.setVatOutput(computed.getVatOutput());
-        snapshot.setVatInput(computed.getVatInput());
-        snapshot.setVatCarryforwardIn(computed.getVatCarryforwardIn());
-        snapshot.setVatCarryforwardOut(computed.getVatCarryforwardOut());
         snapshot.setIncomeTax(computed.getIncomeTax());
-        snapshot.setNextPeriodTaxType(nextGroup);
+        snapshot.setPeriodTaxType(nextGroup);
         snapshot.setQuarterlyRevenue(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
         snapshot.setRecordedAt(LocalDateTime.now(VN_ZONE));
@@ -793,11 +790,8 @@ public class TaxperiodsnapshotService {
         }
 
         snapshot.setVatOutput(vatOutput);
-        snapshot.setVatInput(vatInput);
-        snapshot.setVatCarryforwardIn(carryIn);
-        snapshot.setVatCarryforwardOut(carryForwardOut(vatOutput, vatInput, carryIn));
         snapshot.setIncomeTax(incomeTax);
-        snapshot.setNextPeriodTaxType(nextGroup);
+        snapshot.setPeriodTaxType(nextGroup);
         snapshot.setQuarterlyRevenue(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
 
@@ -889,8 +883,8 @@ public class TaxperiodsnapshotService {
                 snapshot.getQuarterlyRevenue() == null
                         ? null
                         : scaled(snapshot.getQuarterlyRevenue()),
-                snapshot.getNextPeriodTaxType(),
-                TaxRevenueGroup.label(snapshot.getNextPeriodTaxType()),
+                snapshot.getPeriodTaxType(),
+                TaxRevenueGroup.label(snapshot.getPeriodTaxType()),
                 formatDateTime(snapshot.getRecordedAt()),
                 snapshot.getNote(),
                 previous.map(Taxperiodsnapshot::getPeriodLabel).orElse(null),

@@ -29,9 +29,6 @@ public class InvoiceDetailPageResponse {
 
     private String invoiceTypeDisplay;
 
-    /** True for hóa đơn GTGT (Nhóm 3+) — hiện cột thuế trên màn chi tiết. */
-    private boolean showVatBreakdown;
-
     private String statusName;
     private String statusCssClass;
 
@@ -46,13 +43,8 @@ public class InvoiceDetailPageResponse {
     private Integer originalInvoiceId;
     private String originalInvoiceCode;
 
-    private Integer rootInvoiceId;
-    private String rootInvoiceCode;
-
     private BigDecimal subtotal;
     private BigDecimal discount;
-    private BigDecimal totalPreTaxAmount;
-    private BigDecimal totalVATOutput;
     private BigDecimal total;
 
     private BigDecimal paidByCash;

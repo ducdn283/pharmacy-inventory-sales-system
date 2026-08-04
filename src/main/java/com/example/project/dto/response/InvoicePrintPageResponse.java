@@ -16,7 +16,6 @@ public class InvoicePrintPageResponse {
     /** Số hóa đơn 8 chữ số hiển thị trên mẫu in (vd. 00008131). */
     private String invoiceSerialNumber;
     private String invoiceTypeDisplay;
-    private boolean showVatBreakdown;
     private boolean signed;
     /** Ngày 24 tháng 06 năm 2026 */
     private String dateLongDisplay;
@@ -47,8 +46,6 @@ public class InvoicePrintPageResponse {
     private int totalQuantity;
     private BigDecimal subtotal;
     private BigDecimal discount;
-    private BigDecimal totalPreTaxAmount;
-    private BigDecimal totalVATOutput;
     private BigDecimal total;
     private BigDecimal paidByCash;
     private BigDecimal paidByBanking;

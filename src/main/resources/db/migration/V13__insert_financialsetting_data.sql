@@ -13,9 +13,7 @@ INSERT INTO financialsetting (
     email,
     bankAccountNumber,
     bankName,
-    revenueGroup,
-    annualRevenueThreshold1,
-    annualRevenueThreshold2
+    revenueGroup
 )
 SELECT
     1,
@@ -32,9 +30,7 @@ SELECT
     'nhathuochangngoc1976@gmail.com',
     '123456789',
     'vietcombank',
-    1,
-    1000000000.00,
-    3000000000.00
+    1
 WHERE NOT EXISTS (
     SELECT 1
     FROM financialsetting

@@ -63,17 +63,8 @@ public class Stockadjustmentdetail {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-    @Column(name = "vatRate", precision = 5, scale = 2)
-    private BigDecimal vatRate;
-
     @Column(name = "refSellPrice", precision = 15, scale = 2)
     private BigDecimal refSellPrice;
-
-    @Column(name = "preTaxAmount", precision = 15, scale = 2)
-    private BigDecimal preTaxAmount;
-
-    @Column(name = "vatAmount", precision = 15, scale = 2)
-    private BigDecimal vatAmount;
 
     @Column(name = "oldExpirationDate")
     private LocalDate oldExpirationDate;

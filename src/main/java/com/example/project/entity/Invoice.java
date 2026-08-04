@@ -102,13 +102,6 @@ public class Invoice {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-    @Column(name = "totalVATOutput", precision = 15, scale = 2)
-    private BigDecimal totalVATOutput;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rootInvoiceID")
-    private Invoice rootInvoiceID;
-
     @Version
     @Column(name = "version", nullable = false)
     private Integer version;
