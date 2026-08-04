@@ -2,16 +2,19 @@ package com.example.project.service;
 
 import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ExpenseType;
+import com.example.project.constant.PurchaseInvoiceStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
 import com.example.project.constant.StockCountStatus;
 import com.example.project.dto.response.ApprovalItemResponse;
 import com.example.project.dto.response.ApprovalStatsResponse;
 import com.example.project.entity.Expense;
+import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
 import com.example.project.entity.Stockreview;
 import com.example.project.repository.ExpenseRepository;
+import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.ShiftreportRepository;
 import com.example.project.repository.StockreviewRepository;
@@ -31,8 +34,8 @@ import java.util.Locale;
 
 /**
  * Read-only aggregator for the Owner's unified Approve List. Approve/reject business logic still
- * lives in each module's own service (Return/StockCount/ShiftReport/Expense) — this class
- * only reads their PENDING + a recent window of resolved items for display, and dispatches the
+ * lives in each module's own service (Return/StockReview/ShiftReport/Expense/PurchaseInvoice) — this
+ * class only reads their PENDING + a recent window of resolved items for display, and dispatches the
  * bulk-approve action to each one's existing {@code approve(...)} method.
  */
 @Service
@@ -42,6 +45,12 @@ public class ApprovalService {
     private static final String TYPE_STOCK_COUNT = "Kiểm kê";
     private static final String TYPE_SHIFT_REPORT = "Báo cáo ca";
     private static final String TYPE_EXPENSE = "Phiếu chi";
+    /**
+     * Phiếu nhập hàng — thêm 04/08/2026. Chủ nhà thuốc có thể nhập sai số lượng/giá mà không ai soát
+     * lại, nên phiếu nhập phải qua một bước duyệt độc lập trước khi hàng thật sự vào kho
+     * ({@code PurchaseinvoiceService.approvePurchaseInvoice} là nơi DUY NHẤT cộng tồn).
+     */
+    private static final String TYPE_PURCHASE_INVOICE = "Phiếu nhập";
 
     /** Short, stable codes for the bulk-approve checkbox value ("CODE:id") — distinct from the
      *  Vietnamese TYPE_* display labels used for the type filter dropdown. */
@@ -49,6 +58,7 @@ public class ApprovalService {
     private static final String TYPE_CODE_STOCK_COUNT = "STOCK_COUNT";
     private static final String TYPE_CODE_SHIFT_REPORT = "SHIFT_REPORT";
     private static final String TYPE_CODE_EXPENSE = "EXPENSE";
+    private static final String TYPE_CODE_PURCHASE_INVOICE = "PURCHASE_INVOICE";
 
     /** How far back a resolved (Đã duyệt/Từ chối) item stays visible after being handled, so approving
      *  something doesn't make it vanish immediately — purely a display window, not a data retention rule. */
@@ -60,27 +70,33 @@ public class ApprovalService {
     private final StockreviewRepository stockreviewRepository;
     private final ShiftreportRepository shiftreportRepository;
     private final ExpenseRepository expenseRepository;
+    private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final ReturnService returnService;
     private final StockreviewService stockreviewService;
     private final ShiftreportService shiftreportService;
     private final ExpenseService expenseService;
+    private final PurchaseinvoiceService purchaseinvoiceService;
 
     public ApprovalService(ReturnRepository returnRepository,
                            StockreviewRepository stockreviewRepository,
                            ShiftreportRepository shiftreportRepository,
                            ExpenseRepository expenseRepository,
+                           PurchaseinvoiceRepository purchaseinvoiceRepository,
                            ReturnService returnService,
                            StockreviewService stockreviewService,
                            ShiftreportService shiftreportService,
-                           ExpenseService expenseService) {
+                           ExpenseService expenseService,
+                           PurchaseinvoiceService purchaseinvoiceService) {
         this.returnRepository = returnRepository;
         this.stockreviewRepository = stockreviewRepository;
         this.shiftreportRepository = shiftreportRepository;
         this.expenseRepository = expenseRepository;
+        this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.returnService = returnService;
         this.stockreviewService = stockreviewService;
         this.shiftreportService = shiftreportService;
         this.expenseService = expenseService;
+        this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
     @Transactional(readOnly = true)
@@ -125,6 +141,18 @@ public class ApprovalService {
                     .forEach(items::add);
         }
 
+        if (matchesType(typeFilter, TYPE_PURCHASE_INVOICE)) {
+            // Phiếu Nháp chưa nộp và phiếu Đã hủy không phải việc của người duyệt. Từ chối một phiếu
+            // nhập đưa nó VỀ Nháp (không hủy), nên phiếu vừa bị từ chối cũng không hiện lại ở đây —
+            // khác 4 loại kia (có trạng thái "Từ chối" riêng để còn nhìn thấy trong 3 ngày).
+            purchaseinvoiceRepository.findAll().stream()
+                    .filter(invoice -> !isStatus(invoice.getStatus(), PurchaseInvoiceStatus.DRAFT)
+                            && !isStatus(invoice.getStatus(), PurchaseInvoiceStatus.CANCELLED))
+                    .map(this::toApprovalItem)
+                    .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
+                    .forEach(items::add);
+        }
+
         return items.stream()
                 .sorted(Comparator.comparing(ApprovalItemResponse::isPending).reversed()
                         .thenComparing(ApprovalItemResponse::getRequestedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -145,18 +173,22 @@ public class ApprovalService {
         long expenseCount = expenseRepository.findAll().stream()
                 .filter(expense -> isStatus(expense.getStatus(), ExpenseStatus.PENDING))
                 .count();
+        long purchaseInvoiceCount = purchaseinvoiceRepository.findAll().stream()
+                .filter(invoice -> isStatus(invoice.getStatus(), PurchaseInvoiceStatus.PENDING_APPROVAL))
+                .count();
 
         return new ApprovalStatsResponse(
-                returnCount + stockCountCount + shiftReportCount + expenseCount,
+                returnCount + stockCountCount + shiftReportCount + expenseCount + purchaseInvoiceCount,
                 returnCount,
                 stockCountCount,
                 shiftReportCount,
-                expenseCount
+                expenseCount,
+                purchaseInvoiceCount
         );
     }
 
     public List<String> listTypes() {
-        return List.of(TYPE_RETURN, TYPE_STOCK_COUNT, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
+        return List.of(TYPE_RETURN, TYPE_PURCHASE_INVOICE, TYPE_STOCK_COUNT, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
     }
 
     /** Approves every "CODE:id" selector the Owner checked, dispatching to each module's own approve().
@@ -179,6 +211,7 @@ public class ApprovalService {
                     case TYPE_CODE_STOCK_COUNT -> stockreviewService.approve(id, ownerAccountId);
                     case TYPE_CODE_SHIFT_REPORT -> shiftreportService.approve(id, ownerAccountId);
                     case TYPE_CODE_EXPENSE -> expenseService.approve(id, ownerAccountId);
+                    case TYPE_CODE_PURCHASE_INVOICE -> purchaseinvoiceService.approvePurchaseInvoice(id);
                     default -> {
                         continue;
                     }
@@ -279,6 +312,32 @@ public class ApprovalService {
                 "/owner/expenses/" + id,
                 "/owner/expenses/" + id + "/approve",
                 "/owner/expenses/" + id + "/reject"
+        );
+    }
+
+    /**
+     * Phiếu nhập chờ duyệt. Mốc thời gian dùng {@code date} (ngày lập phiếu) — bảng
+     * {@code purchaseinvoice} không có cột "thời điểm nộp duyệt" riêng, và {@code approvedAt} chỉ có
+     * giá trị SAU khi duyệt nên không sắp xếp được hàng đang chờ.
+     */
+    private ApprovalItemResponse toApprovalItem(Purchaseinvoice invoice) {
+        String id = String.valueOf(invoice.getId());
+        boolean pending = isStatus(invoice.getStatus(), PurchaseInvoiceStatus.PENDING_APPROVAL);
+        String supplier = invoice.getSupplierID() != null ? invoice.getSupplierID().getName() : "Không rõ NCC";
+        return new ApprovalItemResponse(
+                TYPE_PURCHASE_INVOICE,
+                TYPE_CODE_PURCHASE_INVOICE + ":" + id,
+                invoice.getPurchaseInvoiceCode(),
+                invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
+                invoice.getDate(),
+                formatInstant(invoice.getDate()),
+                supplier + " — " + formatMoney(invoice.getTotalAmount()),
+                invoice.getStatus(),
+                statusCssClass(invoice.getStatus()),
+                pending,
+                "/owner/purchase-invoices/" + id,
+                "/owner/purchase-invoices/" + id + "/approve",
+                "/owner/purchase-invoices/" + id + "/reject"
         );
     }
 
