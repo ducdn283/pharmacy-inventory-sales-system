@@ -46,6 +46,18 @@ public final class TaxRevenueGroup {
     public static final List<Integer> ALL = List.of(EXEMPT, DIRECT, DEDUCTION);
 
     /**
+     * Annual revenue threshold between {@link #EXEMPT} and {@link #DIRECT} — 1 tỷ đồng.
+     *
+     * <p>Was configurable via {@code Financialsetting.annualRevenueThreshold1} until it was dropped
+     * from the schema (2026-08-04, per {@code Tax-Invoice.xlsx}): the group boundaries are fixed by
+     * law, not a per-pharmacy setting, so this is now the single hardcoded definition.</p>
+     */
+    public static final BigDecimal THRESHOLD_1 = new BigDecimal("1000000000.00");
+
+    /** Annual revenue threshold between {@link #DIRECT} and {@link #DEDUCTION} — 3 tỷ đồng. See {@link #THRESHOLD_1}. */
+    public static final BigDecimal THRESHOLD_2 = new BigDecimal("3000000000.00");
+
+    /**
      * VAT rate applied to revenue under the {@link #DIRECT} method: <strong>1%</strong> for retail
      * and wholesale of goods, which is what a pharmacy does.
      *
