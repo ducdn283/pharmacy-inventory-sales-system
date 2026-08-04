@@ -51,16 +51,5 @@ public class ReturnDetailPageResponse {
     /** Phần nhà thuốc GIỮ LẠI = totalOriginalValue − totalRefund; vẫn là doanh thu chịu thuế bình thường. */
     private BigDecimal retainedAmount;
 
-    /** Doanh thu (chưa thuế) được giảm trừ = Σ preTaxAmount của các dòng. */
-    private BigDecimal totalPreTaxRefund;
-    /** Thuế GTGT đầu ra được giảm trừ trong kỳ TRẢ HÀNG (không hồi tố kỳ bán gốc) = Return.totalVATRefund. */
-    private BigDecimal totalVATRefund;
-
-    /**
-     * Nhà thuốc đang ở Nhóm 1 (miễn thuế) ⇒ không kê khai gì, nên màn hình ẩn hẳn phần thuế thay vì
-     * hiển thị một cột toàn số không có ý nghĩa. Số thuế vẫn được lưu theo hóa đơn gốc.
-     */
-    private boolean taxExempt;
-
     private List<ReturnDetailItemResponse> items;
 }

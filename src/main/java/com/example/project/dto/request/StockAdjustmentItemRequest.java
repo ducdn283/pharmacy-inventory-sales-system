@@ -15,7 +15,6 @@ public class StockAdjustmentItemRequest {
 
     private String reason;
 
-    // Thuế suất GTGT đầu ra do người lập tự nhập — chỉ dùng cho INTERNAL_USE/GIFT/SAMPLE
-    // (0 nếu chương trình khuyến mãi đã đăng ký hợp lệ). Bỏ qua với DESTROY/COUNT_*.
-    private BigDecimal vatRate;
+    // Ô nhập "Thuế suất GTGT đầu ra" đã bỏ 04/08/2026 — phiếu điều chỉnh kho không phát sinh thuế
+    // (hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ %, không khấu trừ đầu ra).
 }

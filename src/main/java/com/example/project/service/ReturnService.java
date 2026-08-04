@@ -60,30 +60,38 @@ public class ReturnService {
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
     /** An invoice still carrying an unpaid balance (mirrors InvoiceService.STATUS_DEBT). */
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
-    // A signed invoice ("Đã ký") has been pushed to the tax authority — it must NOT be edited, so a
-    // return against it emits an adjustment invoice (TH2) instead of touching the original.
+    /**
+     * Hóa đơn "Đã ký" = đã đẩy lên cơ quan thuế. Từ 04/08/2026 trạng thái này KHÔNG còn rẽ nhánh nghiệp vụ
+     * nào ở màn trả hàng: đã ký hay chưa thì trả hàng vẫn xuất hóa đơn THAY THẾ. Hằng số giữ lại vì hóa
+     * đơn đã ký vẫn phải nằm trong danh sách trả được ({@link #isReturnEligibleStatus}).
+     */
     private static final String INVOICE_STATUS_SIGNED = "Đã ký";
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String INVOICE_STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
 
-    // Only sale/replacement invoices are returnable. DB invoiceType (nay lưu tiếng Việt):
-    // Bán hàng / Hóa đơn GTGT / Điều chỉnh / Thay thế — a return must not be opened against an
-    // adjustment invoice (the negative slip emitted by TH2, no returnable lines of its own).
-    private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
     /**
-     * Hóa đơn bán hàng của nhà thuốc Nhóm 3+ — {@code InvoiceService} gán loại này thay cho
-     * {@link #INVOICE_TYPE_NORMAL}. Vẫn là bán hàng, vẫn trả lại được (xem {@link #isNormalInvoice}).
+     * Loại hóa đơn nay CHỈ CÒN 2: "Bán hàng" (normal) và "Thay thế" (replacement) — loại "Điều chỉnh"
+     * đã bị bỏ hẳn ngày 04/08/2026 (Tax_Invoice.xlsx sheet 04). 3 hằng {@code *_LEGACY} và
+     * {@link #INVOICE_TYPE_VAT} giữ lại CHỈ để đọc dữ liệu cũ đã ghi trong DB, không bao giờ ghi mới.
      */
+    private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
+    /** Giá trị cũ: hóa đơn bán hàng của nhà thuốc Nhóm 3+ khi còn phân biệt theo nhóm doanh thu. */
     private static final String INVOICE_TYPE_VAT = "Hóa đơn GTGT";
     /** Legacy DB value before invoiceType was stored in Vietnamese. */
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
+    /** Loại đã bị bỏ — chỉ còn dùng để NHẬN DIỆN hóa đơn điều chỉnh cũ và chặn không cho trả tiếp. */
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
     /** Legacy DB value before invoiceType was stored in Vietnamese. */
     private static final String INVOICE_TYPE_ADJUSTMENT_LEGACY = "adjustment";
-    // Emitted for a return against an UNSIGNED original (TH1) — distinct from an
-    // adjustment because it fully supersedes/invalidates the original (see isInvalidatedByReplacement),
-    // carrying over ALL of its remaining data (not just a negative delta) including any unpaid debt.
+    /**
+     * Hóa đơn thay thế — phát hành cho MỌI phiếu trả hàng, bất kể hóa đơn gốc đã ký hay chưa. Nó vô hiệu
+     * hoàn toàn bản gốc (xem {@link #isSupersededByReturn}) và kế thừa TOÀN BỘ phần dữ liệu còn lại,
+     * gồm cả công nợ chưa trả.
+     */
     private static final String INVOICE_TYPE_REPLACEMENT = "Thay thế";
+
+    /** Chặn vòng lặp vô hạn khi đi ngược chuỗi {@code originalInvoiceID} — xem {@link #rootOf}. */
+    private static final int MAX_INVOICE_CHAIN_DEPTH = 100;
 
     private static final String INVOICE_RETURN_NONE = "NONE";
     private static final String INVOICE_RETURN_PARTIAL = "PARTIAL";
@@ -105,7 +113,7 @@ public class ReturnService {
     private final AccountRepository accountRepository;
     private final BatchRepository batchRepository;
     // Sales invoice / detail rows are read for the TH1 flow; for TH2 (signed invoice) we also *create*
-    // an adjustment invoice row here (see createAdjustmentInvoice) — mirroring how cloneReturnBatch
+    // a replacement invoice row here (see createReplacementInvoice) — mirroring how cloneReturnBatch
     // creates a Batch — without calling into InvoiceService.
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
@@ -210,22 +218,33 @@ public class ReturnService {
         // Resolved once, not per invoice — the window is a single setting row, not per-invoice data.
         int windowDays = getReturnWindowDays();
 
+        // Lọc những điều kiện RẺ (chỉ đọc cột của chính hóa đơn) TRƯỚC, rồi mới tính returnCode cho
+        // phần còn lại: returnCode phải đọc các dòng chi tiết, nên tính cho mọi hóa đơn trong bảng là
+        // lãng phí. Tính đúng MỘT lần cho mỗi ứng viên và dùng lại cho cả bước lọc lẫn bước hiển thị.
         return invoiceRepository.findAll().stream()
-                .filter(invoice -> isReturnable(invoice, windowDays))
+                .filter(this::isNormalInvoice)
+                .filter(this::isReturnEligibleStatus)
+                .filter(invoice -> !Boolean.TRUE.equals(invoice.getPrescriptionRequired()))
                 .filter(invoice -> matchesInvoiceKeyword(invoice, normalizedKeyword))
-                .sorted(Comparator.comparing(Invoice::getDate, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(invoice -> new ReturnableInvoiceResponse(
-                        invoice.getId(),
-                        // Số hóa đơn (HD00000x) — duy nhất, để phân biệt; KHÔNG dùng invoicePattern.
-                        invoice.getInvoiceNumber(),
-                        formatLocalDateTime(invoice.getDate()),
-                        invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
-                        invoice.getCustomerID() != null ? invoice.getCustomerID().getName() : "Khách lẻ",
-                        invoice.getTotal(),
-                        // Công nợ còn lại của chính hóa đơn — số sẽ bị cấn trừ vào tiền hoàn khi duyệt
-                        // phiếu trả (netting). Hiển thị ngay ở bảng chọn để người lập biết trước.
-                        nz(invoice.getDebtAmount()),
-                        returnStatusDisplay(invoiceReturnCode(invoice))))
+                .map(invoice -> Map.entry(invoice, invoiceReturnCode(invoice)))
+                .filter(entry -> isReturnable(entry.getKey(), windowDays, entry.getValue()))
+                .sorted(Comparator.comparing(entry -> entry.getKey().getDate(),
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(entry -> {
+                    Invoice invoice = entry.getKey();
+                    return new ReturnableInvoiceResponse(
+                            invoice.getId(),
+                            // Số hóa đơn (HD00000x) — duy nhất, để phân biệt; KHÔNG dùng invoicePattern.
+                            invoice.getInvoiceNumber(),
+                            formatLocalDateTime(invoice.getDate()),
+                            invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
+                            invoice.getCustomerID() != null ? invoice.getCustomerID().getName() : "Khách lẻ",
+                            invoice.getTotal(),
+                            // Công nợ còn lại của chính hóa đơn — số sẽ bị cấn trừ vào tiền hoàn khi duyệt
+                            // phiếu trả (netting). Hiển thị ngay ở bảng chọn để người lập biết trước.
+                            nz(invoice.getDebtAmount()),
+                            returnStatusDisplay(entry.getValue()));
+                })
                 .toList();
     }
 
@@ -334,10 +353,6 @@ public class ReturnService {
         BigDecimal totalRefund = prepared.values().stream()
                 .map(PreparedLine::lineRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalVATRefund = prepared.values().stream()
-                .map(PreparedLine::vatAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         String status = asDraft ? ReturnStatus.DRAFT : (isOwner ? ReturnStatus.DEBT : ReturnStatus.PENDING);
         boolean approvedNow = ReturnStatus.DEBT.equals(status);
 
@@ -352,7 +367,6 @@ public class ReturnService {
         // phiếu chi bên Kế toán. 3 cột refundCash/refundBanking/refundCredit đã bị bỏ khỏi
         // bảng `return` — phiếu trả chỉ còn lưu tổng phải hoàn (totalRefund).
         ret.setTotalRefund(totalRefund);
-        ret.setTotalVATRefund(totalVATRefund);
         ret.setAppliedRefundRate(refundRate);
         // Số dự kiến cấn trừ vào công nợ hóa đơn gốc. Chốt lại theo dư nợ tại thời điểm DUYỆT
         // (xem applyDebtOffset) — phiếu nháp chỉ giữ số ước tính để màn chi tiết có gì hiển thị.
@@ -384,9 +398,6 @@ public class ReturnService {
             // originalLineValue = giá trị GỐC 100%, lineRefund = số thực hoàn (gốc × tỷ lệ hoàn).
             // Chênh lệch 2 cột là phần nhà thuốc giữ lại — vẫn là doanh thu chịu thuế bình thường.
             detail.setOriginalLineValue(line.originalLineValue());
-            detail.setVatRate(line.vatRate());
-            detail.setPreTaxAmount(line.preTaxAmount());
-            detail.setVatAmount(line.vatAmount());
             detail.setRestockable(line.restockable());
             details.add(returndetailRepository.save(detail));
         }
@@ -454,16 +465,15 @@ public class ReturnService {
 
     /**
      * Restores stock for an approved return: each restockable line goes into a fresh batch cloned from the
-     * one it was sold from, and the original invoice line's {@code returnedQty} is bumped. Then, depending
-     * on whether the original invoice is signed:
-     * <ul>
-     *   <li><b>TH1 (chưa ký):</b> the original is fully superseded — a REPLACEMENT invoice ("Thay thế") is
-     *       emitted carrying its entire remaining data, <em>including any outstanding debt</em>, which moves
-     *       onto the replacement while the original is zeroed (see {@link #createReplacementInvoice}).</li>
-     *   <li><b>TH2 (đã ký):</b> the original stays valid in parallel — an ADJUSTMENT invoice ("Điều chỉnh")
-     *       with negative lines is emitted (see {@link #createAdjustmentInvoice}); the signed original's
-     *       {@code subtotal/total/paidBy*} are left untouched (already pushed to the tax authority).</li>
-     * </ul>
+     * one it was sold from, and the original invoice line's {@code returnedQty} is bumped. Then the original
+     * is fully superseded — a REPLACEMENT invoice ("Thay thế") is emitted carrying its entire remaining data,
+     * <em>including any outstanding debt</em>, which moves onto the replacement while the original is zeroed
+     * (see {@link #createReplacementInvoice}).
+     *
+     * <p><strong>Không còn phân biệt hóa đơn đã ký / chưa ký.</strong> Trước 04/08/2026 hóa đơn ĐÃ KÝ đi
+     * nhánh riêng, phát hành hóa đơn "Điều chỉnh" gồm các dòng ÂM và không đụng vào hóa đơn gốc. Nay bỏ hẳn
+     * loại "Điều chỉnh": mọi thay đổi trên hóa đơn đã lập — dù đã ký hay chưa — đều xuất hóa đơn THAY THẾ
+     * (Tax_Invoice.xlsx sheet 04).</p>
      *
      * <p><strong>Bù trừ công nợ (netting)</strong> chạy TRƯỚC khi phát hành hóa đơn nào (xem
      * {@link #applyDebtOffset}) — chạy sau thì hóa đơn thay thế ôm nguyên số nợ chưa trừ. Chỉ phần dư
@@ -480,7 +490,6 @@ public class ReturnService {
         ret.setShiftReportID(shift);
 
         Invoice original = ret.getInvoiceID();
-        boolean signed = isSigned(original);
         for (Returndetail detail : details) {
             Invoicedetail invoiceLine = detail.getInvoiceDetailID();
             int already = invoiceLine.getReturnedQty() != null ? invoiceLine.getReturnedQty() : 0;
@@ -499,11 +508,10 @@ public class ReturnService {
         // sau khi đã cấn trừ, nếu chạy sau thì nó sẽ ôm nguyên số nợ chưa trừ.
         applyDebtOffset(ret, original);
 
-        if (signed) {
-            createAdjustmentInvoice(ret, original, details);
-        } else {
-            createReplacementInvoice(ret, original, details);
-        }
+        // MỌI phiếu trả đều phát hành hóa đơn THAY THẾ, không phân biệt hóa đơn gốc đã ký hay chưa
+        // (Tax_Invoice.xlsx sheet 04, 04/08/2026: "việc đã ký không ảnh hưởng, chỉ cần hóa đơn cũ bị
+        // thay thế hoàn toàn bởi bản mới"). Loại "Điều chỉnh" + cơ chế dòng âm đã bị bỏ hẳn.
+        createReplacementInvoice(ret, original, details);
 
         // Cột riêng invoice.returnStatus nên ghi được cho CẢ hóa đơn đã ký lẫn chưa ký.
         updateInvoiceReturnStatus(original);
@@ -512,76 +520,10 @@ public class ReturnService {
     }
 
     /**
-     * TH2 — hóa đơn gốc ĐÃ KÝ (đã gửi thuế): phát hành hóa đơn ĐIỀU CHỈNH gồm các dòng ÂM, KHÔNG đụng
-     * vào hóa đơn gốc ({@code subtotal/total/paidBy*} bị đóng băng về mặt pháp lý sau khi ký).
-     * Không trừ kho (hàng trả đã được nhập vào lô mới ở {@link #applyReturnEffect}).
-     *
-     * <p>Hóa đơn điều chỉnh không mang nợ riêng: phần bù trừ đã được {@link #applyDebtOffset} áp vào
-     * hóa đơn GỐC trước đó — {@code debtAmount} là số duy nhất của HĐ đã ký còn được phép thay đổi.</p>
-     */
-    private void createAdjustmentInvoice(Return ret, Invoice original, List<Returndetail> details) {
-        BigDecimal refund = nz(ret.getTotalRefund());
-        BigDecimal vatRefund = nz(ret.getTotalVATRefund());
-
-        Invoice adj = new Invoice();
-        // Cùng ký hiệu (mẫu số / serie) với hóa đơn gốc; số hóa đơn mới, duy nhất.
-        adj.setInvoicePattern(original.getInvoicePattern());
-        adj.setInvoiceNumber(generateInvoiceNumber());
-        adj.setDate(LocalDateTime.now(VN_ZONE));
-        adj.setEmployeeID(ret.getReturnedBy());
-        adj.setCustomerID(original.getCustomerID());
-        adj.setInvoiceType(INVOICE_TYPE_ADJUSTMENT);
-        adj.setOriginalInvoiceID(original);
-        adj.setRootInvoiceID(rootOf(original));
-        adj.setReturnID(ret);
-        adj.setPrescriptionRequired(false);
-        // Phát hành ở trạng thái "Hoàn thành" (chờ ký) — Kế toán/Owner review rồi ký đẩy thuế như hóa đơn thường.
-        adj.setStatus(INVOICE_STATUS_COMPLETED);
-        // Bản thân hóa đơn điều chỉnh chưa bị trả gì (nó chỉ là bút toán âm, không có hàng để trả tiếp).
-        adj.setReturnStatus(INVOICE_RETURN_NONE);
-        adj.setDiscount(BigDecimal.ZERO);
-        adj.setSubtotal(refund.negate());
-        adj.setTotal(refund.negate());
-        adj.setTotalVATOutput(vatRefund.negate());
-        adj.setPaidByCash(BigDecimal.ZERO);
-        adj.setPaidByBanking(BigDecimal.ZERO);
-        adj.setDebtAmount(BigDecimal.ZERO);
-        adj.setNote(buildAdjustmentNote(ret, original, true));
-
-        Invoice savedAdj = invoiceService.persistInvoice(adj);
-        saveNegativeLines(savedAdj, details);
-    }
-
-    /** The negative delta lines of an adjustment invoice — one per returned line, quantities/amounts negated. */
-    private void saveNegativeLines(Invoice savedAdj, List<Returndetail> details) {
-        for (Returndetail detail : details) {
-            Productunit unit = detail.getProductUnitID();
-            int qty = detail.getReturnQty() != null ? detail.getReturnQty() : 0;
-            int baseQty = detail.getBaseQtyRestored() != null ? detail.getBaseQtyRestored() : 0;
-
-            Invoicedetail line = new Invoicedetail();
-            line.setInvoiceID(savedAdj);
-            line.setProductID(detail.getProductID());
-            line.setProductUnitID(unit);
-            line.setBatchID(detail.getBatchID());
-            line.setQuantity(-qty);
-            line.setUnitName(unit != null && unit.getUnitName() != null ? truncate(unit.getUnitName(), 20) : "");
-            line.setBaseQtyDeducted(-baseQty);
-            line.setUnitSellPrice(nz(detail.getUnitSellPrice()));
-            line.setSubtotal(nz(detail.getLineRefund()).negate());
-            line.setReturnedQty(0);
-            line.setVatRate(detail.getVatRate());
-            line.setPreTaxAmount(nz(detail.getPreTaxAmount()).negate());
-            line.setVatAmount(nz(detail.getVatAmount()).negate());
-            invoicedetailRepository.save(line);
-        }
-    }
-
-    /**
      * TH1 — hóa đơn gốc CHƯA KÝ: gốc bị vô hiệu hoàn toàn nên clone TOÀN BỘ phần còn lại sang một hóa
      * đơn THAY THẾ mới (không phải dòng âm như TH2). Nợ của gốc xoá về 0 và chuyển sang hóa đơn mới;
      * sai sót về sau phải tham chiếu bản thay thế, không phải bản gốc (chặn bởi
-     * {@link #isInvalidatedByReplacement}).
+     * {@link #isSupersededByReturn}).
      *
      * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ (ví dụ BA mục
      * 1.2: mua 500.000, hoàn 400.000 ⇒ thay thế 100.000) — nên dòng đã trả HẾT số lượng vẫn được giữ
@@ -603,11 +545,9 @@ public class ReturnService {
         }
 
         BigDecimal refund = nz(ret.getTotalRefund());
-        BigDecimal vatRefund = nz(ret.getTotalVATRefund());
 
         BigDecimal newSubtotal = nz(original.getSubtotal()).subtract(refund).max(BigDecimal.ZERO);
         BigDecimal newTotal = nz(original.getTotal()).subtract(refund).max(BigDecimal.ZERO);
-        BigDecimal newVatOutput = nz(original.getTotalVATOutput()).subtract(vatRefund).max(BigDecimal.ZERO);
         // Bản thay thế kế thừa TOÀN BỘ trạng thái còn lại của hóa đơn gốc — gồm cả công nợ: nợ chuyển sang
         // hóa đơn mới, hóa đơn gốc bị vô hiệu nên xóa nợ về 0. Đây là nghiệp vụ tạo hóa đơn mới từ hóa đơn
         // cũ (không phải dòng tiền của phiếu trả) nên chuyển NGUYÊN số nợ CÒN LẠI — phần đã cấn trừ vào
@@ -627,14 +567,12 @@ public class ReturnService {
         repl.setCustomerID(original.getCustomerID());
         repl.setInvoiceType(INVOICE_TYPE_REPLACEMENT);
         repl.setOriginalInvoiceID(original);
-        repl.setRootInvoiceID(rootOf(original));
         repl.setReturnID(ret);
         repl.setPrescriptionRequired(original.getPrescriptionRequired());
         repl.setPrescriptionCode(original.getPrescriptionCode());
         repl.setDiscount(nz(original.getDiscount()));
         repl.setSubtotal(newSubtotal);
         repl.setTotal(newTotal);
-        repl.setTotalVATOutput(newVatOutput);
         repl.setPaidByCash(nz(original.getPaidByCash()));
         repl.setPaidByBanking(nz(original.getPaidByBanking()));
         repl.setDebtAmount(newDebt);
@@ -665,13 +603,6 @@ public class ReturnService {
                     .subtract(matched != null ? nz(matched.getLineRefund()) : BigDecimal.ZERO)
                     .max(BigDecimal.ZERO));
             clone.setReturnedQty(0);
-            clone.setVatRate(line.getVatRate());
-            clone.setPreTaxAmount(nz(line.getPreTaxAmount())
-                    .subtract(matched != null ? nz(matched.getPreTaxAmount()) : BigDecimal.ZERO)
-                    .max(BigDecimal.ZERO));
-            clone.setVatAmount(nz(line.getVatAmount())
-                    .subtract(matched != null ? nz(matched.getVatAmount()) : BigDecimal.ZERO)
-                    .max(BigDecimal.ZERO));
             invoicedetailRepository.save(clone);
         }
     }
@@ -732,9 +663,25 @@ public class ReturnService {
         return nz(matched.getOriginalLineValue()).subtract(nz(matched.getLineRefund())).max(BigDecimal.ZERO);
     }
 
-    /** Walks to the very first invoice in a replace/adjust chain — itself if it has no root of its own. */
+    /**
+     * Hóa đơn F0 — gốc đầu tiên của cả chuỗi thay thế. Đi ngược {@code originalInvoiceID} cho tới hóa đơn
+     * không có bản trước nữa.
+     *
+     * <p>Trước 04/08/2026 việc này chỉ là đọc cột {@code invoice.rootInvoiceID} (trỏ THẲNG về F0). Cột đó
+     * đã bị bỏ khỏi bảng nên phải lần từng bước. Chuỗi thực tế rất ngắn (mỗi lần trả hàng thêm đúng 1 bậc)
+     * nên chi phí không đáng kể, nhưng vẫn chặn vòng lặp vô hạn bằng {@code MAX_INVOICE_CHAIN_DEPTH}
+     * phòng dữ liệu bẩn trỏ vòng.</p>
+     */
     private Invoice rootOf(Invoice invoice) {
-        return invoice.getRootInvoiceID() != null ? invoice.getRootInvoiceID() : invoice;
+        Invoice current = invoice;
+        for (int hops = 0; hops < MAX_INVOICE_CHAIN_DEPTH; hops++) {
+            Invoice previous = current.getOriginalInvoiceID();
+            if (previous == null || previous.getId() == null || previous.getId().equals(current.getId())) {
+                return current;
+            }
+            current = previous;
+        }
+        return current;
     }
 
     /**
@@ -875,12 +822,6 @@ public class ReturnService {
                 // Tổng giá trị gốc 100% của hàng trả, và phần nhà thuốc giữ lại (chênh do tỷ lệ hoàn < 100%).
                 totalOriginalValue,
                 totalOriginalValue.subtract(nz(ret.getTotalRefund())).max(BigDecimal.ZERO),
-                details.stream()
-                        .map(Returndetail::getPreTaxAmount)
-                        .filter(Objects::nonNull)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add),
-                ret.getTotalVATRefund(),
-                isTaxExempt(),
                 items);
     }
 
@@ -926,9 +867,6 @@ public class ReturnService {
                 detail.getUnitSellPrice(),
                 detail.getOriginalLineValue(),
                 detail.getLineRefund(),
-                detail.getVatRate(),
-                detail.getPreTaxAmount(),
-                detail.getVatAmount(),
                 restockable,
                 restockable ? "Nhập lại kho" : "Không nhập lại");
     }
@@ -949,7 +887,6 @@ public class ReturnService {
                 already,
                 line.getQuantity() - already,
                 line.getUnitSellPrice(),
-                line.getVatRate(),
                 isRestockableUnit(line));
     }
 
@@ -968,34 +905,18 @@ public class ReturnService {
      * Builds a priced return line.
      *
      * <p><b>Tỷ lệ hoàn</b> (đặc tả bổ sung 27/07 mục 1.2): {@code originalLineValue} là giá trị GỐC 100%
-     * (gross, prorate từ dòng hóa đơn bán), {@code lineRefund = originalLineValue × refundRate}. Thuế được
-     * tách TỪ TRONG {@code lineRefund} — tức chỉ giảm trừ đúng phần thực hoàn, phần giữ lại vẫn là doanh
-     * thu chịu thuế bình thường (ví dụ của BA: bán 1.000.000 hoàn 80% ⇒ VAT giảm trừ tính trên 800.000,
-     * KHÔNG phải 1.000.000).</p>
+     * (gross, prorate từ dòng hóa đơn bán), {@code lineRefund = originalLineValue × refundRate}. Chênh lệch
+     * giữa hai số là phần nhà thuốc GIỮ LẠI — vẫn là doanh thu bình thường.</p>
      *
-     * <p><b>Thuế lấy đúng theo dòng hóa đơn GỐC</b> (snapshot lúc bán, F-12) chứ không theo nhóm doanh
-     * thu hiện tại: phiếu trả là bản đối ứng âm của hóa đơn đó nên phải đảo lại đúng con số đã thu.
-     * Gate lại theo nhóm hiện tại sẽ làm phần giảm trừ lệch khỏi hóa đơn mà nó đang đảo.</p>
+     * <p><b>KHÔNG còn tách net/thuế</b> (04/08/2026): hộ kinh doanh tính GTGT bằng
+     * {@code doanh thu × tỷ lệ %} ở mọi nhóm, không khấu trừ đầu ra/đầu vào ⇒ không có số thuế nào trên
+     * dòng trả để giảm trừ. Doanh thu tính thuế của kỳ nay suy từ tổng các hóa đơn CÒN HIỆU LỰC (hóa đơn
+     * thay thế đã mang giá trị mới), không phải từ phiếu trả (Tax_Invoice.xlsx sheet 02).</p>
      */
     private PreparedLine preparedLineOf(Invoicedetail line, int qty, boolean restockable, BigDecimal refundRate) {
-        BigDecimal saleRate = line.getVatRate() != null ? line.getVatRate() : BigDecimal.ZERO;
         BigDecimal originalLineValue = grossRefundOf(line, qty);
         BigDecimal gross = applyRefundRate(originalLineValue, refundRate);
-
-        BigDecimal rate;
-        BigDecimal preTax;
-        BigDecimal vat;
-        if (saleRate.compareTo(BigDecimal.ZERO) > 0) {
-            rate = saleRate;
-            BigDecimal divisor = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
-            preTax = gross.divide(divisor, 2, RoundingMode.HALF_UP);
-            vat = gross.subtract(preTax);
-        } else {
-            rate = BigDecimal.ZERO;
-            preTax = gross;
-            vat = BigDecimal.ZERO;
-        }
-        return new PreparedLine(line, qty, restockable, rate, preTax, vat, gross, originalLineValue);
+        return new PreparedLine(line, qty, restockable, gross, originalLineValue);
     }
 
     /** {@code lineRefund = originalLineValue × rate%}, làm tròn về đồng. */
@@ -1020,11 +941,13 @@ public class ReturnService {
 
     // ------------------------------------------------------------------ invoice read-only access
 
-    /** All detail lines of one invoice (read-only over the Invoice module — no custom repo methods). */
+    /**
+     * All detail lines of one invoice. Dùng finder CÓ SẴN của module Bán hàng thay vì
+     * {@code findAll()} + lọc trong bộ nhớ: hàm này được gọi cho TỪNG hóa đơn khi dựng danh sách
+     * chọn để trả, nên quét cả bảng mỗi lần là quét bảng × số hóa đơn.
+     */
     private List<Invoicedetail> invoiceLinesOf(Integer invoiceId) {
-        return invoicedetailRepository.findAll().stream()
-                .filter(line -> line.getInvoiceID() != null && invoiceId.equals(line.getInvoiceID().getId()))
-                .toList();
+        return invoicedetailRepository.findByInvoiceIdWithRelations(invoiceId);
     }
 
     /**
@@ -1071,22 +994,32 @@ public class ReturnService {
     }
 
     /**
-     * True once a "Thay thế" (replacement) child invoice exists pointing back at this one — per BA
-     * 2026-07-25, a replaced invoice is fully invalidated and must never be picked again as a return
-     * target; later corrections land on the latest replacement instead. An "Điều chỉnh" (adjustment)
-     * child does NOT invalidate its original — the two remain valid in parallel.
+     * <b>Đã trả hàng ⇒ bản gốc hết hiệu lực</b> (BA chốt 04/08/2026). Trả một phần cũng vậy: phần hàng
+     * khách còn giữ đã được chuyển sang hóa đơn THAY THẾ, nên muốn trả tiếp phải trả trên bản thay thế
+     * đó, không phải bản gốc.
+     *
+     * <p>Vì thế chỉ cần đọc {@code returnCode != NONE} là đủ — <b>không</b> phải đi tìm xem có hóa đơn
+     * "Thay thế" nào trỏ ngược về hóa đơn này không. Hai cách cho cùng kết quả (hóa đơn thay thế chỉ
+     * được phát hành CÙNG LÚC với việc cộng {@code returnedQty} trên hóa đơn gốc), nhưng cách cũ phải
+     * quét toàn bảng {@code invoice} cho MỖI hóa đơn được kiểm, còn {@code returnCode} thì gọi nào cũng
+     * đã tính sẵn rồi.</p>
+     *
+     * <p>Ca trả HẾT + hoàn 100% không phát hành hóa đơn thay thế nào — cách cũ sẽ trả {@code false},
+     * nhưng {@code returnCode} = FULL nên vẫn bị chặn đúng.</p>
      */
-    private boolean isInvalidatedByReplacement(Invoice invoice) {
-        if (invoice == null || invoice.getId() == null) {
-            return false;
-        }
-        return invoiceRepository.findAll().stream().anyMatch(candidate ->
-                INVOICE_TYPE_REPLACEMENT.equalsIgnoreCase(candidate.getInvoiceType())
-                        && candidate.getOriginalInvoiceID() != null
-                        && invoice.getId().equals(candidate.getOriginalInvoiceID().getId()));
+    private boolean isSupersededByReturn(String returnCode) {
+        return !INVOICE_RETURN_NONE.equals(returnCode);
     }
 
     private boolean isReturnable(Invoice invoice, int windowDays) {
+        return isReturnable(invoice, windowDays, invoiceReturnCode(invoice));
+    }
+
+    /**
+     * Bản nhận sẵn {@code returnCode} để người gọi tính MỘT lần rồi dùng lại — xem
+     * {@link #listReturnableInvoices}, nơi con số này vừa dùng để lọc vừa dùng để hiển thị.
+     */
+    private boolean isReturnable(Invoice invoice, int windowDays, String returnCode) {
         if (!isNormalInvoice(invoice)) {
             return false;
         }
@@ -1096,10 +1029,7 @@ public class ReturnService {
         if (Boolean.TRUE.equals(invoice.getPrescriptionRequired())) {
             return false;
         }
-        if (isFullyReturned(invoice)) {
-            return false;
-        }
-        if (isInvalidatedByReplacement(invoice)) {
+        if (isSupersededByReturn(returnCode)) {
             return false;
         }
         // KHÔNG chặn hóa đơn còn nợ: khách còn nợ vẫn được trả hàng, tiền hoàn cấn trừ thẳng vào khoản nợ
@@ -1119,12 +1049,14 @@ public class ReturnService {
         if (Boolean.TRUE.equals(invoice.getPrescriptionRequired())) {
             throw new IllegalArgumentException("Không thể trả hóa đơn thuốc kê đơn");
         }
-        if (isFullyReturned(invoice)) {
+        String returnCode = invoiceReturnCode(invoice);
+        if (INVOICE_RETURN_FULL.equals(returnCode)) {
             throw new IllegalArgumentException("Hóa đơn này đã được trả toàn bộ");
         }
-        if (isInvalidatedByReplacement(invoice)) {
+        if (isSupersededByReturn(returnCode)) {
             throw new IllegalArgumentException(
-                    "Hóa đơn này đã được thay thế bởi hóa đơn khác — vui lòng chọn hóa đơn thay thế mới nhất");
+                    "Hóa đơn này đã được trả hàng một phần nên không còn hiệu lực — "
+                            + "vui lòng chọn hóa đơn thay thế mới nhất");
         }
         int windowDays = getReturnWindowDays();
         if (!withinReturnWindow(effectiveSaleDate(invoice), windowDays)) {
@@ -1163,22 +1095,9 @@ public class ReturnService {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Nhà thuốc đang thuộc nhóm doanh thu MIỄN THUẾ (Nhóm 1) hay không —
-     * {@code Financialsetting.revenueGroup}, cùng nguồn với {@code ReturnPurchaseService.revenueGroup()}.
-     *
-     * <p>Nhóm 1 dưới ngưỡng 1 nên KHÔNG kê khai gì cả: không có thuế GTGT đầu ra để giảm trừ khi khách
-     * trả hàng. Cờ này chỉ dùng để ẨN phần thuế trên màn hình — số thuế vẫn được lưu nguyên theo snapshot
-     * của dòng hóa đơn gốc , vì phiếu trả là bản đối ứng âm của hóa đơn đó: đổi nhóm doanh thu sau
-     * này không được làm mất căn cứ đảo lại đúng con số đã thu.</p>
-     */
-    @Transactional(readOnly = true)
-    public boolean isTaxExempt() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
-                .map(Financialsetting::getRevenueGroup)
-                .map(TaxRevenueGroup::isTaxExempt)
-                .orElse(false);
-    }
+    // isTaxExempt() đã bỏ 04/08/2026: màn trả hàng không còn hiển thị phần thuế nào nên không cần biết
+    // nhà thuốc thuộc nhóm doanh thu nào. Thuế GTGT nay tính ở cấp KỲ (doanh thu × tỷ lệ %), không ở
+    // cấp phiếu — xem TaxperiodsnapshotService.
 
     /**
      * Có tự động cấn trừ tiền hoàn vào công nợ hóa đơn hay không —
@@ -1227,11 +1146,11 @@ public class ReturnService {
     /**
      * The date the return window is measured from: the ROOT invoice's date, not this one's own —
      * a replacement invoice is reissued at approval time, but the customer's actual purchase (and the
-     * clock the window runs on) is whenever the root sale happened.
+     * clock the window runs on) is whenever the root sale happened. Nếu không đo từ F0 thì mỗi lần phát
+     * hành hóa đơn thay thế là RESET lại đồng hồ hạn trả, khách trả vòng 2 được cộng thêm thời gian.
      */
     private LocalDateTime effectiveSaleDate(Invoice invoice) {
-        Invoice root = invoice.getRootInvoiceID();
-        return root != null ? root.getDate() : invoice.getDate();
+        return rootOf(invoice).getDate();
     }
 
     // ------------------------------------------------------------------ filtering / formatting
@@ -1475,9 +1394,8 @@ public class ReturnService {
         return normalized.toLowerCase(Locale.ROOT).trim();
     }
 
-    /** A validated, priced return line (with its VAT split) ready to be persisted. */
+    /** A validated, priced return line ready to be persisted (no VAT split — see {@link #preparedLineOf}). */
     private record PreparedLine(Invoicedetail invoiceLine, int qty, boolean restockable,
-                                BigDecimal vatRate, BigDecimal preTaxAmount, BigDecimal vatAmount,
                                 BigDecimal lineRefund, BigDecimal originalLineValue) {
         BigDecimal unitSellPrice() {
             return invoiceLine.getUnitSellPrice() != null ? invoiceLine.getUnitSellPrice() : BigDecimal.ZERO;

@@ -19,13 +19,12 @@ public class ReturnPurchaseDetailItemResponse {
     private BigDecimal unitImportPrice;
     /** Giá trị nhập GỐC 100% của dòng trả, TRƯỚC khi áp tỷ lệ NCC chấp nhận hoàn. */
     private BigDecimal originalLineValue;
-    /** Số NCC THỰC hoàn của dòng = originalLineValue × appliedRefundRate. */
+    /**
+     * Số NCC THỰC hoàn của dòng = originalLineValue × appliedRefundRate.
+     *
+     * <p>KHÔNG còn tách net/thuế: 3 cột {@code vatRate/preTaxAmount/vatAmount} đã bị bỏ khỏi
+     * {@code returndetail} (04/08/2026). Hộ kinh doanh không khấu trừ GTGT đầu vào ở bất kỳ nhóm nào
+     * nên trả hàng NCC không có khoản thuế nào để đảo ngược — {@code lineRefund} là số gộp cuối cùng.</p>
+     */
     private BigDecimal lineRefund;
-
-    // Thuế GTGT ĐẦU VÀO phải giảm trừ cho dòng này, tách từ giá nhập gross theo thuế suất trên phiếu
-    // nhập gốc. Chỉ có giá trị với Nhóm 3/4 (khấu trừ) — Nhóm 2 chưa từng khấu trừ nên không có gì đảo
-    // (Huong_dan_tinh_thue sheet 12, mục 5B).
-    private BigDecimal vatRate;
-    private BigDecimal preTaxAmount;
-    private BigDecimal vatAmount;
 }
