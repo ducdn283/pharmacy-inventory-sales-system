@@ -10,6 +10,7 @@ import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.ReturnPurchaseDetailPageResponse;
 import com.example.project.dto.response.ShiftReportDetailPageResponse;
 import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.example.project.service.IncomeService;
 import com.example.project.service.InvoiceService;
 import com.example.project.service.ReturnPurchaseService;
@@ -96,8 +97,6 @@ public class IncomeController {
         model.addAttribute("totalIncomes", incomeService.countAll());
         model.addAttribute("todayIncomes", incomeService.countToday());
         model.addAttribute("todayAmount", incomeService.sumTodayAmount());
-        model.addAttribute("pendingIncomes", incomeService.countPending());
-        model.addAttribute("pendingAmount", incomeService.sumPendingAmount());
         model.addAttribute("approvedIncomes", incomeService.countApproved());
         model.addAttribute("approvedAmount", incomeService.sumApprovedAmount());
         model.addAttribute("statuses", incomeService.listStatuses());
@@ -186,8 +185,16 @@ public class IncomeController {
             ACCOUNTANT_BASE + "/references/supplier-returns/{id}/detail"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ReturnPurchaseDetailPageResponse supplierReturnReferenceDetail(@PathVariable("id") Integer id) {
-        return returnPurchaseService.getDetail(id);
+    public SupplierReturnReferenceDetailPayload supplierReturnReferenceDetail(@PathVariable("id") Integer id) {
+        return new SupplierReturnReferenceDetailPayload(
+                returnPurchaseService.getDetail(id),
+                incomeService.remainingCollectibleForSupplierReturn(id));
+    }
+
+    /** JSON payload for supplier-return detail on the income create screen (flattened via {@link JsonUnwrapped}). */
+    private record SupplierReturnReferenceDetailPayload(
+            @JsonUnwrapped ReturnPurchaseDetailPageResponse detail,
+            BigDecimal remainingCollectibleAmount) {
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments/{id}/detail",

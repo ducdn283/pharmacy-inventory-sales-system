@@ -75,6 +75,7 @@ public class ReturnPurchaseService {
     private final FinancialsettingRepository financialsettingRepository;
     private final DebtService debtService;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final IncomeService incomeService;
 
     public ReturnPurchaseService(ReturnRepository returnRepository,
                                  ReturndetailRepository returndetailRepository,
@@ -85,7 +86,8 @@ public class ReturnPurchaseService {
                                  PurchasedetailRepository purchasedetailRepository,
                                  FinancialsettingRepository financialsettingRepository,
                                  DebtService debtService,
-                                 PurchaseinvoiceService purchaseinvoiceService) {
+                                 PurchaseinvoiceService purchaseinvoiceService,
+                                 IncomeService incomeService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -96,6 +98,7 @@ public class ReturnPurchaseService {
         this.financialsettingRepository = financialsettingRepository;
         this.debtService = debtService;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.incomeService = incomeService;
     }
 
     // revenueGroup() / isDeductionGroup() / isTaxExempt() đã bỏ 04/08/2026: hộ kinh doanh KHÔNG khấu trừ
@@ -690,7 +693,7 @@ public class ReturnPurchaseService {
                 totalQuantity,
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
-                nzMoney(ret.getTotalRefund()).subtract(nzMoney(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
+                supplierCashRefundDue(ret),
                 ret.getAppliedRefundRate(),
                 totalOriginalValue,
                 totalOriginalValue.subtract(nzMoney(ret.getTotalRefund())).max(BigDecimal.ZERO),
@@ -698,6 +701,16 @@ public class ReturnPurchaseService {
     }
 
     // ------------------------------------------------------------------ mapping helpers
+
+    /** Tiền NCC còn phải hoàn — trừ các phiếu thu SUPPLIER đã hoàn thành (không đụng offsetDebtAmount). */
+    private BigDecimal supplierCashRefundDue(Return ret) {
+        if (ret != null && ret.getId() != null && isStatus(getStatusName(ret), ReturnPurchaseStatus.APPROVED)) {
+            return incomeService.remainingCollectibleForSupplierReturn(ret.getId());
+        }
+        return nzMoney(ret != null ? ret.getTotalRefund() : null)
+                .subtract(nzMoney(ret != null ? ret.getOffsetDebtAmount() : null))
+                .max(BigDecimal.ZERO);
+    }
 
     private ReturnPurchaseListItemResponse toListItem(Return ret, List<Returndetail> details) {
         Purchaseinvoice purchase = ret.getPurchaseID();
@@ -713,7 +726,7 @@ public class ReturnPurchaseService {
                 details.size(),
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
-                nzMoney(ret.getTotalRefund()).subtract(nzMoney(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
+                supplierCashRefundDue(ret),
                 ret.getReturnType(),
                 returnTypeDisplay(ret.getReturnType()),
                 statusName,

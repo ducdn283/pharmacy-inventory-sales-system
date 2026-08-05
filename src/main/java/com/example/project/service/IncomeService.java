@@ -70,7 +70,7 @@ public class IncomeService {
     private static final String STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY = "Duyệt";
 
     /**
-     * Hai loại phiếu điều chỉnh được phép liên kết phiếu thu "Thu tiền nhân viên đền bù"
+     * Hai loại phiếu điều chỉnh được phép liên kết phiếu thu "Thu tiền nhân viên làm hỏng hàng"
      * ({@code Dac_ta_Income_StockAdjustment.xlsx} sheet 03).
      */
     private static final Set<String> EMPLOYEE_LIABLE_ADJUSTMENT_TYPES =
@@ -345,6 +345,25 @@ public class IncomeService {
         return toDetail(income);
     }
 
+    /** Tiền NCC còn phải hoàn trên phiếu trả hàng, sau các phiếu thu đã hoàn thành. */
+    @Transactional(readOnly = true)
+    public BigDecimal remainingCollectibleForSupplierReturn(Integer returnId) {
+        if (returnId == null) {
+            return BigDecimal.ZERO;
+        }
+        Return ret = returnRepository.findById(returnId).orElse(null);
+        if (!isApprovedSupplierReturn(ret)) {
+            return BigDecimal.ZERO;
+        }
+        return remainingCollectibleFromSupplier(ret, accountedByReturnId());
+    }
+
+    /** Tổng tiền đã thu qua phiếu thu SUPPLIER hoàn thành, keyed by phiếu trả NCC. */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> collectedAmountBySupplierReturnId() {
+        return accountedByReturnId();
+    }
+
     /**
      * Creates a manual income slip. When {@code asDraft} is true it is saved as {@link #STATUS_DRAFT};
      * otherwise it is auto-completed ({@link #STATUS_COMPLETED}) — income slips do not require approval.
@@ -439,16 +458,6 @@ public class IncomeService {
     }
 
     @Transactional(readOnly = true)
-    public long countPending() {
-        return countByStatus(STATUS_PENDING);
-    }
-
-    @Transactional(readOnly = true)
-    public BigDecimal sumPendingAmount() {
-        return sumAmountByStatus(STATUS_PENDING);
-    }
-
-    @Transactional(readOnly = true)
     public long countApproved() {
         return countCompleted();
     }
@@ -456,20 +465,6 @@ public class IncomeService {
     @Transactional(readOnly = true)
     public BigDecimal sumApprovedAmount() {
         return sumCompletedAmount();
-    }
-
-    private long countByStatus(String status) {
-        return incomeRepository.findAll().stream()
-                .filter(income -> isStatus(income.getStatus(), status))
-                .count();
-    }
-
-    private BigDecimal sumAmountByStatus(String status) {
-        return incomeRepository.findAll().stream()
-                .filter(income -> isStatus(income.getStatus(), status))
-                .map(Income::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private long countCompleted() {
@@ -654,14 +649,11 @@ public class IncomeService {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
         }
-        return containsNormalized(income.getIncomeCode(), normalizedKeyword)
-                || containsNormalized(income.getReason(), normalizedKeyword)
-                || containsNormalized(formatIncomeType(resolveIncomeType(income)), normalizedKeyword)
-                || containsNormalized(income.getStatus(), normalizedKeyword)
-                || containsNormalized(referenceCode(income), normalizedKeyword)
-                || containsNormalized(
-                        income.getApplicantID() != null ? income.getApplicantID().getName() : null,
-                        normalizedKeyword);
+        String code = income.getIncomeCode();
+        if (code == null || code.isBlank()) {
+            code = formatCode(income.getId());
+        }
+        return containsNormalized(code, normalizedKeyword);
     }
 
     private boolean matchesDate(Income income, LocalDate from, LocalDate to) {
@@ -886,11 +878,11 @@ public class IncomeService {
         if (rawType == null || rawType.isBlank()) {
             throw new IllegalArgumentException("Vui lòng chọn loại phiếu thu");
         }
-        String type = rawType.trim().toUpperCase(Locale.ROOT);
-        if (!IncomeTypeOptionResponse.isValid(type)) {
+        String trimmed = rawType.trim();
+        if (!IncomeTypeOptionResponse.isValid(trimmed)) {
             throw new IllegalArgumentException("Loại phiếu thu không hợp lệ");
         }
-        return type;
+        return IncomeTypeOptionResponse.codeOf(trimmed);
     }
 
     private void applyPartyLinks(Income income, String incomeType, IncomeCreateRequest request) {
@@ -996,9 +988,7 @@ public class IncomeService {
     }
 
     /**
-     * Cash the supplier still owes back after netting against purchase-invoice debt at approval time.
-     * {@code offsetDebtAmount} is the fixed portion already offset — not a running balance (see
-     * {@code ReturnPurchaseService#applyDebtOffset} javadoc 28/07).
+     * Tiền thật NCC còn phải hoàn sau cấn trừ công nợ lúc duyệt ({@code offsetDebtAmount} cố định).
      */
     private BigDecimal collectibleCashFromSupplier(Return ret) {
         return nullToZero(ret != null ? ret.getTotalRefund() : null)
@@ -1008,14 +998,17 @@ public class IncomeService {
 
     private BigDecimal remainingCollectibleFromSupplier(Return ret, Map<Integer, BigDecimal> accounted) {
         return collectibleCashFromSupplier(ret)
-                .subtract(accounted.getOrDefault(ret.getId(), BigDecimal.ZERO))
+                .subtract(accounted.getOrDefault(ret != null ? ret.getId() : null, BigDecimal.ZERO))
                 .max(BigDecimal.ZERO);
     }
 
-    /** Live supplier-income slips already pointing at a return — each amount counts against the collectible. */
+    /** Completed supplier-income slips pointing at a return — each amount counts against the collectible. */
     private Map<Integer, BigDecimal> accountedByReturnId() {
         Map<Integer, BigDecimal> accounted = new LinkedHashMap<>();
-        for (Income income : liveIncomes()) {
+        for (Income income : incomeRepository.findAllWithRelations()) {
+            if (!isCompletedStatus(income.getStatus())) {
+                continue;
+            }
             if (!IncomeTypeOptionResponse.SUPPLIER.equals(resolveIncomeType(income))) {
                 continue;
             }
@@ -1026,19 +1019,6 @@ public class IncomeService {
             accounted.merge(ret.getId(), nullToZero(income.getAmount()), BigDecimal::add);
         }
         return accounted;
-    }
-
-    private List<Income> liveIncomes() {
-        return incomeRepository.findAllWithRelations().stream()
-                .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED))
-                .toList();
-    }
-
-    private boolean isApprovedSupplierReturn(Return ret) {
-        return ret != null
-                && ret.getPurchaseID() != null
-                && ret.getInvoiceID() == null
-                && isStatus(ret.getStatus(), ReturnPurchaseStatus.APPROVED);
     }
 
     private void validateSupplierPaymentAmount(Return ret, BigDecimal paymentAmount) {
@@ -1054,8 +1034,8 @@ public class IncomeService {
     }
 
     /**
-     * Supplier-return collection is tracked via linked income slips ({@link #accountedByReturnId});
-     * {@code Return.offsetDebtAmount} is a fixed netting figure and must not be decremented here.
+     * Validates supplier-return collection. {@code Return.offsetDebtAmount} stays the approval-time
+     * debt offset only; cash collected is tracked via linked income slips ({@link #accountedByReturnId}).
      */
     private void applySupplierOffsetDebtPayment(Income income) {
         if (income.getReturnID() == null || income.getAmount() == null) {
@@ -1064,6 +1044,13 @@ public class IncomeService {
         Return ret = returnRepository.findById(income.getReturnID().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng nhà cung cấp"));
         validateSupplierPaymentAmount(ret, income.getAmount());
+    }
+
+    private boolean isApprovedSupplierReturn(Return ret) {
+        return ret != null
+                && ret.getPurchaseID() != null
+                && ret.getInvoiceID() == null
+                && isStatus(ret.getStatus(), ReturnPurchaseStatus.APPROVED);
     }
 
     private Set<Integer> linkedStockAdjustmentIds() {
