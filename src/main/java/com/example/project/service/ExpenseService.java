@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,23 +70,27 @@ import java.util.stream.Collectors;
  *
  * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#GOODS_PAYMENT} slip can point at a
  * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
- * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE}). Approving or
- * paying the slip pushes the money onto {@code Purchaseinvoice.paid} via
+ * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE}). Only once the
+ * Owner confirms the money actually left (see {@link #confirmPayment}) does the slip push money onto
+ * {@code Purchaseinvoice.paid} via
  * {@link PurchaseinvoiceService#applyPayment(Integer, java.math.BigDecimal)}, which re-derives and
- * stores the invoice's status in the same transaction. Cancelling an already-approved slip reverses
- * it. Money is only ever considered disbursed once the slip is approved — see
- * {@link #disbursedAmount}.</p>
+ * stores the invoice's status in the same transaction. Money is only ever considered disbursed once
+ * the slip is {@link ExpenseStatus#COMPLETED} — see {@link #disbursedAmount}.</p>
  *
  * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
- * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. A
- * shift's whole {@code totalCashOut} is the sum of its slips' {@code paidByCash}, so this stamp is
- * load-bearing: a slip left unstamped is cash the register can never account for.</p>
+ * the money is <em>actually paid</em> (not merely approved), so the register can be reconciled —
+ * see {@link #attachOpenShift}. A shift's whole {@code totalCashOut} is the sum of its slips'
+ * {@code paidByCash}, so this stamp is load-bearing: a slip left unstamped is cash the register can
+ * never account for.</p>
  *
- * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
- * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
- * Expense tracks real cash leaving the register, not just an approval. In practice a slip is always
- * paid in full at creation (see {@link #createExpense}), so {@code AWAITING_PAYMENT} is legacy
- * display-only for slips saved before that rule.</p>
+ * <p><strong>Approval and real payment are two separate steps (BA 2026-08).</strong> Workflow
+ * mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a real payment
+ * step: {@link #createExpense}/{@link #submit}/{@link #approve} only ever move a slip as far as
+ * {@link ExpenseStatus#AWAITING_PAYMENT} — approved, but nothing has left the drawer/bank account
+ * yet. Only {@link #confirmPayment}, Owner-only regardless of who raised or approved the slip, moves
+ * it the rest of the way to {@link ExpenseStatus#COMPLETED} and triggers the money-moving side
+ * effects above. {@link ExpenseStatus#CANCELLED} is reachable right up until real payment — see
+ * {@link #cancel} — but not after, since by then there is real money to un-ring the bell on.</p>
  */
 @Service
 public class ExpenseService {
@@ -181,10 +186,12 @@ public class ExpenseService {
                 .filter(expense -> YearMonth.from(toLocalDate(expense.getDate())).equals(currentMonth))
                 .toList();
 
-        // Cancelled slips don't count as real cash out (same convention as
-        // PurchaseinvoiceService.getStats() excluding cancelled invoices from its totals).
+        // BA 2026-08: chỉ COMPLETED là tiền THẬT đã rời quỹ (xem ExpenseService.confirmPayment) —
+        // DRAFT/PENDING/AWAITING_PAYMENT/CANCELLED đều chưa/không phải tiền thật, không được cộng
+        // vào "Đã chi trong tháng". Trước đây cờ này chỉ loại CANCELLED, hợp lý khi duyệt = hoàn
+        // thành ngay lập tức; giờ AWAITING_PAYMENT có thể tồn tại lâu nên phải loại nốt.
         BigDecimal monthlyPaidTotal = thisMonth.stream()
-                .filter(expense -> !ExpenseStatus.CANCELLED.equals(expense.getStatus()))
+                .filter(expense -> ExpenseStatus.COMPLETED.equals(expense.getStatus()))
                 .map(Expense::getPaid)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -267,6 +274,28 @@ public class ExpenseService {
     }
 
     /**
+     * {@code returnId -> phần còn phải hoàn thực}, cho màn Return của {@code ReturnService} hiển thị
+     * đúng "còn phải hoàn bao nhiêu" sau khi trừ những phiếu chi RETURN_REFUND_PAYOUT còn sống đã
+     * chi ra — cùng vai trò {@code PurchaseinvoiceService.remainingDebt()} đóng cho
+     * {@code Purchaseinvoice.paid}, chỉ khác chỗ Return không có cột tiền-đã-chi của riêng nó nên
+     * nguồn sự thật nằm hẳn ở Expense (xem "Read second": phiếu trả CHỈ TÍNH tiền, không chi tiền).
+     * Trả 0 cho một return đã được hoàn đủ (kể cả supplier return — công thức vẫn đúng vì
+     * {@code committedByReturnId()} chỉ đếm phiếu chi thực sự trỏ vào nó, mà chỉ trả hàng khách mới
+     * có phiếu chi loại này).
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> outstandingRefundByReturnId(Collection<Return> returns) {
+        Map<Integer, BigDecimal> committed = committedByReturnId();
+        Map<Integer, BigDecimal> result = new LinkedHashMap<>();
+        for (Return ret : returns) {
+            if (ret != null && ret.getId() != null) {
+                result.put(ret.getId(), availableToRefund(ret, committed));
+            }
+        }
+        return result;
+    }
+
+    /**
      * Purchase invoices the pharmacy still owes money on, for the debt-payment picker. The figure
      * shown is what is still <em>available to commit</em>, not the raw debt — see
      * {@link #availableToPay}.
@@ -319,9 +348,9 @@ public class ExpenseService {
     /**
      * Creates a new expense slip. When {@code asDraft} is true it is saved as
      * {@link ExpenseStatus#DRAFT} regardless of role. Otherwise: the Owner's slip is auto-approved
-     * (status resolved straight to {@link ExpenseStatus#AWAITING_PAYMENT} or
-     * {@link ExpenseStatus#COMPLETED} depending on whether it's fully paid); anyone else's goes to
-     * {@link ExpenseStatus#PENDING} for the Owner to approve.
+     * straight to {@link ExpenseStatus#AWAITING_PAYMENT} (money has not left yet — see
+     * {@link #confirmPayment}); anyone else's goes to {@link ExpenseStatus#PENDING} for the Owner to
+     * approve.
      */
     @Transactional
     public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
@@ -462,12 +491,15 @@ public class ExpenseService {
     /**
      * Internal correction for a wrongly-entered slip — same spirit as
      * {@code PurchaseinvoiceService.cancelPurchaseInvoice()}: not a real accounting reversal, just
-     * marks the record void and gives the money back to the linked document.
+     * marks the record void.
      *
-     * <p><strong>A completed slip can still be cancelled.</strong> A phiếu chi cannot be edited or
-     * topped up after creation, so if a completed one also couldn't be cancelled, a mis-keyed slip
-     * would have no correction path at all. The money already pushed onto the linked document is
-     * reversed via {@link #disbursedAmount}, then a new slip is raised with the right figure.</p>
+     * <p><strong>Only before real money has left (BA 2026-08).</strong> A phiếu chi cannot be edited
+     * or topped up after creation, so {@code DRAFT}/{@code PENDING}/{@code AWAITING_PAYMENT} can
+     * still be cancelled — nothing has been disbursed yet at any of those, so there is nothing to
+     * reverse (no purchase invoice / fund / shift effect has fired — see {@link #confirmPayment}). A
+     * {@code COMPLETED} slip is terminal: real money is already out, so cancelling would need an
+     * actual reversal this method never performed even under the old rules; raise a fresh slip
+     * instead to record what actually happened.</p>
      */
     @Transactional
     public void cancel(Integer expenseId, String reason) {
@@ -477,18 +509,9 @@ public class ExpenseService {
         if (ExpenseStatus.CANCELLED.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Phiếu chi này đã bị hủy trước đó");
         }
-
-        // Give the money back to the invoice's outstanding debt before voiding the slip. Computed
-        // while the status is still the pre-cancel one, since that is what decides whether anything
-        // was ever disbursed. A DRAFT/PENDING slip pushed nothing, so this is a no-op for them.
-        boolean wasDisbursed = isDisbursed(expense);
-        settlePurchaseInvoice(expense, disbursedAmount(expense).negate());
-        // Same "đã từng giải ngân chưa" mốc, nhưng trả lại đúng theo từng quỹ (tiền mặt/ngân hàng)
-        // thay vì tổng paid — paidByCredit không đụng tới quỹ nào nên không cần đảo ngược.
-        if (wasDisbursed) {
-            financialsettingService.adjustFundBalances(
-                    nullToZero(expense.getPaidByCash()),
-                    nullToZero(expense.getPaidByBanking()));
+        if (ExpenseStatus.COMPLETED.equals(expense.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Phiếu chi đã hoàn thành (tiền đã thực chi) không thể hủy nữa");
         }
 
         expense.setStatus(ExpenseStatus.CANCELLED);
@@ -625,24 +648,45 @@ public class ExpenseService {
     // ------------------------------------------------------------------ helpers
 
     /**
-     * The single choke point where a slip becomes authorised — reached from create-as-Owner,
-     * submit-as-Owner and approve. Pushes the money onto a linked purchase invoice and jumps
-     * straight to {@link ExpenseStatus#COMPLETED}, since a slip is always paid in full at creation.
-     * {@link ExpenseStatus#AWAITING_PAYMENT} is never produced here — the constant only remains so
-     * the screen can still display slips saved under the old rules.
+     * The single choke point where a slip becomes approved — reached from create-as-Owner,
+     * submit-as-Owner and approve. Lands on {@link ExpenseStatus#AWAITING_PAYMENT}, not
+     * {@link ExpenseStatus#COMPLETED}: approving only authorises the slip, it does not move any
+     * money yet — see {@link #confirmPayment} for the step that actually does.
      */
     private void applyApproval(Expense expense, Account approver) {
         expense.setApprovedAt(Instant.now());
+        expense.setStatus(ExpenseStatus.AWAITING_PAYMENT);
+    }
+
+    /**
+     * The Owner confirms that an {@link ExpenseStatus#AWAITING_PAYMENT} slip's money has actually
+     * left — the real payment leg. Owner-only regardless of who raised or approved the slip
+     * (Accountant included): {@code ExpensePageController} only maps this route under
+     * {@code /owner/**}, matching approve/reject. This is the single choke point that pushes money
+     * onto a linked purchase invoice, debits the financial-setting fund and stamps the shift — none
+     * of that happens at approval any more.
+     */
+    @Transactional
+    public void confirmPayment(Integer expenseId) {
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+
+        if (!ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Chỉ có thể xác nhận thanh toán cho phiếu đang ở trạng thái chờ thanh toán");
+        }
+
         BigDecimal paid = nullToZero(expense.getPaid());
         expense.setStatus(ExpenseStatus.COMPLETED);
         settlePurchaseInvoice(expense, paid);
-        // Tiền rời quỹ đúng lúc này — cùng thời điểm status chuyển COMPLETED, không phải lúc tạo
-        // phiếu (PENDING chưa phải tiền thật). Xem FinancialsettingService.adjustFundBalances: quỹ
+        // Tiền rời quỹ đúng lúc này — cùng thời điểm status chuyển COMPLETED, không phải lúc duyệt
+        // (Chờ thanh toán chưa phải tiền thật). Xem FinancialsettingService.adjustFundBalances: quỹ
         // chưa từng được thiết lập (còn null) thì delta của quỹ đó bị bỏ qua lặng lẽ.
         financialsettingService.adjustFundBalances(
                 nullToZero(expense.getPaidByCash()).negate(),
                 nullToZero(expense.getPaidByBanking()).negate());
         attachOpenShift(expense, applicantIdOf(expense));
+        expenseRepository.save(expense);
     }
 
     /** Người LẬP phiếu — xem {@link #attachOpenShift}. */
@@ -800,8 +844,13 @@ public class ExpenseService {
      * refund payout.
      */
     private Purchaseinvoice resolvePurchaseInvoice(ExpenseCreateRequest request, String expenseType) {
-        if (!ExpenseType.supportsPurchaseInvoiceLink(expenseType) || request.getPurchaseId() == null) {
+        if (!ExpenseType.GOODS_PAYMENT.equals(expenseType)) {
             return null;
+        }
+
+        if (request.getPurchaseId() == null) {
+            throw new IllegalArgumentException(
+                    "Vui lòng chọn phiếu nhập thanh toán");
         }
 
         Purchaseinvoice invoice = purchaseinvoiceService.findPayableInvoices().stream()
@@ -888,9 +937,9 @@ public class ExpenseService {
     }
 
     /**
-     * Money this slip has actually pushed onto its purchase invoice. Only an <em>approved</em> slip
-     * has disbursed anything: a draft or a pending one records a {@code paid} figure the creator
-     * typed, but nobody has authorised it leaving the register yet.
+     * Money this slip has actually pushed onto its purchase invoice. Only a {@code COMPLETED} slip
+     * has disbursed anything — approval alone ({@code AWAITING_PAYMENT}) authorises the slip but does
+     * not move money yet, see {@link #confirmPayment}.
      */
     private BigDecimal disbursedAmount(Expense expense) {
         return isDisbursed(expense) ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
@@ -898,8 +947,7 @@ public class ExpenseService {
 
     /** Whether money has actually left for this slip — status-only, independent of amount. */
     private boolean isDisbursed(Expense expense) {
-        return ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
-                || ExpenseStatus.COMPLETED.equals(expense.getStatus());
+        return ExpenseStatus.COMPLETED.equals(expense.getStatus());
     }
 
     private List<Expense> liveExpenses() {

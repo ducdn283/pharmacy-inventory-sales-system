@@ -334,12 +334,28 @@
                         </form>
                     </th:block>
 
-                    <!-- Không còn ô "Ghi nhận thanh toán": phiếu chi là một lần chi và không sửa
-                         được. Trả thêm cho cùng chứng từ thì lập phiếu chi mới. -->
+                    <!-- Xác nhận thanh toán: bước chi tiền THẬT, tách khỏi duyệt (BA 2026-08). Chỉ
+                         Chủ nhà thuốc mới bấm được, kể cả với phiếu Kế toán lập/được duyệt hộ — màn
+                         Kế toán không có nút này. Đây mới là lúc phiếu nhập/phiếu trả hàng được cập
+                         nhật, quỹ bị trừ và ca làm việc được gắn (xem ExpenseService.confirmPayment). -->
+                    <form th:if="${#strings.startsWith(basePath, '/owner') and detail.statusName == 'Chờ thanh toán'}"
+                          th:action="${basePath + '/' + detail.id + '/confirm-payment'}"
+                          method="post"
+                          class="mb-3">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <button type="submit" class="btn btn-expense-primary w-100"
+                                data-confirm="Xác nhận đã chi thực tế số tiền này? Sau khi xác nhận, phiếu nhập/phiếu trả hàng liên kết và quỹ sẽ được cập nhật, và phiếu sẽ không hủy được nữa.">
+                            <i class="ti ti-cash me-1"></i>
+                            Xác nhận đã thanh toán
+                        </button>
+                    </form>
 
-                    <!-- Hủy: sửa lỗi nội bộ. Phiếu đã hoàn thành vẫn hủy được — duyệt phát là hoàn
-                         thành ngay, chặn ở đây thì một phiếu lập sai sẽ không còn đường nào sửa. -->
-                    <form th:if="${detail.statusName != 'Đã hủy'}"
+                    <!-- Hủy: sửa lỗi nội bộ. Chỉ hủy được TRƯỚC khi tiền thực chi (Nháp/Chờ duyệt/Chờ
+                         thanh toán) — chưa phiếu nào trong số đó từng đụng tới phiếu nhập/quỹ nên
+                         không có gì phải đảo ngược. Phiếu đã hoàn thành (tiền đã thực chi qua "Xác
+                         nhận đã thanh toán") không hủy được nữa — lập phiếu mới để ghi nhận đúng
+                         thực tế thay vì hủy. -->
+                    <form th:if="${detail.statusName != 'Đã hủy' and detail.statusName != 'Đã hoàn thành'}"
                           th:action="${basePath + '/' + detail.id + '/cancel'}"
                           method="post"
                           class="mb-3"

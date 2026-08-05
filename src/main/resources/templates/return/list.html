@@ -289,7 +289,10 @@
                                   th:text="${item.offsetDebtAmount == null} ? '0đ'
                                           : ${#numbers.formatDecimal(item.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">50.000đ</span>
                         </td>
-                        <!-- Tiền thật còn phải trả khách sau bù trừ — đây mới là số phiếu chi chi ra. -->
+                        <!-- Tiền thật còn phải trả khách sau bù trừ VÀ sau phiếu chi đã chi ra (xem
+                             ExpenseService.outstandingRefundByReturnId) — 0 có thể vì đã bù trừ hết
+                             công nợ, hoặc vì phiếu chi đã hoàn xong, nên chữ ở đây trung tính cho cả
+                             hai lý do thay vì chỉ nói "bù trừ". -->
                         <td th:if="${autoOffsetDebt}">
                             <span th:if="${item.statusName != 'Nợ'}" class="text-secondary">—</span>
                             <span th:unless="${item.statusName != 'Nợ'}">
@@ -297,7 +300,7 @@
                                         class="text-warning"
                                         th:text="${#numbers.formatDecimal(item.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
                                 <span th:unless="${item.cashRefundDue != null && item.cashRefundDue.signum() > 0}"
-                                      class="badge bg-success-subtle text-success">Đã bù trừ hết</span>
+                                      class="badge bg-success-subtle text-success">Đã hoàn xong</span>
                             </span>
                         </td>
                         <td th:text="${item.returnTypeDisplay}">Khách hàng</td>

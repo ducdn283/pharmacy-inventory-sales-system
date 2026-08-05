@@ -20,10 +20,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 
 /**
- * Expense ("Phiếu chi") screens (list / detail / create / submit / approve / reject / cancel).
- * Reachable by the Owner and the Accountant (both share the same templates; there is no
- * Pharmacist route — matches {@code SidebarMenuService}, which only lists this under those two
- * roles). Approve/reject are Owner-only, same as Stock Adjustment.
+ * Expense ("Phiếu chi") screens (list / detail / create / submit / approve / reject / confirm
+ * payment / cancel). Reachable by the Owner and the Accountant (both share the same templates;
+ * there is no Pharmacist route — matches {@code SidebarMenuService}, which only lists this under
+ * those two roles). Approve/reject/confirm-payment are Owner-only, same as Stock Adjustment —
+ * confirm-payment in particular is Owner-only even for a slip an Accountant raised or that was
+ * approved on their behalf (BA 2026-08).
  */
 @Controller
 public class ExpensePageController {
@@ -122,7 +124,7 @@ public class ExpensePageController {
             if (asDraft) {
                 message = "Đã lưu nháp phiếu chi";
             } else if (isOwner) {
-                message = "Tạo phiếu chi thành công (đã tự động duyệt)";
+                message = "Tạo phiếu chi thành công (đã tự động duyệt, đang chờ thanh toán)";
             } else {
                 message = "Đã gửi phiếu chi, đang chờ duyệt";
             }
@@ -190,7 +192,7 @@ public class ExpensePageController {
                           RedirectAttributes redirectAttributes) {
         try {
             expenseService.approve(expenseId, currentUserContext.getCurrentAccountId());
-            redirectAttributes.addFlashAttribute("successMessage", "Đã duyệt phiếu chi");
+            redirectAttributes.addFlashAttribute("successMessage", "Đã duyệt phiếu chi, đang chờ thanh toán");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
@@ -210,8 +212,25 @@ public class ExpensePageController {
         return "redirect:" + (redirectTo != null && !redirectTo.isBlank() ? redirectTo : OWNER_BASE + "/" + expenseId);
     }
 
-    // Không còn endpoint "mark-paid": một phiếu chi là một lần chi và không sửa được. Trả thêm cho
-    // cùng một phiếu nhập / phiếu trả hàng thì lập phiếu chi mới — xem ExpenseService.resolveAmount.
+    /**
+     * The Owner confirms an {@link com.example.project.constant.ExpenseStatus#AWAITING_PAYMENT}
+     * slip's money actually left — Owner-only (mapped under {@code /owner/**} only, matching
+     * approve/reject), even for a slip an Accountant raised or that an Owner approved on their
+     * behalf. This is NOT the old, deleted "mark-paid" (that let a slip under-pay itself and be
+     * topped up later) — a phiếu chi is still one payment for its whole posted amount; this only
+     * confirms that amount really left.
+     */
+    @PostMapping(OWNER_BASE + "/{expenseId}/confirm-payment")
+    public String confirmPayment(@PathVariable Integer expenseId,
+                                 RedirectAttributes redirectAttributes) {
+        try {
+            expenseService.confirmPayment(expenseId);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã xác nhận thanh toán, phiếu chi hoàn thành");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+        }
+        return "redirect:" + OWNER_BASE + "/" + expenseId;
+    }
 
     @PostMapping({OWNER_BASE + "/{expenseId}/cancel", ACCOUNTANT_BASE + "/{expenseId}/cancel"})
     public String cancel(@PathVariable Integer expenseId,
