@@ -53,6 +53,12 @@
             vertical-align: middle;
         }
 
+        /* Ô "Sản phẩm" cao hơn các ô khác trong hàng vì có thêm dòng "Giá bán" bên dưới ô tìm
+           kiếm — canh trên cho cả hàng để các input còn lại không bị đẩy lệch xuống giữa. */
+        #detailTable tbody.detail-item > tr:first-child > td {
+            vertical-align: top;
+        }
+
         .money-summary-row {
             display: flex;
             justify-content: space-between;

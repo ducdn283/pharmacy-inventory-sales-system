@@ -346,6 +346,12 @@
                                 <td class="amount"
                                     th:text="${'−' + #numbers.formatDecimal(computation.operatingCost, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
                             </tr>
+                            <tr class="component"
+                                th:if="${computation.supplierReturnShortfall.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+                                <td>Trừ: khoản lỗ NCC không hoàn đủ khi trả hàng nhà cung cấp</td>
+                                <td class="amount"
+                                    th:text="${'−' + #numbers.formatDecimal(computation.supplierReturnShortfall, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                            </tr>
                             <tr class="row-subtotal">
                                 <td>Thu nhập chịu thuế</td>
                                 <td class="amount"

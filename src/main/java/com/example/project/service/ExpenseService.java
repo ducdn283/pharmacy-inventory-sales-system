@@ -208,6 +208,15 @@ public class ExpenseService {
         return ExpenseType.PURCHASE_LINKABLE;
     }
 
+    /** Which types the "trên 5 triệu bắt buộc chuyển khoản" rule applies to — same reason. */
+    public List<String> cashLimitApplicableTypes() {
+        return ExpenseType.CASH_LIMIT_APPLICABLE;
+    }
+
+    public BigDecimal cashLimitThreshold() {
+        return ExpenseType.CASH_LIMIT_THRESHOLD;
+    }
+
     // ------------------------------------------------------------------ reference documents
 
     /**
@@ -355,7 +364,7 @@ public class ExpenseService {
 
         // Một phiếu là một lần chi: tiền đã chi luôn đúng bằng số tiền của phiếu, không có phiếu
         // "chi thiếu so với chính nó". Chi thiếu so với CHỨNG TỪ thì nằm ở chỗ khác — chứng từ còn nợ.
-        BigDecimal[] split = resolveSplit(request, amount, isOwner);
+        BigDecimal[] split = resolveSplit(request, amount, isOwner, expenseType);
         expense.setPaid(amount);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
@@ -810,16 +819,20 @@ public class ExpenseService {
 
     /**
      * Số tiền của phiếu = số tiền người lập nhập cho lần chi này — không có khái niệm "chi thiếu so
-     * với chính nó" (một phiếu là một lần chi). Chỉ bị chặn trần ở phần chứng từ còn thiếu (xem
+     * với chính nó" (một phiếu là một lần chi). Chặn trần ở phần chứng từ còn thiếu (xem
      * {@link #cappedByDocument}), để hai phiếu chi cùng lúc không cùng trả vượt phần còn nợ.
+     *
+     * <p><strong>Ngoại lệ: hoàn tiền trả hàng không nhận số người dùng gõ, luôn lấy nguyên phần
+     * còn phải hoàn của phiếu trả</strong> (đúng như {@link ExpenseCreateRequest#getReturnId()} đã ghi
+     * — "the posted value is never trusted"), khác phiếu nhập vẫn cho trả một phần. Ô tiền trên form
+     * chỉ hiển thị, không sửa được khi chọn loại hoàn tiền — xem {@code expense/create.html}.</p>
      */
     private BigDecimal resolveAmount(ExpenseCreateRequest request,
                                      Return linkedReturn,
                                      Purchaseinvoice linkedPurchase) {
         BigDecimal posted = request.getAmount();
         if (linkedReturn != null) {
-            return cappedByDocument(posted, availableToRefund(linkedReturn, committedByReturnId()),
-                    "Số tiền hoàn vượt quá phần còn phải hoàn của phiếu trả hàng");
+            return availableToRefund(linkedReturn, committedByReturnId());
         }
         if (linkedPurchase != null) {
             return cappedByDocument(posted, availableToPay(linkedPurchase, committedByPurchaseId()),
@@ -937,14 +950,25 @@ public class ExpenseService {
      * slip has no shift, so any cash on it would be money no register could ever account for. The
      * default therefore flips with the role — an unsplit amount is all cash for the Owner and all
      * banking for anyone else, rather than silently landing in the drawer.</p>
+     *
+     * <p><strong>Trên {@link ExpenseType#CASH_LIMIT_THRESHOLD}, một phiếu thuộc
+     * {@link ExpenseType#CASH_LIMIT_APPLICABLE} không được có phần tiền mặt nào, kể cả một phần</strong>
+     * — bắt buộc chuyển khoản toàn bộ. Kiểm tra này chạy trước cả rào "chỉ Chủ nhà thuốc mới được chi
+     * tiền mặt" nên áp dụng cho mọi vai trò như nhau; unsplit mặc định cũng đổi sang toàn bộ chuyển
+     * khoản thay vì rơi vào tiền mặt của Chủ nhà thuốc.</p>
      */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean isOwner) {
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean isOwner,
+                                      String expenseType) {
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
+        boolean bankTransferRequired = ExpenseType.requiresBankTransfer(expenseType, amount);
         BigDecimal cash = request.getPaidByCash();
         BigDecimal banking = request.getPaidByBanking();
         if (cash == null && banking == null) {
+            if (bankTransferRequired) {
+                return new BigDecimal[]{BigDecimal.ZERO, amount};
+            }
             return isOwner
                     ? new BigDecimal[]{amount, BigDecimal.ZERO}
                     : new BigDecimal[]{BigDecimal.ZERO, amount};
@@ -952,6 +976,13 @@ public class ExpenseService {
         cash = nullToZero(cash);
         banking = nullToZero(banking);
         assertCashAllowed(cash, isOwner);
+        if (bankTransferRequired && cash.compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException(
+                    "Phiếu chi loại này trên "
+                            + String.format(Locale.forLanguageTag("vi-VN"), "%,.0fđ",
+                                    ExpenseType.CASH_LIMIT_THRESHOLD)
+                            + " bắt buộc chuyển khoản toàn bộ, không được chi tiền mặt");
+        }
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
                 .compareTo(amount.setScale(2, RoundingMode.HALF_UP)) != 0) {
             throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền chi");
