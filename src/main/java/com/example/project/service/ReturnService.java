@@ -124,6 +124,7 @@ public class ReturnService {
     private final ShiftreportService shiftreportService;
     private final InvoiceService invoiceService;
     private final WorkflowNotificationService workflowNotificationService;
+    private final ExpenseService expenseService;
 
     public ReturnService(ReturnRepository returnRepository,
                          ReturndetailRepository returndetailRepository,
@@ -134,7 +135,8 @@ public class ReturnService {
                          FinancialsettingRepository financialsettingRepository,
                          ShiftreportService shiftreportService,
                          InvoiceService invoiceService,
-                         WorkflowNotificationService workflowNotificationService) {
+                         WorkflowNotificationService workflowNotificationService,
+                         ExpenseService expenseService) {
         this.returnRepository = returnRepository;
         this.returndetailRepository = returndetailRepository;
         this.accountRepository = accountRepository;
@@ -145,6 +147,7 @@ public class ReturnService {
         this.shiftreportService = shiftreportService;
         this.invoiceService = invoiceService;
         this.workflowNotificationService =  workflowNotificationService;
+        this.expenseService = expenseService;
     }
 
     // ------------------------------------------------------------------ list / search
@@ -163,6 +166,9 @@ public class ReturnService {
         Map<Integer, List<Returndetail>> detailMap = returndetailRepository.findAllWithRelations().stream()
                 .filter(detail -> detail.getReturnID() != null)
                 .collect(Collectors.groupingBy(detail -> detail.getReturnID().getId()));
+        // Còn phải hoàn thực sau khi trừ phiếu chi RETURN_REFUND_PAYOUT đã chi — nguồn sự thật nằm ở
+        // Expense, không phải ở return (xem ExpenseService.outstandingRefundByReturnId).
+        Map<Integer, BigDecimal> outstandingRefund = expenseService.outstandingRefundByReturnId(returns);
 
         List<ReturnListItemResponse> filtered = returns.stream()
                 // Exclude supplier returns (purchaseID set) — they share the table but have their own screens.
@@ -171,7 +177,7 @@ public class ReturnService {
                 .filter(ret -> matchesDate(ret, from, to))
                 .filter(ret -> status == null || status.isBlank() || isStatus(getStatusName(ret), status))
                 .sorted(Comparator.comparing(Return::getId, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(ret -> toListItem(ret, detailMap.getOrDefault(ret.getId(), List.of())))
+                .map(ret -> toListItem(ret, detailMap.getOrDefault(ret.getId(), List.of()), outstandingRefund))
                 .toList();
 
         int start = (int) pageable.getOffset();
@@ -762,12 +768,42 @@ public class ReturnService {
      * <p><strong>Phải gọi SAU {@link #applyReturnEffect}</strong>, vì {@code offsetDebtAmount} chỉ được
      * chốt theo dư nợ thật bên trong đó. Gọi sớm hơn là đọc phải số ước tính lúc lập phiếu.</p>
      *
-     * <p>Đây hiện là <strong>đường DUY NHẤT</strong> đưa phiếu vào {@link ReturnStatus#COMPLETED}.
-     * Đường thứ hai — phiếu chi hoàn tiền trả xong thì chuyển tiếp — nằm ở module Thu/Chi và chưa
-     * được nối; xem javadoc của {@link ReturnStatus}.</p>
+     * <p>Đây là đường THỨ NHẤT đưa phiếu vào {@link ReturnStatus#COMPLETED} — chạy ngay lúc duyệt, khi
+     * bù trừ công nợ nuốt trọn khoản hoàn. Đường thứ hai — phiếu chi hoàn tiền trả xong thì chuyển
+     * tiếp — xem {@link #syncStatusAfterRefundPayment(Integer)}.</p>
      */
     private String settledStatusOf(Return ret) {
         return cashRefundDue(ret).signum() > 0 ? ReturnStatus.DEBT : ReturnStatus.COMPLETED;
+    }
+
+    /**
+     * Đường THỨ HAI vào {@link ReturnStatus#COMPLETED}: được {@code ExpenseService.confirmPayment()}
+     * gọi ngay khi một phiếu chi {@code RETURN_REFUND_PAYOUT} vừa thực chi thật — nối nốt phần mà
+     * javadoc của {@link ReturnStatus} từng đánh dấu "chưa làm, chờ module Thu/Chi tự nối".
+     *
+     * <p>Chỉ chuyển {@link ReturnStatus#DEBT} → {@link ReturnStatus#COMPLETED} khi tổng các phiếu chi
+     * ĐÃ THỰC CHI ({@code ExpenseService.disbursedRefundAmount()}) phủ hết {@link #cashRefundDue}.
+     * Cố ý dùng "đã thực chi", không dùng "đã cam kết" ({@code committedByReturnId()}/
+     * {@code outstandingRefundByReturnId()}) — nếu không phiếu trả sẽ tất toán ngay lúc phiếu chi
+     * được TẠO, trước cả khi Owner xác nhận thanh toán.</p>
+     *
+     * <p>No-op cho một phiếu không ở {@link ReturnStatus#DEBT} (đã tất toán sẵn, còn Nháp/Chờ duyệt,
+     * bị Từ chối…) — không có gì để đồng bộ.</p>
+     */
+    @Transactional
+    public void syncStatusAfterRefundPayment(Integer returnId) {
+        if (returnId == null) {
+            return;
+        }
+        Return ret = returnRepository.findById(returnId).orElse(null);
+        if (ret == null || !ReturnStatus.DEBT.equals(ret.getStatus())) {
+            return;
+        }
+        BigDecimal stillOwed = cashRefundDue(ret).subtract(expenseService.disbursedRefundAmount(returnId));
+        if (stillOwed.compareTo(BigDecimal.ZERO) <= 0) {
+            ret.setStatus(ReturnStatus.COMPLETED);
+            returnRepository.save(ret);
+        }
     }
 
     /** Số lượng của dòng hóa đơn còn CHƯA trả (đã trừ mọi lần trả trước đó). */
@@ -938,6 +974,10 @@ public class ReturnService {
         String statusName = getStatusName(ret);
         Invoice invoice = ret.getInvoiceID();
         Customer customer = invoice != null ? invoice.getCustomerID() : null;
+        // Đã trừ phiếu chi RETURN_REFUND_PAYOUT còn sống — 0 nghĩa là đã hoàn đủ, không phải "chưa
+        // ai chi" (xem ExpenseService.outstandingRefundByReturnId).
+        BigDecimal cashRefundDue = expenseService.outstandingRefundByReturnId(List.of(ret))
+                .getOrDefault(ret.getId(), BigDecimal.ZERO);
 
         return new ReturnDetailPageResponse(
                 ret.getId(),
@@ -959,8 +999,7 @@ public class ReturnService {
                 totalQuantity,
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
-                // Tiền thật còn phải hoàn cho khách sau khi đã cấn trừ công nợ — phần phiếu chi bên Kế toán chi ra.
-                nz(ret.getTotalRefund()).subtract(nz(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
+                cashRefundDue,
                 ret.getAppliedRefundRate(),
                 // Tổng giá trị gốc 100% của hàng trả, và phần nhà thuốc giữ lại (chênh do tỷ lệ hoàn < 100%).
                 totalOriginalValue,
@@ -971,7 +1010,8 @@ public class ReturnService {
 
     // ------------------------------------------------------------------ mapping helpers
 
-    private ReturnListItemResponse toListItem(Return ret, List<Returndetail> details) {
+    private ReturnListItemResponse toListItem(Return ret, List<Returndetail> details,
+                                              Map<Integer, BigDecimal> outstandingRefund) {
         Invoice invoice = ret.getInvoiceID();
         Customer customer = invoice != null ? invoice.getCustomerID() : null;
         String statusName = getStatusName(ret);
@@ -987,8 +1027,9 @@ public class ReturnService {
                 details.size(),
                 ret.getTotalRefund(),
                 ret.getOffsetDebtAmount(),
-                // Cùng công thức với màn chi tiết để hai màn không bao giờ lệch số.
-                nz(ret.getTotalRefund()).subtract(nz(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO),
+                // Đã trừ phiếu chi RETURN_REFUND_PAYOUT còn sống — cùng công thức với màn chi tiết
+                // để hai màn không bao giờ lệch số (xem ExpenseService.outstandingRefundByReturnId).
+                outstandingRefund.getOrDefault(ret.getId(), BigDecimal.ZERO),
                 ret.getReturnType(),
                 returnTypeDisplay(ret.getReturnType()),
                 statusName,

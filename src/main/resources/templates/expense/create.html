@@ -231,7 +231,7 @@
                             <div class="col-12" id="purchaseLinkFields" style="display: none;">
                                 <label class="form-label">Thanh toán cho phiếu nhập</label>
                                 <select class="form-select" th:field="*{purchaseId}" id="purchaseIdInput">
-                                    <option value="">-- Không gắn phiếu nhập cụ thể --</option>
+                                    <option value="">-- Chọn phiếu nhập cần thanh toán --</option>
                                     <option th:each="item : ${purchaseInvoices}"
                                             th:value="${item.id}"
                                             th:text="${item.code + ' · ' + item.dateDisplay + ' · còn '
@@ -687,15 +687,22 @@
     function toggleReferenceFields() {
         const refundPayout = isRefundPayout();
         const purchaseLink = supportsPurchaseLink();
+
+        const returnInput = document.getElementById('returnIdInput');
+        const purchaseInput = document.getElementById('purchaseIdInput');
+
         document.getElementById('returnRefundFields').style.display = refundPayout ? '' : 'none';
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
 
+        returnInput.required = refundPayout;
+        purchaseInput.required = purchaseLink;
+
         // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
         if (!refundPayout) {
-            document.getElementById('returnIdInput').value = '';
+            returnInput.value = '';
         }
         if (!purchaseLink) {
-            document.getElementById('purchaseIdInput').value = '';
+            purchaseInput.value = '';
         }
 
         if (refundPayout) {
@@ -759,6 +766,11 @@
 
             if (isRefundPayout() && !document.getElementById('returnIdInput').value) {
                 reject('Vui lòng chọn phiếu trả hàng của khách cần hoàn tiền.');
+                return;
+            }
+
+            if (supportsPurchaseLink() && !document.getElementById('purchaseIdInput').value) {
+                reject('Vui lòng chọn phiếu nhập cần thanh toán.');
                 return;
             }
             // pmMoneyValue ignores the thousand separators — Number("500.000") would read 500.
