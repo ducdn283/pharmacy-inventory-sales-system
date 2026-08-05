@@ -68,6 +68,7 @@ public class DebtOffsetService {
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final InvoiceService invoiceService;
+    private final IncomeService incomeService;
 
     public DebtOffsetService(DebtService debtService,
                              AccountRepository accountRepository,
@@ -79,7 +80,8 @@ public class DebtOffsetService {
                              ReturnRepository returnRepository,
                              PurchaseinvoiceRepository purchaseinvoiceRepository,
                              PurchaseinvoiceService purchaseinvoiceService,
-                             InvoiceService invoiceService) {
+                             InvoiceService invoiceService,
+                             IncomeService incomeService) {
         this.debtService = debtService;
         this.accountRepository = accountRepository;
         this.customerRepository = customerRepository;
@@ -91,6 +93,7 @@ public class DebtOffsetService {
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
         this.invoiceService = invoiceService;
+        this.incomeService = incomeService;
     }
 
     @Transactional(readOnly = true)
@@ -369,7 +372,7 @@ public class DebtOffsetService {
                 || !Objects.equals(supplier.getId(), purchase.getSupplierID().getId())) {
             throw new IllegalArgumentException("Phiếu trả không thuộc nhà cung cấp đang bù trừ");
         }
-        BigDecimal remaining = supplierCashReceivable(ret).subtract(accountedForReturn(ret.getId())).max(BigDecimal.ZERO);
+        BigDecimal remaining = incomeService.remainingCollectibleForSupplierReturn(ret.getId());
         if (amount.setScale(2, RoundingMode.HALF_UP).compareTo(remaining.setScale(2, RoundingMode.HALF_UP)) > 0) {
             throw new IllegalArgumentException(
                     "Số tiền bù trừ vượt quá phần NCC còn phải hoàn của phiếu " + ret.getReturnCode());
@@ -400,16 +403,6 @@ public class DebtOffsetService {
                 .filter(expense -> expense.getReturnID() != null
                         && returnId.equals(expense.getReturnID().getId()))
                 .map(this::disbursedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private BigDecimal accountedForReturn(Integer returnId) {
-        return incomeRepository.findAllWithRelations().stream()
-                .filter(income -> !INCOME_STATUS_REJECTED.equals(income.getStatus()))
-                .filter(income -> income.getReturnID() != null
-                        && returnId.equals(income.getReturnID().getId()))
-                .map(Income::getAmount)
-                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

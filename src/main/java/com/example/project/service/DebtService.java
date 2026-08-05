@@ -5,20 +5,17 @@ import com.example.project.constant.ReturnPurchaseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.dto.response.DebtListItemResponse;
 import com.example.project.dto.response.DebtSummaryResponse;
-import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.dto.response.PayableDetailResponse;
 import com.example.project.dto.response.PayableLineResponse;
 import com.example.project.dto.response.ReceivableDetailResponse;
 import com.example.project.dto.response.ReceivableLineResponse;
 import com.example.project.entity.Customer;
 import com.example.project.entity.Expense;
-import com.example.project.entity.Income;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.repository.CustomerRepository;
 import com.example.project.repository.ExpenseRepository;
-import com.example.project.repository.IncomeRepository;
 import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
@@ -49,7 +46,6 @@ import java.util.stream.Collectors;
 public class DebtService {
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
-    private static final String INCOME_STATUS_REJECTED = "Từ chối";
     private static final String PARTY_CUSTOMER = "CUSTOMER";
     private static final String PARTY_SUPPLIER = "SUPPLIER";
     /** Synthetic key for walk-in sales whose invoice has no {@code customerID}. */
@@ -60,8 +56,8 @@ public class DebtService {
     private final ReturnRepository returnRepository;
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final ExpenseRepository expenseRepository;
-    private final IncomeRepository incomeRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final IncomeService incomeService;
     private final CustomerRepository customerRepository;
     private final SupplierRepository supplierRepository;
 
@@ -69,16 +65,16 @@ public class DebtService {
                        ReturnRepository returnRepository,
                        PurchaseinvoiceRepository purchaseinvoiceRepository,
                        ExpenseRepository expenseRepository,
-                       IncomeRepository incomeRepository,
                        PurchaseinvoiceService purchaseinvoiceService,
+                       IncomeService incomeService,
                        CustomerRepository customerRepository,
                        SupplierRepository supplierRepository) {
         this.invoiceRepository = invoiceRepository;
         this.returnRepository = returnRepository;
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.expenseRepository = expenseRepository;
-        this.incomeRepository = incomeRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.incomeService = incomeService;
         this.customerRepository = customerRepository;
         this.supplierRepository = supplierRepository;
     }
@@ -233,7 +229,6 @@ public class DebtService {
 
         Map<Integer, Purchaseinvoice> purchasesById = purchaseinvoiceRepository.findAllWithRelations().stream()
                 .collect(Collectors.toMap(Purchaseinvoice::getId, purchase -> purchase, (a, b) -> a));
-        Map<Integer, BigDecimal> accounted = supplierReturnAccountedByReturnId();
 
         List<ReceivableLineResponse> lines = returnRepository.findAllWithRelations().stream()
                 .filter(this::isApprovedSupplierReturn)
@@ -243,7 +238,7 @@ public class DebtService {
                     return purchase != null && purchase.getSupplierID() != null
                             && supplierId.equals(purchase.getSupplierID().getId());
                 })
-                .map(ret -> Map.entry(ret, remainingSupplierReceivable(ret, accounted)))
+                .map(ret -> Map.entry(ret, incomeService.remainingCollectibleForSupplierReturn(ret.getId())))
                 .filter(entry -> isPositive(entry.getValue()))
                 .sorted(Comparator.<Map.Entry<Return, BigDecimal>, Instant>comparing(
                                 entry -> entry.getKey().getReturnDate(),
@@ -407,12 +402,11 @@ public class DebtService {
 
         Map<Integer, PartyBalance> bySupplierId = new LinkedHashMap<>();
 
-        Map<Integer, BigDecimal> accounted = supplierReturnAccountedByReturnId();
         for (Return ret : returnRepository.findAllWithRelations()) {
             if (!isApprovedSupplierReturn(ret)) {
                 continue;
             }
-            BigDecimal receivable = remainingSupplierReceivable(ret, accounted);
+            BigDecimal receivable = incomeService.remainingCollectibleForSupplierReturn(ret.getId());
             if (!isPositive(receivable)) {
                 continue;
             }
@@ -497,39 +491,6 @@ public class DebtService {
                 && ret.getPurchaseID() != null
                 && ret.getInvoiceID() == null
                 && isStatus(ret.getStatus(), ReturnPurchaseStatus.APPROVED);
-    }
-
-    private BigDecimal supplierCashReceivable(Return ret) {
-        return nullToZero(ret.getTotalRefund())
-                .subtract(nullToZero(ret.getOffsetDebtAmount()))
-                .max(BigDecimal.ZERO);
-    }
-
-    private BigDecimal remainingSupplierReceivable(Return ret, Map<Integer, BigDecimal> accounted) {
-        return supplierCashReceivable(ret)
-                .subtract(accounted.getOrDefault(ret.getId(), BigDecimal.ZERO))
-                .max(BigDecimal.ZERO);
-    }
-
-    private Map<Integer, BigDecimal> supplierReturnAccountedByReturnId() {
-        Map<Integer, BigDecimal> accounted = new LinkedHashMap<>();
-        for (Income income : liveIncomes()) {
-            if (!IncomeTypeOptionResponse.SUPPLIER.equals(resolveIncomeType(income))) {
-                continue;
-            }
-            Return ret = income.getReturnID();
-            if (ret == null || ret.getId() == null) {
-                continue;
-            }
-            accounted.merge(ret.getId(), nullToZero(income.getAmount()), BigDecimal::add);
-        }
-        return accounted;
-    }
-
-    private List<Income> liveIncomes() {
-        return incomeRepository.findAllWithRelations().stream()
-                .filter(income -> !isStatus(income.getStatus(), INCOME_STATUS_REJECTED))
-                .toList();
     }
 
     private Map<Integer, BigDecimal> disbursedByReturnId() {
@@ -626,30 +587,6 @@ public class DebtService {
 
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
-    }
-
-    /** Internal type code; DB may store the Vietnamese label or a legacy English code. */
-    private String resolveIncomeType(Income income) {
-        String stored = income.getIncomeType();
-        if (stored != null && IncomeTypeOptionResponse.isValid(stored)) {
-            return IncomeTypeOptionResponse.codeOf(stored);
-        }
-        if (income.getSupplierID() != null) {
-            return IncomeTypeOptionResponse.SUPPLIER;
-        }
-        if (income.getCustomerID() != null) {
-            return IncomeTypeOptionResponse.CUSTOMER;
-        }
-        if (income.getShiftReportOfAccountID() != null) {
-            return IncomeTypeOptionResponse.SHIFT_SHORTAGE;
-        }
-        if (income.getAccountID() != null && income.getStockAdjustmentID() != null) {
-            return IncomeTypeOptionResponse.EMPLOYEE;
-        }
-        if (income.getAccountID() != null) {
-            return IncomeTypeOptionResponse.EMPLOYEE;
-        }
-        return IncomeTypeOptionResponse.OTHER;
     }
 
     private BigDecimal nullToZero(BigDecimal value) {

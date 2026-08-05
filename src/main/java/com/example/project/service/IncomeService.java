@@ -252,6 +252,7 @@ public class IncomeService {
         }
         Map<Integer, Purchaseinvoice> purchasesById = purchaseinvoiceRepository.findAllWithRelations().stream()
                 .collect(Collectors.toMap(Purchaseinvoice::getId, purchase -> purchase, (a, b) -> a));
+        Map<Integer, BigDecimal> accounted = accountedByReturnId();
 
         return returnRepository.findAllWithRelations().stream()
                 .filter(this::isApprovedSupplierReturn)
@@ -261,7 +262,7 @@ public class IncomeService {
                     return purchase != null && purchase.getSupplierID() != null
                             && supplierId.equals(purchase.getSupplierID().getId());
                 })
-                .map(ret -> Map.entry(ret, remainingCollectibleFromSupplier(ret)))
+                .map(ret -> Map.entry(ret, remainingCollectibleFromSupplier(ret, accounted)))
                 .filter(entry -> isPositive(entry.getValue()))
                 .sorted(Comparator.comparing((Map.Entry<Return, BigDecimal> entry) -> entry.getKey().getReturnDate(),
                                 Comparator.nullsLast(Comparator.reverseOrder()))
@@ -354,7 +355,13 @@ public class IncomeService {
         if (!isApprovedSupplierReturn(ret)) {
             return BigDecimal.ZERO;
         }
-        return remainingCollectibleFromSupplier(ret);
+        return remainingCollectibleFromSupplier(ret, accountedByReturnId());
+    }
+
+    /** Tổng tiền đã thu qua phiếu thu SUPPLIER hoàn thành, keyed by phiếu trả NCC. */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> collectedAmountBySupplierReturnId() {
+        return accountedByReturnId();
     }
 
     /**
@@ -977,13 +984,11 @@ public class IncomeService {
     }
 
     private boolean hasCollectibleCashFromSupplier(Return ret) {
-        return isPositive(remainingCollectibleFromSupplier(ret));
+        return isPositive(remainingCollectibleFromSupplier(ret, accountedByReturnId()));
     }
 
     /**
-     * Tiền NCC còn phải hoàn = {@code totalRefund − offsetDebtAmount}.
-     * {@code offsetDebtAmount} gồm phần cấn trừ công nợ lúc duyệt và các lần thu tiền qua phiếu thu
-     * SUPPLIER ({@link #applySupplierOffsetDebtPayment}) — cùng công thức màn phiếu trả NCC.
+     * Tiền thật NCC còn phải hoàn sau cấn trừ công nợ lúc duyệt ({@code offsetDebtAmount} cố định).
      */
     private BigDecimal collectibleCashFromSupplier(Return ret) {
         return nullToZero(ret != null ? ret.getTotalRefund() : null)
@@ -991,15 +996,36 @@ public class IncomeService {
                 .max(BigDecimal.ZERO);
     }
 
-    private BigDecimal remainingCollectibleFromSupplier(Return ret) {
-        return collectibleCashFromSupplier(ret);
+    private BigDecimal remainingCollectibleFromSupplier(Return ret, Map<Integer, BigDecimal> accounted) {
+        return collectibleCashFromSupplier(ret)
+                .subtract(accounted.getOrDefault(ret != null ? ret.getId() : null, BigDecimal.ZERO))
+                .max(BigDecimal.ZERO);
+    }
+
+    /** Completed supplier-income slips pointing at a return — each amount counts against the collectible. */
+    private Map<Integer, BigDecimal> accountedByReturnId() {
+        Map<Integer, BigDecimal> accounted = new LinkedHashMap<>();
+        for (Income income : incomeRepository.findAllWithRelations()) {
+            if (!isCompletedStatus(income.getStatus())) {
+                continue;
+            }
+            if (!IncomeTypeOptionResponse.SUPPLIER.equals(resolveIncomeType(income))) {
+                continue;
+            }
+            Return ret = income.getReturnID();
+            if (ret == null || ret.getId() == null) {
+                continue;
+            }
+            accounted.merge(ret.getId(), nullToZero(income.getAmount()), BigDecimal::add);
+        }
+        return accounted;
     }
 
     private void validateSupplierPaymentAmount(Return ret, BigDecimal paymentAmount) {
         if (paymentAmount == null) {
             return;
         }
-        BigDecimal remaining = remainingCollectibleFromSupplier(ret);
+        BigDecimal remaining = remainingCollectibleFromSupplier(ret, accountedByReturnId());
         if (paymentAmount.setScale(2, RoundingMode.HALF_UP).compareTo(remaining.setScale(2, RoundingMode.HALF_UP)) > 0) {
             throw new IllegalArgumentException(
                     "Số tiền thu không được vượt quá số tiền NCC còn phải hoàn ("
@@ -1008,8 +1034,8 @@ public class IncomeService {
     }
 
     /**
-     * Ghi nhận tiền NCC đã hoàn: tăng {@code Return.offsetDebtAmount} để
-     * {@code totalRefund − offsetDebtAmount} trên màn phiếu trả NCC giảm tương ứng.
+     * Validates supplier-return collection. {@code Return.offsetDebtAmount} stays the approval-time
+     * debt offset only; cash collected is tracked via linked income slips ({@link #accountedByReturnId}).
      */
     private void applySupplierOffsetDebtPayment(Income income) {
         if (income.getReturnID() == null || income.getAmount() == null) {
@@ -1018,8 +1044,6 @@ public class IncomeService {
         Return ret = returnRepository.findById(income.getReturnID().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu trả hàng nhà cung cấp"));
         validateSupplierPaymentAmount(ret, income.getAmount());
-        ret.setOffsetDebtAmount(nullToZero(ret.getOffsetDebtAmount()).add(income.getAmount()));
-        returnRepository.save(ret);
     }
 
     private boolean isApprovedSupplierReturn(Return ret) {
