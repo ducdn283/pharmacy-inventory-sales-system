@@ -1053,12 +1053,12 @@
         const debtLabel = formatMoney(maxDebt);
         if (currentPayMethod() === 'both') {
             if (type === 'SUPPLIER') {
-                return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
+                return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền NCC còn phải hoàn (' + debtLabel + ').';
             }
             return 'Tổng tiền mặt + chuyển khoản không được vượt quá số tiền nợ (' + debtLabel + ').';
         }
         if (type === 'SUPPLIER') {
-            return 'Số tiền thu không được vượt quá số tiền NCC còn nợ (' + debtLabel + ').';
+            return 'Số tiền thu không được vượt quá số tiền NCC còn phải hoàn (' + debtLabel + ').';
         }
         return 'Số tiền thu không được vượt quá số tiền nợ (' + debtLabel + ').';
     }
@@ -1315,7 +1315,7 @@
                 debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền nợ của hóa đơn.';
                 debtHint.style.display = 'block';
             } else if (type === 'SUPPLIER') {
-                debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền NCC còn nợ.';
+                debtHint.textContent = 'Có thể thu một phần; tối đa bằng số tiền NCC còn phải hoàn.';
                 debtHint.style.display = 'block';
             } else if (type === 'EMPLOYEE') {
                 debtHint.textContent = 'Phải thu đủ giá trị đền bù một lần; không được thu một phần.';
@@ -1635,8 +1635,12 @@
         infoHtml += infoRowHtml('Trạng thái', statusBadgeHtml(detail.status, detail.statusCssClass));
         infoHtml += infoRowHtml('Tổng tiền hoàn',
             '<span class="fw-semibold text-success">' + formatMoney(detail.totalRefund) + '</span>');
-        infoHtml += infoRowHtml('NCC còn nợ',
-            '<span class="fw-semibold text-warning">' + formatMoney(detail.offsetDebtAmount) + '</span>');
+        infoHtml += infoRowHtml('Đã cấn trừ công nợ',
+            '<span class="fw-semibold text-secondary">' + formatMoney(detail.offsetDebtAmount) + '</span>');
+        infoHtml += infoRowHtml('NCC còn phải hoàn',
+            '<span class="fw-semibold text-warning">' + formatMoney(detail.remainingCollectibleAmount != null
+                ? detail.remainingCollectibleAmount
+                : detail.cashRefundDue) + '</span>');
         if (detail.note) {
             infoHtml += infoRowHtml('Ghi chú', escapeHtml(detail.note));
         }
@@ -1672,6 +1676,27 @@
             + '<td class="text-end text-success">' + formatMoney(detail.totalRefund) + '</td>'
             + '</tr>';
         document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
+        applySupplierReturnSuggestedAmount(detail);
+    }
+
+    function applySupplierReturnSuggestedAmount(detail) {
+        if (!detail) {
+            return;
+        }
+        const remaining = detail.remainingCollectibleAmount != null
+            ? Number(detail.remainingCollectibleAmount)
+            : (detail.cashRefundDue != null ? Number(detail.cashRefundDue) : 0);
+        if (!remaining || remaining <= 0) {
+            return;
+        }
+        const select = document.getElementById('returnIdInput');
+        if (select && select.value) {
+            const option = select.options[select.selectedIndex];
+            if (option) {
+                option.dataset.amount = String(remaining);
+            }
+        }
+        setAmount(remaining);
     }
 
     function renderStockAdjustmentReferenceDetail(detail) {
@@ -1932,6 +1957,9 @@
 
         if (selectedValue && String(select.value) === String(selectedValue)) {
             onReferenceSelectionChanged(selectId);
+            if (selectId === 'returnIdInput' || selectId === 'invoiceIdInput') {
+                applySuggestedAmount(select);
+            }
         } else if (!select.value) {
             hideReferenceDetailSection();
         }
@@ -2463,6 +2491,7 @@
                 } else {
                     alert(message);
                 }
+                return;
             }
         });
     });
