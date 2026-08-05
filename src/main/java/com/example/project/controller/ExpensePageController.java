@@ -147,6 +147,8 @@ public class ExpensePageController {
         model.addAttribute("purchaseInvoices", expenseService.listPayablePurchaseInvoices());
         model.addAttribute("purchaseInvoiceAmounts", expenseService.payablePurchaseInvoiceAmounts());
         model.addAttribute("purchaseLinkableTypes", expenseService.purchaseLinkableTypes());
+        model.addAttribute("cashLimitApplicableTypes", expenseService.cashLimitApplicableTypes());
+        model.addAttribute("cashLimitThreshold", expenseService.cashLimitThreshold());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
         // Only the Owner pays out of the drawer; the Accountant settles by transfer and has no shift
         // to reconcile cash against. Enforced server-side in ExpenseService.resolveSplit — this is
