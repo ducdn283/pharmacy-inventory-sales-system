@@ -195,8 +195,8 @@ public class InvoiceController {
         try {
             invoiceService.createSaleInvoice(
                     form, currentUserContext.getCurrentAccountId(), !currentUserContext.isPharmacist());
-            redirectAttributes.addFlashAttribute("success", "Tạo hóa đơn bán hàng thành công");
-            return "redirect:" + invoiceListBasePath(request);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã tạo hóa đơn thành công");
+            return "redirect:" + resolveSellingBasePath(request);
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             addSellingPageData(request, model);

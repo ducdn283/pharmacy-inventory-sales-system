@@ -1022,8 +1022,17 @@
             </a>
         </div>
 
-        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
-        <div th:replace="~{fragments/toast :: flash}"></div>
+        <div th:if="${successMessage}" id="sellSuccessAlert" class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+            <i class="ti ti-circle-check me-2"></i>
+            <span th:text="${successMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
+        </div>
+
+        <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+            <i class="ti ti-alert-circle me-2"></i>
+            <span th:text="${errorMessage}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
+        </div>
 
         <form id="invoiceCreateForm" th:action="${basePath}" th:object="${form}" method="post">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -2948,6 +2957,16 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        const successAlert = document.getElementById('sellSuccessAlert');
+        if (successAlert) {
+            setTimeout(function () {
+                if (window.bootstrap && bootstrap.Alert) {
+                    bootstrap.Alert.getOrCreateInstance(successAlert).close();
+                } else {
+                    successAlert.remove();
+                }
+            }, 4000);
+        }
         if (Array.isArray(initialDetails) && initialDetails.length > 0) {
             const entriesByKey = {};
             initialDetails.forEach(detail => {
