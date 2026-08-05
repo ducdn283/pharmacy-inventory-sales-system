@@ -67,6 +67,14 @@ public class TaxPeriodComputationResponse {
     // --- personal income tax. Only populated (and only meaningful) when pitCostMethod is true.
     private BigDecimal costOfGoodsSold;
     private BigDecimal operatingCost;
+
+    /**
+     * Loss on supplier returns not refunded in full ({@code originalLineValue - lineRefund} summed
+     * across the period's approved supplier-return lines) — a chi phí hợp lý per {@code
+     * Tax-Invoice.xlsx}, sheet "03_Cong_Thuc_TNCN". Zero whenever no supplier return fell short.
+     */
+    private BigDecimal supplierReturnShortfall;
+
     private BigDecimal taxableIncome;
     private BigDecimal incomeTax;
 

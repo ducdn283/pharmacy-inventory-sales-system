@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 public interface ReturndetailRepository extends JpaRepository<Returndetail, Integer> {
@@ -56,5 +58,27 @@ public interface ReturndetailRepository extends JpaRepository<Returndetail, Inte
        group by d.purchaseDetailID.id
        """)
     List<Object[]> sumReturnedQtyByPurchaseDetail(@Param("status") String status);
+
+    /**
+     * The gap between what a supplier return line was originally worth and what the supplier
+     * actually refunded — a real loss to the pharmacy (see {@code Tax-Invoice.xlsx}, sheet
+     * "03_Cong_Thuc_TNCN"). Both {@code originalLineValue}/{@code lineRefund} are gross (VAT-
+     * inclusive, no net/VAT split since 04/08/2026 — see {@code ReturnPurchaseService.Chunk}), so the
+     * difference is the loss figure directly, with no further tax adjustment needed.
+     */
+    @Query("""
+       select coalesce(sum(rd.originalLineValue - rd.lineRefund), 0)
+       from Returndetail rd
+       join rd.returnID r
+       where r.purchaseID is not null
+         and r.invoiceID is null
+         and r.status = :approvedStatus
+         and r.returnDate >= :from
+         and r.returnDate < :to
+       """)
+    BigDecimal sumSupplierReturnShortfallInPeriod(
+            @Param("approvedStatus") String approvedStatus,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
 
 }

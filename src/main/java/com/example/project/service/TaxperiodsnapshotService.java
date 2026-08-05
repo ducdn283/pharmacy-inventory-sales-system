@@ -26,6 +26,7 @@ import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.InvoicedetailRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
+import com.example.project.repository.ReturndetailRepository;
 import com.example.project.repository.StockadjustmentdetailRepository;
 import com.example.project.repository.TaxperiodsnapshotRepository;
 import org.springframework.stereotype.Service;
@@ -126,6 +127,7 @@ public class TaxperiodsnapshotService {
     private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
     private final ExpenseRepository expenseRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final ReturndetailRepository returndetailRepository;
 
     public TaxperiodsnapshotService(TaxperiodsnapshotRepository taxperiodsnapshotRepository,
                                     InvoiceRepository invoiceRepository,
@@ -137,7 +139,8 @@ public class TaxperiodsnapshotService {
                                     IncomeRepository incomeRepository,
                                     StockadjustmentdetailRepository stockadjustmentdetailRepository,
                                     ExpenseRepository expenseRepository,
-                                    PurchaseinvoiceService purchaseinvoiceService) {
+                                    PurchaseinvoiceService purchaseinvoiceService,
+                                    ReturndetailRepository returndetailRepository) {
         this.taxperiodsnapshotRepository = taxperiodsnapshotRepository;
         this.invoiceRepository = invoiceRepository;
         this.returnRepository = returnRepository;
@@ -149,6 +152,7 @@ public class TaxperiodsnapshotService {
         this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
         this.expenseRepository = expenseRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.returndetailRepository = returndetailRepository;
     }
 
     // ------------------------------------------------------------------ the period itself
@@ -539,6 +543,7 @@ public class TaxperiodsnapshotService {
 
         BigDecimal costOfGoodsSold = BigDecimal.ZERO;
         BigDecimal operatingCost = BigDecimal.ZERO;
+        BigDecimal supplierReturnShortfall = BigDecimal.ZERO;
         BigDecimal taxableIncome = BigDecimal.ZERO;
         BigDecimal incomeTax = BigDecimal.ZERO;
         BigDecimal incomeTaxRate = BigDecimal.ZERO;
@@ -549,9 +554,13 @@ public class TaxperiodsnapshotService {
             operatingCost = safe(expenseRepository.sumOperatingCostInPeriod(
                     instantStart(period), instantEndExclusive(period),
                     DEDUCTIBLE_EXPENSE_TYPES, DISBURSED_EXPENSE_STATUSES));
+            // A supplier that doesn't refund a return in full leaves the pharmacy out of pocket for
+            // the shortfall — a real cost, per Tax-Invoice.xlsx sheet "03_Cong_Thuc_TNCN".
+            supplierReturnShortfall = safe(returndetailRepository.sumSupplierReturnShortfallInPeriod(
+                    ReturnPurchaseStatus.APPROVED, instantStart(period), instantEndExclusive(period)));
             // A loss-making quarter owes nothing; it does not create a negative tax.
             taxableIncome = taxableIncomeRevenue.subtract(costOfGoodsSold).subtract(operatingCost)
-                    .max(BigDecimal.ZERO);
+                    .subtract(supplierReturnShortfall).max(BigDecimal.ZERO);
             incomeTaxRate = group3 ? TaxRevenueGroup.GROUP3_PIT_RATE : TaxRevenueGroup.DEDUCTION_PIT_RATE;
             incomeTax = taxableIncome.multiply(incomeTaxRate);
         } else if (!exempt) {
@@ -587,6 +596,7 @@ public class TaxperiodsnapshotService {
                 scaled(vatPayable),
                 scaled(costOfGoodsSold),
                 scaled(operatingCost),
+                scaled(supplierReturnShortfall),
                 scaled(taxableIncome),
                 scaled(incomeTax),
                 percent(incomeTaxRate),
