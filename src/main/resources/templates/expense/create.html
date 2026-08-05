@@ -265,7 +265,7 @@
                                 <div class="form-text" id="amountLockedHint" style="display: none;">
                                     <i class="ti ti-info-circle me-1"></i>
                                     <span id="amountLockedText"></span>
-                                    Đã điền sẵn phần còn thiếu — sửa nhỏ lại nếu lần này chỉ trả một phần.
+                                    <span id="amountLockedSuffix"></span>
                                 </div>
                             </div>
 
@@ -319,6 +319,12 @@
                             </div>
                             <div class="form-text" th:unless="${canPayCash}">
                                 Kế toán chỉ chi qua chuyển khoản; phần tiền mặt phải do chủ nhà thuốc chi.
+                            </div>
+                            <div class="form-text" id="cashLimitHint" style="display: none;">
+                                <i class="ti ti-info-circle me-1"></i>
+                                Phiếu chi loại này trên
+                                <span th:text="${#numbers.formatDecimal(cashLimitThreshold, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.000.000đ</span>
+                                bắt buộc chuyển khoản toàn bộ, không được chi tiền mặt.
                             </div>
                         </div>
 
@@ -427,6 +433,9 @@
     const PURCHASE_PAYABLE_AMOUNTS = /*[[${purchaseInvoiceAmounts}]]*/ {};
     // Từ ExpenseType.PURCHASE_LINKABLE — không hardcode ở đây để JS không lệch khỏi Java.
     const PURCHASE_LINKABLE_TYPES = /*[[${purchaseLinkableTypes}]]*/ [];
+    // Từ ExpenseType.CASH_LIMIT_APPLICABLE/.CASH_LIMIT_THRESHOLD — cùng lý do.
+    const CASH_LIMIT_APPLICABLE_TYPES = /*[[${cashLimitApplicableTypes}]]*/ [];
+    const CASH_LIMIT_THRESHOLD = /*[[${cashLimitThreshold}]]*/ 5000000;
     const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
 
     // Script nằm sau form nên các phần tử đã tồn tại; cashInput là null với kế toán (không được chi tiền mặt).
@@ -457,6 +466,38 @@
     function currentPayMethod() {
         const picked = document.querySelector('input[name="payMethod"]:checked');
         return picked ? picked.value : 'banking';
+    }
+
+    function cashTransferRequired() {
+        const total = pmMoneyValue(document.getElementById('amountInput'));
+        return CASH_LIMIT_APPLICABLE_TYPES.indexOf(currentType()) !== -1 && total > CASH_LIMIT_THRESHOLD;
+    }
+
+    /**
+     * Trên CASH_LIMIT_THRESHOLD, phiếu thuộc CASH_LIMIT_APPLICABLE_TYPES không được chọn "Tiền mặt"
+     * hay "Tiền mặt + Chuyển khoản" — khoá hai lựa chọn đó và ép về "Chuyển khoản". Server cũng chặn
+     * lại y hệt (xem ExpenseService.resolveSplit) nên đây chỉ là phản ánh cho người dùng thấy trước.
+     */
+    function applyCashLimit() {
+        const required = cashTransferRequired();
+        const payCash = document.getElementById('payCash');
+        const payBoth = document.getElementById('payBoth');
+        const payBanking = document.getElementById('payBanking');
+
+        [payCash, payBoth].forEach(function (radio) {
+            if (radio) {
+                radio.disabled = required;
+            }
+        });
+        if (required && payBanking && !payBanking.checked) {
+            payBanking.checked = true;
+            applyPayMethod();
+        }
+
+        const hint = document.getElementById('cashLimitHint');
+        if (hint) {
+            hint.style.display = required ? '' : 'none';
+        }
     }
 
     /**
@@ -598,8 +639,10 @@
 
     function syncRefundAmount() {
         const returnId = document.getElementById('returnIdInput').value;
-        // Khoá ô tiền ngay khi chọn loại hoàn tiền — server cũng ghi đè, đây chỉ là phản ánh cho người dùng thấy.
+        // Ô tiền đã khoá (readonly) từ applyAmountLock — đây chỉ điền lại giá trị đúng của phiếu trả
+        // vừa chọn. Server cũng luôn lấy nguyên số này, không tin số client gửi lên.
         setAmount(returnId ? RETURN_REFUND_AMOUNTS[returnId] : '');
+        applyAmountLock();
     }
 
     /**
@@ -614,9 +657,12 @@
     }
 
     /**
-     * Chọn chứng từ thì ô tiền được điền sẵn phần còn thiếu, nhưng KHÔNG khoá — trả một phần là
-     * chuyện bình thường và đó chính là lý do có nhiều phiếu chi cho cùng một phiếu nhập. Chỉ hiện
-     * mức trần để người lập biết gõ tối đa bao nhiêu; server cũng chặn đúng con số này.
+     * Hoàn tiền trả hàng: ô tiền KHOÁ hẳn, luôn bằng đúng phần còn phải hoàn của phiếu trả — server
+     * cũng bỏ qua số gõ vào, không có chuyện hoàn một phần (xem
+     * {@code ExpenseService.resolveAmount}). Phiếu nhập thì vẫn chỉ điền sẵn phần còn thiếu, KHÔNG
+     * khoá — trả một phần là chuyện bình thường và đó chính là lý do có nhiều phiếu chi cho cùng một
+     * phiếu nhập. Chỉ hiện mức trần để người lập biết gõ tối đa bao nhiêu; server cũng chặn đúng con
+     * số này.
      */
     function applyAmountLock() {
         const refundPayout = isRefundPayout();
@@ -626,10 +672,16 @@
             ? (returnId ? RETURN_REFUND_AMOUNTS[returnId] : null)
             : (purchaseId ? PURCHASE_PAYABLE_AMOUNTS[purchaseId] : null);
 
+        const amountInput = document.getElementById('amountInput');
+        amountInput.readOnly = refundPayout;
+
         document.getElementById('amountLockedHint').style.display = max == null ? 'none' : '';
         document.getElementById('amountLockedText').textContent = refundPayout
-            ? 'Phiếu trả hàng này còn phải hoàn tối đa ' + money(max) + '.'
+            ? 'Phiếu trả hàng này còn phải hoàn ' + money(max) + '.'
             : 'Phiếu nhập này còn phải trả tối đa ' + money(max) + '.';
+        document.getElementById('amountLockedSuffix').textContent = refundPayout
+            ? 'Lấy nguyên từ phiếu trả hàng, không sửa được.'
+            : 'Đã điền sẵn phần còn thiếu — sửa nhỏ lại nếu lần này chỉ trả một phần.';
     }
 
     function toggleReferenceFields() {
@@ -650,6 +702,7 @@
             syncRefundAmount();
         }
         applyAmountLock();
+        applyCashLimit();
         syncPayment();
     }
 
@@ -657,7 +710,10 @@
         document.querySelectorAll('input[name="payMethod"]').forEach(function (radio) {
             radio.addEventListener('change', applyPayMethod);
         });
-        document.getElementById('amountInput').addEventListener('input', syncPayment);
+        document.getElementById('amountInput').addEventListener('input', function () {
+            applyCashLimit();
+            syncPayment();
+        });
         // Gõ (hoặc bấm mũi tên) vào ô chia tiền là người dùng tự quyết -> JS thôi gợi ý. Phân biệt với
         // lần setMoney() của chính syncPayment nhờ cờ `syncing`: lúc đó handler này cũng chạy, nhưng
         // là do code phát ra chứ không phải người gõ.
@@ -717,6 +773,12 @@
             const paymentProblem = paymentErrorFor(amount, paid, currentPayMethod() === 'both');
             if (paymentProblem) {
                 reject(paymentProblem);
+                return;
+            }
+
+            if (cashTransferRequired() && pmMoneyValue(cashInput) > 0) {
+                reject('Phiếu chi loại này trên ' + money(CASH_LIMIT_THRESHOLD)
+                    + ' bắt buộc chuyển khoản toàn bộ, không được chi tiền mặt.');
                 return;
             }
 
