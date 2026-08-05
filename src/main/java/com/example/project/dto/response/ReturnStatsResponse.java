@@ -11,6 +11,9 @@ public class ReturnStatsResponse {
     private long monthlyCount;
     private long draftCount;
     private long pendingCount;
+    /** Đã duyệt và CÒN phải hoàn tiền — không gồm phiếu đã tất toán, xem {@link #completedCount}. */
     private long debtCount;
+    /** Đã duyệt và không còn nghĩa vụ tiền (bù trừ hết nợ, hoặc phiếu chi đã trả xong). */
+    private long completedCount;
     private long rejectedCount;
 }

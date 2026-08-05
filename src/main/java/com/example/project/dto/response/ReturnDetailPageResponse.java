@@ -51,5 +51,13 @@ public class ReturnDetailPageResponse {
     /** Phần nhà thuốc GIỮ LẠI = totalOriginalValue − totalRefund; vẫn là doanh thu chịu thuế bình thường. */
     private BigDecimal retainedAmount;
 
+    /**
+     * Phiếu đã tất toán ("Hoàn thành") — nhà thuốc không còn nợ khách đồng nào.
+     *
+     * <p>{@link #cashRefundDue} là số phiếu chi <em>phải</em> chi ra và không giảm dần khi đã chi, nên
+     * nhãn "Còn phải hoàn khách" phải đổi theo cờ này, không suy từ số tiền.</p>
+     */
+    private boolean settled;
+
     private List<ReturnDetailItemResponse> items;
 }

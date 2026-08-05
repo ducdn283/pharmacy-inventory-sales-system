@@ -108,7 +108,11 @@ public class ApprovalService {
         if (matchesType(typeFilter, TYPE_RETURN)) {
             returnRepository.findAllWithRelations().stream()
                     .filter(ret -> ret.getInvoiceID() != null)
+                    // DEBT và COMPLETED đều nghĩa là "đã duyệt", chỉ khác còn nợ tiền hay không —
+                    // thiếu COMPLETED thì phiếu duyệt xong mà cấn trừ hết nợ sẽ biến mất khỏi màn
+                    // duyệt ngay lập tức, thay vì nằm lại đủ thời gian nhìn cho hết.
                     .filter(ret -> isStatus(ret.getStatus(), ReturnStatus.PENDING) || isStatus(ret.getStatus(), ReturnStatus.DEBT)
+                            || isStatus(ret.getStatus(), ReturnStatus.COMPLETED)
                             || isStatus(ret.getStatus(), ReturnStatus.REJECTED))
                     .map(this::toApprovalItem)
                     .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
