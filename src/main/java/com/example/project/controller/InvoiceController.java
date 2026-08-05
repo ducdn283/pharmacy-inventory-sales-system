@@ -1,26 +1,34 @@
 package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
+import com.example.project.dto.request.CustomerRequest;
 import com.example.project.dto.request.InvoiceCreateRequest;
+import com.example.project.dto.response.CustomerOptionResponse;
 import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.InvoiceLineResponse;
 import com.example.project.dto.response.InvoicePrintPageResponse;
 import com.example.project.dto.response.InvoiceListItemResponse;
 import com.example.project.dto.response.InvoiceResponse;
+import com.example.project.service.CustomerService;
 import com.example.project.service.InvoiceService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.beans.propertyeditors.CustomNumberEditor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -28,14 +36,19 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 public class InvoiceController {
     private final InvoiceService invoiceService;
+    private final CustomerService customerService;
     private final CurrentUserContext currentUserContext;
 
-    public InvoiceController(InvoiceService invoiceService, CurrentUserContext currentUserContext) {
+    public InvoiceController(InvoiceService invoiceService,
+                             CustomerService customerService,
+                             CurrentUserContext currentUserContext) {
         this.invoiceService = invoiceService;
+        this.customerService = customerService;
         this.currentUserContext = currentUserContext;
     }
 
@@ -191,12 +204,39 @@ public class InvoiceController {
         }
     }
 
+    @PostMapping(value = {"/owner/selling/customers", "/pharmacist/selling/customers"},
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<?> createCustomerFromSelling(@Valid @RequestBody CustomerRequest request,
+                                                       BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            String message = bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("Dữ liệu không hợp lệ");
+            return ResponseEntity.badRequest().body(Map.of("message", message));
+        }
+        try {
+            Integer id = customerService.create(request);
+            return ResponseEntity.ok(new CustomerOptionResponse(
+                    id,
+                    request.getName(),
+                    request.getPhoneNumber(),
+                    request.getCustomerType()));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
     private void addSellingPageData(HttpServletRequest request, Model model) {
         model.addAttribute("products", invoiceService.listSellableProducts());
         model.addAttribute("customers", invoiceService.listCustomers());
         model.addAttribute("sellerName", currentUserContext.getCurrentAccountName());
         model.addAttribute("debtAllowed", !currentUserContext.isPharmacist());
-        model.addAttribute("basePath", resolveSellingBasePath(request));
+        String sellingBasePath = resolveSellingBasePath(request);
+        model.addAttribute("basePath", sellingBasePath);
+        model.addAttribute("customerCreateUrl", sellingBasePath + "/customers");
         model.addAttribute("invoicesPath", invoiceListBasePath(request));
     }
 
