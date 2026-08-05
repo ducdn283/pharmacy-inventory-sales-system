@@ -352,16 +352,19 @@
 
         .signed-print-modal-body {
             flex: 1;
+            min-height: 0;
             overflow: auto;
             background: #f3f4f6;
             padding: 16px;
         }
 
         .signed-print-frame {
+            display: block;
             width: 100%;
-            min-height: 720px;
+            height: 0;
             border: none;
             background: #fff;
+            overflow: hidden;
         }
 
         @media (max-width: 991.98px) {
@@ -755,6 +758,7 @@
         <div class="signed-print-modal-body">
             <iframe id="signedPrintFrame"
                     class="signed-print-frame"
+                    scrolling="no"
                     title="Hình ảnh hóa đơn đã ký"></iframe>
         </div>
         <div class="signed-print-modal-footer">
@@ -781,14 +785,37 @@
             document.getElementById('signedPrintModalBackdrop')
         ];
 
+        function resizeEmbedFrame(frame) {
+            if (!frame) {
+                return;
+            }
+            try {
+                var doc = frame.contentDocument || frame.contentWindow.document;
+                var height = Math.max(
+                    doc.body ? doc.body.scrollHeight : 0,
+                    doc.documentElement ? doc.documentElement.scrollHeight : 0
+                );
+                frame.style.height = height + 'px';
+            } catch (error) {
+                frame.style.height = '720px';
+            }
+        }
+
         function openSignedPrintModal(printUrl) {
             if (!signedPrintModal || !signedPrintFrame) {
                 return;
             }
+            signedPrintFrame.style.height = '0';
             signedPrintFrame.src = printUrl;
             signedPrintModal.classList.add('open');
             signedPrintModal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
+        }
+
+        if (signedPrintFrame) {
+            signedPrintFrame.addEventListener('load', function () {
+                resizeEmbedFrame(signedPrintFrame);
+            });
         }
 
         function closeSignedPrintModal() {
@@ -797,6 +824,7 @@
             }
             signedPrintModal.classList.remove('open');
             signedPrintModal.setAttribute('aria-hidden', 'true');
+            signedPrintFrame.style.height = '0';
             signedPrintFrame.src = 'about:blank';
             document.body.style.overflow = '';
         }

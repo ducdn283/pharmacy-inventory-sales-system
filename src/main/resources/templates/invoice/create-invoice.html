@@ -990,6 +990,38 @@
             color: #111827;
         }
 
+        .print-modal-backdrop {
+            padding: 24px 16px;
+            overflow: hidden;
+            align-items: center;
+        }
+
+        .print-modal-backdrop .pm-modal {
+            max-width: 860px;
+            max-height: calc(100vh - 48px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .print-modal-body {
+            flex: 1;
+            min-height: 0;
+            max-height: none;
+            padding: 16px;
+            overflow: auto;
+            background: #f3f4f6;
+        }
+
+        .print-modal-frame {
+            display: block;
+            width: 100%;
+            height: 0;
+            border: none;
+            background: #fff;
+            overflow: hidden;
+        }
+
         .batch-option-meta {
             font-size: 11px;
             color: #6b7280;
@@ -1034,8 +1066,10 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
         </div>
 
-        <form id="invoiceCreateForm" th:action="${basePath}" th:object="${form}" method="post">
+        <form id="invoiceCreateForm" th:action="${basePath}" th:object="${form}" method="post"
+              th:attr="data-invoice-print-base-path=${invoicePrintBasePath}">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="hidden" name="printAfterSave" id="printAfterSave" value="false">
 
             <div class="row g-4">
                 <div class="col-12 col-xl-8">
@@ -1171,9 +1205,14 @@
                         </div>
                     </div>
 
-                    <div class="mt-4 d-flex gap-3">
+                    <div class="mt-4 d-flex gap-3 flex-wrap">
                         <button type="submit" id="submitInvoiceBtn" class="btn btn-sell-primary px-4" disabled>
                             Lưu hóa đơn
+                        </button>
+
+                        <button type="submit" id="submitAndPrintBtn" class="btn btn-outline-primary px-4" disabled>
+                            <i class="ti ti-printer me-1"></i>
+                            Lưu và in
                         </button>
 
                         <a th:href="${invoicesPath}" class="btn btn-outline-secondary px-4">
@@ -1320,6 +1359,25 @@
                 Lô HSD gần nhất
             </button>
             <button type="button" class="btn btn-sell-primary btn-sm" id="batchPickerConfirmBtn">OK</button>
+        </div>
+    </div>
+</div>
+
+<div class="pm-modal-backdrop print-modal-backdrop" id="invoicePrintModal">
+    <div class="pm-modal" role="dialog" aria-modal="true" aria-labelledby="invoicePrintModalTitle">
+        <div class="pm-modal-header">
+            <div class="fw-semibold fs-6" id="invoicePrintModalTitle">Phiếu in hóa đơn</div>
+            <button type="button" class="pm-modal-close" id="invoicePrintCloseBtn" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="pm-modal-body print-modal-body">
+            <iframe id="invoicePrintFrame" class="print-modal-frame" scrolling="no" title="Phiếu in hóa đơn"></iframe>
+        </div>
+        <div class="pm-modal-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="invoicePrintDismissBtn">Đóng</button>
+            <button type="button" class="btn btn-sell-primary btn-sm" id="invoicePrintBtn">
+                <i class="ti ti-printer me-1"></i>
+                In hóa đơn
+            </button>
         </div>
     </div>
 </div>
@@ -1603,6 +1661,47 @@
         document.getElementById('batchPickerModal').classList.remove('open');
         batchPickerEntryId = null;
         batchPickerSelectedId = null;
+    }
+
+    function resizeEmbedFrame(frame) {
+        if (!frame) return;
+        try {
+            const doc = frame.contentDocument || frame.contentWindow.document;
+            const height = Math.max(
+                doc.body ? doc.body.scrollHeight : 0,
+                doc.documentElement ? doc.documentElement.scrollHeight : 0
+            );
+            frame.style.height = height + 'px';
+        } catch (error) {
+            frame.style.height = '720px';
+        }
+    }
+
+    function openInvoicePrintModal(printUrl) {
+        const modal = document.getElementById('invoicePrintModal');
+        const frame = document.getElementById('invoicePrintFrame');
+        if (!modal || !frame) return;
+        frame.style.height = '0';
+        frame.src = printUrl;
+        modal.classList.add('open');
+    }
+
+    function closeInvoicePrintModal() {
+        const modal = document.getElementById('invoicePrintModal');
+        const frame = document.getElementById('invoicePrintFrame');
+        if (!modal) return;
+        modal.classList.remove('open');
+        if (frame) {
+            frame.style.height = '0';
+            frame.src = 'about:blank';
+        }
+    }
+
+    function printInvoicePreview() {
+        const frame = document.getElementById('invoicePrintFrame');
+        if (frame && frame.contentWindow) {
+            frame.contentWindow.print();
+        }
     }
 
     function pickBatchInModal(batchId) {
@@ -2206,8 +2305,12 @@
         const hasRows = getEntryIdsInTable().some(entryId => hasActiveUnits(entryId));
         const ok = hasRows && validateStock() && validatePrescription();
         const submitBtn = document.getElementById('submitInvoiceBtn');
+        const printBtn = document.getElementById('submitAndPrintBtn');
         if (submitBtn) {
             submitBtn.disabled = !ok;
+        }
+        if (printBtn) {
+            printBtn.disabled = !ok;
         }
     }
 
@@ -3008,6 +3111,20 @@
             if (e.target.id === 'batchPickerModal') closeBatchPicker();
         });
 
+        document.getElementById('invoicePrintCloseBtn')?.addEventListener('click', closeInvoicePrintModal);
+        document.getElementById('invoicePrintDismissBtn')?.addEventListener('click', closeInvoicePrintModal);
+        document.getElementById('invoicePrintBtn')?.addEventListener('click', printInvoicePreview);
+        document.getElementById('invoicePrintModal')?.addEventListener('click', e => {
+            if (e.target.id === 'invoicePrintModal') closeInvoicePrintModal();
+        });
+
+        const invoicePrintFrame = document.getElementById('invoicePrintFrame');
+        if (invoicePrintFrame) {
+            invoicePrintFrame.addEventListener('load', function () {
+                resizeEmbedFrame(invoicePrintFrame);
+            });
+        }
+
         const searchInput = document.getElementById('productSearchInput');
         searchInput.addEventListener('input', function (event) {
             liveSearchProducts(event.target.value);
@@ -3066,6 +3183,23 @@
 
         const invoiceForm = document.getElementById('invoiceCreateForm');
         if (invoiceForm) {
+            const printBasePath = invoiceForm.dataset.invoicePrintBasePath;
+            const params = new URLSearchParams(window.location.search);
+            const printId = params.get('printId');
+            if (printId && printBasePath) {
+                openInvoicePrintModal(printBasePath + '/' + printId + '/print?embed=1');
+                params.delete('printId');
+                const query = params.toString();
+                window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
+            }
+
+            document.getElementById('submitInvoiceBtn')?.addEventListener('click', function () {
+                document.getElementById('printAfterSave').value = 'false';
+            });
+            document.getElementById('submitAndPrintBtn')?.addEventListener('click', function () {
+                document.getElementById('printAfterSave').value = 'true';
+            });
+
             invoiceForm.addEventListener('submit', function (event) {
                 const prescriptionOk = validatePrescription(true);
                 const stockOk = validateStock();

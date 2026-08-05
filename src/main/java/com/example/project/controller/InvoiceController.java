@@ -189,14 +189,19 @@ public class InvoiceController {
 
     @PostMapping({"/owner/selling", "/pharmacist/selling"})
     public String createSale(@ModelAttribute("form") InvoiceCreateRequest form,
+                             @RequestParam(name = "printAfterSave", defaultValue = "false") boolean printAfterSave,
                              HttpServletRequest request,
                              RedirectAttributes redirectAttributes,
                              Model model) {
         try {
-            invoiceService.createSaleInvoice(
+            Integer invoiceId = invoiceService.createSaleInvoice(
                     form, currentUserContext.getCurrentAccountId(), !currentUserContext.isPharmacist());
             redirectAttributes.addFlashAttribute("successMessage", "Đã tạo hóa đơn thành công");
-            return "redirect:" + resolveSellingBasePath(request);
+            String redirectUrl = resolveSellingBasePath(request);
+            if (printAfterSave) {
+                redirectUrl += "?printId=" + invoiceId;
+            }
+            return "redirect:" + redirectUrl;
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             addSellingPageData(request, model);
@@ -238,6 +243,7 @@ public class InvoiceController {
         model.addAttribute("basePath", sellingBasePath);
         model.addAttribute("customerCreateUrl", sellingBasePath + "/customers");
         model.addAttribute("invoicesPath", invoiceListBasePath(request));
+        model.addAttribute("invoicePrintBasePath", invoiceListBasePath(request));
     }
 
     private String resolveSellingBasePath(HttpServletRequest request) {

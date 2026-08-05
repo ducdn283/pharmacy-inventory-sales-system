@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org"
+      th:classappend="${param.embed != null} ? 'embed-preview' : ''">
 
 <head>
     <meta charset="UTF-8">
@@ -13,6 +14,12 @@
             color: #000;
             background: #fff;
             margin: 0;
+        }
+
+        html.embed-preview,
+        html.embed-preview body {
+            overflow: hidden;
+            height: auto;
         }
 
         .no-print {
