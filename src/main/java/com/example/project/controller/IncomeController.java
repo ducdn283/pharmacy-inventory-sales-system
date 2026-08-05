@@ -270,6 +270,22 @@ public class IncomeController {
         }
     }
 
+    @PostMapping({OWNER_BASE + "/{incomeId}/cancel", PHARMACIST_BASE + "/{incomeId}/cancel",
+            ACCOUNTANT_BASE + "/{incomeId}/cancel"})
+    public String cancel(@PathVariable Integer incomeId,
+                         @RequestParam(name = "reason", required = false) String reason,
+                         HttpServletRequest request,
+                         RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+        try {
+            incomeService.cancel(incomeId, reason);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã hủy phiếu thu");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+        }
+        return "redirect:" + basePath + "/" + incomeId;
+    }
+
     private void addCreatePageData(HttpServletRequest request, Model model) {
         IncomeCreateRequest form = (IncomeCreateRequest) model.getAttribute("form");
         model.addAttribute("incomeTypes", incomeService.listIncomeTypes());
