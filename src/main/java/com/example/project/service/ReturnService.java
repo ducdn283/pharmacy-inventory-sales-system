@@ -204,6 +204,7 @@ public class ReturnService {
                 countByStatus(returns, ReturnStatus.DRAFT),
                 countByStatus(returns, ReturnStatus.PENDING),
                 countByStatus(returns, ReturnStatus.DEBT),
+                countByStatus(returns, ReturnStatus.COMPLETED),
                 countByStatus(returns, ReturnStatus.REJECTED));
     }
 
@@ -410,6 +411,9 @@ public class ReturnService {
 
         if (approvedNow) {
             applyReturnEffect(savedReturn, details);
+            // Chốt lại trạng thái sau khi bù trừ công nợ đã ghi: hết nghĩa vụ tiền thì đi thẳng
+            // "Hoàn thành", không phải "Nợ". Xem settledStatusOf().
+            savedReturn.setStatus(settledStatusOf(savedReturn));
         } else if (ReturnStatus.PENDING.equals(
                 savedReturn.getStatus()
         )) {
@@ -463,10 +467,14 @@ public class ReturnService {
     }
 
     private void markApproved(Return ret) {
+        // DEBT là trạng thái TẠM ở đây, chỉ để applyReturnEffect chạy đúng nhánh "đã duyệt".
+        // Trạng thái cuối được chốt lại ngay bên dưới, sau khi bù trừ công nợ đã ghi xong.
         ret.setStatus(ReturnStatus.DEBT);
         ret.setApprovedAt(nowVn());
         returnRepository.save(ret);
         applyReturnEffect(ret, returndetailRepository.findByReturnIdWithRelations(ret.getId()));
+        ret.setStatus(settledStatusOf(ret));
+        returnRepository.save(ret);
     }
 
     /**
@@ -720,9 +728,13 @@ public class ReturnService {
      * tiếp, không suy ra bằng cách SUM lại; lỗi ở bất kỳ bước nào thì rollback cả cụm.
      *
      * <p>Phần còn lại ({@code totalRefund − offsetDebtAmount}) là tiền thật còn phải hoàn khách, do phiếu
-     * chi bên Kế toán chi ra. <strong>TODO:</strong> mục 3.2 còn đòi sinh cặp Income/Expense đối ứng
-     * ({@code paidByCredit = offsetDebtAmount}) — chưa làm vì 2 bảng đó thuộc module Thu/Chi của thành
-     * viên khác. Công nợ đã trừ đúng, chỉ thiếu 2 chứng từ.</p>
+     * chi bên Kế toán chi ra; bằng 0 thì phiếu tất toán ngay (xem {@link #settledStatusOf}).</p>
+     *
+     * <p><strong>KHÔNG sinh cặp Income/Expense cho phần cấn trừ.</strong> Đặc tả bổ sung 27/07 mục 3.2
+     * từng đòi thế, nhưng hồ sơ nghiệp vụ v2 (05/08) sheet 05 đã bỏ hẳn:
+     * <em>"KHÔNG BAO GIỜ tạo Income ở chiều khách hàng — cơ chế bù trừ Income+Expense cũ đã bị THAY THẾ
+     * HOÀN TOÀN bởi cơ chế hóa đơn thay thế"</em>. Phần cấn trừ được thể hiện bằng chính hóa đơn thay
+     * thế, chỉ phần tiền thật chi ra mới thành một phiếu chi.</p>
      */
     private void applyDebtOffset(Return ret, Invoice invoice) {
         BigDecimal offset = computeDebtOffset(invoice, ret.getTotalRefund());
@@ -732,6 +744,36 @@ public class ReturnService {
         }
         invoice.setDebtAmount(nz(invoice.getDebtAmount()).subtract(offset).max(BigDecimal.ZERO));
         invoiceService.persistInvoice(invoice);
+    }
+
+    /**
+     * Tiền thật còn phải hoàn khách sau khi đã cấn trừ vào công nợ hóa đơn gốc. Bằng 0 nghĩa là phiếu
+     * không còn nghĩa vụ tiền nào — công nợ đã nuốt trọn khoản hoàn.
+     *
+     * <p>Chỉ có nghĩa SAU khi {@link #applyDebtOffset} đã chạy; trước đó {@code offsetDebtAmount} mới
+     * là số ước tính lúc lập phiếu.</p>
+     */
+    private BigDecimal cashRefundDue(Return ret) {
+        return nz(ret.getTotalRefund()).subtract(nz(ret.getOffsetDebtAmount())).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Trạng thái của phiếu vừa được duyệt: {@link ReturnStatus#DEBT} nếu còn phải hoàn tiền,
+     * {@link ReturnStatus#COMPLETED} nếu bù trừ công nợ đã nuốt trọn khoản hoàn.
+     *
+     * <p>Hồ sơ nghiệp vụ v2 (05/08) sheet 05 chia làm 3 ca — hoàn &gt; nợ, hoàn &lt; nợ, hoàn = nợ —
+     * nhưng vì {@code offsetDebtAmount = MIN(totalRefund, dư nợ)} nên hai ca sau đều quy về
+     * {@code cashRefundDue == 0}. Một điều kiện là đủ, không cần tách ca.</p>
+     *
+     * <p><strong>Phải gọi SAU {@link #applyReturnEffect}</strong>, vì {@code offsetDebtAmount} chỉ được
+     * chốt theo dư nợ thật bên trong đó. Gọi sớm hơn là đọc phải số ước tính lúc lập phiếu.</p>
+     *
+     * <p>Đây hiện là <strong>đường DUY NHẤT</strong> đưa phiếu vào {@link ReturnStatus#COMPLETED}.
+     * Đường thứ hai — phiếu chi hoàn tiền trả xong thì chuyển tiếp — nằm ở module Thu/Chi và chưa
+     * được nối; xem javadoc của {@link ReturnStatus}.</p>
+     */
+    private String settledStatusOf(Return ret) {
+        return cashRefundDue(ret).signum() > 0 ? ReturnStatus.DEBT : ReturnStatus.COMPLETED;
     }
 
     /** Số lượng của dòng hóa đơn còn CHƯA trả (đã trừ mọi lần trả trước đó). */
@@ -932,6 +974,7 @@ public class ReturnService {
                 // Tổng giá trị gốc 100% của hàng trả, và phần nhà thuốc giữ lại (chênh do tỷ lệ hoàn < 100%).
                 totalOriginalValue,
                 totalOriginalValue.subtract(nz(ret.getTotalRefund())).max(BigDecimal.ZERO),
+                isStatus(statusName, ReturnStatus.COMPLETED),
                 items);
     }
 
@@ -960,7 +1003,14 @@ public class ReturnService {
                 ret.getReturnType(),
                 returnTypeDisplay(ret.getReturnType()),
                 statusName,
-                statusCssClass(statusName));
+                statusCssClass(statusName),
+                isApprovedStatus(statusName),
+                isStatus(statusName, ReturnStatus.COMPLETED));
+    }
+
+    /** Phiếu đã qua bước duyệt — cả "Nợ" (còn phải hoàn) lẫn "Hoàn thành" (đã tất toán). */
+    private boolean isApprovedStatus(String statusName) {
+        return isStatus(statusName, ReturnStatus.DEBT) || isStatus(statusName, ReturnStatus.COMPLETED);
     }
 
     private ReturnDetailItemResponse toDetailItem(Returndetail detail) {
@@ -1329,6 +1379,9 @@ public class ReturnService {
     private String statusCssClass(String statusName) {
         if (isStatus(statusName, ReturnStatus.DEBT)) {
             return "status-debt";
+        }
+        if (isStatus(statusName, ReturnStatus.COMPLETED)) {
+            return "status-completed";
         }
         if (isStatus(statusName, ReturnStatus.REJECTED)) {
             return "status-rejected";

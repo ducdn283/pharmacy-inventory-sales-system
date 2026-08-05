@@ -63,6 +63,7 @@
         .status-pending { background: #fef3c7; color: #d97706; }
         .status-draft { background: #f3f4f6; color: #4b5563; }
         .status-rejected { background: #fee2e2; color: #dc2626; }
+        .status-cancelled { background: #fee2e2; color: #dc2626; }
         .status-default { background: #f3f4f6; color: #4b5563; }
 
         .summary-row {
@@ -416,6 +417,22 @@
                 </div>
 
                 <div class="income-card p-4">
+                    <form th:if="${detail.statusName != 'Đã hủy'}"
+                          th:action="${basePath + '/' + detail.id + '/cancel'}"
+                          method="post"
+                          class="mb-3"
+                          id="cancelForm">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <label class="form-label small mb-1">Lý do hủy (nếu có)</label>
+                        <input type="text" class="form-control form-control-sm mb-2" name="reason"
+                               placeholder="VD: Lập nhầm số tiền">
+                        <button type="submit" class="btn btn-danger w-100"
+                                data-confirm="Bạn có chắc chắn muốn hủy phiếu thu này không? Đây là thao tác sửa lỗi nội bộ, không thể hoàn tác.">
+                            <i class="ti ti-trash me-1"></i>
+                            Hủy phiếu thu
+                        </button>
+                    </form>
+
                     <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
                         <i class="ti ti-arrow-left me-1"></i>
                         Quay lại danh sách

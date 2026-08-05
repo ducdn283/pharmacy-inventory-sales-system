@@ -228,7 +228,7 @@ public class StockadjustmentService {
 
     public Map<String, String> adjustmentTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
-        labels.put(TYPE_DESTROY, "Hủy hàng");
+        labels.put(TYPE_DESTROY, "Hủy hàng (nguyên nhân khách quan)");
         labels.put(TYPE_DESTROY_EMPLOYEE_FAULT, "Hủy hàng (lỗi nhân viên)");
         labels.put("INTERNAL_USE", "Sử dụng nội bộ");
         labels.put("SAMPLE", "Hàng mẫu");
@@ -325,7 +325,9 @@ public class StockadjustmentService {
                 employeeLiable,
                 totalReimbursementValue,
                 linkedIncome != null ? linkedIncome.getId() : null,
-                linkedIncome != null ? linkedIncome.getIncomeCode() : null
+                linkedIncome != null ? linkedIncome.getIncomeCode() : null,
+                cancelBlockedReason(adjustment, statusName, details) == null,
+                cancelBlockedReason(adjustment, statusName, details)
         );
     }
 
@@ -453,7 +455,7 @@ public class StockadjustmentService {
                 // (applyExpiryEffect tự kiểm hạn hiện tại có còn đúng của phiếu này không).
                 applyExpiryEffect(details, true);
             } else {
-                assertBatchesUntouchedSince(adjustment, details);
+                assertReversible(adjustment, details);
                 reverseStockEffect(details);
             }
             // Trả phiếu rà soát kho về "Đã duyệt" để có thể lập lại phiếu điều chỉnh khác cho nó.
@@ -468,9 +470,86 @@ public class StockadjustmentService {
     }
 
     /**
-     * Luật đảo ngược DUY NHẤT (sheet 05): chỉ hủy được phiếu {@code Hoàn thành} khi mọi lô của nó vẫn
-     * y hệt như ngay sau khi phiếu được áp dụng. Kiểm 2 nguồn duy nhất làm đổi tồn: hóa đơn bán và
-     * phiếu điều chỉnh khác (chỉ tính phiếu đang {@code Hoàn thành} — phiếu đã hủy có tác động ròng 0).
+     * Phiếu {@code Hoàn thành} này có được phép đảo ngược không — luật do BA chốt 05/08/2026, thay cho
+     * luật cũ *"chỉ hủy được khi chưa ai động vào lô"* (đặc tả 28/07) vốn áp chung cho mọi loại phiếu.
+     *
+     * <p><strong>Tiêu chí là HÀNG CÒN TỒN TẠI VẬT LÝ hay không</strong>, không phải chiều tăng/giảm:
+     * <ul>
+     *   <li>{@code INTERNAL_USE} / {@code SAMPLE} / {@code GIFT} — hàng chỉ đổi mục đích sử dụng, vẫn
+     *       lấy lại được ⇒ <strong>hủy thoải mái</strong>, không kiểm gì.</li>
+     *   <li>{@code DESTROY} / {@code DESTROY_EMPLOYEE_FAULT} — hàng đã tiêu hủy, không còn trên đời
+     *       ⇒ <strong>KHÔNG BAO GIỜ hủy được</strong>. Cho hủy là ghi lại vào sổ số hàng không tồn tại
+     *       (kho ảo), sau này bán ra mới phát hiện thiếu.</li>
+     *   <li>{@code COUNT} — xét theo DÒNG: dòng <em>giảm</em> là hàng đã thất thoát, cùng bản chất với
+     *       tiêu hủy ⇒ chặn; dòng <em>tăng</em> thì đảo lại là TRỪ kho nên giữ luật cũ
+     *       ({@link #assertBatchesUntouchedSince}).</li>
+     * </ul>
+     *
+     * <p>Một phiếu {@code COUNT} có thể chứa cả hai loại dòng, mà hủy là thao tác <em>nguyên phiếu</em>
+     * (không hủy được nửa phiếu) ⇒ chỉ cần có MỘT dòng giảm là cả phiếu không hủy được.</p>
+     *
+     * <p>{@code DATE_ADJUSTMENT} không đi qua đây — nó không đụng tồn kho, xem {@link #cancel}.</p>
+     */
+    private void assertReversible(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
+        String blocked = typeBlocksReversal(adjustment.getAdjustmentType(), details);
+        if (blocked != null) {
+            throw new IllegalArgumentException(blocked);
+        }
+        if (isCountType(adjustment.getAdjustmentType())) {
+            // Phiếu rà soát toàn dòng TĂNG: đảo ngược sẽ TRỪ kho nên vẫn phải giữ luật cũ.
+            assertBatchesUntouchedSince(adjustment, details);
+        }
+        // INTERNAL_USE / SAMPLE / GIFT: không kiểm gì thêm — hàng vẫn còn, đảo ngược chỉ cộng lại tồn.
+    }
+
+    /** Câu từ chối theo LOẠI phiếu, hoặc {@code null} nếu loại này đảo ngược được. */
+    private String typeBlocksReversal(String type, List<Stockadjustmentdetail> details) {
+        if (TYPE_DESTROY.equals(type) || TYPE_DESTROY_EMPLOYEE_FAULT.equals(type)) {
+            return "Không thể hủy phiếu " + formatAdjustmentType(type)
+                    + ": hàng đã được tiêu hủy nên không thể nhập trở lại kho. "
+                    + "Nếu cần ghi tăng tồn kho, hãy lập một phiếu điều chỉnh mới theo phiếu rà soát kho.";
+        }
+        if (isCountType(type)) {
+            boolean hasDecreaseLine = details.stream().anyMatch(
+                    detail -> !DIRECTION_IN.equals(detail.getDirection())
+                            && !DIRECTION_NONE.equals(detail.getDirection()));
+            if (hasDecreaseLine) {
+                return "Không thể hủy phiếu " + formatAdjustmentType(type)
+                        + ": phiếu có dòng ghi GIẢM tồn kho (hàng đã thất thoát) nên không nhập lại được. "
+                        + "Hãy lập một phiếu điều chỉnh mới nếu số liệu cần sửa.";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Vì sao phiếu này không hủy được — dùng cho MÀN HÌNH, để ẩn nút Hủy kèm lời giải thích thay vì
+     * để người dùng bấm rồi mới ăn lỗi. {@code null} nghĩa là hủy được.
+     *
+     * <p>Chỉ soi phần phụ thuộc LOẠI phiếu. Phiếu rà soát toàn dòng tăng vẫn có thể bị
+     * {@link #assertBatchesUntouchedSince} chặn lúc bấm — điều kiện đó phụ thuộc dữ liệu thay đổi
+     * theo thời gian, đoán trước trên màn hình thì vừa tốn truy vấn vừa dễ lệch với lúc thao tác.</p>
+     */
+    private String cancelBlockedReason(Stockadjustment adjustment, String statusName,
+                                       List<Stockadjustmentdetail> details) {
+        if (!isStatus(statusName, StockAdjustmentStatus.COMPLETED)) {
+            // Phiếu Nháp hủy được vô điều kiện (chưa đụng tồn kho nên không có gì để đảo).
+            return null;
+        }
+        if (TYPE_DATE_ADJUSTMENT.equals(adjustment.getAdjustmentType())) {
+            return null;
+        }
+        return typeBlocksReversal(adjustment.getAdjustmentType(), details);
+    }
+
+    /**
+     * Chỉ hủy được khi mọi lô của phiếu vẫn y hệt như ngay sau khi phiếu được áp dụng. Kiểm 2 nguồn
+     * duy nhất làm đổi tồn: hóa đơn bán và phiếu điều chỉnh khác (chỉ tính phiếu đang
+     * {@code Hoàn thành} — phiếu đã hủy có tác động ròng 0).
+     *
+     * <p>Từ 05/08/2026 luật này <strong>chỉ còn áp cho phiếu rà soát toàn dòng TĂNG</strong>
+     * (xem {@link #assertReversible}), vì chỉ chiều đó mới trừ kho khi đảo ngược. Trước đó nó áp cho
+     * mọi loại phiếu, khiến phiếu biếu tặng / dùng nội bộ lập nhầm cũng không sửa được.</p>
      *
      * <p>"Lô hết hạn không đảo ngược được" chỉ là hệ quả của luật này, không phải luật riêng.
      */
@@ -1514,16 +1593,10 @@ public class StockadjustmentService {
         if (type == null) {
             return "Không rõ";
         }
-        return switch (type) {
-            case TYPE_DESTROY -> "Hủy hàng (nguyên nhân khách quan)";
-            case TYPE_DESTROY_EMPLOYEE_FAULT -> "Hủy hàng (lỗi nhân viên)";
-            case "INTERNAL_USE" -> "Sử dụng nội bộ";
-            case "SAMPLE" -> "Hàng mẫu";
-            case "GIFT" -> "Quà tặng";
-            case "COUNT_INCREASE" -> "Tăng theo rà soát kho";
-            case "COUNT_DECREASE" -> "Giảm theo rà soát kho";
-            default -> type;
-        };
+        // Đọc từ đúng bảng nhãn của bộ lọc — MỘT nguồn sự thật. Trước đây đây là một switch riêng và
+        // nó đã lệch thật: thiếu hẳn COUNT lẫn DATE_ADJUSTMENT nên hai loại đó hiện MÃ THÔ ra màn
+        // danh sách và màn chi tiết, trong khi dropdown lọc ngay cạnh vẫn hiện đúng tiếng Việt.
+        return adjustmentTypeLabels().getOrDefault(type, type);
     }
 
     /** Lô đã quá hạn dùng tính tới hôm nay. Không có HSD (nullable) thì coi như chưa quá hạn. */

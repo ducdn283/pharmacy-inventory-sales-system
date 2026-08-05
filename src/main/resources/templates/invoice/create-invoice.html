@@ -62,10 +62,11 @@
 
         .stock-hint {
             display: block;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 500;
-            line-height: 1.35;
+            line-height: 1.4;
             color: #9ca3af;
+            margin-top: 2px;
         }
 
         .stock-hint:empty {
@@ -73,7 +74,11 @@
         }
 
         .stock-hint.text-danger {
-            color: #dc2626 !important;
+            color: #dc2626;
+        }
+
+        .stock-hint.text-success {
+            color: #059669;
         }
 
         @media (max-width: 991.98px) {
@@ -148,6 +153,309 @@
 
         .customer-picker {
             position: relative;
+        }
+
+        .customer-picker-row {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+        }
+
+        .customer-picker-row .customer-picker {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .customer-add-btn {
+            flex-shrink: 0;
+            width: 40px;
+            min-height: 38px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+
+        .customer-create-success {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: #ecfdf5;
+            border: 1px solid #6ee7b7;
+            color: #047857;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.45;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, .12);
+            animation: customerSuccessIn .28s ease-out;
+        }
+
+        .customer-create-success .ti {
+            font-size: 1.15rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        @keyframes customerSuccessIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .customer-picker-row.is-highlight .customer-picker-trigger {
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .15);
+        }
+
+        .customer-modal.pm-modal-backdrop {
+            align-items: center;
+            padding: 24px 16px;
+            background: rgba(15, 23, 42, .5);
+            backdrop-filter: blur(2px);
+        }
+
+        .customer-modal .pm-modal {
+            max-width: 560px;
+            border-radius: 16px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, .18);
+            overflow: hidden;
+        }
+
+        .customer-modal .pm-modal-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid #eef0f3;
+            background: linear-gradient(180deg, #f0fdf9 0%, #fff 100%);
+        }
+
+        .customer-modal .pm-modal-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .customer-modal .pm-modal-title-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: #059669;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, .25);
+        }
+
+        .customer-modal .pm-modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #111827;
+            line-height: 1.3;
+        }
+
+        .customer-modal .pm-modal-subtitle {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .customer-modal .pm-modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background .15s, color .15s;
+        }
+
+        .customer-modal .pm-modal-close:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .customer-modal .pm-modal-body {
+            padding: 20px 22px;
+            max-height: min(68vh, 620px);
+            overflow-y: auto;
+        }
+
+        .customer-modal .pm-modal-footer {
+            padding: 16px 22px;
+            border-top: 1px solid #eef0f3;
+            background: #fafafa;
+            gap: 10px;
+        }
+
+        .customer-modal .form-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .customer-modal .form-control {
+            min-height: 40px;
+            border-radius: 10px;
+            border-color: #e5e7eb;
+            font-size: 13px;
+            padding: 8px 12px;
+        }
+
+        .customer-modal .form-control:focus {
+            border-color: #6ee7b7;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .12);
+        }
+
+        .customer-modal .form-control::placeholder {
+            color: #9ca3af;
+        }
+
+        .customer-modal textarea.form-control {
+            min-height: 88px;
+            resize: vertical;
+        }
+
+        .customer-modal #customerCreateError {
+            border-radius: 10px;
+            border: none;
+            background: #fef2f2;
+            color: #b91c1c;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .customer-modal .customer-form-section {
+            margin-bottom: 18px;
+        }
+
+        .customer-modal .customer-form-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .customer-type-toggle {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .customer-type-option {
+            flex: 1 1 160px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 14px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 13px;
+            margin: 0;
+            transition: border-color .15s, background .15s, box-shadow .15s;
+        }
+
+        .customer-type-option:hover {
+            border-color: #a7f3d0;
+            background: #fafafa;
+        }
+
+        .customer-type-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .customer-type-option.active {
+            border-color: #059669;
+            background: #f0fdf9;
+            box-shadow: 0 0 0 1px rgba(5, 150, 105, .15);
+        }
+
+        .customer-type-option .type-icon-wrap {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: #ecfdf5;
+            color: #059669;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background .15s, color .15s;
+        }
+
+        .customer-type-option.active .type-icon-wrap {
+            background: #059669;
+            color: #fff;
+        }
+
+        .customer-type-option .ti {
+            font-size: 1.15rem;
+        }
+
+        .customer-type-option .t-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 2px;
+        }
+
+        .customer-type-option .t-desc {
+            font-size: 11.5px;
+            color: #6b7280;
+            line-height: 1.35;
+        }
+
+        .customer-modal .btn-customer-cancel {
+            min-height: 40px;
+            padding: 0 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #4b5563;
+        }
+
+        .customer-modal .btn-customer-cancel:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #111827;
+        }
+
+        .customer-modal .btn-customer-submit {
+            min-height: 40px;
+            padding: 0 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, .2);
+        }
+
+        .customer-modal .btn-customer-submit:hover {
+            box-shadow: 0 6px 16px rgba(5, 150, 105, .28);
+        }
+
+        .customer-modal .invalid-feedback {
+            font-size: 12px;
+        }
+
+        .customer-company-field {
+            display: none;
         }
 
         .customer-picker-trigger {
@@ -490,6 +798,13 @@
             padding: 4px 8px;
         }
 
+        .unit-qty-cell .unit-qty-input.is-invalid {
+            border-color: #f87171;
+            color: #dc2626;
+            box-shadow: none;
+            background-color: #fff;
+        }
+
         .unit-price-cell .form-control[readonly] {
             background: #f9fafb;
             color: #374151;
@@ -708,6 +1023,7 @@
         </div>
 
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+        <div th:replace="~{fragments/toast :: flash}"></div>
 
         <form id="invoiceCreateForm" th:action="${basePath}" th:object="${form}" method="post">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -724,34 +1040,46 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Khách hàng</label>
-                                <div class="customer-picker" id="customerPicker">
-                                    <button type="button"
-                                            class="form-select customer-picker-trigger"
-                                            id="customerPickerTrigger"
-                                            aria-haspopup="listbox"
-                                            aria-expanded="false">
-                                        <i class="ti ti-user customer-picker-icon muted" id="customerPickerIcon"></i>
-                                        <span class="customer-picker-label" id="customerPickerLabel">Khách lẻ</span>
-                                    </button>
-                                    <input type="hidden" th:field="*{customerId}" id="customerId">
-                                    <div class="customer-picker-menu" id="customerPickerMenu" role="listbox">
-                                        <div class="customer-picker-option active"
-                                             data-value=""
-                                             data-label="Khách lẻ"
-                                             data-icon="ti-user"
-                                             data-muted="1">
-                                            <i class="ti ti-user"></i>
-                                            <span>Khách lẻ</span>
-                                        </div>
-                                        <div th:each="customer : ${customers}"
-                                             class="customer-picker-option"
-                                             th:data-value="${customer.id}"
-                                             th:data-label="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"
-                                             th:data-icon="${customer.customerType == 'COMPANY' ? 'ti-building' : 'ti-user'}">
-                                            <i th:class="${customer.customerType == 'COMPANY' ? 'ti ti-building' : 'ti ti-user'}"></i>
-                                            <span th:text="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"></span>
+                                <div class="customer-picker-row">
+                                    <div class="customer-picker" id="customerPicker">
+                                        <button type="button"
+                                                class="form-select customer-picker-trigger"
+                                                id="customerPickerTrigger"
+                                                aria-haspopup="listbox"
+                                                aria-expanded="false">
+                                            <i class="ti ti-user customer-picker-icon muted" id="customerPickerIcon"></i>
+                                            <span class="customer-picker-label" id="customerPickerLabel">Khách lẻ</span>
+                                        </button>
+                                        <input type="hidden" th:field="*{customerId}" id="customerId">
+                                        <div class="customer-picker-menu" id="customerPickerMenu" role="listbox">
+                                            <div class="customer-picker-option active"
+                                                 data-value=""
+                                                 data-label="Khách lẻ"
+                                                 data-icon="ti-user"
+                                                 data-muted="1">
+                                                <i class="ti ti-user"></i>
+                                                <span>Khách lẻ</span>
+                                            </div>
+                                            <div th:each="customer : ${customers}"
+                                                 class="customer-picker-option"
+                                                 th:data-value="${customer.id}"
+                                                 th:data-label="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"
+                                                 th:data-icon="${customer.customerType == 'COMPANY' ? 'ti-building' : 'ti-user'}">
+                                                <i th:class="${customer.customerType == 'COMPANY' ? 'ti ti-building' : 'ti ti-user'}"></i>
+                                                <span th:text="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"></span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <button type="button"
+                                            class="btn btn-outline-success customer-add-btn"
+                                            id="customerAddBtn"
+                                            title="Thêm khách hàng mới">
+                                        <i class="ti ti-plus"></i>
+                                    </button>
+                                </div>
+                                <div id="customerCreateSuccess" class="customer-create-success d-none" role="status" aria-live="polite">
+                                    <i class="ti ti-circle-check"></i>
+                                    <span id="customerCreateSuccessText"></span>
                                 </div>
                             </div>
 
@@ -987,10 +1315,119 @@
     </div>
 </div>
 
+<div class="pm-modal-backdrop customer-modal" id="customerCreateModal">
+    <div class="pm-modal" role="dialog" aria-modal="true" aria-labelledby="customerCreateModalTitle">
+        <div class="pm-modal-header">
+            <div class="pm-modal-title-wrap">
+                <span class="pm-modal-title-icon"><i class="ti ti-user-plus"></i></span>
+                <div>
+                    <div class="pm-modal-title" id="customerCreateModalTitle">Thêm khách hàng mới</div>
+                    <div class="pm-modal-subtitle">Tạo nhanh và chọn ngay trên hóa đơn</div>
+                </div>
+            </div>
+            <button type="button" class="pm-modal-close" id="customerCreateCloseBtn" aria-label="Đóng">&times;</button>
+        </div>
+        <form id="sellCustomerCreateForm" data-validate novalidate>
+            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div class="pm-modal-body">
+                <div id="customerCreateError" class="alert alert-danger py-2 px-3 small d-none" role="alert"></div>
+
+                <div class="customer-form-section">
+                    <label class="form-label">Loại khách hàng <span class="text-danger">*</span></label>
+                    <div class="customer-type-toggle">
+                        <label class="customer-type-option active" id="sellCustOptIndividual">
+                            <input type="radio" name="sellCustomerType" value="INDIVIDUAL" checked>
+                            <span class="type-icon-wrap"><i class="ti ti-user"></i></span>
+                            <span>
+                                <span class="t-title d-block">Cá nhân</span>
+                                <span class="t-desc">Có CCCD/CMND, địa chỉ</span>
+                            </span>
+                        </label>
+                        <label class="customer-type-option" id="sellCustOptCompany">
+                            <input type="radio" name="sellCustomerType" value="COMPANY">
+                            <span class="type-icon-wrap"><i class="ti ti-building"></i></span>
+                            <span>
+                                <span class="t-title d-block">Doanh nghiệp</span>
+                                <span class="t-desc">Có mã số thuế, thông tin ngân hàng</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="customer-form-section">
+                    <label class="form-label" for="sellCustName">Tên khách hàng <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="sellCustName" name="name"
+                           maxlength="100" required placeholder="Nhập tên khách hàng">
+                </div>
+
+                <div class="row g-3 customer-form-section">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="sellCustPhone">Số điện thoại <span class="text-danger">*</span></label>
+                        <input type="tel" class="form-control" id="sellCustPhone" name="phoneNumber"
+                               inputmode="numeric" maxlength="10" data-digits
+                               data-unique-url="/customer/check-duplicate"
+                               data-unique-field="phoneNumber"
+                               data-unique-message="Số điện thoại đã tồn tại trong hệ thống"
+                               pattern="0(2|3|5|7|8|9)[0-9]{8}"
+                               title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
+                               required placeholder="0900000000">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="sellCustTax">
+                            <span id="sellCustTaxLabel">Số CCCD/CMND</span> <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="sellCustTax" name="taxCode"
+                               inputmode="numeric" data-digits="-" maxlength="100" required
+                               data-unique-url="/customer/check-duplicate"
+                               data-unique-field="taxCode"
+                               data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
+                               placeholder="Nhập số CCCD/CMND">
+                    </div>
+                </div>
+
+                <div class="customer-form-section">
+                    <label class="form-label" for="sellCustAddress">Địa chỉ <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="sellCustAddress" name="address"
+                           maxlength="100" required placeholder="Nhập địa chỉ khách hàng">
+                </div>
+
+                <div class="row g-3 customer-form-section customer-company-field" id="sellCustCompanyFields">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="sellCustBankAcc">Số tài khoản ngân hàng <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="sellCustBankAcc" name="bankAccountNumber"
+                               inputmode="numeric" data-digits maxlength="100"
+                               placeholder="Nhập số tài khoản">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="sellCustBankName">Tên ngân hàng <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="sellCustBankName" name="bankName"
+                               maxlength="100" placeholder="Nhập tên ngân hàng">
+                    </div>
+                </div>
+
+                <div class="customer-form-section mb-0">
+                    <label class="form-label" for="sellCustNote">Ghi chú</label>
+                    <textarea class="form-control" id="sellCustNote" name="note" rows="3"
+                              placeholder="Ghi chú thêm về khách hàng (nếu có)"></textarea>
+                </div>
+            </div>
+            <div class="pm-modal-footer">
+                <button type="button" class="btn btn-customer-cancel" id="customerCreateCancelBtn">Hủy</button>
+                <button type="button" class="btn btn-sell-primary btn-customer-submit" id="customerCreateSubmitBtn">
+                    <i class="ti ti-check"></i>
+                    <span>Tạo khách hàng</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script th:inline="javascript">
     const products = /*[[${products}]]*/ [];
     const initialDetails = /*[[${form.details}]]*/ [];
     const debtAllowed = /*[[${debtAllowed}]]*/ true;
+    const sellingBasePath = /*[[${basePath}]]*/ '/owner/selling';
+    const customerCreateUrl = /*[[${customerCreateUrl}]]*/ '/owner/selling/customers';
     const productById = {};
     products.forEach(p => productById[p.productId] = p);
 
@@ -1504,6 +1941,23 @@
     }
 
     /** Validates one entry (one batch line) against stock. */
+    function renderStockHint(hint, mode, stockLimit, baseName) {
+        if (!hint) return;
+        hint.classList.remove('text-danger', 'text-success');
+        const unitSuffix = baseName ? ' ' + escapeHtml(baseName) : '';
+        if (mode === 'error') {
+            hint.classList.add('text-danger');
+            hint.innerHTML = '<i class="ti ti-alert-triangle"></i> Vượt tồn lô! Còn '
+                + stockLimit + unitSuffix;
+        } else if (mode === 'ok') {
+            hint.classList.add('text-success');
+            hint.innerHTML = '<i class="ti ti-package"></i> Có thể bán: '
+                + stockLimit + unitSuffix;
+        } else {
+            hint.innerHTML = '';
+        }
+    }
+
     function validateEntryRow(entryId) {
         const productId = getEntryProductId(entryId);
         const product = productById[productId];
@@ -1538,22 +1992,15 @@
                 }
             });
             if (hint) {
-                hint.classList.add('text-danger');
-                hint.style.display = 'inline-flex';
-                hint.innerHTML = '<i class="ti ti-alert-triangle"></i> Vượt tồn lô! Còn '
-                    + stockLimit + (baseName ? ' ' + escapeHtml(baseName) : '');
+                renderStockHint(hint, 'error', stockLimit, baseName);
             }
         } else {
             rows.forEach(row => row.querySelector('.unit-qty-input').classList.remove('is-invalid'));
             if (hint) {
-                hint.classList.remove('text-danger');
                 if (hasBatch) {
-                    hint.style.display = 'none';
-                    hint.innerHTML = '';
+                    renderStockHint(hint, 'hide');
                 } else {
-                    hint.style.display = 'inline-flex';
-                    hint.innerHTML = '<i class="ti ti-package"></i> Có thể bán: '
-                        + stockLimit + (baseName ? ' ' + escapeHtml(baseName) : '');
+                    renderStockHint(hint, 'ok', stockLimit, baseName);
                 }
             }
         }
@@ -1939,6 +2386,275 @@
         return isWalkInCustomer() || !debtAllowed;
     }
 
+    let selectCustomerById = null;
+
+    function customerOptionLabel(name, phoneNumber) {
+        return phoneNumber ? name + ' - ' + phoneNumber : name;
+    }
+
+    function appendCustomerOption(customer) {
+        const menu = document.getElementById('customerPickerMenu');
+        if (!menu || !customer || customer.id == null) {
+            return;
+        }
+        if (menu.querySelector('.customer-picker-option[data-value="' + customer.id + '"]')) {
+            return;
+        }
+        const isCompany = customer.customerType === 'COMPANY';
+        const icon = isCompany ? 'ti-building' : 'ti-user';
+        const label = customerOptionLabel(customer.name || '', customer.phoneNumber || '');
+        const option = document.createElement('div');
+        option.className = 'customer-picker-option';
+        option.dataset.value = String(customer.id);
+        option.dataset.label = label;
+        option.dataset.icon = icon;
+        option.innerHTML = '<i class="ti ' + icon + '"></i><span>' + escapeHtml(label) + '</span>';
+        menu.appendChild(option);
+    }
+
+    let customerCreateSuccessTimer = null;
+
+    function showCustomerCreateSuccess(message) {
+        const box = document.getElementById('customerCreateSuccess');
+        const text = document.getElementById('customerCreateSuccessText');
+        const pickerRow = document.querySelector('.customer-picker-row');
+        if (!box || !text) {
+            return;
+        }
+        text.textContent = message;
+        box.classList.remove('d-none');
+        if (pickerRow) {
+            pickerRow.classList.add('is-highlight');
+        }
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (customerCreateSuccessTimer) {
+            clearTimeout(customerCreateSuccessTimer);
+        }
+        customerCreateSuccessTimer = setTimeout(function () {
+            box.classList.add('d-none');
+            if (pickerRow) {
+                pickerRow.classList.remove('is-highlight');
+            }
+        }, 6000);
+    }
+
+    function readCsrfHeader() {
+        const input = document.querySelector('#sellCustomerCreateForm input[name="_csrf"]')
+            || document.querySelector('#invoiceCreateForm input[name="_csrf"]');
+        if (!input) {
+            return {};
+        }
+        return { 'X-CSRF-TOKEN': input.value };
+    }
+
+    function applySellCustomerTypeFields() {
+        const isCompany = document.querySelector('input[name="sellCustomerType"]:checked')?.value === 'COMPANY';
+        document.getElementById('sellCustOptIndividual')?.classList.toggle('active', !isCompany);
+        document.getElementById('sellCustOptCompany')?.classList.toggle('active', isCompany);
+        const taxLabel = document.getElementById('sellCustTaxLabel');
+        const taxInput = document.getElementById('sellCustTax');
+        const companyFields = document.getElementById('sellCustCompanyFields');
+        const bankAcc = document.getElementById('sellCustBankAcc');
+        const bankName = document.getElementById('sellCustBankName');
+        if (taxLabel) {
+            taxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND';
+        }
+        if (taxInput) {
+            taxInput.placeholder = isCompany ? 'Nhập mã số thuế' : 'Nhập số CCCD/CMND';
+        }
+        if (companyFields) {
+            companyFields.style.display = isCompany ? 'flex' : 'none';
+        }
+        if (bankAcc) {
+            if (isCompany) {
+                bankAcc.setAttribute('required', 'required');
+            } else {
+                bankAcc.removeAttribute('required');
+                clearCustomerFieldValidation(bankAcc);
+            }
+        }
+        if (bankName) {
+            if (isCompany) {
+                bankName.setAttribute('required', 'required');
+            } else {
+                bankName.removeAttribute('required');
+                clearCustomerFieldValidation(bankName);
+            }
+        }
+        updateSellCustomerTaxValidation(isCompany);
+    }
+
+    function updateSellCustomerTaxValidation(isCompany) {
+        const taxInput = document.getElementById('sellCustTax');
+        if (!taxInput) {
+            return;
+        }
+        if (isCompany) {
+            taxInput.setAttribute('pattern', '[0-9]{10}(-[0-9]{3})?');
+            taxInput.setAttribute('title', 'Mã số thuế phải gồm 10 chữ số (hoặc 10 chữ số - 3 chữ số chi nhánh)');
+        } else {
+            taxInput.setAttribute('pattern', '([0-9]{9}|[0-9]{12})');
+            taxInput.setAttribute('title', 'Số CCCD/CMND phải gồm 12 chữ số (CCCD) hoặc 9 chữ số (CMND)');
+        }
+    }
+
+    function clearCustomerFieldValidation(control) {
+        if (!control) {
+            return;
+        }
+        control.classList.remove('is-invalid');
+        control.removeAttribute('aria-invalid');
+        control.removeAttribute('data-unique-duplicate');
+        let sibling = control.nextElementSibling;
+        while (sibling) {
+            if (sibling.hasAttribute('data-field-feedback') || sibling.hasAttribute('data-unique-feedback')) {
+                sibling.textContent = '';
+                sibling.style.display = 'none';
+            }
+            sibling = sibling.nextElementSibling;
+        }
+    }
+
+    function clearCustomerCreateValidation() {
+        const form = document.getElementById('sellCustomerCreateForm');
+        if (!form) {
+            return;
+        }
+        form.querySelectorAll('input, textarea').forEach(clearCustomerFieldValidation);
+    }
+
+    function resetCustomerCreateForm() {
+        document.getElementById('sellCustName').value = '';
+        document.getElementById('sellCustPhone').value = '';
+        document.getElementById('sellCustTax').value = '';
+        document.getElementById('sellCustAddress').value = '';
+        document.getElementById('sellCustBankAcc').value = '';
+        document.getElementById('sellCustBankName').value = '';
+        document.getElementById('sellCustNote').value = '';
+        const individual = document.querySelector('input[name="sellCustomerType"][value="INDIVIDUAL"]');
+        if (individual) {
+            individual.checked = true;
+        }
+        applySellCustomerTypeFields();
+        clearCustomerCreateValidation();
+        const errorBox = document.getElementById('customerCreateError');
+        if (errorBox) {
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+        }
+    }
+
+    function openCustomerCreateModal() {
+        resetCustomerCreateForm();
+        document.getElementById('customerCreateModal')?.classList.add('open');
+    }
+
+    function closeCustomerCreateModal() {
+        document.getElementById('customerCreateModal')?.classList.remove('open');
+    }
+
+    async function submitCustomerCreateModal() {
+        const form = document.getElementById('sellCustomerCreateForm');
+        if (!form) {
+            return;
+        }
+
+        const duplicateInput = form.querySelector('input[data-unique-duplicate="true"]');
+        if (duplicateInput) {
+            duplicateInput.focus();
+            duplicateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        const errorBox = document.getElementById('customerCreateError');
+        const submitBtn = document.getElementById('customerCreateSubmitBtn');
+        const customerType = document.querySelector('input[name="sellCustomerType"]:checked')?.value || 'INDIVIDUAL';
+        const payload = {
+            customerType: customerType,
+            name: document.getElementById('sellCustName').value.trim(),
+            phoneNumber: document.getElementById('sellCustPhone').value.trim(),
+            taxCode: document.getElementById('sellCustTax').value.trim(),
+            address: document.getElementById('sellCustAddress').value.trim(),
+            bankAccountNumber: document.getElementById('sellCustBankAcc').value.trim(),
+            bankName: document.getElementById('sellCustBankName').value.trim(),
+            note: document.getElementById('sellCustNote').value.trim()
+        };
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+        if (errorBox) {
+            errorBox.classList.add('d-none');
+        }
+
+        try {
+            const response = await fetch(customerCreateUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    ...readCsrfHeader()
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = data.message || data.error || ('Không thể tạo khách hàng (HTTP ' + response.status + ')');
+                throw new Error(message);
+            }
+            appendCustomerOption(data);
+            if (selectCustomerById) {
+                selectCustomerById(String(data.id));
+            }
+            closeCustomerCreateModal();
+            const customerLabel = (data.name || payload.name || '').trim();
+            const successMessage = customerLabel
+                ? 'Đã thêm mới khách hàng "' + customerLabel + '" và chọn trên hóa đơn'
+                : 'Đã thêm mới khách hàng thành công';
+            showCustomerCreateSuccess(successMessage);
+        } catch (error) {
+            if (errorBox) {
+                errorBox.textContent = error.message || 'Không thể tạo khách hàng';
+                errorBox.classList.remove('d-none');
+            }
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+            }
+        }
+    }
+
+    function initCustomerCreateModal() {
+        document.getElementById('customerAddBtn')?.addEventListener('click', openCustomerCreateModal);
+        document.getElementById('customerCreateCloseBtn')?.addEventListener('click', closeCustomerCreateModal);
+        document.getElementById('customerCreateCancelBtn')?.addEventListener('click', closeCustomerCreateModal);
+        document.getElementById('customerCreateSubmitBtn')?.addEventListener('click', function () {
+            const form = document.getElementById('sellCustomerCreateForm');
+            if (!form) {
+                return;
+            }
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+            } else {
+                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            }
+        });
+        document.getElementById('sellCustomerCreateForm')?.addEventListener('submit', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            submitCustomerCreateModal();
+        });
+        document.getElementById('customerCreateModal')?.addEventListener('click', function (event) {
+            if (event.target.id === 'customerCreateModal') {
+                closeCustomerCreateModal();
+            }
+        });
+        document.querySelectorAll('input[name="sellCustomerType"]').forEach(function (radio) {
+            radio.addEventListener('change', applySellCustomerTypeFields);
+        });
+        applySellCustomerTypeFields();
+    }
+
     function initCustomerPicker() {
         const picker = document.getElementById('customerPicker');
         const trigger = document.getElementById('customerPickerTrigger');
@@ -1984,6 +2700,8 @@
         if (hidden.value) {
             setSelection(hidden.value);
         }
+
+        selectCustomerById = setSelection;
 
         trigger.addEventListener('click', function (event) {
             event.preventDefault();
@@ -2261,6 +2979,7 @@
         }
         toggleEmptyState();
         initCustomerPicker();
+        initCustomerCreateModal();
         calculateSummary();
 
         document.getElementById('batchPickerCloseBtn').addEventListener('click', closeBatchPicker);
@@ -2352,6 +3071,10 @@
         }
     });
 </script>
+
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
+<div th:replace="~{fragments/unique-check :: uniqueChecks}"></div>
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
 </body>
 </html>

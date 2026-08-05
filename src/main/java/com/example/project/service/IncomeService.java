@@ -63,6 +63,7 @@ public class IncomeService {
     private static final String STATUS_COMPLETED = "Hoàn thành";
     private static final String STATUS_COMPLETED_LEGACY = "Duyệt";
     private static final String STATUS_REJECTED = "Từ chối";
+    private static final String STATUS_CANCELLED = "Đã hủy";
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
@@ -167,7 +168,7 @@ public class IncomeService {
 
     @Transactional(readOnly = true)
     public List<String> listStatuses() {
-        return List.of(STATUS_DRAFT, STATUS_PENDING, STATUS_COMPLETED, STATUS_REJECTED);
+        return List.of(STATUS_DRAFT, STATUS_PENDING, STATUS_COMPLETED, STATUS_REJECTED, STATUS_CANCELLED);
     }
 
     @Transactional(readOnly = true)
@@ -424,6 +425,45 @@ public class IncomeService {
         creditFundOnCompletion(saved);
 
         return saved.getId();
+    }
+
+    /**
+     * Internal correction for a wrongly-entered slip — same spirit as
+     * {@code ExpenseService.cancel()}: marks the record void and gives the money back to the linked
+     * document.
+     *
+     * <p><strong>A completed slip can still be cancelled.</strong> Income slips cannot be edited after
+     * creation, so cancellation is the only correction path for a mis-keyed slip.</p>
+     */
+    @Transactional
+    public void cancel(Integer incomeId, String reason) {
+        Income income = incomeRepository.findByIdWithRelations(incomeId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu thu"));
+
+        if (isStatus(income.getStatus(), STATUS_CANCELLED)) {
+            throw new IllegalArgumentException("Phiếu thu này đã bị hủy trước đó");
+        }
+
+        boolean wasCompleted = isCompletedStatus(income.getStatus());
+        if (wasCompleted && IncomeTypeOptionResponse.CUSTOMER.equals(resolveIncomeType(income))) {
+            reverseCustomerDebtPayment(income);
+        }
+        if (wasCompleted) {
+            financialsettingService.applyFundDelta(
+                    nullToZero(income.getPaidByCash()).negate(),
+                    nullToZero(income.getPaidByBanking()).negate());
+        }
+
+        income.setStatus(STATUS_CANCELLED);
+        String trimmedReason = trimToNull(reason);
+        if (trimmedReason != null) {
+            String existingNote = income.getNote();
+            income.setNote(existingNote == null || existingNote.isBlank()
+                    ? "Lý do hủy: " + trimmedReason
+                    : existingNote + " | Lý do hủy: " + trimmedReason);
+        }
+
+        incomeRepository.save(income);
     }
 
     /** Cộng tiền mặt / chuyển khoản vào quỹ khi phiếu thu đã hoàn thành (không áp dụng cấn trừ công nợ). */
@@ -706,12 +746,18 @@ public class IncomeService {
         if (isCompletedStatus(status)) {
             return STATUS_COMPLETED;
         }
+        if (isStatus(status, STATUS_CANCELLED)) {
+            return STATUS_CANCELLED;
+        }
         return status;
     }
 
     private String statusCssClass(String statusName) {
         if (isCompletedStatus(statusName)) {
             return "status-completed";
+        }
+        if (isStatus(statusName, STATUS_CANCELLED)) {
+            return "status-cancelled";
         }
         if (isStatus(statusName, STATUS_REJECTED)) {
             return "status-rejected";
@@ -1055,6 +1101,8 @@ public class IncomeService {
 
     private Set<Integer> linkedStockAdjustmentIds() {
         return incomeRepository.findAllWithRelations().stream()
+                .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED)
+                        && !isStatus(income.getStatus(), STATUS_CANCELLED))
                 .map(Income::getStockAdjustmentID)
                 .filter(Objects::nonNull)
                 .map(Stockadjustment::getId)
@@ -1162,7 +1210,8 @@ public class IncomeService {
 
     private Set<Integer> linkedShiftReportOfAccountIds() {
         return incomeRepository.findAllWithRelations().stream()
-                .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED))
+                .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED)
+                        && !isStatus(income.getStatus(), STATUS_CANCELLED))
                 .map(Income::getShiftReportOfAccountID)
                 .filter(Objects::nonNull)
                 .map(Shiftreport::getId)
@@ -1203,6 +1252,26 @@ public class IncomeService {
             throw new IllegalArgumentException(
                     "Số tiền thu không được vượt quá số tiền nợ (" + formatMoney(debt) + ")");
         }
+    }
+
+    /** Restores the linked sales invoice debt when a completed customer debt-collection income is cancelled. */
+    private void reverseCustomerDebtPayment(Income income) {
+        if (income.getInvoiceID() == null || income.getAmount() == null) {
+            return;
+        }
+        Invoice invoice = invoiceRepository.findById(income.getInvoiceID().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn bán hàng"));
+
+        BigDecimal payment = income.getAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cash = nullToZero(income.getPaidByCash());
+        BigDecimal banking = nullToZero(income.getPaidByBanking());
+
+        invoice.setPaidByCash(nullToZero(invoice.getPaidByCash()).subtract(cash).max(BigDecimal.ZERO));
+        invoice.setPaidByBanking(nullToZero(invoice.getPaidByBanking()).subtract(banking).max(BigDecimal.ZERO));
+        BigDecimal newDebt = nullToZero(invoice.getDebtAmount()).add(payment);
+        invoice.setDebtAmount(newDebt);
+        invoice.setStatus(newDebt.compareTo(BigDecimal.ZERO) > 0 ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
+        invoiceService.persistInvoice(invoice);
     }
 
     /** Reduces the linked sales invoice debt when a customer debt-collection income is submitted. */
