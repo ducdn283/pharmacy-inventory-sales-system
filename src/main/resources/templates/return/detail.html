@@ -54,6 +54,7 @@
         .status-draft { background: #f3f4f6; color: #4b5563; }
         .status-pending { background: #fef3c7; color: #d97706; }
         .status-debt { background: #dbeafe; color: #2563eb; }
+        .status-completed { background: #dcfce7; color: #16a34a; }
         .status-rejected { background: #fee2e2; color: #dc2626; }
         .status-default { background: #f3f4f6; color: #4b5563; }
 
@@ -270,8 +271,10 @@
                             </tr>
                             <tr class="fw-semibold"
                                 th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
-                                <td colspan="8">Còn phải hoàn khách (tiền thật)</td>
-                                <td class="text-warning"
+                                <td colspan="8"
+                                    th:text="${detail.settled} ? 'Đã hoàn khách (tiền thật)'
+                                            : 'Còn phải hoàn khách (tiền thật)'">Còn phải hoàn khách (tiền thật)</td>
+                                <td th:classappend="${detail.settled} ? 'text-success' : 'text-warning'"
                                     th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</td>
                                 <td></td>
                             </tr>
@@ -336,8 +339,11 @@
                         </div>
 
                         <div class="d-flex justify-content-between mt-2">
-                            <span class="text-secondary">Còn phải hoàn khách (tiền thật)</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
+                            <span class="text-secondary"
+                                  th:text="${detail.settled} ? 'Đã hoàn khách (tiền thật)'
+                                          : 'Còn phải hoàn khách (tiền thật)'">Còn phải hoàn khách (tiền thật)</span>
+                            <strong th:classappend="${detail.settled} ? 'text-success' : ''"
+                                    th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
                         </div>
 
                         <!-- Phiếu trả KHÔNG còn kê thuế. Hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ %
