@@ -768,12 +768,42 @@ public class ReturnService {
      * <p><strong>Phải gọi SAU {@link #applyReturnEffect}</strong>, vì {@code offsetDebtAmount} chỉ được
      * chốt theo dư nợ thật bên trong đó. Gọi sớm hơn là đọc phải số ước tính lúc lập phiếu.</p>
      *
-     * <p>Đây hiện là <strong>đường DUY NHẤT</strong> đưa phiếu vào {@link ReturnStatus#COMPLETED}.
-     * Đường thứ hai — phiếu chi hoàn tiền trả xong thì chuyển tiếp — nằm ở module Thu/Chi và chưa
-     * được nối; xem javadoc của {@link ReturnStatus}.</p>
+     * <p>Đây là đường THỨ NHẤT đưa phiếu vào {@link ReturnStatus#COMPLETED} — chạy ngay lúc duyệt, khi
+     * bù trừ công nợ nuốt trọn khoản hoàn. Đường thứ hai — phiếu chi hoàn tiền trả xong thì chuyển
+     * tiếp — xem {@link #syncStatusAfterRefundPayment(Integer)}.</p>
      */
     private String settledStatusOf(Return ret) {
         return cashRefundDue(ret).signum() > 0 ? ReturnStatus.DEBT : ReturnStatus.COMPLETED;
+    }
+
+    /**
+     * Đường THỨ HAI vào {@link ReturnStatus#COMPLETED}: được {@code ExpenseService.confirmPayment()}
+     * gọi ngay khi một phiếu chi {@code RETURN_REFUND_PAYOUT} vừa thực chi thật — nối nốt phần mà
+     * javadoc của {@link ReturnStatus} từng đánh dấu "chưa làm, chờ module Thu/Chi tự nối".
+     *
+     * <p>Chỉ chuyển {@link ReturnStatus#DEBT} → {@link ReturnStatus#COMPLETED} khi tổng các phiếu chi
+     * ĐÃ THỰC CHI ({@code ExpenseService.disbursedRefundAmount()}) phủ hết {@link #cashRefundDue}.
+     * Cố ý dùng "đã thực chi", không dùng "đã cam kết" ({@code committedByReturnId()}/
+     * {@code outstandingRefundByReturnId()}) — nếu không phiếu trả sẽ tất toán ngay lúc phiếu chi
+     * được TẠO, trước cả khi Owner xác nhận thanh toán.</p>
+     *
+     * <p>No-op cho một phiếu không ở {@link ReturnStatus#DEBT} (đã tất toán sẵn, còn Nháp/Chờ duyệt,
+     * bị Từ chối…) — không có gì để đồng bộ.</p>
+     */
+    @Transactional
+    public void syncStatusAfterRefundPayment(Integer returnId) {
+        if (returnId == null) {
+            return;
+        }
+        Return ret = returnRepository.findById(returnId).orElse(null);
+        if (ret == null || !ReturnStatus.DEBT.equals(ret.getStatus())) {
+            return;
+        }
+        BigDecimal stillOwed = cashRefundDue(ret).subtract(expenseService.disbursedRefundAmount(returnId));
+        if (stillOwed.compareTo(BigDecimal.ZERO) <= 0) {
+            ret.setStatus(ReturnStatus.COMPLETED);
+            returnRepository.save(ret);
+        }
     }
 
     /** Số lượng của dòng hóa đơn còn CHƯA trả (đã trừ mọi lần trả trước đó). */

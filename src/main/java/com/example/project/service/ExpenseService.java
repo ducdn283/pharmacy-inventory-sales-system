@@ -22,6 +22,7 @@ import com.example.project.repository.AccountRepository;
 import com.example.project.repository.AccountpermissionRepository;
 import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.ReturnRepository;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -108,6 +109,9 @@ public class ExpenseService {
     private final ShiftreportService shiftreportService;
     private final WorkflowNotificationService workflowNotificationService;
     private final FinancialsettingService financialsettingService;
+    // @Lazy vì ReturnService đã inject ExpenseService (chiều ngược) — cần phá vòng lặp bean. Chỉ
+    // dùng ở confirmPayment() để báo ReturnService đồng bộ lại trạng thái sau khi tiền thực chi.
+    private final ReturnService returnService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
@@ -116,7 +120,8 @@ public class ExpenseService {
                           PurchaseinvoiceService purchaseinvoiceService,
                           ShiftreportService shiftreportService,
                           WorkflowNotificationService workflowNotificationService,
-                          FinancialsettingService financialsettingService) {
+                          FinancialsettingService financialsettingService,
+                          @Lazy ReturnService returnService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
@@ -125,6 +130,7 @@ public class ExpenseService {
         this.shiftreportService = shiftreportService;
         this.workflowNotificationService = workflowNotificationService;
         this.financialsettingService = financialsettingService;
+        this.returnService = returnService;
     }
 
     // ------------------------------------------------------------------ generated-REST passthrough
@@ -293,6 +299,28 @@ public class ExpenseService {
             }
         }
         return result;
+    }
+
+    /**
+     * Tổng tiền các phiếu chi RETURN_REFUND_PAYOUT đã THỰC CHI ({@link ExpenseStatus#COMPLETED}) cho
+     * một phiếu trả — dùng bởi {@code ReturnService.syncStatusAfterRefundPayment()} để biết khi nào
+     * phiếu trả đã được hoàn ĐỦ tiền thật. Khác {@link #committedByReturnId()} (đếm cả phiếu mới chỉ
+     * CAM KẾT — DRAFT/PENDING/AWAITING_PAYMENT — chưa chắc tiền đã rời quỹ): dùng con số đó ở đây sẽ
+     * chuyển phiếu trả sang Hoàn thành ngay khi phiếu chi được TẠO, trước cả khi Owner xác nhận
+     * thanh toán.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal disbursedRefundAmount(Integer returnId) {
+        if (returnId == null) {
+            return BigDecimal.ZERO;
+        }
+        return expenseRepository.findAll().stream()
+                .filter(expense -> ExpenseStatus.COMPLETED.equals(expense.getStatus()))
+                .filter(expense -> expense.getReturnID() != null
+                        && returnId.equals(expense.getReturnID().getId()))
+                .map(Expense::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
@@ -664,7 +692,9 @@ public class ExpenseService {
      * (Accountant included): {@code ExpensePageController} only maps this route under
      * {@code /owner/**}, matching approve/reject. This is the single choke point that pushes money
      * onto a linked purchase invoice, debits the financial-setting fund and stamps the shift — none
-     * of that happens at approval any more.
+     * of that happens at approval any more. For a {@link ExpenseType#RETURN_REFUND_PAYOUT} slip, this
+     * is also the point that syncs the linked {@code Return}'s status back —
+     * see {@link ReturnService#syncStatusAfterRefundPayment(Integer)}.
      */
     @Transactional
     public void confirmPayment(Integer expenseId) {
@@ -687,6 +717,13 @@ public class ExpenseService {
                 nullToZero(expense.getPaidByBanking()).negate());
         attachOpenShift(expense, applicantIdOf(expense));
         expenseRepository.save(expense);
+
+        // Đường thứ hai vào ReturnStatus.COMPLETED (xem javadoc của ReturnStatus): phiếu chi hoàn
+        // tiền vừa thực chi xong, báo ReturnService tự kiểm và tất toán phiếu trả nếu không còn nợ.
+        // No-op cho mọi loại phiếu chi khác (getReturnID() luôn null ngoài RETURN_REFUND_PAYOUT).
+        if (expense.getReturnID() != null) {
+            returnService.syncStatusAfterRefundPayment(expense.getReturnID().getId());
+        }
     }
 
     /** Người LẬP phiếu — xem {@link #attachOpenShift}. */
