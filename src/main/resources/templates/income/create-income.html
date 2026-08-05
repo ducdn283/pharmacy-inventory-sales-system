@@ -333,6 +333,22 @@
             overflow-wrap: anywhere;
         }
 
+        .batch-cell {
+            line-height: 1.35;
+        }
+
+        .batch-code {
+            font-size: 12px;
+            font-weight: 600;
+            color: #059669;
+        }
+
+        .batch-hsd {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
         @media (max-width: 991.98px) {
             .income-page-content {
                 padding-top: 84px !important;
@@ -1574,14 +1590,14 @@
 
         document.getElementById('referenceItemsHead').innerHTML =
             '<tr>'
-            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Lô</th><th>HSD</th>'
+            + '<th>Mã hàng</th><th>Tên hàng hóa</th><th>Mã lô</th>'
             + '<th>Đơn vị</th><th>SL</th><th>Giá bán</th><th class="text-end">Thành tiền</th>'
             + '</tr>';
 
         const items = detail.items || [];
         if (!items.length) {
             document.getElementById('referenceItemsBody').innerHTML =
-                '<tr><td colspan="8" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
+                '<tr><td colspan="7" class="text-center text-secondary py-4">Không có hàng hóa</td></tr>';
             return;
         }
 
@@ -1589,8 +1605,7 @@
             return '<tr>'
                 + '<td class="fw-semibold text-success">' + escapeHtml(item.productCode || item.productId) + '</td>'
                 + '<td>' + escapeHtml(item.productName) + '</td>'
-                + '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(item.lotNumber || '—') + '</span></td>'
-                + '<td>' + escapeHtml(item.expirationDateDisplay || '—') + '</td>'
+                + '<td>' + renderInvoiceBatchCell(item) + '</td>'
                 + '<td>' + escapeHtml(item.unitName || '—') + '</td>'
                 + '<td>' + escapeHtml(item.quantity) + '</td>'
                 + '<td>' + formatMoney(item.unitSellPrice) + '</td>'
@@ -1598,7 +1613,7 @@
                 + '</tr>';
         }).join('');
         bodyHtml += '<tr class="fw-semibold">'
-            + '<td colspan="7">Tổng cộng</td>'
+            + '<td colspan="6">Tổng cộng</td>'
             + '<td class="text-end text-success">' + formatMoney(detail.total) + '</td>'
             + '</tr>';
         document.getElementById('referenceItemsBody').innerHTML = bodyHtml;
@@ -2010,6 +2025,46 @@
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
+    }
+
+    function invoiceBatchCode(item) {
+        const label = item.batchLabel || '';
+        const sep = ' - ';
+        const idx = label.indexOf(sep);
+        if (idx >= 0) {
+            return label.substring(0, idx);
+        }
+        return item.batchCode || label || '';
+    }
+
+    function invoiceBatchHsd(item) {
+        if (item.expirationDateDisplay) {
+            return item.expirationDateDisplay;
+        }
+        const label = item.batchLabel || '';
+        const sep = ' - ';
+        const idx = label.indexOf(sep);
+        if (idx >= 0) {
+            return label.substring(idx + sep.length);
+        }
+        return '';
+    }
+
+    function renderInvoiceBatchCell(item) {
+        const code = invoiceBatchCode(item);
+        const hsd = invoiceBatchHsd(item);
+        if (!code && !hsd) {
+            return '—';
+        }
+        let html = '<div class="batch-cell">';
+        if (code) {
+            html += '<div class="batch-code">' + escapeHtml(code) + '</div>';
+        }
+        if (hsd) {
+            html += '<div class="batch-hsd">HSD ' + escapeHtml(hsd) + '</div>';
+        }
+        html += '</div>';
+        return html;
     }
 
     function customerLabel(item) {

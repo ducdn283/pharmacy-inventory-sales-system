@@ -1,5 +1,6 @@
 package com.example.project.service;
 
+import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
@@ -80,7 +81,9 @@ public class InvoiceService {
     private static final String STATUS_SIGNED = "Đã ký";
     private static final String STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
+    private static final String RETAIL_BUYER_PRINT_LABEL = "Bán cho người tiêu dùng";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private static final String[] MONEY_WORD_DIGITS = {
             "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"
     };
@@ -94,6 +97,7 @@ public class InvoiceService {
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
     private final FinancialsettingService financialsettingService;
+    private final TaxperiodsnapshotService taxperiodsnapshotService;
     private final ReturnRepository returnRepository;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
@@ -109,6 +113,7 @@ public class InvoiceService {
                           AccountRepository accountRepository,
                           FinancialsettingRepository financialsettingRepository,
                           FinancialsettingService financialsettingService,
+                          TaxperiodsnapshotService taxperiodsnapshotService,
                           ReturnRepository returnRepository,
                           ShiftreportService shiftreportService) {
         this.invoiceRepository = invoiceRepository;
@@ -120,6 +125,7 @@ public class InvoiceService {
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.financialsettingService = financialsettingService;
+        this.taxperiodsnapshotService = taxperiodsnapshotService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
     }
@@ -646,8 +652,10 @@ public class InvoiceService {
                     "Hai ký tự cuối của ký hiệu mẫu số hóa đơn phải là chữ cái (VD: AA, YY)");
         }
 
-        // '2' = mẫu hóa đơn bán hàng thông thường.
-        char kindPrefix = '2';
+        // '1' = GTGT (Nhóm 3+); '2' = bán hàng thông thường (Nhóm 1–2).
+        Integer revenueGroup = taxperiodsnapshotService.groupForPeriod(
+                TaxperiodsnapshotService.quarterOf(date));
+        char kindPrefix = TaxRevenueGroup.isDeductionGroup(revenueGroup) ? '1' : '2';
         String yearPart = String.format("%02d", date.getYear() % 100);
         return kindPrefix + "K" + yearPart + "M" + sellerSuffix;
     }
@@ -842,20 +850,12 @@ public class InvoiceService {
         String buyerCompanyName;
         String buyerTaxCode;
         String buyerAddress;
-        if (customer == null) {
-            buyerCompanyName = "Khách lẻ không lấy hóa đơn";
+        if (isRetailCustomer(customer)) {
+            buyerCompanyName = RETAIL_BUYER_PRINT_LABEL;
             buyerTaxCode = "";
             buyerAddress = "";
         } else {
-            boolean companyBuyer = "COMPANY".equalsIgnoreCase(customer.getCustomerType());
-            if (companyBuyer) {
-                buyerCompanyName = nullToEmpty(customer.getName());
-            } else {
-                String name = nullToEmpty(customer.getName());
-                buyerCompanyName = name.isBlank() || "Khách lẻ".equalsIgnoreCase(name.trim())
-                        ? "Khách lẻ không lấy hóa đơn"
-                        : name;
-            }
+            buyerCompanyName = nullToEmpty(customer.getName());
             buyerTaxCode = nullToEmpty(customer.getTaxCode());
             buyerAddress = nullToEmpty(customer.getAddress());
         }
@@ -1286,6 +1286,15 @@ public class InvoiceService {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    /** Walk-in sale: no customer row, or the synthetic "Khách lẻ" placeholder. */
+    private boolean isRetailCustomer(Customer customer) {
+        if (customer == null) {
+            return true;
+        }
+        String name = nullToEmpty(customer.getName());
+        return name.isBlank() || "Khách lẻ".equalsIgnoreCase(name);
     }
 
     private String paymentDisplay(Invoice invoice) {

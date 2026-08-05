@@ -70,7 +70,7 @@ public class IncomeService {
     private static final String STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY = "Duyệt";
 
     /**
-     * Hai loại phiếu điều chỉnh được phép liên kết phiếu thu "Thu tiền nhân viên đền bù"
+     * Hai loại phiếu điều chỉnh được phép liên kết phiếu thu "Thu tiền nhân viên làm hỏng hàng"
      * ({@code Dac_ta_Income_StockAdjustment.xlsx} sheet 03).
      */
     private static final Set<String> EMPLOYEE_LIABLE_ADJUSTMENT_TYPES =
@@ -439,16 +439,6 @@ public class IncomeService {
     }
 
     @Transactional(readOnly = true)
-    public long countPending() {
-        return countByStatus(STATUS_PENDING);
-    }
-
-    @Transactional(readOnly = true)
-    public BigDecimal sumPendingAmount() {
-        return sumAmountByStatus(STATUS_PENDING);
-    }
-
-    @Transactional(readOnly = true)
     public long countApproved() {
         return countCompleted();
     }
@@ -456,20 +446,6 @@ public class IncomeService {
     @Transactional(readOnly = true)
     public BigDecimal sumApprovedAmount() {
         return sumCompletedAmount();
-    }
-
-    private long countByStatus(String status) {
-        return incomeRepository.findAll().stream()
-                .filter(income -> isStatus(income.getStatus(), status))
-                .count();
-    }
-
-    private BigDecimal sumAmountByStatus(String status) {
-        return incomeRepository.findAll().stream()
-                .filter(income -> isStatus(income.getStatus(), status))
-                .map(Income::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private long countCompleted() {
@@ -654,14 +630,11 @@ public class IncomeService {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
         }
-        return containsNormalized(income.getIncomeCode(), normalizedKeyword)
-                || containsNormalized(income.getReason(), normalizedKeyword)
-                || containsNormalized(formatIncomeType(resolveIncomeType(income)), normalizedKeyword)
-                || containsNormalized(income.getStatus(), normalizedKeyword)
-                || containsNormalized(referenceCode(income), normalizedKeyword)
-                || containsNormalized(
-                        income.getApplicantID() != null ? income.getApplicantID().getName() : null,
-                        normalizedKeyword);
+        String code = income.getIncomeCode();
+        if (code == null || code.isBlank()) {
+            code = formatCode(income.getId());
+        }
+        return containsNormalized(code, normalizedKeyword);
     }
 
     private boolean matchesDate(Income income, LocalDate from, LocalDate to) {

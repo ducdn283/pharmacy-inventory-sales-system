@@ -96,8 +96,6 @@ public class IncomeController {
         model.addAttribute("totalIncomes", incomeService.countAll());
         model.addAttribute("todayIncomes", incomeService.countToday());
         model.addAttribute("todayAmount", incomeService.sumTodayAmount());
-        model.addAttribute("pendingIncomes", incomeService.countPending());
-        model.addAttribute("pendingAmount", incomeService.sumPendingAmount());
         model.addAttribute("approvedIncomes", incomeService.countApproved());
         model.addAttribute("approvedAmount", incomeService.sumApprovedAmount());
         model.addAttribute("statuses", incomeService.listStatuses());
