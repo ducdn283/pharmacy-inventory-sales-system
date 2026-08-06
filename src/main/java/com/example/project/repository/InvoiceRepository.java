@@ -41,20 +41,30 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
      *
      * <p>An invoice counts when:
      * <ul>
-     *   <li>it is a <strong>"Thay thế"</strong> (replacement) or <strong>"Điều chỉnh"</strong>
-     *       (adjustment) invoice — always, since these already carry the post-return net amount
-     *       ({@code total}); or</li>
+     *   <li>it is a <strong>"Thay thế"</strong> (replacement) invoice — always, since it already
+     *       carries the post-return net amount ({@code total}); or</li>
      *   <li>it is a normal sale ("Bán hàng"/legacy "normal"/null) that has <strong>not</strong> been
      *       superseded by a "Thay thế" child ({@code ReturnService.isInvalidatedByReplacement}, done
      *       here as a proper query instead of loading every invoice into memory), <strong>and</strong>
      *       is not the one specific case where a "Thay thế" child should have existed but didn't: an
-     *       <strong>unsigned</strong> invoice fully refunded ({@code returnStatus = 'FULL'}) with
-     *       {@code appliedRefundRate = 100%} produces zero remaining lines, so
-     *       {@code ReturnService.createReplacementInvoice} returns early and no child is ever
-     *       created — the original must be treated as void by hand in that one case (confirmed with
-     *       the BA; a <em>signed</em> original at {@code returnStatus = 'FULL'} is deliberately kept,
-     *       since its own "Điều chỉnh" line(s) already net it to zero via plain addition).</li>
+     *       invoice fully refunded ({@code returnStatus = 'FULL'}) with {@code appliedRefundRate =
+     *       100%} produces zero remaining lines, so {@code ReturnService.createReplacementInvoice}
+     *       returns early and no child is ever created — the original must be treated as void by
+     *       hand in that one case.</li>
      * </ul>
+     *
+     * <p><strong>2026-08-06 fix:</strong> the "no child created" exclusion used to only apply to an
+     * <em>unsigned</em> original ({@code status <> 'Đã ký'}) — a leftover from the pre-04/08/2026
+     * TH1/TH2 split, where a <em>signed</em> original at {@code returnStatus = 'FULL'} was
+     * deliberately kept, on the theory that its own "Điều chỉnh" (adjustment) line(s) already netted
+     * it to zero via plain addition. Both premises are gone: {@code ReturnService} no longer branches
+     * on signed/unsigned at all (every return goes through the same
+     * {@code createReplacementInvoice()} path regardless), and no code writes {@code invoiceType =
+     * "Điều chỉnh"} any more (confirmed — the only remaining references were this exclusion and its
+     * read-only display fallback). So a <em>signed</em> original fully refunded with no replacement
+     * was being left in "còn hiệu lực" by mistake, double-counting its already-void revenue/giá vốn.
+     * The exclusion now applies to every original regardless of signed status, and the "Điều chỉnh"
+     * branch was dropped — nothing writes that value any more, so it can only ever match dead data.</p>
      *
      * <p><strong>Known gap:</strong> this does not special-case the legacy "Hóa đơn GTGT" invoice
      * type (issued by group 3 before GTGT moved to the direct method) — such a row is treated as a
@@ -68,7 +78,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
          and i.date < :to
          and (
            i.invoiceType = 'Thay thế'
-           or i.invoiceType = 'Điều chỉnh'
            or (
              (i.invoiceType is null or i.invoiceType = 'Bán hàng' or i.invoiceType = 'normal')
              and not exists (
@@ -76,11 +85,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
                where r.invoiceType = 'Thay thế'
                  and r.originalInvoiceID = i
              )
-             and not (
-               i.signAt is null
-               and (i.status is null or i.status <> 'Đã ký')
-               and i.returnStatus = 'FULL'
-             )
+             and (i.returnStatus is null or i.returnStatus <> 'FULL')
            )
          )
        order by i.date asc
