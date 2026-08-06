@@ -433,14 +433,14 @@ public class TaxperiodsnapshotService {
      * là thu nhập vì không có hóa đơn mua thật đứng sau nó), và phần nhà thuốc GIỮ LẠI khi hoàn tiền
      * khách ở tỷ lệ &lt;100% (xem {@link #customerReturnRetainedOf}).
      */
-    private BigDecimal taxableIncomeRevenueOf(BigDecimal revenue, TaxPeriod period) {
+    private BigDecimal taxableIncomeRevenueOf(BigDecimal revenue, BigDecimal customerReturnRetained,
+                                              TaxPeriod period) {
         BigDecimal employeeIncome = safe(incomeRepository.sumByTypeInPeriod(
                 IncomeTypeOptionResponse.labelOf(IncomeTypeOptionResponse.EMPLOYEE),
                 INCOME_COMPLETED_STATUSES, instantStart(period), instantEndExclusive(period)));
         BigDecimal unknownOriginSurplusCost = safe(stockadjustmentdetailRepository
                 .sumUnknownOriginIncreaseCostInPeriod(StockAdjustmentStatus.COMPLETED,
                         instantStart(period), instantEndExclusive(period)));
-        BigDecimal customerReturnRetained = customerReturnRetainedOf(period);
         return revenue.add(employeeIncome).add(unknownOriginSurplusCost).add(customerReturnRetained);
     }
 
@@ -552,7 +552,11 @@ public class TaxperiodsnapshotService {
                 .toList();
 
         BigDecimal revenue = exempt ? BigDecimal.ZERO : revenueOf(invoices, period);
-        BigDecimal taxableIncomeRevenue = exempt ? BigDecimal.ZERO : taxableIncomeRevenueOf(revenue, period);
+        // Tính riêng ra ngoài để đưa vào response hiển thị được trên UI (xem tax-period/preview.html)
+        // — không tính lại lần hai bên trong taxableIncomeRevenueOf.
+        BigDecimal customerReturnRetained = exempt ? BigDecimal.ZERO : customerReturnRetainedOf(period);
+        BigDecimal taxableIncomeRevenue = exempt ? BigDecimal.ZERO
+                : taxableIncomeRevenueOf(revenue, customerReturnRetained, period);
 
         // --- GTGT: trực tiếp trên doanh thu cho cả nhóm 2 và nhóm 3, không nhóm nào còn khấu trừ.
         BigDecimal vatOutput = exempt ? BigDecimal.ZERO : revenue.multiply(TaxRevenueGroup.DIRECT_VAT_RATE);
@@ -612,6 +616,7 @@ public class TaxperiodsnapshotService {
                 !exempt,
                 scaled(revenue),
                 scaled(taxableIncomeRevenue),
+                scaled(customerReturnRetained),
                 percent(TaxRevenueGroup.DIRECT_VAT_RATE),
                 scaled(vatOutputFromSales),
                 scaled(vatOutputReturnDeduction),

@@ -71,6 +71,28 @@
 
         .amount { text-align: right; white-space: nowrap; }
 
+        .total-tax-banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+        }
+
+        .total-tax-banner .label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #065f46;
+        }
+
+        .total-tax-banner .amount {
+            font-size: 18px;
+            font-weight: 700;
+            color: #059669;
+        }
+
         .btn-tax-primary {
             background: #059669;
             border-color: #059669;
@@ -336,6 +358,13 @@
                                 <td class="amount"
                                     th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                             </tr>
+                            <tr class="component"
+                                th:if="${computation.customerReturnRetained.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+                                <td>Cộng: thu nhập khác từ trả hàng một phần (phần giữ lại khi hoàn
+                                    tiền khách &lt;100%)</td>
+                                <td class="amount"
+                                    th:text="${'+' + #numbers.formatDecimal(computation.customerReturnRetained, 0, 'POINT', 0, 'COMMA') + 'đ'}">+0đ</td>
+                            </tr>
                             <tr class="component">
                                 <td>Trừ: giá vốn hàng bán (đã trừ hàng nhập lại kho)</td>
                                 <td class="amount"
@@ -364,6 +393,13 @@
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
+                        <tr class="component"
+                            th:if="${!computation.pitCostMethod and computation.customerReturnRetained.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+                            <td>Cộng: thu nhập khác từ trả hàng một phần (phần giữ lại khi hoàn tiền
+                                khách &lt;100%)</td>
+                            <td class="amount"
+                                th:text="${'+' + #numbers.formatDecimal(computation.customerReturnRetained, 0, 'POINT', 0, 'COMMA') + 'đ'}">+0đ</td>
+                        </tr>
 
                         <tr class="component">
                             <td th:text="${computation.pitCostMethod
@@ -379,6 +415,14 @@
                         </tr>
                         </tbody>
                     </table>
+
+                    <!-- vatPayable + incomeTax — xem TaxPeriodComputationResponse.totalTaxPayable.
+                         Không lưu cột riêng, tính lại mỗi lần hiển thị. -->
+                    <div class="total-tax-banner mt-3" th:unless="${computation.taxExempt}">
+                        <span class="label">Tổng thuế phải nộp của kỳ (GTGT + TNCN)</span>
+                        <span class="amount"
+                              th:text="${#numbers.formatDecimal(computation.totalTaxPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>
+                    </div>
 
                     <div class="alert alert-secondary small p-3 mt-3 mb-0">
                         <i class="ti ti-device-floppy-off me-1"></i>
