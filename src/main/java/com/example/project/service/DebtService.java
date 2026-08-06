@@ -280,7 +280,6 @@ public class DebtService {
                         .orElse("—");
 
         Map<Integer, BigDecimal> disbursed = disbursedByReturnId();
-        Map<Integer, Integer> awaitingPaymentByReturnId = awaitingPaymentExpenseByReturnId();
 
         List<PayableLineResponse> lines = returnRepository.findAllWithRelations().stream()
                 .filter(this::isApprovedCustomerReturn)
@@ -319,12 +318,10 @@ public class DebtService {
                 .map(supplier -> supplier.getName())
                 .orElse("—");
 
-        Map<Integer, BigDecimal> committed = committedByPurchaseId();
-
         List<PayableLineResponse> lines = purchaseinvoiceService.findPayableInvoices().stream()
                 .filter(purchase -> purchase.getSupplierID() != null
                         && supplierId.equals(purchase.getSupplierID().getId()))
-                .map(purchase -> Map.entry(purchase, availableToPay(purchase, committed)))
+                .map(purchase -> Map.entry(purchase, purchaseinvoiceService.remainingDebt(purchase)))
                 .filter(entry -> isPositive(entry.getValue()))
                 .sorted(Comparator.<Map.Entry<Purchaseinvoice, BigDecimal>, Instant>comparing(
                                 entry -> entry.getKey().getDate(),
@@ -423,19 +420,18 @@ public class DebtService {
                     .addReceivable(name, receivable);
         }
 
-        Map<Integer, BigDecimal> committed = committedByPurchaseId();
         for (Purchaseinvoice purchase : purchaseinvoiceService.findPayableInvoices()) {
             if (purchase.getSupplierID() == null || purchase.getSupplierID().getId() == null) {
                 continue;
             }
-            BigDecimal available = availableToPay(purchase, committed);
-            if (!isPositive(available)) {
+            BigDecimal payable = purchaseinvoiceService.remainingDebt(purchase);
+            if (!isPositive(payable)) {
                 continue;
             }
             Integer supplierId = purchase.getSupplierID().getId();
             String name = purchase.getSupplierID().getName();
             bySupplierId.computeIfAbsent(supplierId, id -> new PartyBalance())
-                    .addPayable(name, available);
+                    .addPayable(name, payable);
         }
 
         return bySupplierId.entrySet().stream()
@@ -454,26 +450,6 @@ public class DebtService {
         );
     }
 
-    private BigDecimal availableToPay(Purchaseinvoice invoice, Map<Integer, BigDecimal> committed) {
-        BigDecimal debt = purchaseinvoiceService.remainingDebt(invoice);
-        return debt.subtract(committed.getOrDefault(invoice.getId(), BigDecimal.ZERO)).max(BigDecimal.ZERO);
-    }
-
-    private Map<Integer, BigDecimal> committedByPurchaseId() {
-        Map<Integer, BigDecimal> committed = new LinkedHashMap<>();
-        for (Expense expense : liveExpenses()) {
-            Purchaseinvoice invoice = expense.getPurchaseID();
-            if (invoice == null || invoice.getId() == null) {
-                continue;
-            }
-            BigDecimal outstanding = nullToZero(expense.getAmount())
-                    .subtract(disbursedAmount(expense))
-                    .max(BigDecimal.ZERO);
-            committed.merge(invoice.getId(), outstanding, BigDecimal::add);
-        }
-        return committed;
-    }
-
     /**
      * Money this slip has actually settled against its linked document. Only
      * {@link ExpenseStatus#COMPLETED} counts — {@link ExpenseStatus#AWAITING_PAYMENT} authorises
@@ -486,7 +462,7 @@ public class DebtService {
     }
 
     private List<Expense> liveExpenses() {
-        return expenseRepository.findAll().stream()
+        return expenseRepository.findAllWithRelations().stream()
                 .filter(expense -> !ExpenseStatus.REJECTED.equals(expense.getStatus()))
                 .filter(expense -> !ExpenseStatus.CANCELLED.equals(expense.getStatus()))
                 .toList();
