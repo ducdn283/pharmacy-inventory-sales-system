@@ -61,9 +61,11 @@ public class ReturnService {
     /** An invoice still carrying an unpaid balance (mirrors InvoiceService.STATUS_DEBT). */
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     /**
-     * Hóa đơn "Đã ký" = đã đẩy lên cơ quan thuế. Từ 04/08/2026 trạng thái này KHÔNG còn rẽ nhánh nghiệp vụ
-     * nào ở màn trả hàng: đã ký hay chưa thì trả hàng vẫn xuất hóa đơn THAY THẾ. Hằng số giữ lại vì hóa
-     * đơn đã ký vẫn phải nằm trong danh sách trả được ({@link #isReturnEligibleStatus}).
+     * Giá trị CŨ của {@code invoice.status}. Từ 04/08/2026 việc ký không còn rẽ nhánh nghiệp vụ nào ở màn
+     * trả hàng (ký hay chưa thì trả hàng vẫn xuất hóa đơn THAY THẾ), và từ 06/08/2026 nó cũng không còn
+     * nằm trong {@code status} nữa — bảng {@code invoice} có 2 cột riêng {@code signAt}/{@code signBy}.
+     * Hằng số giữ lại CHỈ để đọc dữ liệu cũ: hóa đơn cũ mang chuỗi này vẫn phải trả hàng được
+     * ({@link #isReturnEligibleStatus}) và không bị ghi đè trạng thái ({@link #hasLegacySignedStatus}).
      */
     private static final String INVOICE_STATUS_SIGNED = "Đã ký";
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
@@ -119,6 +121,8 @@ public class ReturnService {
     private final InvoicedetailRepository invoicedetailRepository;
     // Read-only: the pharmacy's return policy (returnPolicyMaxDays) — see getReturnWindowDays().
     private final FinancialsettingRepository financialsettingRepository;
+    // Read-only: mốc kỳ thuế đã chốt gần nhất — xem lastClosedPeriodEnd().
+    private final TaxperiodsnapshotRepository taxperiodsnapshotRepository;
     // Lazily opens/reuses the acting account's shift the moment a return is actually approved
     // (becomes Nợ) — mirrors the same hook on the Invoice side (see ShiftreportService).
     private final ShiftreportService shiftreportService;
@@ -133,6 +137,7 @@ public class ReturnService {
                          InvoiceRepository invoiceRepository,
                          InvoicedetailRepository invoicedetailRepository,
                          FinancialsettingRepository financialsettingRepository,
+                         TaxperiodsnapshotRepository taxperiodsnapshotRepository,
                          ShiftreportService shiftreportService,
                          InvoiceService invoiceService,
                          WorkflowNotificationService workflowNotificationService,
@@ -144,6 +149,7 @@ public class ReturnService {
         this.invoiceRepository = invoiceRepository;
         this.invoicedetailRepository = invoicedetailRepository;
         this.financialsettingRepository = financialsettingRepository;
+        this.taxperiodsnapshotRepository = taxperiodsnapshotRepository;
         this.shiftreportService = shiftreportService;
         this.invoiceService = invoiceService;
         this.workflowNotificationService =  workflowNotificationService;
@@ -595,7 +601,10 @@ public class ReturnService {
         invoiceService.persistInvoice(original);
 
         Invoice repl = new Invoice();
-        repl.setInvoicePattern(original.getInvoicePattern());
+        // Ký hiệu của bản thay thế phải là ký hiệu CHƯA KÝ. Hóa đơn gốc đã ký thì ký hiệu của nó đã bị
+        // đổi K → C (có mã CQT) lúc ký; bản thay thế là hóa đơn MỚI, chưa gửi CQT (signAt/signBy để
+        // trống), nên bê nguyên ký hiệu của gốc là hóa đơn tự nhận có mã CQT trong khi chưa hề được ký.
+        repl.setInvoicePattern(toUnsignedInvoicePattern(original.getInvoicePattern()));
         repl.setInvoiceNumber(generateInvoiceNumber());
         repl.setDate(LocalDateTime.now(VN_ZONE));
         // Toàn bộ data khác của hóa đơn gốc (nhân viên bán, khách hàng, đơn thuốc) được giữ nguyên —
@@ -693,6 +702,17 @@ public class ReturnService {
      * Dòng hàng của hóa đơn thay thế, phần dùng chung giữa dòng HÀNG CÒN LẠI và dòng PHẦN GIỮ LẠI.
      * Người gọi tự đặt {@code quantity / baseQtyDeducted / subtotal}.
      */
+    /**
+     * Đưa ký hiệu hóa đơn về dạng CHƯA KÝ: ký tự thứ 2 là {@code K} (không mã CQT), {@code C} là đã có mã
+     * CQT — {@code InvoiceService.sign()} đổi K → C khi ký. Hóa đơn chưa ký thì gọi vào đây là không đổi gì.
+     */
+    private String toUnsignedInvoicePattern(String pattern) {
+        if (pattern == null || pattern.length() < 2) {
+            return pattern;
+        }
+        return pattern.charAt(0) + "K" + pattern.substring(2);
+    }
+
     private Invoicedetail cloneLine(Invoice replacement, Invoicedetail source) {
         Invoicedetail clone = new Invoicedetail();
         clone.setInvoiceID(replacement);
@@ -865,15 +885,18 @@ public class ReturnService {
      * chứa nổi 2 nghĩa. {@code returnStatus} chỉ là bản CACHE, nguồn đúng vẫn là
      * {@link #invoiceReturnCode} tính động, nên dữ liệu cũ chưa backfill cũng không sai.</p>
      *
-     * <p>Hóa đơn ĐÃ KÝ giữ nguyên {@code status = "Đã ký"} (đã gửi cơ quan thuế), nhưng
-     * {@code returnStatus} thì vẫn ghi được vì là cột riêng.</p>
+     * <p><b>Việc ký KHÔNG còn nằm trong {@code status}</b> (06/08/2026): bảng {@code invoice} có 2 cột
+     * riêng {@code signAt}/{@code signBy}, {@code InvoiceService.sign()} chỉ ghi 2 cột đó (cùng việc đổi ký
+     * hiệu K → C) và không đụng {@code status}. Nên hóa đơn đã ký vẫn phải được tính lại {@code status}
+     * theo công nợ như mọi hóa đơn khác — chỉ DỮ LIỆU CŨ còn giữ chuỗi "Đã ký" trong {@code status} thì mới
+     * không ghi đè, xem {@link #hasLegacySignedStatus}.</p>
      */
     private void updateInvoiceReturnStatus(Invoice invoice) {
         if (invoice == null) {
             return;
         }
         invoice.setReturnStatus(invoiceReturnCode(invoice));
-        if (!isSigned(invoice)) {
+        if (!hasLegacySignedStatus(invoice)) {
             invoice.setStatus(nz(invoice.getDebtAmount()).signum() > 0
                     ? INVOICE_STATUS_DEBT : INVOICE_STATUS_COMPLETED);
         }
@@ -1159,8 +1182,14 @@ public class ReturnService {
                 || isStatus(invoice.getStatus(), INVOICE_STATUS_RETURNED_FULL);
     }
 
-    /** Signed ("Đã ký") = pushed to tax → return must emit an adjustment invoice (TH2), not edit the original. */
-    private boolean isSigned(Invoice invoice) {
+    /**
+     * Hóa đơn CŨ còn mang chuỗi "Đã ký" trong {@code status}. Chỉ dùng để KHÔNG ghi đè trạng thái của dữ
+     * liệu cũ — <b>không phải</b> phép kiểm "hóa đơn đã ký hay chưa": nguồn đúng của việc ký nay là
+     * {@code invoice.signAt} (xem {@code InvoiceService.sign()}), và một hóa đơn đã ký theo cách mới vẫn
+     * phải được cập nhật {@code status} theo công nợ bình thường. Đổi hàm này sang đọc {@code signAt} sẽ
+     * làm ĐÓNG BĂNG {@code status} của mọi hóa đơn đã ký — trả hàng xong nợ về 0 mà vẫn hiện "Còn nợ".
+     */
+    private boolean hasLegacySignedStatus(Invoice invoice) {
         return invoice != null && isStatus(invoice.getStatus(), INVOICE_STATUS_SIGNED);
     }
 
@@ -1224,6 +1253,9 @@ public class ReturnService {
         if (isSupersededByReturn(returnCode)) {
             return false;
         }
+        if (isInClosedTaxPeriod(invoice)) {
+            return false;
+        }
         // KHÔNG chặn hóa đơn còn nợ: khách còn nợ vẫn được trả hàng, tiền hoàn cấn trừ thẳng vào khoản nợ
         // đó (netting — xem applyDebtOffset). Đặc tả bổ sung 27/07 mục 3, và PISMS_Xu_ly_Cong_no sheet
         // "Công nợ Khách hàng" ca 3/4/5: "phần mềm KHÔNG cần bắt người dùng thanh toán xong rồi mới xử lý
@@ -1250,11 +1282,47 @@ public class ReturnService {
                     "Hóa đơn này đã được trả hàng một phần nên không còn hiệu lực — "
                             + "vui lòng chọn hóa đơn thay thế mới nhất");
         }
+        LocalDate closedThrough = lastClosedPeriodEnd();
+        if (isInClosedTaxPeriod(invoice)) {
+            throw new IllegalArgumentException("Hóa đơn này thuộc kỳ thuế đã chốt (đã chốt đến hết "
+                    + closedThrough.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                    + ") nên không trả hàng được. Doanh thu của kỳ đó đã kê khai — "
+                    + "vui lòng xử lý bằng chứng từ điều chỉnh của kế toán.");
+        }
         int windowDays = getReturnWindowDays();
         if (!withinReturnWindow(effectiveSaleDate(invoice), windowDays)) {
             throw new IllegalArgumentException("Quá thời hạn trả hàng (chỉ trong "
                     + windowDays + " ngày kể từ ngày lập hóa đơn gốc)");
         }
+    }
+
+    /**
+     * Hóa đơn nằm trong kỳ thuế ĐÃ CHỐT thì không cho trả hàng nữa.
+     *
+     * <p><b>Vì sao chặn:</b> trả hàng phát hành hóa đơn THAY THẾ mang ngày HÔM NAY, đồng thời làm bản gốc
+     * hết hiệu lực ({@code InvoiceRepository.findValidInPeriod} loại hóa đơn đã có con "Thay thế"). Nếu bản
+     * gốc thuộc quý đã chốt thì con số của quý đó đã kê khai và đóng băng trong {@code Taxperiodsnapshot},
+     * trong khi bản thay thế lại được tính là doanh thu MỚI của quý hiện tại ⇒ <b>cùng một lô hàng bị khai
+     * doanh thu hai lần</b>. Ví dụ thật: bán 1.585.000 ở Q3 (đã chốt), khách trả 2/5 hộp ở Q4 ⇒ Q3 vẫn khai
+     * 1.585.000 còn Q4 khai thêm 1.077.800, trong khi doanh thu thật của cả chuỗi chỉ là 1.077.800.</p>
+     *
+     * <p><b>Mốc đo là snapshot THẬT, không phải {@code nextPeriodToClose()}</b>: khi chưa chốt kỳ nào,
+     * {@code TaxperiodsnapshotService.nextPeriodToClose()} trả về quý HIỆN TẠI, nên đo theo nó sẽ coi mọi
+     * hóa đơn của các quý trước là "đã chốt" và khóa sạch — trong khi thực tế chưa kỳ nào được chốt cả.</p>
+     */
+    private boolean isInClosedTaxPeriod(Invoice invoice) {
+        LocalDate closedThrough = lastClosedPeriodEnd();
+        if (closedThrough == null || invoice == null || invoice.getDate() == null) {
+            return false;
+        }
+        return !invoice.getDate().toLocalDate().isAfter(closedThrough);
+    }
+
+    /** Ngày cuối của kỳ thuế đã chốt gần nhất; {@code null} khi chưa kỳ nào được chốt. */
+    private LocalDate lastClosedPeriodEnd() {
+        return taxperiodsnapshotRepository.findFirstByOrderByStartDateDescIdDesc()
+                .map(Taxperiodsnapshot::getEndDate)
+                .orElse(null);
     }
 
     /**
