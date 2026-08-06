@@ -43,6 +43,15 @@ public class TaxPeriodComputationResponse {
     /** Revenue of the period: sales that are "còn hiệu lực" plus hoa hồng NCC and hàng biếu tặng. */
     private BigDecimal periodRevenue;
 
+    /**
+     * Doanh thu tính thuế TNCN — {@code periodRevenue} cộng thêm các khoản riêng cho TNCN (tiền đền
+     * bù của nhân viên, giá vốn hàng thừa kiểm kê không rõ nguồn gốc, phần nhà thuốc giữ lại khi hoàn
+     * tiền khách &lt;100%) — xem {@code TaxperiodsnapshotService.taxableIncomeRevenueOf}. Khác
+     * {@code taxableIncome} (đã trừ chi phí hợp lý) và khác {@code periodRevenue} (GTGT) mỗi khi có
+     * ít nhất một trong ba khoản trên phát sinh trong kỳ.
+     */
+    private BigDecimal taxableIncomeRevenue;
+
     /** The percentage-method rate as a human number (e.g. {@code 1.00} for 1%). */
     private BigDecimal directVatRatePercent;
 
@@ -83,6 +92,14 @@ public class TaxPeriodComputationResponse {
      * group 2 on the profit method, {@code 17.00} for group 3.
      */
     private BigDecimal incomeTaxRatePercent;
+
+    /**
+     * Tổng thuế phải nộp trong kỳ = {@code vatPayable + incomeTax} (cùng công thức
+     * {@code PricesettingService.totalTax} đã dùng cho một sản phẩm, áp cho cả kỳ). Không có cột
+     * riêng trên {@code Taxperiodsnapshot} — tính lại mỗi lần từ hai cột đã lưu sẵn
+     * ({@code vatOutput}, {@code incomeTax}), giống mọi tổng khác trong DTO này.
+     */
+    private BigDecimal totalTaxPayable;
 
     /** How many source documents fell in the period — a sanity check for an empty-looking result. */
     private int invoiceCount;
