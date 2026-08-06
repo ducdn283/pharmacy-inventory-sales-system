@@ -416,10 +416,11 @@ public class DebtOffsetService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Mirrors {@link ExpenseService}: only {@link ExpenseStatus#COMPLETED} is real disbursement. */
     private BigDecimal disbursedAmount(Expense expense) {
-        boolean approved = ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
-                || ExpenseStatus.COMPLETED.equals(expense.getStatus());
-        return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+        return ExpenseStatus.COMPLETED.equals(expense.getStatus())
+                ? nullToZero(expense.getPaid())
+                : BigDecimal.ZERO;
     }
 
     private BigDecimal cashRefundAmount(Return ret) {

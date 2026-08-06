@@ -280,6 +280,7 @@ public class DebtService {
                         .orElse("—");
 
         Map<Integer, BigDecimal> disbursed = disbursedByReturnId();
+        Map<Integer, Integer> awaitingPaymentByReturnId = awaitingPaymentExpenseByReturnId();
 
         List<PayableLineResponse> lines = returnRepository.findAllWithRelations().stream()
                 .filter(this::isApprovedCustomerReturn)
@@ -473,10 +474,15 @@ public class DebtService {
         return committed;
     }
 
+    /**
+     * Money this slip has actually settled against its linked document. Only
+     * {@link ExpenseStatus#COMPLETED} counts — {@link ExpenseStatus#AWAITING_PAYMENT} authorises
+     * the slip but does not move money yet (see {@code ExpenseService.confirmPayment}).
+     */
     private BigDecimal disbursedAmount(Expense expense) {
-        boolean approved = isStatus(expense.getStatus(), ExpenseStatus.AWAITING_PAYMENT)
-                || isStatus(expense.getStatus(), ExpenseStatus.COMPLETED);
-        return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+        return isStatus(expense.getStatus(), ExpenseStatus.COMPLETED)
+                ? nullToZero(expense.getPaid())
+                : BigDecimal.ZERO;
     }
 
     private List<Expense> liveExpenses() {
