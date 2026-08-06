@@ -703,6 +703,15 @@
                                 Hoàn thành
                             </span>
                         </div>
+
+                        <div class="d-flex justify-content-between mt-3" th:if="${detail.signed}">
+                            <span class="text-secondary">Thời gian ký</span>
+                            <span th:text="${detail.signAtDisplay}">01/08/2026 10:00</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2" th:if="${detail.signed and detail.signByName != null}">
+                            <span class="text-secondary">Người ký</span>
+                            <span th:text="${detail.signByName}">Kế toán A</span>
+                        </div>
                     </div>
                 </div>
 
@@ -716,7 +725,7 @@
                         </button>
 
                         <button type="button"
-                                th:if="${detail.statusName == 'Đã ký'}"
+                                th:if="${detail.signed}"
                                 id="viewSignedPrintBtn"
                                 th:data-print-url="${basePath + '/' + detail.id + '/print?embed=1'}"
                                 class="btn btn-invoice-primary w-100 mb-3">
@@ -724,13 +733,13 @@
                             Xem hình ảnh hóa đơn
                         </button>
 
-                        <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}"
+                        <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and !detail.signed}"
                               th:action="${basePath + '/' + detail.id + '/sign'}"
                               method="post"
                               class="mb-3">
                             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <button type="submit" class="btn btn-invoice-primary w-100"
-                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot; và bạn có thể xem hình ảnh hóa đơn có Mã CQT.">
+                                    data-confirm="Ký hóa đơn này? Hệ thống sẽ ghi nhận thời gian và người ký, đồng thời bạn có thể xem hình ảnh hóa đơn có Mã CQT.">
                                 <i class="ti ti-writing-sign me-1"></i>
                                 Ký hóa đơn
                             </button>

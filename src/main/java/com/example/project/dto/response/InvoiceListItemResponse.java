@@ -34,4 +34,7 @@ public class InvoiceListItemResponse {
 
     private String statusName;
     private String statusCssClass;
+
+    /** {@code true} when {@code signAt} is set (or legacy {@code status = Đã ký}). */
+    private boolean signed;
 }

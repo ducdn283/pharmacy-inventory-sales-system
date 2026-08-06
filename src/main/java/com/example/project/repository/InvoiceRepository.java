@@ -25,6 +25,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
        left join fetch i.employeeID
        left join fetch i.customerID
        left join fetch i.originalInvoiceID
+       left join fetch i.signBy
        where i.id = :invoiceId
        """)
     Optional<Invoice> findByIdWithRelations(@Param("invoiceId") Integer invoiceId);
@@ -32,7 +33,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
     /**
      * Sales in a half-open interval {@code [from, to)} that are still <strong>"còn hiệu lực"</strong>
      * for revenue/tax aggregation — the fix for a double-count bug where a superseded original and
-     * its replacement were both being summed. {@code Invoice.date} is a
+     * its replacement/adjustment were both being summed. {@code Invoice.date} is a
      * {@code LocalDateTime} holding Vietnam wall-clock time (written by {@code InvoiceService} as
      * {@code LocalDateTime.now(VN_ZONE)}), so callers must pass VN wall-clock bounds — see
      * {@code TaxperiodsnapshotService}'s boundary helpers. The upper bound is exclusive so a sale at

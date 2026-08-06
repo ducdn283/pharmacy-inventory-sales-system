@@ -32,6 +32,12 @@ public class InvoiceDetailPageResponse {
     private String statusName;
     private String statusCssClass;
 
+    /** {@code true} when {@code signAt} is set (or legacy {@code status = Đã ký}). */
+    private boolean signed;
+    private LocalDateTime signAt;
+    private String signAtDisplay;
+    private String signByName;
+
     private boolean prescriptionRequired;
     private String prescriptionCode;
 

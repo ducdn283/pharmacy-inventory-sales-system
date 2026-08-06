@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.TaxRevenueGroup;
+import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
@@ -99,6 +100,7 @@ public class InvoiceService {
     private final FinancialsettingService financialsettingService;
     private final TaxperiodsnapshotService taxperiodsnapshotService;
     private final ReturnRepository returnRepository;
+    private final CurrentUserContext currentUserContext;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
     // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
@@ -115,7 +117,8 @@ public class InvoiceService {
                           FinancialsettingService financialsettingService,
                           TaxperiodsnapshotService taxperiodsnapshotService,
                           ReturnRepository returnRepository,
-                          ShiftreportService shiftreportService) {
+                          ShiftreportService shiftreportService,
+                          CurrentUserContext currentUserContext) {
         this.invoiceRepository = invoiceRepository;
         this.invoicedetailRepository = invoicedetailRepository;
         this.productRepository = productRepository;
@@ -128,6 +131,7 @@ public class InvoiceService {
         this.taxperiodsnapshotService = taxperiodsnapshotService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
+        this.currentUserContext = currentUserContext;
     }
 
     @Transactional(readOnly = true)
@@ -714,16 +718,18 @@ public class InvoiceService {
                 .toList();
     }
 
-    /** Marks a sale invoice as signed ({@code status = Đã ký}). Owner and Accountant only. */
+    /** Records e-invoice signing ({@code signAt}, {@code signBy}); does not change {@code status}. Owner and Accountant only. */
     @Transactional
     public void sign(Integer invoiceId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
-        if (isStatus(invoice.getStatus(), STATUS_SIGNED)) {
+        if (isSigned(invoice)) {
             throw new IllegalArgumentException("Hóa đơn đã được ký");
         }
+        Account signer = resolveCurrentSigner();
         invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
-        invoice.setStatus(STATUS_SIGNED);
+        invoice.setSignAt(LocalDateTime.now(VN_ZONE));
+        invoice.setSignBy(signer);
         saveInvoiceGuardingConcurrentEdit(invoice);
     }
 
@@ -734,14 +740,17 @@ public class InvoiceService {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một hóa đơn");
         }
 
+        Account signer = resolveCurrentSigner();
+        LocalDateTime signedAt = LocalDateTime.now(VN_ZONE);
         int signed = 0;
         for (Integer invoiceId : invoiceIds.stream().distinct().toList()) {
             Invoice invoice = invoiceRepository.findById(invoiceId).orElse(null);
-            if (invoice == null || isStatus(invoice.getStatus(), STATUS_SIGNED)) {
+            if (invoice == null || isSigned(invoice)) {
                 continue;
             }
             invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
-            invoice.setStatus(STATUS_SIGNED);
+            invoice.setSignAt(signedAt);
+            invoice.setSignBy(signer);
             saveInvoiceGuardingConcurrentEdit(invoice);
             signed++;
         }
@@ -750,6 +759,20 @@ public class InvoiceService {
             throw new IllegalArgumentException("Không có hóa đơn nào được ký (có thể đã ký trước đó)");
         }
         return signed;
+    }
+
+    private boolean isSigned(Invoice invoice) {
+        return invoice != null
+                && (invoice.getSignAt() != null || isStatus(invoice.getStatus(), STATUS_SIGNED));
+    }
+
+    private Account resolveCurrentSigner() {
+        Integer accountId = currentUserContext.getCurrentAccountId();
+        if (accountId == null) {
+            throw new IllegalArgumentException("Không xác định được người ký");
+        }
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản người ký"));
     }
 
     /** Full sale-invoice detail for the detail page. */
@@ -788,7 +811,7 @@ public class InvoiceService {
 
         String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
-        boolean signed = isStatus(statusName, STATUS_SIGNED);
+        boolean signed = isSigned(invoice);
         String taxCode = signed && setting != null ? trimToNull(setting.getTaxCode()) : null;
 
         return new InvoiceDetailPageResponse(
@@ -804,6 +827,10 @@ public class InvoiceService {
                 invoiceTypeDisplay(invoice.getInvoiceType()),
                 statusName,
                 statusCssClass(invoice.getStatus()),
+                signed,
+                invoice.getSignAt(),
+                formatDate(invoice.getSignAt()),
+                invoice.getSignBy() != null ? invoice.getSignBy().getName() : null,
                 Boolean.TRUE.equals(invoice.getPrescriptionRequired()),
                 invoice.getPrescriptionCode(),
                 returnStatusDisplay(returnCode),
@@ -838,7 +865,8 @@ public class InvoiceService {
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        boolean signed = isStatus(invoice.getStatus(), STATUS_SIGNED);
+        boolean signed = isSigned(invoice);
+        LocalDateTime signedAt = invoice.getSignAt() != null ? invoice.getSignAt() : invoice.getDate();
 
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         Customer customer = invoice.getCustomerID();
@@ -871,7 +899,7 @@ public class InvoiceService {
                 signed,
                 formatDateLong(invoice.getDate()),
                 signed ? buildTaxAuthorityCode(invoice, setting) : null,
-                signed ? formatSignedAt(invoice.getDate()) : null,
+                signed ? formatSignedAt(signedAt) : null,
                 setting != null ? nullToEmpty(setting.getLocationName()) : "",
                 setting != null ? nullToEmpty(setting.getTaxCode()) : "",
                 setting != null ? nullToEmpty(setting.getAddress()) : "",
@@ -1021,7 +1049,8 @@ public class InvoiceService {
                 returnStatusDisplay(returnCode),
                 returnStatusCssClass(returnCode),
                 statusName,
-                statusCssClass(statusName));
+                statusCssClass(statusName),
+                isSigned(invoice));
     }
 
     private InvoiceLineResponse toLine(Invoicedetail line) {
