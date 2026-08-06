@@ -81,4 +81,31 @@ public interface ReturndetailRepository extends JpaRepository<Returndetail, Inte
             @Param("from") Instant from,
             @Param("to") Instant to);
 
+    /**
+     * Phần tiền nhà thuốc GIỮ LẠI khi hoàn tiền cho khách ở tỷ lệ &lt;100%
+     * ({@code Ho_so_nghiep_vu_v2.xlsx}, sheet "05_Tra_Hang": "Thu nhập phát sinh (thu nhập khác) =
+     * X − totalRefund", với X là giá trị gốc 100% của phần hàng trả). Cùng công thức từng dòng
+     * {@code ReturnService.retainedValueOf()} đã dùng để dựng dòng "tiền không kèm hàng" trên hóa đơn
+     * thay thế — <strong>KHÔNG</strong> được suy ra bằng
+     * {@code Invoice(gốc).total − Invoice(thay thế).total}: hiệu đó luôn đúng bằng
+     * {@code Return.totalRefund} (vì {@code ReturnService.createReplacementInvoice()} định nghĩa
+     * {@code newTotal = oldTotal − totalRefund}), không bao giờ ra đúng phần giữ lại — đã xác nhận
+     * bằng ví dụ số cụ thể trước khi thêm hàm này.
+     */
+    @Query("""
+       select coalesce(sum(rd.originalLineValue - rd.lineRefund), 0)
+       from Returndetail rd
+       join rd.returnID r
+       where r.invoiceID is not null
+         and r.purchaseID is null
+         and r.status in (:debtStatus, :completedStatus)
+         and r.returnDate >= :from
+         and r.returnDate < :to
+       """)
+    BigDecimal sumCustomerReturnRetainedInPeriod(
+            @Param("debtStatus") String debtStatus,
+            @Param("completedStatus") String completedStatus,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
 }

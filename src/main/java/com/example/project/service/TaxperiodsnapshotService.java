@@ -427,10 +427,11 @@ public class TaxperiodsnapshotService {
 
     /**
      * Doanh thu tính thuế TNCN — <strong>chỉ dùng cho thuế TNCN, không dùng cho GTGT</strong> (mục D
-     * của yêu cầu). Bằng {@link #revenueOf} cộng thêm hai khoản riêng cho TNCN: tiền thu được từ
+     * của yêu cầu). Bằng {@link #revenueOf} cộng thêm ba khoản riêng cho TNCN: tiền thu được từ
      * người chịu trách nhiệm đền bù (Income {@code EMPLOYEE}, TT40/2021 Điều 10.1 — khoản bồi thường
-     * chỉ tính vào doanh thu TNCN) và giá vốn của hàng thừa kiểm kê không rõ nguồn gốc (được ghi nhận
-     * là thu nhập vì không có hóa đơn mua thật đứng sau nó).
+     * chỉ tính vào doanh thu TNCN), giá vốn của hàng thừa kiểm kê không rõ nguồn gốc (được ghi nhận
+     * là thu nhập vì không có hóa đơn mua thật đứng sau nó), và phần nhà thuốc GIỮ LẠI khi hoàn tiền
+     * khách ở tỷ lệ &lt;100% (xem {@link #customerReturnRetainedOf}).
      */
     private BigDecimal taxableIncomeRevenueOf(BigDecimal revenue, TaxPeriod period) {
         BigDecimal employeeIncome = safe(incomeRepository.sumByTypeInPeriod(
@@ -439,7 +440,33 @@ public class TaxperiodsnapshotService {
         BigDecimal unknownOriginSurplusCost = safe(stockadjustmentdetailRepository
                 .sumUnknownOriginIncreaseCostInPeriod(StockAdjustmentStatus.COMPLETED,
                         instantStart(period), instantEndExclusive(period)));
-        return revenue.add(employeeIncome).add(unknownOriginSurplusCost);
+        BigDecimal customerReturnRetained = customerReturnRetainedOf(period);
+        return revenue.add(employeeIncome).add(unknownOriginSurplusCost).add(customerReturnRetained);
+    }
+
+    /**
+     * "Thu nhập phát sinh" từ trả hàng một phần ({@code Ho_so_nghiep_vu_v2.xlsx}, sheet
+     * "05_Tra_Hang"): khi một phiếu trả khách hoàn ở tỷ lệ &lt;100%, phần nhà thuốc KHÔNG hoàn lại
+     * ({@code Σ(originalLineValue − lineRefund)} trên các dòng trả) là một khoản thu nhập thật, dù đã
+     * nằm sẵn trong {@code Invoice(thay thế).total} dưới dạng dòng "tiền không kèm hàng" (xem
+     * {@code ReturnService.retainedValueOf}/{@code moneyOnlyLine}) — không phải một khoản mới phát
+     * sinh ngoài sổ sách, mà là làm RÕ một thành phần đã có trong doanh thu hóa đơn, riêng cho mục
+     * đích TNCN.
+     *
+     * <p><strong>Không được suy ra từ {@code Invoice(gốc).total − Invoice(thay thế).total}</strong> —
+     * hiệu đó luôn đúng bằng {@code Return.totalRefund} vì
+     * {@code ReturnService.createReplacementInvoice()} định nghĩa
+     * {@code newTotal = oldTotal − totalRefund}, không bao giờ ra đúng phần giữ lại. Phải tính trực
+     * tiếp từ {@code Returndetail.originalLineValue}/{@code .lineRefund} — xem
+     * {@link ReturndetailRepository#sumCustomerReturnRetainedInPeriod}.</p>
+     *
+     * <p>Không lưu vào đâu cả — tính lại mỗi lần từ dữ liệu gốc, cùng cách mọi khoản khác trong
+     * {@link #taxableIncomeRevenueOf} đang làm.</p>
+     */
+    private BigDecimal customerReturnRetainedOf(TaxPeriod period) {
+        return safe(returndetailRepository.sumCustomerReturnRetainedInPeriod(
+                ReturnStatus.DEBT, ReturnStatus.COMPLETED,
+                instantStart(period), instantEndExclusive(period)));
     }
 
     /** Computes {@link #nextPeriodToClose()} without storing anything. */
