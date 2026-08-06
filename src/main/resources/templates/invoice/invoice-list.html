@@ -395,7 +395,7 @@
                 id="btnBulkSign"
                 class="btn-bulk-sign"
                 disabled
-                data-confirm="Ký các hóa đơn đã chọn? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
+                data-confirm="Ký các hóa đơn đã chọn? Hệ thống sẽ ghi nhận thời gian và người ký cho từng hóa đơn.">
           <i class="ti ti-writing-sign"></i>
           Ký hóa đơn đã chọn
         </button>
@@ -427,7 +427,7 @@
                        class="invoice-check invoice-row-check"
                        name="invoiceIds"
                        th:value="${item.id}"
-                       th:disabled="${item.statusName == 'Đã ký'}"
+                       th:disabled="${item.signed}"
                        form="bulkSignForm">
               </td>
               <td>

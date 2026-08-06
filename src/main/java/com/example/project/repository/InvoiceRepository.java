@@ -25,6 +25,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
        left join fetch i.employeeID
        left join fetch i.customerID
        left join fetch i.originalInvoiceID
+       left join fetch i.signBy
        where i.id = :invoiceId
        """)
     Optional<Invoice> findByIdWithRelations(@Param("invoiceId") Integer invoiceId);
@@ -76,7 +77,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
                  and r.originalInvoiceID = i
              )
              and not (
-               (i.status is null or i.status <> 'Đã ký')
+               i.signAt is null
+               and (i.status is null or i.status <> 'Đã ký')
                and i.returnStatus = 'FULL'
              )
            )
