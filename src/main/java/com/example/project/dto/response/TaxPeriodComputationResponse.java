@@ -52,6 +52,16 @@ public class TaxPeriodComputationResponse {
      */
     private BigDecimal taxableIncomeRevenue;
 
+    /**
+     * "Thu nhập phát sinh (thu nhập khác)" từ trả hàng một phần ({@code Ho_so_nghiep_vu_v2.xlsx},
+     * sheet "05_Tra_Hang") — phần nhà thuốc GIỮ LẠI khi hoàn tiền khách ở tỷ lệ &lt;100%, một trong
+     * ba khoản cộng vào {@link #taxableIncomeRevenue}. Tách riêng ra đây (thay vì chỉ nằm trong tổng)
+     * để hiển thị được trên `tax-period/preview.html`, cùng tinh thần "mỗi tổng đi kèm các thành
+     * phần đã tạo ra nó" của DTO này. Hai khoản còn lại (tiền đền bù nhân viên, giá vốn hàng thừa
+     * kiểm kê không rõ nguồn gốc) chưa được tách riêng — chỉ nằm trong {@link #taxableIncomeRevenue}.
+     */
+    private BigDecimal customerReturnRetained;
+
     /** The percentage-method rate as a human number (e.g. {@code 1.00} for 1%). */
     private BigDecimal directVatRatePercent;
 
