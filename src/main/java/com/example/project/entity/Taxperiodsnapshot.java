@@ -42,6 +42,9 @@ public class Taxperiodsnapshot {
     @Column(name = "quarterlyRevenue", precision = 15, scale = 2)
     private BigDecimal quarterlyRevenue;
 
+    @Column(name = "vatRevenue", precision = 15, scale = 2)
+    private BigDecimal vatRevenue;
+
     @Column(name = "recordedAt")
     private LocalDateTime recordedAt;
 
