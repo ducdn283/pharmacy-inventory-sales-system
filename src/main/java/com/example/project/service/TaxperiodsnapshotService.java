@@ -611,6 +611,7 @@ public class TaxperiodsnapshotService {
                 exempt,
                 !exempt,
                 scaled(revenue),
+                scaled(taxableIncomeRevenue),
                 percent(TaxRevenueGroup.DIRECT_VAT_RATE),
                 scaled(vatOutputFromSales),
                 scaled(vatOutputReturnDeduction),
@@ -627,6 +628,7 @@ public class TaxperiodsnapshotService {
                 scaled(taxableIncome),
                 scaled(incomeTax),
                 percent(incomeTaxRate),
+                scaled(vatPayable.add(incomeTax)),
                 invoices.size(),
                 customerReturns.size(),
                 deductiblePurchases.size(),
@@ -743,6 +745,9 @@ public class TaxperiodsnapshotService {
             throw new IllegalArgumentException(blocked);
         }
 
+        // cashBalanceAtPeriodEnd is validated but no longer stored anywhere — see the note on
+        // quarterlyRevenue/vatRevenue below. Kept as a typed sanity check on the form; nothing reads
+        // it back once submitted.
         BigDecimal cashBalance = request.getCashBalanceAtPeriodEnd();
         if (cashBalance != null && cashBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Số dư quỹ tiền mặt cuối kỳ không được âm");
@@ -758,7 +763,12 @@ public class TaxperiodsnapshotService {
         snapshot.setVatOutput(computed.getVatOutput());
         snapshot.setIncomeTax(computed.getIncomeTax());
         snapshot.setPeriodTaxType(nextGroup);
-        snapshot.setQuarterlyRevenue(cashBalance);
+        // quarterlyRevenue = "Doanh thu TNCN", vatRevenue = "Doanh thu GTGT" (Pharmacy-Database-
+        // Description.docx) — tên quarterlyRevenue là tàn dư đổi tên từ cashBalanceAtPeriodEnd
+        // (§0.10 lịch sử), trước giờ vẫn bị ghi nhầm bằng cashBalance thay vì doanh thu thật. Sửa lại
+        // đúng nghĩa cột, lấy thẳng từ computePeriod() — không suy ra từ đâu khác.
+        snapshot.setQuarterlyRevenue(computed.getTaxableIncomeRevenue());
+        snapshot.setVatRevenue(computed.getPeriodRevenue());
         snapshot.setNote(trimToNull(request.getNote()));
         snapshot.setRecordedAt(LocalDateTime.now(VN_ZONE));
 
@@ -815,6 +825,10 @@ public class TaxperiodsnapshotService {
             incomeTax = BigDecimal.ZERO;
         }
 
+        // cashBalanceAtPeriodEnd validated but not stored — same note as closePeriod(). An amendment
+        // only re-types VAT/PIT figures (see this method's own javadoc: "figures taken as typed, not
+        // a recalculation"); quarterlyRevenue/vatRevenue are never among the typed fields, so they
+        // stay exactly as closePeriod() computed and stored them — not overwritten here at all.
         BigDecimal cashBalance = request.getCashBalanceAtPeriodEnd();
         if (cashBalance != null && cashBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Số dư quỹ tiền mặt cuối kỳ không được âm");
@@ -823,7 +837,6 @@ public class TaxperiodsnapshotService {
         snapshot.setVatOutput(vatOutput);
         snapshot.setIncomeTax(incomeTax);
         snapshot.setPeriodTaxType(nextGroup);
-        snapshot.setQuarterlyRevenue(cashBalance);
         snapshot.setNote(trimToNull(request.getNote()));
 
         taxperiodsnapshotRepository.save(snapshot);
