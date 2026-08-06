@@ -196,6 +196,19 @@
       font-weight: 700;
     }
 
+    .signed-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 13px;
+      line-height: 1;
+    }
+
     .view-link {
       width: 34px;
       height: 34px;
@@ -423,11 +436,16 @@
           <tbody>
             <tr th:each="item : ${invoices}">
               <td th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" style="text-align:center;">
-                <input type="checkbox"
+                <span th:if="${item.signed}"
+                      class="signed-mark"
+                      title="Hóa đơn đã ký điện tử">
+                  <i class="ti ti-writing-sign"></i>
+                </span>
+                <input th:unless="${item.signed}"
+                       type="checkbox"
                        class="invoice-check invoice-row-check"
                        name="invoiceIds"
                        th:value="${item.id}"
-                       th:disabled="${item.signed}"
                        form="bulkSignForm">
               </td>
               <td>
