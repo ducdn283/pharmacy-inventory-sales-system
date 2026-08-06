@@ -299,7 +299,7 @@
                 <th style="width:44px;"></th>
                 <th th:text="${page.partyType == 'CUSTOMER' ? 'Mã phiếu trả' : 'Mã phiếu nhập'}">Mã</th>
                 <th>Ngày</th>
-                <th class="col-amount">Còn nợ</th>
+                <th class="col-amount">Có thể bù trừ</th>
                 <th class="col-amount" style="width:150px;">Bù trừ</th>
               </tr>
             </thead>
@@ -318,12 +318,12 @@
                 </td>
                 <td th:text="${line.dateDisplay}">01/07/2026</td>
                 <td class="col-amount"
-                    th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}"
-                    th:attr="data-remaining=${line.payableAmount}">0đ</td>
+                    th:text="${#numbers.formatDecimal(line.remainingCreatable, 0, 'POINT', 0, 'COMMA') + 'đ'}"
+                    th:attr="data-remaining=${line.remainingCreatable}">0đ</td>
                 <td class="col-amount">
                   <input type="text" inputmode="numeric" data-money class="amount-input payable-amount"
                          th:name="${'payableLines[' + stat.index + '].amount'}"
-                         th:attr="data-remaining=${line.payableAmount}, data-index=${stat.index}"
+                         th:attr="data-remaining=${line.remainingCreatable}, data-index=${stat.index}"
                          disabled>
                 </td>
               </tr>
@@ -366,14 +366,19 @@
       return Number.isFinite(n) ? n : 0;
     }
 
+    function capVnd(value) {
+      const n = parseNum(value);
+      return n > 0 ? Math.floor(n) : 0;
+    }
+
     function formatMoney(n) {
-      return Math.round(n).toLocaleString('vi-VN') + 'đ';
+      return capVnd(n).toLocaleString('vi-VN') + 'đ';
     }
 
     /** Ghi số vào ô data-money rồi phát input để fragment money-input định dạng (650000 → 650.000). */
     function setMoney(input, value) {
       if (!input) return;
-      input.value = value > 0 ? String(Math.round(value)) : '';
+      input.value = value > 0 ? String(capVnd(value)) : '';
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
@@ -428,7 +433,7 @@
           if (!input) return;
           input.disabled = !check.checked;
           if (check.checked && !input.value) {
-            setMoney(input, parseNum(input.dataset.remaining));
+            setMoney(input, capVnd(input.dataset.remaining));
           }
           if (!check.checked) {
             input.value = '';
@@ -443,7 +448,7 @@
     }
 
     function autoFill() {
-      let remaining = Math.round(parseNum(maxOffset));
+      let remaining = capVnd(maxOffset);
       if (remaining <= 0) return;
 
       document.querySelectorAll('.receivable-check, .payable-check').forEach(function (c) {
@@ -460,7 +465,7 @@
           if (remaining <= 0) return;
           const input = row.querySelector(amountClass);
           const check = row.querySelector(checkClass);
-          const cap = Math.round(parseNum(input.dataset.remaining));
+          const cap = capVnd(input.dataset.remaining);
           if (cap <= 0) return;
           const use = Math.min(cap, remaining);
           check.checked = true;
@@ -471,7 +476,7 @@
       }
 
       allocate('#receivableTable', '.receivable-check', '.receivable-amount');
-      const receivableUsed = Math.round(parseNum(maxOffset)) - remaining;
+      const receivableUsed = capVnd(maxOffset) - remaining;
       remaining = receivableUsed;
       allocate('#payableTable', '.payable-check', '.payable-amount');
       updateTotals();

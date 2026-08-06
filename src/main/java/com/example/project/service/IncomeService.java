@@ -443,6 +443,7 @@ public class IncomeService {
         if (isStatus(income.getStatus(), STATUS_CANCELLED)) {
             throw new IllegalArgumentException("Phiếu thu này đã bị hủy trước đó");
         }
+        DebtOffsetSlipCancelGuard.assertIncomeNotCancellable(income);
 
         boolean wasCompleted = isCompletedStatus(income.getStatus());
         if (wasCompleted && IncomeTypeOptionResponse.CUSTOMER.equals(resolveIncomeType(income))) {
@@ -598,7 +599,9 @@ public class IncomeService {
                 returnId,
                 stockAdjustmentId,
                 shiftReportOfAccountId,
-                income.getNote());
+                income.getNote(),
+                !isStatus(income.getStatus(), STATUS_CANCELLED)
+                        && !DebtOffsetSlipCancelGuard.isDebtOffsetIncome(income));
     }
 
     private String displayReason(Income income) {
