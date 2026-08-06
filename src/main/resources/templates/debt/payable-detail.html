@@ -73,29 +73,7 @@
     .type-badge.customer { background: var(--sup-blue-bg); color: var(--sup-blue); }
     .type-badge.supplier { background: var(--sup-amber-bg); color: var(--sup-amber); }
 
-    .sup-table { width: 100%; border-collapse: collapse; min-width: 720px; }
-    .sup-table th {
-      padding: 10px 14px;
-      text-align: left;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--sup-muted);
-      background: #f9fafb;
-      border-bottom: 1px solid var(--sup-border);
-      white-space: nowrap;
-    }
-    .sup-table td {
-      padding: 13px 14px;
-      font-size: 13px;
-      color: #374151;
-      border-bottom: 1px solid #f3f4f6;
-      vertical-align: middle;
-    }
-    .sup-table tr:last-child td { border-bottom: none; }
-    .sup-table tr:hover td { background: #fafafa; }
     .sup-code { font-weight: 600; color: #111827; }
-    .sup-table th.col-amount,
-    .sup-table td.col-amount { text-align: right; }
     .amount-payable { color: var(--sup-red); font-weight: 700; font-variant-numeric: tabular-nums; }
     .detail-sub { font-size: 12px; color: var(--sup-muted); margin-top: 2px; }
 
@@ -119,14 +97,121 @@
       background: var(--sup-red);
       border-color: var(--sup-red);
       color: #fff;
-      border-radius: 10px;
-      font-size: 12.5px;
+      border-radius: 8px;
+      font-size: 11.5px;
       font-weight: 600;
       white-space: nowrap;
+      padding: 4px 8px;
     }
     .btn-pay:hover { background: var(--sup-red-dark); border-color: var(--sup-red-dark); color: #fff; }
 
-    .empty-row td { color: var(--sup-muted); font-size: 13px; padding: 40px 0; text-align: center; }
+    .btn-awaiting {
+      background: var(--sup-amber-bg);
+      border: 1px solid #fcd34d;
+      color: var(--sup-amber);
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+    }
+    .btn-awaiting:hover { background: #fde68a; color: #b45309; }
+
+    .payable-table-wrap {
+      overflow-x: hidden;
+    }
+
+    .payable-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    /* Hai nửa bảng đối xứng: 50% / 50% */
+    .payable-table col:nth-child(1) { width: 14%; }
+    .payable-table col:nth-child(2) { width: 11%; }
+    .payable-table col:nth-child(3) { width: 10%; }
+    .payable-table col:nth-child(4) { width: 15%; }
+    .payable-table col:nth-child(5) { width: 14%; }
+    .payable-table col:nth-child(6) { width: 11%; }
+    .payable-table col:nth-child(7) { width: 10%; }
+    .payable-table col:nth-child(8) { width: 15%; }
+
+    .payable-table th,
+    .payable-table td {
+      padding: 10px 10px;
+      font-size: 12.5px;
+      color: #374151;
+      vertical-align: middle;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .payable-table tbody tr:last-child td { border-bottom: none; }
+    .payable-table tbody tr:hover td { background: #fafafa; }
+
+    .payable-table th {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--sup-muted);
+      background: #f9fafb;
+    }
+
+    .payable-table th.section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111827;
+      background: #fff;
+      border-bottom: 1px solid var(--sup-border);
+      padding-top: 0;
+      padding-bottom: 10px;
+      white-space: normal;
+      line-height: 1.35;
+    }
+
+    .payable-table th.col-amount,
+    .payable-table td.col-amount { text-align: right; }
+
+    .payable-table th.col-action,
+    .payable-table td.col-action { text-align: center; }
+
+    .payable-table th.col-split,
+    .payable-table td.col-split {
+      border-left: 1px solid #e5e7eb;
+    }
+
+    .payable-table td.doc-cell {
+      vertical-align: middle;
+    }
+
+    .payable-table .col-date {
+      white-space: nowrap;
+      font-size: 11.5px;
+    }
+
+    .payable-table .detail-sub {
+      display: block;
+      white-space: normal;
+      line-height: 1.35;
+    }
+
+    .payable-table td.empty-cell {
+      color: var(--sup-muted);
+      text-align: center;
+    }
+
+    .payable-table tr.sub-row td {
+      border-top: 1px dashed #e5e7eb;
+    }
+
+    .empty-state {
+      color: var(--sup-muted);
+      font-size: 13px;
+      padding: 40px 0;
+      text-align: center;
+    }
   </style>
 </head>
 
@@ -167,48 +252,109 @@
         </div>
       </div>
 
-      <h2 class="fs-6 fw-semibold mb-3"
-          th:text="${detail.partyType == 'CUSTOMER' ? 'Danh sách phiếu trả hàng cần hoàn tiền' : 'Danh sách phiếu nhập còn nợ'}">
-        Danh sách phiếu trả hàng cần hoàn tiền
-      </h2>
+      <div th:if="${#lists.isEmpty(detail.lines)}" class="empty-state">Không có khoản nợ.</div>
 
-      <div class="table-responsive">
-        <table class="sup-table">
+      <div th:unless="${#lists.isEmpty(detail.lines)}" class="payable-table-wrap">
+        <table class="payable-table">
+          <colgroup>
+            <col/>
+            <col/>
+            <col/>
+            <col/>
+            <col/>
+            <col/>
+            <col/>
+            <col/>
+          </colgroup>
           <thead>
             <tr>
-              <th th:text="${detail.partyType == 'CUSTOMER' ? 'Mã phiếu trả' : 'Mã phiếu nhập'}">Mã phiếu trả</th>
+              <th colspan="4" class="section-title"
+                  th:text="${detail.partyType == 'CUSTOMER' ? 'Danh sách phiếu trả hàng cần hoàn tiền' : 'Danh sách phiếu nhập còn nợ'}">
+                Danh sách phiếu nhập còn nợ
+              </th>
+              <th colspan="4" class="section-title col-split">Phiếu chi chờ thanh toán</th>
+            </tr>
+            <tr>
+              <th th:text="${detail.partyType == 'CUSTOMER' ? 'Mã phiếu trả' : 'Mã phiếu nhập'}">Mã phiếu nhập</th>
               <th>Ngày</th>
               <th class="col-amount">Nợ</th>
-              <th style="width:120px;text-align:center;"
-                  th:text="${detail.partyType == 'CUSTOMER' ? 'Hoàn tiền' : 'Chi trả'}">Hoàn tiền</th>
+              <th class="col-action"
+                  th:text="${detail.partyType == 'CUSTOMER' ? 'Hoàn tiền' : 'Chi trả'}">Chi trả</th>
+              <th class="col-split">Mã phiếu chi</th>
+              <th>Ngày</th>
+              <th class="col-amount">Số tiền</th>
+              <th class="col-action">Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            <tr th:each="line : ${detail.lines}">
-              <td>
-                <div class="sup-code" th:text="${line.code}">TH-001</div>
-                <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}">HĐ HD-001</div>
-              </td>
-              <td th:text="${line.dateDisplay}">01/07/2026 14:10</td>
-              <td class="col-amount amount-payable"
-                  th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">100.000đ</td>
-              <td style="text-align:center;">
-                <a class="btn btn-sm btn-pay"
-                   th:if="${detail.partyType == 'CUSTOMER'}"
-                   th:href="@{${expenseBasePath + '/create'}(expenseType=${returnRefundExpenseType}, returnId=${line.id})}">
-                  <i class="ti ti-cash me-1"></i>Hoàn tiền
-                </a>
-                <a class="btn btn-sm btn-pay"
-                   th:if="${detail.partyType == 'SUPPLIER'}"
-                   th:href="@{${expenseBasePath + '/create'}(expenseType=${goodsPaymentExpenseType}, purchaseId=${line.id}, supplierId=${detail.entityId})}">
-                  <i class="ti ti-cash me-1"></i>Chi trả
-                </a>
-              </td>
-            </tr>
+            <th:block th:each="line : ${detail.lines}">
+              <tr th:if="${#lists.isEmpty(line.awaitingExpenses)}">
+                <td class="doc-cell">
+                  <div class="sup-code" th:text="${line.code}">PINV-001</div>
+                  <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}">Tổng phiếu nhập</div>
+                </td>
+                <td class="col-date" th:text="${line.dateDisplay}">06/08/2026 19:30</td>
+                <td class="col-amount amount-payable"
+                    th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">300.000đ</td>
+                <td class="col-action">
+                  <a class="btn btn-sm btn-pay"
+                     th:if="${line.remainingCreatable != null and line.remainingCreatable > 0 and detail.partyType == 'CUSTOMER'}"
+                     th:href="@{${expenseBasePath + '/create'}(expenseType=${returnRefundExpenseType}, returnId=${line.id})}">
+                    <i class="ti ti-cash me-1"></i>Hoàn tiền
+                  </a>
+                  <a class="btn btn-sm btn-pay"
+                     th:if="${line.remainingCreatable != null and line.remainingCreatable > 0 and detail.partyType == 'SUPPLIER'}"
+                     th:href="@{${expenseBasePath + '/create'}(expenseType=${goodsPaymentExpenseType}, purchaseId=${line.id}, supplierId=${detail.entityId})}">
+                    <i class="ti ti-cash me-1"></i>Chi trả
+                  </a>
+                </td>
+                <td class="empty-cell col-split" colspan="4">—</td>
+              </tr>
 
-            <tr th:if="${#lists.isEmpty(detail.lines)}" class="empty-row">
-              <td colspan="4">Không có khoản nợ nào.</td>
-            </tr>
+              <tr th:each="expense, stat : ${line.awaitingExpenses}"
+                  th:classappend="${!stat.first} ? ' sub-row'">
+                <td th:if="${stat.first}"
+                    class="doc-cell"
+                    th:rowspan="${#lists.size(line.awaitingExpenses)}">
+                  <div class="sup-code" th:text="${line.code}">PINV-001</div>
+                  <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}">Tổng phiếu nhập</div>
+                </td>
+                <td th:if="${stat.first}"
+                    class="col-date"
+                    th:rowspan="${#lists.size(line.awaitingExpenses)}"
+                    th:text="${line.dateDisplay}">06/08/2026 19:30</td>
+                <td th:if="${stat.first}"
+                    class="col-amount amount-payable"
+                    th:rowspan="${#lists.size(line.awaitingExpenses)}"
+                    th:text="${#numbers.formatDecimal(line.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">300.000đ</td>
+                <td th:if="${stat.first}"
+                    class="col-action"
+                    th:rowspan="${#lists.size(line.awaitingExpenses)}">
+                  <a class="btn btn-sm btn-pay"
+                     th:if="${line.remainingCreatable != null and line.remainingCreatable > 0 and detail.partyType == 'CUSTOMER'}"
+                     th:href="@{${expenseBasePath + '/create'}(expenseType=${returnRefundExpenseType}, returnId=${line.id})}">
+                    <i class="ti ti-cash me-1"></i>Hoàn tiền
+                  </a>
+                  <a class="btn btn-sm btn-pay"
+                     th:if="${line.remainingCreatable != null and line.remainingCreatable > 0 and detail.partyType == 'SUPPLIER'}"
+                     th:href="@{${expenseBasePath + '/create'}(expenseType=${goodsPaymentExpenseType}, purchaseId=${line.id}, supplierId=${detail.entityId})}">
+                    <i class="ti ti-cash me-1"></i>Chi trả
+                  </a>
+                </td>
+                <td class="col-split">
+                  <div class="sup-code" th:text="${expense.code}">PC-001</div>
+                </td>
+                <td class="col-date" th:text="${expense.dateDisplay}">06/08/2026 00:00</td>
+                <td class="col-amount amount-payable"
+                    th:text="${#numbers.formatDecimal(expense.payableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">100.000đ</td>
+                <td class="col-action">
+                  <a class="btn btn-sm btn-awaiting"
+                     th:href="@{${expenseBasePath + '/' + expense.id}}">
+                    <i class="ti ti-clock me-1"></i>Chờ thanh toán
+                  </a>
+                </td>
+              </tr>
+            </th:block>
           </tbody>
         </table>
       </div>

@@ -280,13 +280,19 @@ public class DebtService {
                         .orElse("—");
 
         Map<Integer, BigDecimal> disbursed = disbursedByReturnId();
+        Map<Integer, BigDecimal> awaitingAmounts = awaitingPaymentAmountByReturnId();
+        Map<Integer, List<PayableLineResponse>> awaitingByReturnId = awaitingExpensesByReturnId(customerId);
 
         List<PayableLineResponse> lines = returnRepository.findAllWithRelations().stream()
                 .filter(this::isApprovedCustomerReturn)
                 .filter(ret -> customerId.equals(customerKeyOf(ret.getInvoiceID())))
-                .map(ret -> Map.entry(ret, remainingCustomerReturnPayable(ret, disbursed)))
-                .filter(entry -> isPositive(entry.getValue()))
-                .sorted(Comparator.<Map.Entry<Return, BigDecimal>, Instant>comparing(
+                .map(ret -> {
+                    BigDecimal actualDebt = remainingCustomerReturnPayable(ret, disbursed);
+                    BigDecimal creatable = displayCustomerReturnPayable(ret, disbursed, awaitingAmounts);
+                    return Map.entry(ret, Map.entry(actualDebt, creatable));
+                })
+                .filter(entry -> isPositive(entry.getValue().getKey()))
+                .sorted(Comparator.<Map.Entry<Return, Map.Entry<BigDecimal, BigDecimal>>, Instant>comparing(
                                 entry -> entry.getKey().getReturnDate(),
                                 Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(entry -> entry.getKey().getId(),
@@ -295,8 +301,10 @@ public class DebtService {
                         entry.getKey().getId(),
                         entry.getKey().getReturnCode(),
                         formatVnWallClockInstant(entry.getKey().getReturnDate()),
-                        entry.getValue(),
-                        customerReturnDetail(entry.getKey())))
+                        entry.getValue().getKey(),
+                        customerReturnDetail(entry.getKey()),
+                        entry.getValue().getValue(),
+                        awaitingByReturnId.getOrDefault(entry.getKey().getId(), List.of())))
                 .toList();
 
         BigDecimal total = lines.stream()
@@ -318,12 +326,19 @@ public class DebtService {
                 .map(supplier -> supplier.getName())
                 .orElse("—");
 
+        Map<Integer, BigDecimal> awaitingAmounts = awaitingPaymentAmountByPurchaseId();
+        Map<Integer, List<PayableLineResponse>> awaitingByPurchaseId = awaitingExpensesByPurchaseId(supplierId);
+
         List<PayableLineResponse> lines = purchaseinvoiceService.findPayableInvoices().stream()
                 .filter(purchase -> purchase.getSupplierID() != null
                         && supplierId.equals(purchase.getSupplierID().getId()))
-                .map(purchase -> Map.entry(purchase, purchaseinvoiceService.remainingDebt(purchase)))
-                .filter(entry -> isPositive(entry.getValue()))
-                .sorted(Comparator.<Map.Entry<Purchaseinvoice, BigDecimal>, Instant>comparing(
+                .map(purchase -> {
+                    BigDecimal actualDebt = purchaseinvoiceService.remainingDebt(purchase);
+                    BigDecimal creatable = displaySupplierPayable(purchase, awaitingAmounts);
+                    return Map.entry(purchase, Map.entry(actualDebt, creatable));
+                })
+                .filter(entry -> isPositive(entry.getValue().getKey()))
+                .sorted(Comparator.<Map.Entry<Purchaseinvoice, Map.Entry<BigDecimal, BigDecimal>>, Instant>comparing(
                                 entry -> entry.getKey().getDate(),
                                 Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(entry -> entry.getKey().getId(),
@@ -332,8 +347,10 @@ public class DebtService {
                         entry.getKey().getId(),
                         entry.getKey().getPurchaseInvoiceCode(),
                         formatInstant(entry.getKey().getDate()),
-                        entry.getValue(),
-                        "Tổng phiếu nhập: " + formatMoney(entry.getKey().getTotalAmount())))
+                        entry.getValue().getKey(),
+                        "Tổng phiếu nhập: " + formatMoney(entry.getKey().getTotalAmount()),
+                        entry.getValue().getValue(),
+                        awaitingByPurchaseId.getOrDefault(entry.getKey().getId(), List.of())))
                 .toList();
 
         BigDecimal total = lines.stream()
@@ -448,6 +465,121 @@ public class DebtService {
                 balance.payableAmount,
                 balance.receivableAmount
         );
+    }
+
+    private Map<Integer, List<PayableLineResponse>> awaitingExpensesByReturnId(Integer customerId) {
+        Map<Integer, List<Expense>> byReturnId = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            if (!isStatus(expense.getStatus(), ExpenseStatus.AWAITING_PAYMENT)) {
+                continue;
+            }
+            Return ret = expense.getReturnID();
+            if (ret == null || ret.getId() == null) {
+                continue;
+            }
+            if (!customerId.equals(customerKeyOf(ret.getInvoiceID()))) {
+                continue;
+            }
+            byReturnId.computeIfAbsent(ret.getId(), id -> new ArrayList<>()).add(expense);
+        }
+        return toAwaitingExpenseLinesByDocumentId(byReturnId);
+    }
+
+    private Map<Integer, List<PayableLineResponse>> awaitingExpensesByPurchaseId(Integer supplierId) {
+        Map<Integer, List<Expense>> byPurchaseId = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            if (!isStatus(expense.getStatus(), ExpenseStatus.AWAITING_PAYMENT)) {
+                continue;
+            }
+            Purchaseinvoice purchase = expense.getPurchaseID();
+            if (purchase == null || purchase.getId() == null || purchase.getSupplierID() == null) {
+                continue;
+            }
+            if (!supplierId.equals(purchase.getSupplierID().getId())) {
+                continue;
+            }
+            byPurchaseId.computeIfAbsent(purchase.getId(), id -> new ArrayList<>()).add(expense);
+        }
+        return toAwaitingExpenseLinesByDocumentId(byPurchaseId);
+    }
+
+    private Map<Integer, List<PayableLineResponse>> toAwaitingExpenseLinesByDocumentId(
+            Map<Integer, List<Expense>> expensesByDocumentId) {
+        Map<Integer, List<PayableLineResponse>> linesByDocumentId = new LinkedHashMap<>();
+        for (Map.Entry<Integer, List<Expense>> entry : expensesByDocumentId.entrySet()) {
+            List<PayableLineResponse> lines = entry.getValue().stream()
+                    .sorted(Comparator.comparing(Expense::getDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                            .thenComparing(Expense::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .map(this::toAwaitingExpenseLine)
+                    .toList();
+            linesByDocumentId.put(entry.getKey(), lines);
+        }
+        return linesByDocumentId;
+    }
+
+    private PayableLineResponse toAwaitingExpenseLine(Expense expense) {
+        Return ret = expense.getReturnID();
+        Purchaseinvoice purchase = expense.getPurchaseID();
+        String detail;
+        if (ret != null) {
+            detail = "Phiếu trả: " + nullToEmpty(ret.getReturnCode());
+        } else if (purchase != null) {
+            detail = "Phiếu nhập: " + nullToEmpty(purchase.getPurchaseInvoiceCode());
+        } else {
+            detail = null;
+        }
+        return new PayableLineResponse(
+                expense.getId(),
+                expense.getExpenseCode(),
+                formatInstant(expense.getDate()),
+                nullToZero(expense.getAmount()),
+                detail,
+                null,
+                List.of()
+        );
+    }
+
+    private BigDecimal displayCustomerReturnPayable(Return ret,
+                                                    Map<Integer, BigDecimal> disbursed,
+                                                    Map<Integer, BigDecimal> awaitingAmounts) {
+        return remainingCustomerReturnPayable(ret, disbursed)
+                .subtract(awaitingAmounts.getOrDefault(ret.getId(), BigDecimal.ZERO))
+                .max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal displaySupplierPayable(Purchaseinvoice purchase,
+                                              Map<Integer, BigDecimal> awaitingAmounts) {
+        return purchaseinvoiceService.remainingDebt(purchase)
+                .subtract(awaitingAmounts.getOrDefault(purchase.getId(), BigDecimal.ZERO))
+                .max(BigDecimal.ZERO);
+    }
+
+    private Map<Integer, BigDecimal> awaitingPaymentAmountByReturnId() {
+        Map<Integer, BigDecimal> amounts = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            if (!isStatus(expense.getStatus(), ExpenseStatus.AWAITING_PAYMENT)) {
+                continue;
+            }
+            Return ret = expense.getReturnID();
+            if (ret != null && ret.getId() != null) {
+                amounts.merge(ret.getId(), nullToZero(expense.getAmount()), BigDecimal::add);
+            }
+        }
+        return amounts;
+    }
+
+    private Map<Integer, BigDecimal> awaitingPaymentAmountByPurchaseId() {
+        Map<Integer, BigDecimal> amounts = new LinkedHashMap<>();
+        for (Expense expense : liveExpenses()) {
+            if (!isStatus(expense.getStatus(), ExpenseStatus.AWAITING_PAYMENT)) {
+                continue;
+            }
+            Purchaseinvoice invoice = expense.getPurchaseID();
+            if (invoice != null && invoice.getId() != null) {
+                amounts.merge(invoice.getId(), nullToZero(expense.getAmount()), BigDecimal::add);
+            }
+        }
+        return amounts;
     }
 
     /**
@@ -573,6 +705,10 @@ public class DebtService {
 
     private BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private String nullToEmpty(String value) {
+        return value != null ? value : "—";
     }
 
     private String normalize(String value) {
