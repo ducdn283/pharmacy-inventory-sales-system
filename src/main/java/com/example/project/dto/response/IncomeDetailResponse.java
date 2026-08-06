@@ -38,4 +38,6 @@ public class IncomeDetailResponse {
     private Integer shiftReportOfAccountId;
 
     private String note;
+    /** {@code false} for phiếu thu bù trừ công nợ ({@link DebtOffsetService}). */
+    private boolean cancellable;
 }

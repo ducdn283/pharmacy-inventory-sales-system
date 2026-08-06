@@ -28,6 +28,7 @@ import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.SupplierRepository;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,7 +55,7 @@ public class DebtOffsetService {
     private static final String INCOME_STATUS_REJECTED = "Từ chối";
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
-    private static final String OFFSET_REASON = "Bù trừ công nợ";
+    static final String OFFSET_REASON = "Bù trừ công nợ";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final DebtService debtService;
@@ -101,13 +102,16 @@ public class DebtOffsetService {
         ReceivableDetailResponse receivable = debtService.getReceivableDetail(partyType, entityId);
         PayableDetailResponse payable = debtService.getPayableDetail(partyType, entityId);
 
-        if (!isPositive(receivable.getTotalReceivable()) || !isPositive(payable.getTotalPayable())) {
+        List<PayableLineResponse> offsetPayableLines = offsetPayableLines(payable, partyType);
+        if (!isPositive(receivable.getTotalReceivable()) || !isPositive(sumOffsetablePayable(offsetPayableLines))) {
             throw new IllegalArgumentException(
                     "Chỉ có thể bù trừ khi đối tượng vừa có nợ vừa có cho nợ");
         }
 
+        BigDecimal totalPayableOffsetable = sumOffsetablePayable(offsetPayableLines);
+
         BigDecimal maxOffset = receivable.getTotalReceivable()
-                .min(payable.getTotalPayable())
+                .min(totalPayableOffsetable)
                 .setScale(2, RoundingMode.HALF_UP);
 
         return new DebtOffsetPageResponse(
@@ -119,13 +123,60 @@ public class DebtOffsetService {
                 payable.getTotalPayable(),
                 maxOffset,
                 receivable.getLines(),
-                payable.getLines()
+                offsetPayableLines
         );
+    }
+
+    private List<PayableLineResponse> offsetPayableLines(PayableDetailResponse payable, String partyType) {
+        return payable.getLines().stream()
+                .map(line -> new PayableLineResponse(
+                        line.getId(),
+                        line.getCode(),
+                        line.getDateDisplay(),
+                        line.getPayableAmount(),
+                        line.getDetail(),
+                        offsetablePayableAmount(line.getId(), partyType),
+                        List.of()))
+                .filter(line -> isPositive(line.getRemainingCreatable()))
+                .toList();
+    }
+
+    private BigDecimal sumOffsetablePayable(List<PayableLineResponse> lines) {
+        return lines.stream()
+                .map(PayableLineResponse::getRemainingCreatable)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal offsetablePayableAmount(Integer documentId, String partyType) {
+        if (documentId == null) {
+            return BigDecimal.ZERO;
+        }
+        if (PARTY_CUSTOMER.equals(partyType)) {
+            Return ret = returnRepository.findById(documentId).orElse(null);
+            if (ret == null) {
+                return BigDecimal.ZERO;
+            }
+            return cashRefundAmount(ret)
+                    .subtract(disbursedForReturn(documentId))
+                    .max(BigDecimal.ZERO);
+        }
+        if (PARTY_SUPPLIER.equals(partyType)) {
+            Purchaseinvoice purchase = purchaseinvoiceRepository.findById(documentId).orElse(null);
+            if (purchase == null) {
+                return BigDecimal.ZERO;
+            }
+            return purchaseinvoiceService.remainingDebt(purchase)
+                    .subtract(committedForPurchase(documentId))
+                    .max(BigDecimal.ZERO);
+        }
+        return BigDecimal.ZERO;
     }
 
     /**
      * Offsets receivable against payable for the same party using paired Income/Expense slips
-     * with {@code paidByCredit} only (no cash/banking movement).
+     * with {@code paidByCredit} only (no cash/banking movement). Each slip is created in
+     * {@code Hoàn thành} / {@link ExpenseStatus#COMPLETED} and cannot be cancelled afterward.
      */
     @Transactional
     public void applyOffset(DebtOffsetRequest request, Integer currentAccountId) {
@@ -140,17 +191,18 @@ public class DebtOffsetService {
         Map<Integer, ReceivableLineResponse> receivableById = receivable.getLines().stream()
                 .collect(Collectors.toMap(ReceivableLineResponse::getId, Function.identity(), (a, b) -> a,
                         LinkedHashMap::new));
-        Map<Integer, PayableLineResponse> payableById = payable.getLines().stream()
+        Map<Integer, PayableLineResponse> payableById = offsetPayableLines(payable, partyType).stream()
                 .collect(Collectors.toMap(PayableLineResponse::getId, Function.identity(), (a, b) -> a,
                         LinkedHashMap::new));
 
         List<DebtOffsetLineRequest> receivableAllocations = normalizeAllocations(
                 request.getReceivableLines(), receivableById, ReceivableLineResponse::getReceivableAmount);
         List<DebtOffsetLineRequest> payableAllocations = normalizeAllocations(
-                request.getPayableLines(), payableById, PayableLineResponse::getPayableAmount);
+                request.getPayableLines(), payableById, PayableLineResponse::getRemainingCreatable);
 
         BigDecimal receivableTotal = sumAllocations(receivableAllocations);
         BigDecimal payableTotal = sumAllocations(payableAllocations);
+        BigDecimal totalPayableOffsetable = sumOffsetablePayable(payableById.values().stream().toList());
 
         if (!isPositive(receivableTotal)) {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một khoản cho nợ để bù trừ");
@@ -161,7 +213,7 @@ public class DebtOffsetService {
                             + ") phải bằng tổng bù trừ nợ (" + formatMoney(payableTotal) + ")");
         }
         if (receivableTotal.compareTo(receivable.getTotalReceivable()) > 0
-                || payableTotal.compareTo(payable.getTotalPayable()) > 0) {
+                || payableTotal.compareTo(totalPayableOffsetable) > 0) {
             throw new IllegalArgumentException("Số tiền bù trừ vượt quá số còn lại của đối tượng");
         }
 
@@ -416,10 +468,11 @@ public class DebtOffsetService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Mirrors {@link ExpenseService}: only {@link ExpenseStatus#COMPLETED} is real disbursement. */
     private BigDecimal disbursedAmount(Expense expense) {
-        boolean approved = ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
-                || ExpenseStatus.COMPLETED.equals(expense.getStatus());
-        return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+        return ExpenseStatus.COMPLETED.equals(expense.getStatus())
+                ? nullToZero(expense.getPaid())
+                : BigDecimal.ZERO;
     }
 
     private BigDecimal cashRefundAmount(Return ret) {
@@ -473,9 +526,12 @@ public class DebtOffsetService {
                         throw new IllegalArgumentException("Chứng từ không hợp lệ hoặc không thuộc đối tượng");
                     }
                     BigDecimal remaining = remainingFn.apply(document);
-                    if (line.getAmount().setScale(2, RoundingMode.HALF_UP)
-                            .compareTo(remaining.setScale(2, RoundingMode.HALF_UP)) > 0) {
-                        throw new IllegalArgumentException("Số tiền bù trừ vượt quá số còn lại của chứng từ");
+                    BigDecimal submitted = line.getAmount().setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal capped = remaining.setScale(2, RoundingMode.HALF_UP);
+                    if (submitted.compareTo(capped) > 0) {
+                        throw new IllegalArgumentException(
+                                "Số tiền bù trừ vượt quá số còn lại của chứng từ ("
+                                        + formatMoney(capped) + ")");
                     }
                 })
                 .map(line -> {
@@ -546,5 +602,107 @@ public class DebtOffsetService {
 
     private BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
+    }
+}
+
+@Component
+class DebtOffsetSlipHibernateCustomizer
+        implements org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer {
+
+    @Override
+    public void customize(Map<String, Object> hibernateProperties) {
+        hibernateProperties.put("hibernate.session_factory.interceptor", DebtOffsetSlipCancelGuard.INSTANCE);
+    }
+}
+
+/**
+ * Blocks cancellation of phiếu thu/chi created by {@link DebtOffsetService#applyOffset} without
+ * touching {@code IncomeService} / {@code ExpenseService}.
+ */
+final class DebtOffsetSlipCancelGuard implements org.hibernate.Interceptor, java.io.Serializable {
+
+    static final DebtOffsetSlipCancelGuard INSTANCE = new DebtOffsetSlipCancelGuard();
+
+    private static final String STATUS_PROPERTY = "status";
+    private static final String INCOME_STATUS_CANCELLED = "Đã hủy";
+
+    private DebtOffsetSlipCancelGuard() {
+    }
+
+    @Override
+    public boolean onFlushDirty(Object entity,
+                                Object id,
+                                Object[] currentState,
+                                Object[] previousState,
+                                String[] propertyNames,
+                                org.hibernate.type.Type[] types) {
+        int statusIndex = indexOf(propertyNames, STATUS_PROPERTY);
+        if (statusIndex < 0 || currentState[statusIndex] == null) {
+            return false;
+        }
+        String newStatus = String.valueOf(currentState[statusIndex]);
+        String oldStatus = previousState[statusIndex] == null
+                ? null
+                : String.valueOf(previousState[statusIndex]);
+        if (Objects.equals(newStatus, oldStatus)) {
+            return false;
+        }
+
+        if (entity instanceof Income income && isDebtOffsetSlip(income)) {
+            if (INCOME_STATUS_CANCELLED.equals(newStatus)) {
+                throw new IllegalArgumentException("Phiếu thu bù trừ công nợ không thể hủy");
+            }
+        } else if (entity instanceof Expense expense && isDebtOffsetSlip(expense)) {
+            if (ExpenseStatus.CANCELLED.equals(newStatus)) {
+                throw new IllegalArgumentException("Phiếu chi bù trừ công nợ không thể hủy");
+            }
+        }
+        return false;
+    }
+
+    private static boolean isDebtOffsetSlip(Income income) {
+        return matchesOffsetPayment(income.getReason(),
+                income.getPaidByCash(), income.getPaidByBanking(), income.getPaidByCredit());
+    }
+
+    /** Used by {@code IncomeService} to block cancel on offset slips created by {@link DebtOffsetService}. */
+    public static boolean isDebtOffsetIncome(Income income) {
+        return isDebtOffsetSlip(income);
+    }
+
+    public static void assertIncomeNotCancellable(Income income) {
+        if (isDebtOffsetSlip(income)) {
+            throw new IllegalArgumentException("Phiếu thu bù trừ công nợ không thể hủy");
+        }
+    }
+
+    private static boolean isDebtOffsetSlip(Expense expense) {
+        return matchesOffsetPayment(expense.getReason(),
+                expense.getPaidByCash(), expense.getPaidByBanking(), expense.getPaidByCredit());
+    }
+
+    private static boolean matchesOffsetPayment(String reason,
+                                                java.math.BigDecimal paidByCash,
+                                                java.math.BigDecimal paidByBanking,
+                                                java.math.BigDecimal paidByCredit) {
+        if (!DebtOffsetService.OFFSET_REASON.equals(reason)) {
+            return false;
+        }
+        return isPositiveAmount(paidByCredit)
+                && !isPositiveAmount(paidByCash)
+                && !isPositiveAmount(paidByBanking);
+    }
+
+    private static boolean isPositiveAmount(java.math.BigDecimal value) {
+        return value != null && value.compareTo(java.math.BigDecimal.ZERO) > 0;
+    }
+
+    private static int indexOf(String[] propertyNames, String target) {
+        for (int i = 0; i < propertyNames.length; i++) {
+            if (target.equals(propertyNames[i])) {
+                return i;
+            }
+        }
+        return -1;
     }
 }
