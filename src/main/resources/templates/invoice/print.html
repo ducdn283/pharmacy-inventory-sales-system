@@ -175,6 +175,11 @@
             line-height: 1.6;
         }
 
+        .invoice-note {
+            margin-top: 10px;
+            line-height: 1.55;
+        }
+
         .vat-summary {
             margin-top: 8px;
             line-height: 1.7;
@@ -406,6 +411,12 @@
             <div class="amount-words">
                 Số tiền viết bằng chữ:
                 <span th:text="${printData.totalInWords}">Mười nghìn đồng chẵn.</span>
+            </div>
+
+            <div class="invoice-note"
+                 th:if="${printData.note != null && !printData.note.isBlank()}">
+                <span class="info-label">Ghi chú:</span>
+                <span th:text="${printData.note}">Ghi chú hóa đơn</span>
             </div>
 
             <div class="signature-grid">
