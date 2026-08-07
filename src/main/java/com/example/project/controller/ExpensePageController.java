@@ -5,6 +5,7 @@ import com.example.project.dto.request.ExpenseCreateRequest;
 import com.example.project.dto.response.ExpenseDetailResponse;
 import com.example.project.dto.response.ExpenseListItemResponse;
 import com.example.project.service.ExpenseService;
+import com.example.project.service.FinancialsettingService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,10 +36,13 @@ public class ExpensePageController {
 
     private final ExpenseService expenseService;
     private final CurrentUserContext currentUserContext;
+    private final FinancialsettingService financialsettingService;
 
-    public ExpensePageController(ExpenseService expenseService, CurrentUserContext currentUserContext) {
+    public ExpensePageController(ExpenseService expenseService, CurrentUserContext currentUserContext,
+                                 FinancialsettingService financialsettingService) {
         this.expenseService = expenseService;
         this.currentUserContext = currentUserContext;
+        this.financialsettingService = financialsettingService;
     }
 
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
@@ -157,6 +161,13 @@ public class ExpensePageController {
         // just so the form does not offer a field the server will reject.
         model.addAttribute("canPayCash", currentUserContext.isOwner());
         model.addAttribute("basePath", basePath);
+
+        // Số dư quỹ hiện tại — chỉ để cảnh báo phía client TRƯỚC khi tạo phiếu nếu quỹ - số tiền chi
+        // sẽ âm (xem create.html). Chưa chắc chắn 100% tại thời điểm tạo vì tiền chỉ thực sự rời quỹ
+        // ở confirmPayment(), nhưng vẫn là con số tốt nhất hiện có để cảnh báo sớm cho người lập.
+        var settings = financialsettingService.getSettings();
+        model.addAttribute("cashSafeBalance", settings.getCashSafeBalance());
+        model.addAttribute("bankAccountBalance", settings.getBankAccountBalance());
     }
 
     @GetMapping({OWNER_BASE + "/{expenseId}", ACCOUNTANT_BASE + "/{expenseId}"})
