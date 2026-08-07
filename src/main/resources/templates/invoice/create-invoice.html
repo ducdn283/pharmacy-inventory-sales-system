@@ -1509,8 +1509,16 @@
         return String(nextEntryId++);
     }
 
+    function batchHasExpiration(batch) {
+        return batch?.expirationDateDisplay != null && String(batch.expirationDateDisplay).trim() !== '';
+    }
+
+    /** Nearest-expiry in-stock batch; lots without HSD are only used when no dated lot exists. */
     function getDefaultBatch(product) {
-        return product?.batches?.length ? product.batches[0] : null;
+        const batches = product?.batches || [];
+        if (!batches.length) return null;
+        const withHsd = batches.filter(batchHasExpiration);
+        return withHsd.length ? withHsd[0] : batches[0];
     }
 
     function getDefaultBatchId(product) {

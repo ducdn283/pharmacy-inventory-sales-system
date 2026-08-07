@@ -1,6 +1,5 @@
 package com.example.project.service;
 
-import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
@@ -98,7 +97,6 @@ public class InvoiceService {
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
     private final FinancialsettingService financialsettingService;
-    private final TaxperiodsnapshotService taxperiodsnapshotService;
     private final ReturnRepository returnRepository;
     private final CurrentUserContext currentUserContext;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
@@ -115,7 +113,6 @@ public class InvoiceService {
                           AccountRepository accountRepository,
                           FinancialsettingRepository financialsettingRepository,
                           FinancialsettingService financialsettingService,
-                          TaxperiodsnapshotService taxperiodsnapshotService,
                           ReturnRepository returnRepository,
                           ShiftreportService shiftreportService,
                           CurrentUserContext currentUserContext) {
@@ -128,7 +125,6 @@ public class InvoiceService {
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.financialsettingService = financialsettingService;
-        this.taxperiodsnapshotService = taxperiodsnapshotService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
         this.currentUserContext = currentUserContext;
@@ -308,7 +304,7 @@ public class InvoiceService {
                     .toList();
 
             List<SellBatchOptionResponse> batchOptions = batchRepository
-                    .findInStockBatchesByProduct(product.getProductID())
+                    .findInStockBatchesByProductForSale(product.getProductID())
                     .stream()
                     .map(batch -> new SellBatchOptionResponse(
                             batch.getId(),
@@ -580,7 +576,7 @@ public class InvoiceService {
             return List.of(new BatchAllocation(batch, baseQty));
         }
 
-        List<Batch> batches = batchRepository.findInStockBatchesByProduct(product.getProductID());
+        List<Batch> batches = batchRepository.findInStockBatchesByProductForSale(product.getProductID());
         long available = batches.stream()
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
@@ -633,8 +629,7 @@ public class InvoiceService {
     }
 
     /**
-     * Ký hiệu hóa đơn 7 ký tự: 1 (GTGT, Nhóm 3+) hoặc 2 (bán hàng thường) + K (không mã CQT)
-     * + YY (năm) + M (máy tính tiền) + AA.
+     * Ký hiệu hóa đơn 7 ký tự: 2 (bán hàng) + K (không mã CQT) + YY (năm) + M (máy tính tiền) + AA.
      * Khi ký đẩy lên CQT, ký hiệu K được chuyển thành C (xem {@link #toSignedInvoicePattern}).
      * Hai ký tự cuối lấy từ {@code vatInvoiceSeries} trong thiết lập tài chính.
      */
@@ -656,12 +651,8 @@ public class InvoiceService {
                     "Hai ký tự cuối của ký hiệu mẫu số hóa đơn phải là chữ cái (VD: AA, YY)");
         }
 
-        // '1' = GTGT (Nhóm 3+); '2' = bán hàng thông thường (Nhóm 1–2).
-        Integer revenueGroup = taxperiodsnapshotService.groupForPeriod(
-                TaxperiodsnapshotService.quarterOf(date));
-        char kindPrefix = TaxRevenueGroup.isDeductionGroup(revenueGroup) ? '1' : '2';
         String yearPart = String.format("%02d", date.getYear() % 100);
-        return kindPrefix + "K" + yearPart + "M" + sellerSuffix;
+        return "2K" + yearPart + "M" + sellerSuffix;
     }
 
     /** Chuyển ký hiệu K (không mã CQT) → C (có mã CQT) khi hóa đơn được ký. */

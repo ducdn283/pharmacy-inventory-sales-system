@@ -69,6 +69,21 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    """)
     List<Batch> findInStockBatchesByProduct(@Param("productId") Integer productId);
 
+    /**
+     * Same filters as {@link #findInStockBatchesByProduct}, but FEFO for selling: dated lots first
+     * (soonest expiry), lots without HSD last — used on the create-invoice / selling screen only.
+     */
+    @Query("""
+   select b
+   from Batch b
+   left join fetch b.importUnitID
+   where b.productID.productID = :productId
+     and b.storageQuantity > 0
+     and b.status = true
+   order by case when b.expirationDate is null then 1 else 0 end, b.expirationDate asc, b.id asc
+   """)
+    List<Batch> findInStockBatchesByProductForSale(@Param("productId") Integer productId);
+
     /** Most recent import (batch) events of one product, for the history preview. */
     @Query("""
    select b
