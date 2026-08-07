@@ -369,6 +369,7 @@ public class PurchaseInvoicePageController {
         model.addAttribute("vatRateByProduct", purchaseinvoiceService.getVatRateByProduct());
         model.addAttribute("importUnitByProduct", purchaseinvoiceService.getImportUnitNameByProduct());
         model.addAttribute("sellPriceByProduct", purchaseinvoiceService.getSellPriceByProduct());
+        model.addAttribute("noExpirationProductIds", purchaseinvoiceService.getNoExpirationProductIds());
         model.addAttribute("basePath", resolveBasePath(request));
 
         model.addAttribute("formAction", formAction);
