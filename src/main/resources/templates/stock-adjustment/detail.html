@@ -343,8 +343,9 @@
                     </div>
                 </div>
 
-                <!-- Thất thoát có thể quy trách nhiệm nhân viên: chỉ 2 loại phiếu
-                     (Hủy hàng do lỗi nhân viên / Giảm theo rà soát kho) mới được liên kết phiếu thu đền bù.
+                <!-- Thất thoát có thể quy trách nhiệm nhân viên: CHỈ phiếu "Hủy hàng (lỗi nhân viên)" mới
+                     được liên kết phiếu thu đền bù. Phiếu điều chỉnh theo rà soát kho đã bị loại khỏi đây
+                     (06/08/2026): kiểm đếm chỉ nói tồn thiếu bao nhiêu, không nói thiếu vì đâu và do ai.
                      Đền bù tính theo GIÁ BÁN niêm yết, không phải giá vốn — Dac_ta_Income_StockAdjustment
                      sheet 01. Phiếu thu do Kế toán/Chủ nhà thuốc lập bên màn Phiếu thu. -->
                 <div class="stock-card mb-4" th:if="${detail.employeeLiable}">
