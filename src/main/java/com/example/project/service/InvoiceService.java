@@ -268,11 +268,6 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<SellProductOptionResponse> listSellableProducts() {
-        Map<Integer, Long> stockByProduct = new LinkedHashMap<>();
-        for (Object[] row : batchRepository.sumStorageGroupedByProduct()) {
-            stockByProduct.put((Integer) row[0], (Long) row[1]);
-        }
-
         Map<Integer, List<Productunit>> unitsByProduct = new LinkedHashMap<>();
         for (Productunit unit : productunitRepository.findAllWithProduct()) {
             if (Boolean.FALSE.equals(unit.getIsActive()) || unit.getProductID() == null) {
@@ -286,9 +281,8 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(product.getStatus())) {
                 continue;
             }
-            long baseStock = stockByProduct.getOrDefault(product.getProductID(), 0L);
             List<Productunit> units = unitsByProduct.getOrDefault(product.getProductID(), List.of());
-            if (baseStock <= 0 || units.isEmpty()) {
+            if (units.isEmpty()) {
                 continue;
             }
 
@@ -312,8 +306,16 @@ public class InvoiceService {
                             batch.getLotNumber(),
                             batch.getExpirationDate(),
                             formatLocalDate(batch.getExpirationDate()),
-                            batch.getStorageQuantity()))
+                            batch.getStorageQuantity(),
+                            isBatchExpired(batch)))
                     .toList();
+
+            long baseStock = batchOptions.stream()
+                    .mapToLong(batch -> batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0L)
+                    .sum();
+            if (baseStock <= 0) {
+                continue;
+            }
 
             options.add(new SellProductOptionResponse(
                     product.getProductID(),
@@ -559,6 +561,12 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(batch.getStatus())) {
                 throw new IllegalArgumentException("Lô hàng không còn hoạt động");
             }
+            if (isBatchExpired(batch)) {
+                String code = batch.getBatchCode() != null ? batch.getBatchCode() : String.valueOf(batch.getId());
+                String hsd = formatLocalDate(batch.getExpirationDate());
+                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn"
+                        + (hsd.isBlank() ? "" : " (" + hsd + ") — không thể bán"));
+            }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch < baseQty) {
                 BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0
@@ -578,6 +586,7 @@ public class InvoiceService {
 
         List<Batch> batches = batchRepository.findInStockBatchesByProductForSale(product.getProductID());
         long available = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
         if (available < baseQty) {
@@ -595,6 +604,9 @@ public class InvoiceService {
         for (Batch batch : batches) {
             if (remaining <= 0) {
                 break;
+            }
+            if (isBatchExpired(batch)) {
+                continue;
             }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch <= 0) {
@@ -1400,6 +1412,16 @@ public class InvoiceService {
 
     private String formatLocalDate(LocalDate date) {
         return date == null ? "" : date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    private LocalDate todayInVn() {
+        return LocalDate.now(VN_ZONE);
+    }
+
+    /** Lô đã quá HSD tính tới hôm nay (VN). Không có HSD thì coi như còn hạn. */
+    private boolean isBatchExpired(Batch batch) {
+        LocalDate expiry = batch.getExpirationDate();
+        return expiry != null && expiry.isBefore(todayInVn());
     }
 
     private LocalDate toLocalDate(LocalDateTime dateTime) {

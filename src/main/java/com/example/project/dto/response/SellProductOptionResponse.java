@@ -19,7 +19,7 @@ public class SellProductOptionResponse {
     private String name;
     private String barcode;
 
-    /** On-hand stock in the base unit (SUM of batch storageQuantity). */
+    /** On-hand stock in the base unit (SUM of batch storageQuantity, including expired lots). */
     private long baseStock;
 
     private List<SellUnitOptionResponse> units;
