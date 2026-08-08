@@ -68,12 +68,14 @@ public class StockadjustmentService {
      * Loại phiếu mà giá trị hàng mất được phép đòi nhân viên đền bù — nguồn của phiếu thu
      * "Thu tiền nhân viên đền bù". Không được tính chi phí hợp lý khi có người bồi thường.
      *
-     * <p>{@code COUNT} chỉ tính đền bù cho các dòng {@code OUT} (phần THIẾU): một phiếu rà soát kho có thể
-     * vừa thừa vừa thiếu, phần thừa không phải thất thoát nên không đòi ai được — xem
-     * {@link #isReimbursableLine}.</p>
+     * <p><b>Phiếu điều chỉnh theo rà soát kho ({@code COUNT}) KHÔNG nằm ở đây (user chốt 06/08/2026).</b>
+     * Kiểm đếm chỉ cho biết tồn thực tế thiếu bao nhiêu, <em>không</em> cho biết thiếu vì đâu và do ai —
+     * mất trộm, bán quên ghi, nhập sai sổ đều ra cùng một con số. Gợi ý lập phiếu thu đền bù trên phiếu
+     * kiểm đếm là mặc định quy trách nhiệm cho nhân viên trong khi không có căn cứ nào. Muốn đòi đền bù
+     * thì phải lập phiếu {@code DESTROY_EMPLOYEE_FAULT} — loại đó bản thân nó đã khẳng định có lỗi của
+     * nhân viên và có biên bản xác định kèm theo.</p>
      */
-    private static final Set<String> EMPLOYEE_LIABLE_TYPES =
-            Set.of(TYPE_DESTROY_EMPLOYEE_FAULT, TYPE_COUNT, TYPE_COUNT_DECREASE_LEGACY);
+    private static final Set<String> EMPLOYEE_LIABLE_TYPES = Set.of(TYPE_DESTROY_EMPLOYEE_FAULT);
 
     /**
      * Stock-review status strings we read/write. The Stock Review screen (another teammate) owns the
@@ -248,10 +250,7 @@ public class StockadjustmentService {
                 || TYPE_COUNT_DECREASE_LEGACY.equals(adjustmentType);
     }
 
-    /**
-     * Dòng có được tính vào giá trị đền bù của nhân viên hay không. Chỉ dòng làm GIẢM kho — với phiếu
-     * {@code COUNT} vừa thừa vừa thiếu, phần thừa ({@code IN}) không phải thất thoát.
-     */
+    /** Dòng có được tính vào giá trị đền bù của nhân viên hay không — chỉ dòng làm GIẢM kho. */
     private boolean isReimbursableLine(Stockadjustmentdetail detail) {
         return !DIRECTION_IN.equals(detail.getDirection()) && !DIRECTION_NONE.equals(detail.getDirection());
     }
@@ -266,8 +265,8 @@ public class StockadjustmentService {
         List<Stockadjustmentdetail> details =
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId);
 
-        // Đúng loại phiếu THÌ CHƯA ĐỦ: phiếu COUNT chỉ toàn dòng THỪA thì không có gì thất thoát để
-        // đòi đền bù — hiện khối "Đền bù thất thoát 0đ" chỉ làm người xem tưởng có người phải trả tiền.
+        // Đúng loại phiếu THÌ CHƯA ĐỦ: phiếu không có dòng nào làm giảm kho thì không có gì thất thoát
+        // để đòi đền bù — hiện khối "Đền bù thất thoát 0đ" chỉ làm người xem tưởng có người phải trả tiền.
         boolean employeeLiable = EMPLOYEE_LIABLE_TYPES.contains(adjustment.getAdjustmentType())
                 && details.stream().anyMatch(this::isReimbursableLine);
 

@@ -48,9 +48,9 @@ public class StockAdjustmentDetailPageResponse {
     private String stockReviewTypeDisplay;
 
     /**
-     * True khi loại phiếu là {@code DESTROY_EMPLOYEE_FAULT} / {@code COUNT_DECREASE} — hai loại thất
-     * thoát mà nhân viên có thể phải đền bù, và là hai loại duy nhất được liên kết phiếu thu
-     * (Dac_ta_Income_StockAdjustment sheet 03, cột "Liên kết Income?").
+     * True khi loại phiếu là {@code DESTROY_EMPLOYEE_FAULT} — loại DUY NHẤT được đề xuất đền bù và liên
+     * kết phiếu thu. Phiếu điều chỉnh theo rà soát kho đã bị loại khỏi diện này (06/08/2026): kiểm đếm
+     * chỉ cho biết tồn thiếu bao nhiêu, không cho biết thiếu vì đâu và do ai.
      */
     private boolean employeeLiable;
 
