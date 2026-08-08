@@ -1,6 +1,5 @@
 package com.example.project.service;
 
-import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
@@ -98,7 +97,6 @@ public class InvoiceService {
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
     private final FinancialsettingService financialsettingService;
-    private final TaxperiodsnapshotService taxperiodsnapshotService;
     private final ReturnRepository returnRepository;
     private final CurrentUserContext currentUserContext;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
@@ -115,7 +113,6 @@ public class InvoiceService {
                           AccountRepository accountRepository,
                           FinancialsettingRepository financialsettingRepository,
                           FinancialsettingService financialsettingService,
-                          TaxperiodsnapshotService taxperiodsnapshotService,
                           ReturnRepository returnRepository,
                           ShiftreportService shiftreportService,
                           CurrentUserContext currentUserContext) {
@@ -128,7 +125,6 @@ public class InvoiceService {
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
         this.financialsettingService = financialsettingService;
-        this.taxperiodsnapshotService = taxperiodsnapshotService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
         this.currentUserContext = currentUserContext;
@@ -272,11 +268,6 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<SellProductOptionResponse> listSellableProducts() {
-        Map<Integer, Long> stockByProduct = new LinkedHashMap<>();
-        for (Object[] row : batchRepository.sumStorageGroupedByProduct()) {
-            stockByProduct.put((Integer) row[0], (Long) row[1]);
-        }
-
         Map<Integer, List<Productunit>> unitsByProduct = new LinkedHashMap<>();
         for (Productunit unit : productunitRepository.findAllWithProduct()) {
             if (Boolean.FALSE.equals(unit.getIsActive()) || unit.getProductID() == null) {
@@ -290,9 +281,8 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(product.getStatus())) {
                 continue;
             }
-            long baseStock = stockByProduct.getOrDefault(product.getProductID(), 0L);
             List<Productunit> units = unitsByProduct.getOrDefault(product.getProductID(), List.of());
-            if (baseStock <= 0 || units.isEmpty()) {
+            if (units.isEmpty()) {
                 continue;
             }
 
@@ -308,7 +298,7 @@ public class InvoiceService {
                     .toList();
 
             List<SellBatchOptionResponse> batchOptions = batchRepository
-                    .findInStockBatchesByProduct(product.getProductID())
+                    .findInStockBatchesByProductForSale(product.getProductID())
                     .stream()
                     .map(batch -> new SellBatchOptionResponse(
                             batch.getId(),
@@ -316,8 +306,16 @@ public class InvoiceService {
                             batch.getLotNumber(),
                             batch.getExpirationDate(),
                             formatLocalDate(batch.getExpirationDate()),
-                            batch.getStorageQuantity()))
+                            batch.getStorageQuantity(),
+                            isBatchExpired(batch)))
                     .toList();
+
+            long baseStock = batchOptions.stream()
+                    .mapToLong(batch -> batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0L)
+                    .sum();
+            if (baseStock <= 0) {
+                continue;
+            }
 
             options.add(new SellProductOptionResponse(
                     product.getProductID(),
@@ -563,6 +561,12 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(batch.getStatus())) {
                 throw new IllegalArgumentException("Lô hàng không còn hoạt động");
             }
+            if (isBatchExpired(batch)) {
+                String code = batch.getBatchCode() != null ? batch.getBatchCode() : String.valueOf(batch.getId());
+                String hsd = formatLocalDate(batch.getExpirationDate());
+                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn"
+                        + (hsd.isBlank() ? "" : " (" + hsd + ") — không thể bán"));
+            }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch < baseQty) {
                 BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0
@@ -580,8 +584,9 @@ public class InvoiceService {
             return List.of(new BatchAllocation(batch, baseQty));
         }
 
-        List<Batch> batches = batchRepository.findInStockBatchesByProduct(product.getProductID());
+        List<Batch> batches = batchRepository.findInStockBatchesByProductForSale(product.getProductID());
         long available = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
         if (available < baseQty) {
@@ -599,6 +604,9 @@ public class InvoiceService {
         for (Batch batch : batches) {
             if (remaining <= 0) {
                 break;
+            }
+            if (isBatchExpired(batch)) {
+                continue;
             }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch <= 0) {
@@ -633,8 +641,7 @@ public class InvoiceService {
     }
 
     /**
-     * Ký hiệu hóa đơn 7 ký tự: 1 (GTGT, Nhóm 3+) hoặc 2 (bán hàng thường) + K (không mã CQT)
-     * + YY (năm) + M (máy tính tiền) + AA.
+     * Ký hiệu hóa đơn 7 ký tự: 2 (bán hàng) + K (không mã CQT) + YY (năm) + M (máy tính tiền) + AA.
      * Khi ký đẩy lên CQT, ký hiệu K được chuyển thành C (xem {@link #toSignedInvoicePattern}).
      * Hai ký tự cuối lấy từ {@code vatInvoiceSeries} trong thiết lập tài chính.
      */
@@ -656,12 +663,8 @@ public class InvoiceService {
                     "Hai ký tự cuối của ký hiệu mẫu số hóa đơn phải là chữ cái (VD: AA, YY)");
         }
 
-        // '1' = GTGT (Nhóm 3+); '2' = bán hàng thông thường (Nhóm 1–2).
-        Integer revenueGroup = taxperiodsnapshotService.groupForPeriod(
-                TaxperiodsnapshotService.quarterOf(date));
-        char kindPrefix = TaxRevenueGroup.isDeductionGroup(revenueGroup) ? '1' : '2';
         String yearPart = String.format("%02d", date.getYear() % 100);
-        return kindPrefix + "K" + yearPart + "M" + sellerSuffix;
+        return "2K" + yearPart + "M" + sellerSuffix;
     }
 
     /** Chuyển ký hiệu K (không mã CQT) → C (có mã CQT) khi hóa đơn được ký. */
@@ -1409,6 +1412,16 @@ public class InvoiceService {
 
     private String formatLocalDate(LocalDate date) {
         return date == null ? "" : date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    private LocalDate todayInVn() {
+        return LocalDate.now(VN_ZONE);
+    }
+
+    /** Lô đã quá HSD tính tới hôm nay (VN). Không có HSD thì coi như còn hạn. */
+    private boolean isBatchExpired(Batch batch) {
+        LocalDate expiry = batch.getExpirationDate();
+        return expiry != null && expiry.isBefore(todayInVn());
     }
 
     private LocalDate toLocalDate(LocalDateTime dateTime) {

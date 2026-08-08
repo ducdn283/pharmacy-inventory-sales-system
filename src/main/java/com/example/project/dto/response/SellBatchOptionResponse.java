@@ -20,4 +20,7 @@ public class SellBatchOptionResponse {
     private String expirationDateDisplay;
 
     private Integer storageQuantity;
+
+    /** True when expirationDate is before today — shown on the sell screen but not selectable. */
+    private boolean expired;
 }

@@ -291,7 +291,7 @@ public class SidebarMenuService {
                         "Kho",
                         ICON_WAREHOUSE,
                         i(
-                                "Danh sách điều chỉnh tồn",
+                                "Danh sách điều chỉnh kho",
                                 "/owner/stock-adjustments",
                                 ICON_WAREHOUSE
                         ),
