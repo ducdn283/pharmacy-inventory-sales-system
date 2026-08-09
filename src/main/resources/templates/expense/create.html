@@ -758,7 +758,9 @@
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
 
         returnInput.required = refundPayout;
-        purchaseInput.required = purchaseLink;
+        // Not required, unlike the refund picker above: paying a supplier without pointing at
+        // one specific invoice is legitimate (see the comment on #purchaseLinkFields).
+        purchaseInput.required = false;
 
         // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
         if (!refundPayout) {
