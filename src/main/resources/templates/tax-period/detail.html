@@ -155,7 +155,7 @@
                         </div>
 
                         <div class="col-12">
-                            <div class="info-label">Số dư quỹ tiền mặt cuối kỳ (tham chiếu)</div>
+                            <div class="info-label">Doanh thu tính TNCN của kỳ</div>
                             <div class="info-value"
                                  th:text="${detail.quarterlyRevenue == null
                                            ? 'Chưa ghi nhận'
@@ -332,13 +332,17 @@
 
                 <div class="col-12 col-md-9">
                     <label for="cashBalanceInput" class="form-label">Số dư quỹ tiền mặt cuối kỳ</label>
+                    <!-- Không có cột nào lưu số dư quỹ tiền mặt cuối kỳ đã chốt (giá trị gõ ở đây chỉ
+                         được validate rồi bỏ, xem TaxperiodsnapshotService) — nên không có gì để điền
+                         sẵn. Trước đây ô này bị điền nhầm bằng detail.quarterlyRevenue (Doanh thu tính
+                         TNCN của kỳ, một số liệu hoàn toàn khác), khiến người sửa tưởng đó là số dư quỹ
+                         tiền mặt đang lưu. -->
                     <input id="cashBalanceInput"
                            type="text"
                            inputmode="numeric"
                            data-money
                            name="cashBalanceAtPeriodEnd"
                            class="form-control"
-                           th:value="${detail.quarterlyRevenue}"
                            placeholder="Có thể bỏ trống">
                 </div>
 
