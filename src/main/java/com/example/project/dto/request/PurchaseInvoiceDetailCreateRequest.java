@@ -29,15 +29,11 @@ public class PurchaseInvoiceDetailCreateRequest {
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate productionDate;
 
+    // Bắt buộc hay bỏ qua hoàn toàn tùy loại sản phẩm (Type.sortType/.name) — xem
+    // PurchaseinvoiceService.requiresExpirationDate. Không còn cách nào để người dùng tự xác nhận
+    // "không có hạn" cho một sản phẩm mà loại của nó có theo dõi hạn sử dụng.
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate expirationDate;
-
-    /**
-     * Xác nhận rõ ràng "sản phẩm này không có hạn sử dụng" — không phải cứ để trống
-     * {@code expirationDate} là được coi là không có hạn; phải tick xác nhận thì server mới bỏ qua
-     * yêu cầu bắt buộc, tránh trường hợp quên điền bị hiểu nhầm thành "không có hạn".
-     */
-    private Boolean noExpirationDate;
 
     private String lotNumber;
 

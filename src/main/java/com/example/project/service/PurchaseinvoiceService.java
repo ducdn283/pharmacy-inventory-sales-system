@@ -85,6 +85,14 @@ public class PurchaseinvoiceService {
         this.accountpermissionRepository = accountpermissionRepository;
     }
 
+    // Product types (Type.sortType / Type.name) that need special handling on purchase invoice
+    // creation. Compared accent/case-insensitively against normalize(...) — same idiom
+    // ReturnService.isReturnableProductType() already uses for the identical sortType/name pair.
+    private static final String SORT_COMBO = "combo";
+    private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
+    private static final String DEVICE_MACHINE_MARK = "may";
+    private static final String DEVICE_NO_EXPIRY_MARK = "khong han";
+
     // ------------------------------------------------------------------ who may create
 
     /**
@@ -449,7 +457,9 @@ public class PurchaseinvoiceService {
             detail.setQuantity(item.getQuantity());
             detail.setImportPrice(item.getImportPrice());
             detail.setProductionDate(item.getProductionDate());
-            detail.setExpirationDate(Boolean.TRUE.equals(item.getNoExpirationDate()) ? null : item.getExpirationDate());
+            // Loại hàng không theo dõi hạn sử dụng (xem requiresExpirationDate) luôn lưu null, bất kể
+            // client gửi gì.
+            detail.setExpirationDate(requiresExpirationDate(line.product()) ? item.getExpirationDate() : null);
             detail.setLotNumber(trimToNull(item.getLotNumber()));
             detail.setVatRate(line.vatRate());
             detail.setPreTaxAmount(line.preTaxAmount());
@@ -680,7 +690,6 @@ public class PurchaseinvoiceService {
             item.setImportPrice(detail.getImportPrice());
             item.setProductionDate(detail.getProductionDate());
             item.setExpirationDate(detail.getExpirationDate());
-            item.setNoExpirationDate(detail.getExpirationDate() == null);
             item.setLotNumber(detail.getLotNumber());
             item.setVatRate(detail.getVatRate());
             details.add(item);
@@ -765,12 +774,63 @@ public class PurchaseinvoiceService {
         Product product = productRepository.findById(item.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + item.getProductId()));
 
+        if (isComboProduct(product)) {
+            throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
+                    + "\" là hàng combo — combo được lắp từ các sản phẩm thành phần, không thể nhập trực tiếp");
+        }
+        validateExpirationForType(product, item);
+
         BigDecimal vatRate = resolvePurchaseVatRate(product);
         BigDecimal grossAmount = calculateLineGrossAmount(item);
         BigDecimal preTaxAmount = calculateLinePreTaxAmount(grossAmount, vatRate);
         BigDecimal vatAmount = grossAmount.subtract(preTaxAmount);
 
         return new PreparedPurchaseLine(item, product, grossAmount, vatRate, preTaxAmount, vatAmount);
+    }
+
+    /** Combo là hàng lắp từ các sản phẩm thành phần khi bán — không được nhập trực tiếp từ NCC. */
+    private boolean isComboProduct(Product product) {
+        Type type = product.getTypeID();
+        return type != null && SORT_COMBO.equals(normalize(type.getSortType()));
+    }
+
+    /**
+     * Whether a product's batch needs {@code expirationDate} at all. Every type tracks it except
+     * two "thiết bị y tế" sub-types: "(máy)" (a durable instrument, tracked by warranty rather than
+     * shelf life) and "(không hạn)" (explicitly labelled as never expiring).
+     */
+    private boolean requiresExpirationDate(Product product) {
+        Type type = product.getTypeID();
+        if (type == null || !SORT_MEDICAL_DEVICE.equals(normalize(type.getSortType()))) {
+            return true;
+        }
+        String name = normalize(type.getName());
+        return !(name.contains(DEVICE_MACHINE_MARK) || name.contains(DEVICE_NO_EXPIRY_MARK));
+    }
+
+    /**
+     * Type-aware counterpart of the old blanket check in {@link #validateCreateRequest}: a product
+     * whose type doesn't track expiration (see {@link #requiresExpirationDate}) is exempt entirely
+     * — {@link #persistDetailLines} discards {@code expirationDate} for such a product regardless
+     * of what the client posts. There is no manual override for a product whose type DOES track
+     * expiration; the date is always required, full stop.
+     */
+    private void validateExpirationForType(Product product, PurchaseInvoiceDetailCreateRequest item) {
+        if (!requiresExpirationDate(product)) {
+            return;
+        }
+
+        if (item.getExpirationDate() == null) {
+            throw new IllegalArgumentException("Vui lòng nhập hạn sử dụng cho tất cả sản phẩm");
+        }
+
+        if (!item.getExpirationDate().isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("Hạn sử dụng phải lớn hơn ngày hiện tại");
+        }
+
+        if (item.getProductionDate() != null && item.getExpirationDate().isBefore(item.getProductionDate())) {
+            throw new IllegalArgumentException("Hạn sử dụng không được trước ngày sản xuất");
+        }
     }
 
     /**
@@ -1107,12 +1167,31 @@ public class PurchaseinvoiceService {
      */
     @Transactional(readOnly = true)
     public List<ProductOptionResponse> listProducts() {
-        return productRepository.findAll()
+        return productRepository.findAllWithRelations()
                 .stream()
                 .filter(product -> Boolean.TRUE.equals(product.getStatus()))
+                // Combo là hàng lắp từ các sản phẩm thành phần, không tồn kho trực tiếp — không thể
+                // nhập từ nhà cung cấp, nên không xuất hiện trong bộ chọn sản phẩm của phiếu nhập.
+                .filter(product -> !isComboProduct(product))
                 .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
                 .map(product -> new ProductOptionResponse(product.getProductID(), product.getName()))
                 .toList();
+    }
+
+    /**
+     * Product IDs whose {@code Type} doesn't track an expiration date at all: durable "thiết bị y
+     * tế (máy)" instruments (tracked by warranty, not shelf life) and goods explicitly labelled
+     * "(không hạn)". Feeds the Purchase Invoice create form's "Không có hạn sử dụng" checkbox — for
+     * these products it is forced on automatically instead of left for the pharmacist to remember
+     * to tick. {@link #requiresExpirationDate} is the same rule re-checked server-side on save,
+     * regardless of what the client posts.
+     */
+    @Transactional(readOnly = true)
+    public Set<Integer> getNoExpirationProductIds() {
+        return productRepository.findAllWithRelations().stream()
+                .filter(product -> !requiresExpirationDate(product))
+                .map(Product::getProductID)
+                .collect(Collectors.toSet());
     }
 
     private void validateCreateRequest(PurchaseInvoiceCreateRequest request) {
@@ -1145,23 +1224,9 @@ public class PurchaseinvoiceService {
                 throw new IllegalArgumentException("Vui lòng nhập số lô cho tất cả sản phẩm");
             }
 
-            // "Không có hạn sử dụng" phải được xác nhận rõ ràng — bỏ trống expirationDate mà không
-            // tick xác nhận vẫn bị coi là quên điền, không được hiểu ngầm là "không có hạn".
-            if (!Boolean.TRUE.equals(detail.getNoExpirationDate())) {
-                if (detail.getExpirationDate() == null) {
-                    throw new IllegalArgumentException(
-                            "Vui lòng nhập hạn sử dụng cho tất cả sản phẩm, hoặc xác nhận sản phẩm không có hạn sử dụng");
-                }
-
-                if (!detail.getExpirationDate().isAfter(LocalDate.now())) {
-                    throw new IllegalArgumentException("Hạn sử dụng phải lớn hơn ngày hiện tại");
-                }
-
-                if (detail.getProductionDate() != null
-                        && detail.getExpirationDate().isBefore(detail.getProductionDate())) {
-                    throw new IllegalArgumentException("Hạn sử dụng không được trước ngày sản xuất");
-                }
-            }
+            // Combo-rejection and the type-aware expiration-date rule both need the resolved
+            // Product (see requiresExpirationDate) — checked per-line in prepareLine() instead of
+            // here, right after each line's Product is looked up, to avoid fetching it twice.
         }
     }
 
