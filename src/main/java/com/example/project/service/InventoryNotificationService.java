@@ -28,6 +28,7 @@ public class InventoryNotificationService {
 
     private static final ZoneId VN_ZONE =
             ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final int NEAR_EXPIRY_DAYS = 90;
 
     private final ProductRepository productRepository;
     private final BatchRepository batchRepository;
@@ -353,6 +354,21 @@ public class InventoryNotificationService {
     /**
      * Đánh giá hạn dùng của một lô hàng.
      */
+    /**
+     * Đánh giá hạn dùng của một lô hàng.
+     *
+     * Trên 90 ngày:
+     * - Không có cảnh báo.
+     *
+     * Từ 31 đến 90 ngày:
+     * - NEAR_EXPIRY_BATCH.
+     *
+     * Từ 1 đến 30 ngày:
+     * - EXPIRING_BATCH.
+     *
+     * Hết hạn hôm nay hoặc đã quá hạn:
+     * - EXPIRED_BATCH.
+     */
     private void evaluateBatchExpiry(
             Batch batch,
             LocalDate today
@@ -380,8 +396,12 @@ public class InventoryNotificationService {
                 );
 
         /*
-         * Lô không hoạt động, không còn hàng,
-         * không có hạn dùng hoặc sản phẩm ngừng hoạt động.
+         * Không cảnh báo đối với:
+         *
+         * - Lô ngừng hoạt động.
+         * - Lô không còn hàng.
+         * - Lô không có hạn dùng.
+         * - Sản phẩm đã ngừng hoạt động.
          */
         if (!eligible) {
             resolveBatchAlerts(
@@ -395,12 +415,25 @@ public class InventoryNotificationService {
                 batch.getExpirationDate();
 
         /*
-         * Lô hết hạn hôm nay hoặc đã quá hạn.
+         * Mức 1: đã hết hạn.
+         *
+         * Bao gồm:
+         * - expirationDate bằng hôm nay.
+         * - expirationDate trước hôm nay.
          */
         if (!expiryDate.isAfter(today)) {
             notificationService
                     .resolveByTypeAndReference(
-                            NotificationType.EXPIRING_BATCH,
+                            NotificationType
+                                    .NEAR_EXPIRY_BATCH,
+                            NotificationReferenceType.BATCH,
+                            batch.getId()
+                    );
+
+            notificationService
+                    .resolveByTypeAndReference(
+                            NotificationType
+                                    .EXPIRING_BATCH,
                             NotificationReferenceType.BATCH,
                             batch.getId()
                     );
@@ -434,29 +467,32 @@ public class InventoryNotificationService {
             return;
         }
 
-        LocalDate warningDate =
-                today.plusDays(
-                        expiringBatchDays
+        long remainingDays =
+                ChronoUnit.DAYS.between(
+                        today,
+                        expiryDate
                 );
 
         /*
-         * Lô nằm trong khoảng cảnh báo.
-         * Mặc định là 30 ngày trước hạn.
+         * Mức 2: còn từ 1 đến 30 ngày.
          */
-        if (!expiryDate.isAfter(
-                warningDate
-        )) {
+        if (remainingDays
+                <= expiringBatchDays) {
+
             notificationService
                     .resolveByTypeAndReference(
-                            NotificationType.EXPIRED_BATCH,
+                            NotificationType
+                                    .NEAR_EXPIRY_BATCH,
                             NotificationReferenceType.BATCH,
                             batch.getId()
                     );
 
-            long remainingDays =
-                    ChronoUnit.DAYS.between(
-                            today,
-                            expiryDate
+            notificationService
+                    .resolveByTypeAndReference(
+                            NotificationType
+                                    .EXPIRED_BATCH,
+                            NotificationReferenceType.BATCH,
+                            batch.getId()
                     );
 
             sendBatchAlert(
@@ -476,7 +512,45 @@ public class InventoryNotificationService {
         }
 
         /*
-         * Lô còn xa hạn sử dụng.
+         * Mức 3: còn từ 31 đến 90 ngày.
+         */
+        if (remainingDays
+                <= NEAR_EXPIRY_DAYS) {
+
+            notificationService
+                    .resolveByTypeAndReference(
+                            NotificationType
+                                    .EXPIRING_BATCH,
+                            NotificationReferenceType.BATCH,
+                            batch.getId()
+                    );
+
+            notificationService
+                    .resolveByTypeAndReference(
+                            NotificationType
+                                    .EXPIRED_BATCH,
+                            NotificationReferenceType.BATCH,
+                            batch.getId()
+                    );
+
+            sendBatchAlert(
+                    batch,
+                    NotificationType.NEAR_EXPIRY_BATCH,
+                    "Lô hàng cận hạn",
+                    batchLabel(batch)
+                            + " sẽ hết hạn sau "
+                            + remainingDays
+                            + " ngày và còn "
+                            + batch.getStorageQuantity()
+                            + " đơn vị cơ sở trong kho.",
+                    NotificationSeverity.WARNING
+            );
+
+            return;
+        }
+
+        /*
+         * Còn trên 90 ngày: đóng mọi cảnh báo hạn dùng cũ.
          */
         resolveBatchAlerts(
                 batch.getId()
@@ -649,19 +723,32 @@ public class InventoryNotificationService {
     /**
      * Đóng cả EXPIRING_BATCH và EXPIRED_BATCH của lô.
      */
+    /**
+     * Đóng toàn bộ cảnh báo hạn dùng của một lô.
+     */
     private void resolveBatchAlerts(
             Integer batchId
     ) {
         notificationService
                 .resolveByTypeAndReference(
-                        NotificationType.EXPIRING_BATCH,
+                        NotificationType
+                                .NEAR_EXPIRY_BATCH,
                         NotificationReferenceType.BATCH,
                         batchId
                 );
 
         notificationService
                 .resolveByTypeAndReference(
-                        NotificationType.EXPIRED_BATCH,
+                        NotificationType
+                                .EXPIRING_BATCH,
+                        NotificationReferenceType.BATCH,
+                        batchId
+                );
+
+        notificationService
+                .resolveByTypeAndReference(
+                        NotificationType
+                                .EXPIRED_BATCH,
                         NotificationReferenceType.BATCH,
                         batchId
                 );
