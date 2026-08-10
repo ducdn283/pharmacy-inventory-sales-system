@@ -33,6 +33,7 @@ import com.example.project.repository.InvoicedetailRepository;
 import com.example.project.repository.ProductRepository;
 import com.example.project.repository.ProductunitRepository;
 import com.example.project.repository.ReturnRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -103,6 +104,7 @@ public class InvoiceService {
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
     // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
     private final ShiftreportService shiftreportService;
+    private InventoryAlertEventService inventoryAlertEventService;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           InvoicedetailRepository invoicedetailRepository,
@@ -128,6 +130,14 @@ public class InvoiceService {
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
         this.currentUserContext = currentUserContext;
+    }
+
+    @Autowired
+    public void setInventoryAlertEventService(
+            InventoryAlertEventService inventoryAlertEventService
+    ) {
+        this.inventoryAlertEventService =
+                inventoryAlertEventService;
     }
 
     @Transactional(readOnly = true)
@@ -581,7 +591,18 @@ public class InvoiceService {
             }
             batch.setStorageQuantity(inBatch - baseQty);
             batchRepository.save(batch);
-            return List.of(new BatchAllocation(batch, baseQty));
+
+            scheduleInventoryAlert(
+                    product,
+                    batch
+            );
+
+            return List.of(
+                    new BatchAllocation(
+                            batch,
+                            baseQty
+                    )
+            );
         }
 
         List<Batch> batches = batchRepository.findInStockBatchesByProductForSale(product.getProductID());
@@ -615,10 +636,39 @@ public class InvoiceService {
             int take = Math.min(inBatch, remaining);
             batch.setStorageQuantity(inBatch - take);
             batchRepository.save(batch);
-            allocations.add(new BatchAllocation(batch, take));
+
+            scheduleInventoryAlert(
+                    product,
+                    batch
+            );
+
+            allocations.add(
+                    new BatchAllocation(
+                            batch,
+                            take
+                    )
+            );
+
             remaining -= take;
         }
         return allocations;
+    }
+
+    private void scheduleInventoryAlert(
+            Product product,
+            Batch batch
+    ) {
+        if (inventoryAlertEventService == null
+                || product == null
+                || batch == null) {
+            return;
+        }
+
+        inventoryAlertEventService
+                .checkBatchAfterCommit(
+                        product.getProductID(),
+                        batch.getId()
+                );
     }
 
     /** Số hóa đơn bán hàng: 8 chữ số, không prefix (vd. 00008131). */
