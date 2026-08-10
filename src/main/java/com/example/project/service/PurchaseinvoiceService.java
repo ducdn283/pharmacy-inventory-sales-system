@@ -7,6 +7,7 @@ import com.example.project.dto.request.PurchaseInvoiceDetailCreateRequest;
 import com.example.project.dto.response.*;
 import com.example.project.entity.*;
 import com.example.project.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -60,6 +61,7 @@ public class PurchaseinvoiceService {
     private final ProcurementplanRepository procurementplanRepository;
     private final ProcurementplandetailRepository procurementplandetailRepository;
     private final AccountpermissionRepository accountpermissionRepository;
+    private InventoryAlertEventService inventoryAlertEventService;
 
     public PurchaseinvoiceService(PurchaseinvoiceRepository purchaseinvoiceRepository,
                                   PurchasedetailRepository purchasedetailRepository,
@@ -83,6 +85,14 @@ public class PurchaseinvoiceService {
         this.procurementplandetailRepository = procurementplandetailRepository;
         this.procurementplanRepository = procurementplanRepository;
         this.accountpermissionRepository = accountpermissionRepository;
+    }
+
+    @Autowired
+    public void setInventoryAlertEventService(
+            InventoryAlertEventService inventoryAlertEventService
+    ) {
+        this.inventoryAlertEventService =
+                inventoryAlertEventService;
     }
 
     // Product types (Type.sortType / Type.name) that need special handling on purchase invoice
@@ -743,8 +753,21 @@ public class PurchaseinvoiceService {
         for (Batch batch : batches) {
             batch.setStorageQuantity(0);
             batch.setStatus(false);
-            batch.setNote(appendNote(batch.getNote(), "Đã hủy do phiếu nhập " + formatPurchaseCode(invoice.getId()) + " bị hủy"));
+
+            batch.setNote(
+                    appendNote(
+                            batch.getNote(),
+                            "Đã hủy do phiếu nhập "
+                                    + formatPurchaseCode(
+                                    invoice.getId()
+                            )
+                                    + " bị hủy"
+                    )
+            );
+
             batchRepository.save(batch);
+
+            scheduleInventoryAlert(batch);
         }
 
         invoice.setStatus(PurchaseInvoiceStatus.CANCELLED);
@@ -984,9 +1007,45 @@ public class PurchaseinvoiceService {
         batch.setExpirationDate(detail.getExpirationDate());
         batch.setLotNumber(detail.getLotNumber());
         batch.setStatus(true);
-        batch.setNote("Tạo từ phiếu nhập " + formatPurchaseCode(invoice.getId()));
 
-        batchRepository.save(batch);
+        batch.setNote(
+                "Tạo từ phiếu nhập "
+                        + formatPurchaseCode(
+                        invoice.getId()
+                )
+        );
+
+        Batch savedBatch =
+                batchRepository.save(batch);
+
+        scheduleInventoryAlert(savedBatch);
+    }
+
+    /**
+     * Sau khi transaction phiếu nhập commit:
+     *
+     * - Kiểm tra lại tổng tồn sản phẩm.
+     * - Kiểm tra hạn dùng của lô vừa tạo hoặc bị hủy.
+     */
+    private void scheduleInventoryAlert(
+            Batch batch
+    ) {
+        /*
+         * Có thể null trong các Unit Test cũ vì test không
+         * thực hiện setter injection.
+         */
+        if (inventoryAlertEventService == null
+                || batch == null
+                || batch.getProductID() == null) {
+            return;
+        }
+
+        inventoryAlertEventService
+                .checkBatchAfterCommit(
+                        batch.getProductID()
+                                .getProductID(),
+                        batch.getId()
+                );
     }
 
     private Productunit resolveImportUnit(Product product) {
