@@ -85,6 +85,7 @@ public class SidebarInterceptor implements HandlerInterceptor {
         modelAndView.addObject("currentAccountName", currentAccountName);
         modelAndView.addObject("currentUserInitials", buildInitials(currentAccountName));
         modelAndView.addObject("currentNotificationsUrl", notificationsUrl(role));
+        modelAndView.addObject("currentSellingUrl", sellingUrl(role));
         modelAndView.addObject("unreadNotificationCount", unreadNotificationCount);
         modelAndView.addObject("latestNotifications",
                 currentAccountId == null ? List.of() : notificationService.latest(currentAccountId));
@@ -119,6 +120,17 @@ public class SidebarInterceptor implements HandlerInterceptor {
             return "/accountant/notifications";
         }
         return "#";
+    }
+
+    /** Owner/Pharmacist run the register; Accountant has no selling screen at all. */
+    private String sellingUrl(String role) {
+        if (RoleConstants.OWNER.equals(role)) {
+            return "/owner/selling";
+        }
+        if (RoleConstants.PHARMACIST.equals(role)) {
+            return "/pharmacist/selling";
+        }
+        return null;
     }
 
     private String buildInitials(String fullName) {

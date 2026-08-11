@@ -886,8 +886,7 @@ public class ExpenseService {
         }
 
         if (request.getPurchaseId() == null) {
-            throw new IllegalArgumentException(
-                    "Vui lòng chọn phiếu nhập thanh toán");
+            return null;
         }
 
         Purchaseinvoice invoice = purchaseinvoiceService.findPayableInvoices().stream()

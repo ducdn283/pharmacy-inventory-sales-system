@@ -359,6 +359,30 @@ public class ProcurementplanService {
                 .toList();
     }
 
+    /**
+     * ID các sản phẩm đang cần nhập thêm (tồn <= minStock), dùng cho nút "Tạo dự trù hàng cần nhập"
+     * ở Danh sách hàng hóa — mở form tạo dự trù với sẵn TẤT CẢ sản phẩm này thay vì phải bấm từng
+     * sản phẩm một. Loại trừ combo (không thể mua trực tiếp) và sản phẩm đã ngừng kinh doanh, cùng
+     * tiêu chí "còn hàng hay không" {@link com.example.project.service.ProductService} đang dùng
+     * cho các thẻ thống kê trên màn Danh sách hàng hóa.
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> findRestockNeededProductIds() {
+        Map<Integer, Long> stockByProduct = buildStockByProduct();
+
+        return productRepository.findAllWithRelations().stream()
+                .filter(product -> Boolean.TRUE.equals(product.getStatus()))
+                .filter(product -> !isComboProduct(product))
+                .filter(product -> {
+                    long stock = stockByProduct.getOrDefault(product.getProductID(), 0L);
+                    int minStock = product.getMinStock() == null ? 0 : product.getMinStock();
+                    return stock <= minStock;
+                })
+                .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
+                .map(Product::getProductID)
+                .toList();
+    }
+
     /* Lấy thông tin đầy đủ của các sản phẩm đã có trong form
        và chuyển chúng thành ProcurementProductSearchResponse để hiển thị trên giao diện. */
     @Transactional(readOnly = true)

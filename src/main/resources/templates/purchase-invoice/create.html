@@ -59,6 +59,12 @@
             vertical-align: top;
         }
 
+        /* Loại hàng không theo dõi hạn sử dụng (thiết bị y tế máy/không hạn) — ẩn hẳn ô "Hạn dùng",
+           không có cách nào để người dùng tự nhập/bỏ qua tay (xem applyExpirationVisibility). */
+        .expiration-field.is-not-applicable {
+            display: none;
+        }
+
         .money-summary-row {
             display: flex;
             justify-content: space-between;
@@ -439,18 +445,13 @@
                                                        th:field="*{details[__${iterStat.index}__].productionDate}">
                                             </div>
 
-                                            <div class="subrow-field">
+                                            <div class="subrow-field expiration-field">
                                                 <label>Hạn dùng <span class="text-danger">*</span></label>
                                                 <input type="date"
                                                        class="form-control expiration-date-input"
                                                        th:field="*{details[__${iterStat.index}__].expirationDate}"
                                                        required
-                                                       data-required-message="Vui lòng nhập hạn dùng hoặc tích &quot;Không có hạn sử dụng&quot;">
-                                                <label class="form-check-label small d-flex align-items-center gap-1 mt-1">
-                                                    <input type="checkbox" class="form-check-input no-expiration-checkbox"
-                                                           th:field="*{details[__${iterStat.index}__].noExpirationDate}">
-                                                    Không có hạn sử dụng
-                                                </label>
+                                                       data-required-message="Vui lòng nhập hạn dùng">
                                             </div>
                                         </div>
                                     </td>
@@ -572,6 +573,8 @@
     const vatRateByProduct = /*[[${vatRateByProduct}]]*/ {};
     const importUnitByProduct = /*[[${importUnitByProduct}]]*/ {};
     const sellPriceByProduct = /*[[${sellPriceByProduct}]]*/ {};
+    const noExpirationProductIds = /*[[${noExpirationProductIds}]]*/ [];
+    const noExpirationProductIdSet = new Set((noExpirationProductIds || []).map(String));
 
     // "Giá nhập" gợi ý = SupplierProduct.costPrice gần nhất của cặp (NCC đang chọn, sản phẩm của dòng này).
     function suggestedCostPrice(supplierId, productId) {
@@ -662,31 +665,27 @@
         applySuggestedSellPrice(row);
     }
 
-    // "Không có hạn sử dụng" phải được tích chủ động — không suy ra từ việc để trống ô ngày, để
-    // tránh nhầm "quên điền" với "xác nhận không có hạn" (xem PurchaseinvoiceService.validateCreateRequest).
-    function applyNoExpirationToggle(row) {
-        const checkbox = row.querySelector('.no-expiration-checkbox');
+    // Thiết bị y tế (máy)/(không hạn) không theo dõi hạn sử dụng — ẩn hẳn ô "Hạn dùng", không có
+    // checkbox hay cách nào khác để người dùng tự quyết: đã xác định loại hàng không có hạn thì
+    // không còn gì để nhập/xác nhận (server áp lại đúng quy tắc này bất kể client gửi gì, xem
+    // PurchaseinvoiceService.requiresExpirationDate). Đổi sản phẩm sang loại có theo dõi hạn thì ô
+    // lại hiện ra và bắt buộc như thường.
+    function applyExpirationVisibility(row) {
+        const productInput = row.querySelector('.product-select');
+        const field = row.querySelector('.expiration-field');
         const dateInput = row.querySelector('.expiration-date-input');
-        if (!checkbox || !dateInput) return;
+        if (!productInput || !field || !dateInput) return;
 
-        function sync() {
-            if (checkbox.checked) {
-                dateInput.value = '';
-                dateInput.required = false;
-                dateInput.disabled = true;
-                dateInput.setCustomValidity('');
-            } else {
-                dateInput.disabled = false;
-                dateInput.required = true;
-            }
+        const notApplicable = noExpirationProductIdSet.has(String(productInput.value));
+        field.classList.toggle('is-not-applicable', notApplicable);
+
+        if (notApplicable) {
+            dateInput.value = '';
+            dateInput.required = false;
+            dateInput.setCustomValidity('');
+        } else {
+            dateInput.required = true;
         }
-
-        checkbox.addEventListener('change', sync);
-        sync();
-    }
-
-    function wireNoExpirationToggle(row) {
-        applyNoExpirationToggle(row);
     }
 
     // Thay thông báo mặc định của trình duyệt ("Please fill out this field.") bằng tiếng Việt —
@@ -838,6 +837,7 @@
         applySuggestedVatRate(row);
         applyImportUnitDisplay(row);
         applySuggestedSellPrice(row);
+        applyExpirationVisibility(row);
     }
 
     function wireProductSearch(row) {
@@ -1127,16 +1127,11 @@
                                    data-field="productionDate" name="details[${index}].productionDate">
                         </div>
 
-                        <div class="subrow-field">
+                        <div class="subrow-field expiration-field">
                             <label>Hạn dùng <span class="text-danger">*</span></label>
                             <input type="date" class="form-control expiration-date-input" required
-                                   data-required-message="Vui lòng nhập hạn dùng hoặc tích &quot;Không có hạn sử dụng&quot;"
+                                   data-required-message="Vui lòng nhập hạn dùng"
                                    data-field="expirationDate" name="details[${index}].expirationDate">
-                            <label class="form-check-label small d-flex align-items-center gap-1 mt-1">
-                                <input type="checkbox" class="form-check-input no-expiration-checkbox"
-                                       data-field="noExpirationDate" name="details[${index}].noExpirationDate">
-                                Không có hạn sử dụng
-                            </label>
                         </div>
                     </div>
                 </td>
@@ -1150,7 +1145,7 @@
         wireVatRateSuggestion(tbody);
         wireImportUnitDisplay(tbody);
         wireSellPriceSuggestion(tbody);
-        wireNoExpirationToggle(tbody);
+        applyExpirationVisibility(tbody);
         wireVietnameseRequiredMessages(tbody);
         calculateSummary();
     }
@@ -1187,7 +1182,7 @@
             wireVatRateSuggestion(row);
             wireImportUnitDisplay(row);
             wireSellPriceSuggestion(row);
-            wireNoExpirationToggle(row);
+            applyExpirationVisibility(row);
         });
 
         wireSupplierSearch();

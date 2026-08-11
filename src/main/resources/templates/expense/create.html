@@ -139,6 +139,7 @@
 <body>
 <div th:replace="~{fragments/topbar :: topbar}"></div>
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+<div th:replace="~{fragments/confirm :: confirm}"></div>
 
 <main id="content" class="content expense-page-content">
     <div class="container-fluid">
@@ -266,6 +267,10 @@
                                     <i class="ti ti-info-circle me-1"></i>
                                     <span id="amountLockedText"></span>
                                     <span id="amountLockedSuffix"></span>
+                                </div>
+                                <div class="split-payment-error" id="fundError" role="alert">
+                                    <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                                    <span id="fundErrorText"></span>
                                 </div>
                             </div>
 
@@ -437,6 +442,11 @@
     const CASH_LIMIT_APPLICABLE_TYPES = /*[[${cashLimitApplicableTypes}]]*/ [];
     const CASH_LIMIT_THRESHOLD = /*[[${cashLimitThreshold}]]*/ 5000000;
     const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
+    // Số dư quỹ hiện tại — chỉ để cảnh báo trước khi tạo phiếu nếu quỹ - số tiền chi sẽ âm, xem
+    // fundShortageWarning() bên dưới. Tiền chỉ thực sự rời quỹ ở bước "Xác nhận đã thanh toán"
+    // (ExpenseService.confirmPayment), nên đây là cảnh báo sớm, không phải chặn cứng.
+    const CASH_SAFE_BALANCE = /*[[${cashSafeBalance}]]*/ null;
+    const BANK_ACCOUNT_BALANCE = /*[[${bankAccountBalance}]]*/ null;
 
     // Script nằm sau form nên các phần tử đã tồn tại; cashInput là null với kế toán (không được chi tiền mặt).
     const cashInput = document.getElementById('cashInput');
@@ -593,6 +603,7 @@
         document.getElementById('paidDisplay').textContent = money(paid);
 
         showPaymentError(paymentErrorFor(total, paid, split));
+        applyFundCheck();
     }
 
     function paymentErrorFor(total, paid, split) {
@@ -614,6 +625,58 @@
         const box = document.getElementById('paymentError');
         document.getElementById('paymentErrorText').textContent = message;
         box.classList.toggle('is-visible', !!message);
+    }
+
+    /**
+     * Quỹ hiện tại trừ đi số tiền phiếu này định chi, cho từng hình thức đang thực sự dùng — âm thì
+     * trả về câu cảnh báo, không âm hoặc chưa thiết lập quỹ (null) thì trả về chuỗi rỗng. Quỹ trong
+     * hệ thống dùng để theo dõi dòng tiền thực tế — để nó âm là một trạng thái sai, nên đây là chặn
+     * thật (khoá nút Tạo &amp; duyệt/Gửi duyệt), không phải chỉ nhắc nhở.
+     */
+    function fundShortageWarning() {
+        const cash = pmMoneyValue(cashInput);
+        const banking = pmMoneyValue(bankingInput);
+        const warnings = [];
+
+        if (cash > 0 && CASH_SAFE_BALANCE != null) {
+            const remaining = CASH_SAFE_BALANCE - cash;
+            if (remaining < 0) {
+                warnings.push('Quỹ tiền mặt hiện có ' + money(CASH_SAFE_BALANCE) + ', không đủ để chi '
+                    + money(cash) + ' (thiếu ' + money(-remaining) + ').');
+            }
+        }
+
+        if (banking > 0 && BANK_ACCOUNT_BALANCE != null) {
+            const remaining = BANK_ACCOUNT_BALANCE - banking;
+            if (remaining < 0) {
+                warnings.push('Quỹ ngân hàng hiện có ' + money(BANK_ACCOUNT_BALANCE) + ', không đủ để chi '
+                    + money(banking) + ' (thiếu ' + money(-remaining) + ').');
+            }
+        }
+
+        return warnings.join(' ');
+    }
+
+    function showFundError(message) {
+        const box = document.getElementById('fundError');
+        document.getElementById('fundErrorText').textContent = message;
+        box.classList.toggle('is-visible', !!message);
+    }
+
+    /**
+     * "Lưu nháp" không bị khoá — chưa phải quyết định chi, sửa lại sau vẫn được. Chỉ "Tạo &amp;
+     * duyệt"/"Gửi duyệt" (nút submit action=submit) bị khoá khi quỹ không đủ.
+     */
+    function setCreateButtonsDisabled(disabled) {
+        document.querySelectorAll('#expenseForm button[name="action"][value="submit"]').forEach(function (btn) {
+            btn.disabled = disabled;
+        });
+    }
+
+    function applyFundCheck() {
+        const warning = fundShortageWarning();
+        showFundError(warning);
+        setCreateButtonsDisabled(!!warning);
     }
 
     function currentType() {
@@ -695,7 +758,9 @@
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
 
         returnInput.required = refundPayout;
-        purchaseInput.required = purchaseLink;
+        // Not required, unlike the refund picker above: paying a supplier without pointing at
+        // one specific invoice is legitimate (see the comment on #purchaseLinkFields).
+        purchaseInput.required = false;
 
         // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
         if (!refundPayout) {
@@ -801,6 +866,19 @@
                 if (payable != null && amount > payable) {
                     reject('Số tiền chi vượt quá số còn phải trả cho phiếu nhập này ('
                         + payable.toLocaleString('vi-VN') + 'đ).');
+                    return;
+                }
+            }
+
+            // "Lưu nháp" chưa phải quyết định chi, không bị chặn ở đây — chỉ Tạo & duyệt/Gửi duyệt
+            // mới cần quỹ đủ. Nút đã bị khoá (disabled) bởi applyFundCheck() khi quỹ không đủ, đây là
+            // lớp chặn thứ hai phòng khi form vẫn submit được bằng cách khác (VD nhấn Enter).
+            const submitAction = event.submitter ? event.submitter.value : 'submit';
+            if (submitAction !== 'draft') {
+                const warning = fundShortageWarning();
+                if (warning) {
+                    reject(warning);
+                    return;
                 }
             }
         });

@@ -33,6 +33,7 @@ import com.example.project.repository.InvoicedetailRepository;
 import com.example.project.repository.ProductRepository;
 import com.example.project.repository.ProductunitRepository;
 import com.example.project.repository.ReturnRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -103,6 +104,7 @@ public class InvoiceService {
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
     // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
     private final ShiftreportService shiftreportService;
+    private InventoryAlertEventService inventoryAlertEventService;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           InvoicedetailRepository invoicedetailRepository,
@@ -128,6 +130,14 @@ public class InvoiceService {
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
         this.currentUserContext = currentUserContext;
+    }
+
+    @Autowired
+    public void setInventoryAlertEventService(
+            InventoryAlertEventService inventoryAlertEventService
+    ) {
+        this.inventoryAlertEventService =
+                inventoryAlertEventService;
     }
 
     @Transactional(readOnly = true)
@@ -268,11 +278,6 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<SellProductOptionResponse> listSellableProducts() {
-        Map<Integer, Long> stockByProduct = new LinkedHashMap<>();
-        for (Object[] row : batchRepository.sumStorageGroupedByProduct()) {
-            stockByProduct.put((Integer) row[0], (Long) row[1]);
-        }
-
         Map<Integer, List<Productunit>> unitsByProduct = new LinkedHashMap<>();
         for (Productunit unit : productunitRepository.findAllWithProduct()) {
             if (Boolean.FALSE.equals(unit.getIsActive()) || unit.getProductID() == null) {
@@ -286,9 +291,8 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(product.getStatus())) {
                 continue;
             }
-            long baseStock = stockByProduct.getOrDefault(product.getProductID(), 0L);
             List<Productunit> units = unitsByProduct.getOrDefault(product.getProductID(), List.of());
-            if (baseStock <= 0 || units.isEmpty()) {
+            if (units.isEmpty()) {
                 continue;
             }
 
@@ -312,8 +316,16 @@ public class InvoiceService {
                             batch.getLotNumber(),
                             batch.getExpirationDate(),
                             formatLocalDate(batch.getExpirationDate()),
-                            batch.getStorageQuantity()))
+                            batch.getStorageQuantity(),
+                            isBatchExpired(batch)))
                     .toList();
+
+            long baseStock = batchOptions.stream()
+                    .mapToLong(batch -> batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0L)
+                    .sum();
+            if (baseStock <= 0) {
+                continue;
+            }
 
             options.add(new SellProductOptionResponse(
                     product.getProductID(),
@@ -559,6 +571,12 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(batch.getStatus())) {
                 throw new IllegalArgumentException("Lô hàng không còn hoạt động");
             }
+            if (isBatchExpired(batch)) {
+                String code = batch.getBatchCode() != null ? batch.getBatchCode() : String.valueOf(batch.getId());
+                String hsd = formatLocalDate(batch.getExpirationDate());
+                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn"
+                        + (hsd.isBlank() ? "" : " (" + hsd + ") — không thể bán"));
+            }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch < baseQty) {
                 BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0
@@ -573,11 +591,23 @@ public class InvoiceService {
             }
             batch.setStorageQuantity(inBatch - baseQty);
             batchRepository.save(batch);
-            return List.of(new BatchAllocation(batch, baseQty));
+
+            scheduleInventoryAlert(
+                    product,
+                    batch
+            );
+
+            return List.of(
+                    new BatchAllocation(
+                            batch,
+                            baseQty
+                    )
+            );
         }
 
         List<Batch> batches = batchRepository.findInStockBatchesByProductForSale(product.getProductID());
         long available = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
         if (available < baseQty) {
@@ -596,6 +626,9 @@ public class InvoiceService {
             if (remaining <= 0) {
                 break;
             }
+            if (isBatchExpired(batch)) {
+                continue;
+            }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch <= 0) {
                 continue;
@@ -603,10 +636,39 @@ public class InvoiceService {
             int take = Math.min(inBatch, remaining);
             batch.setStorageQuantity(inBatch - take);
             batchRepository.save(batch);
-            allocations.add(new BatchAllocation(batch, take));
+
+            scheduleInventoryAlert(
+                    product,
+                    batch
+            );
+
+            allocations.add(
+                    new BatchAllocation(
+                            batch,
+                            take
+                    )
+            );
+
             remaining -= take;
         }
         return allocations;
+    }
+
+    private void scheduleInventoryAlert(
+            Product product,
+            Batch batch
+    ) {
+        if (inventoryAlertEventService == null
+                || product == null
+                || batch == null) {
+            return;
+        }
+
+        inventoryAlertEventService
+                .checkBatchAfterCommit(
+                        product.getProductID(),
+                        batch.getId()
+                );
     }
 
     /** Số hóa đơn bán hàng: 8 chữ số, không prefix (vd. 00008131). */
@@ -1400,6 +1462,16 @@ public class InvoiceService {
 
     private String formatLocalDate(LocalDate date) {
         return date == null ? "" : date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    private LocalDate todayInVn() {
+        return LocalDate.now(VN_ZONE);
+    }
+
+    /** Lô đã quá HSD tính tới hôm nay (VN). Không có HSD thì coi như còn hạn. */
+    private boolean isBatchExpired(Batch batch) {
+        LocalDate expiry = batch.getExpirationDate();
+        return expiry != null && expiry.isBefore(todayInVn());
     }
 
     private LocalDate toLocalDate(LocalDateTime dateTime) {

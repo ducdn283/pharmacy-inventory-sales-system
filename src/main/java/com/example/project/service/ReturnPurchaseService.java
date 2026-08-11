@@ -7,6 +7,7 @@ import com.example.project.dto.request.ReturnPurchaseLineRequest;
 import com.example.project.dto.response.*;
 import com.example.project.entity.*;
 import com.example.project.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -76,6 +77,7 @@ public class ReturnPurchaseService {
     private final DebtService debtService;
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final IncomeService incomeService;
+    private InventoryAlertEventService inventoryAlertEventService;
 
     public ReturnPurchaseService(ReturnRepository returnRepository,
                                  ReturndetailRepository returndetailRepository,
@@ -99,6 +101,14 @@ public class ReturnPurchaseService {
         this.debtService = debtService;
         this.purchaseinvoiceService = purchaseinvoiceService;
         this.incomeService = incomeService;
+    }
+
+    @Autowired
+    public void setInventoryAlertEventService(
+            InventoryAlertEventService inventoryAlertEventService
+    ) {
+        this.inventoryAlertEventService =
+                inventoryAlertEventService;
     }
 
     // revenueGroup() / isDeductionGroup() / isTaxExempt() đã bỏ 04/08/2026: hộ kinh doanh KHÔNG khấu trừ
@@ -513,6 +523,16 @@ public class ReturnPurchaseService {
             }
             batch.setStorageQuantity(available - qty);
             saveBatchGuardingConcurrentEdit(batch, detail);
+            if (inventoryAlertEventService != null
+                    && batch.getProductID() != null) {
+
+                inventoryAlertEventService
+                        .checkBatchAfterCommit(
+                                batch.getProductID()
+                                        .getProductID(),
+                                batch.getId()
+                        );
+            }
         }
         applyDebtOffset(ret, ret.getPurchaseID());
         recomputeReturnPurchaseStatus(ret.getPurchaseID());

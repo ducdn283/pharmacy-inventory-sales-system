@@ -7,6 +7,7 @@ import com.example.project.dto.request.ReturnLineRequest;
 import com.example.project.dto.response.*;
 import com.example.project.entity.*;
 import com.example.project.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -129,6 +130,7 @@ public class ReturnService {
     private final InvoiceService invoiceService;
     private final WorkflowNotificationService workflowNotificationService;
     private final ExpenseService expenseService;
+    private InventoryAlertEventService inventoryAlertEventService;
 
     public ReturnService(ReturnRepository returnRepository,
                          ReturndetailRepository returndetailRepository,
@@ -157,6 +159,13 @@ public class ReturnService {
     }
 
     // ------------------------------------------------------------------ list / search
+    @Autowired
+    public void setInventoryAlertEventService(
+            InventoryAlertEventService inventoryAlertEventService
+    ) {
+        this.inventoryAlertEventService =
+                inventoryAlertEventService;
+    }
 
     @Transactional(readOnly = true)
     public Page<ReturnListItemResponse> search(String keyword,
@@ -934,8 +943,26 @@ public class ReturnService {
         batch.setExpirationDate(original != null ? original.getExpirationDate() : null);
         batch.setLotNumber(original != null ? original.getLotNumber() : null);
         batch.setStatus(true);
-        batch.setNote("Hàng trả từ phiếu " + formatCode(ret.getId()));
-        return batchRepository.save(batch);
+
+        batch.setNote(
+                "Hàng trả từ phiếu "
+                        + formatCode(ret.getId())
+        );
+
+        Batch savedBatch =
+                batchRepository.save(batch);
+        if (inventoryAlertEventService != null
+                && savedBatch.getProductID() != null) {
+
+            inventoryAlertEventService
+                    .checkBatchAfterCommit(
+                            savedBatch.getProductID()
+                                    .getProductID(),
+                            savedBatch.getId()
+                    );
+        }
+
+        return savedBatch;
     }
 
     /**

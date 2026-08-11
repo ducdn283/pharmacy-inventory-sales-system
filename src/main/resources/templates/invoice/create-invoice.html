@@ -985,6 +985,22 @@
             border-color: #d1d5db;
         }
 
+        .batch-option.disabled {
+            opacity: 0.72;
+            cursor: not-allowed;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .batch-option.disabled:hover {
+            background: #fef2f2;
+        }
+
+        .batch-option.disabled .batch-option-lot,
+        .batch-option.disabled .batch-option-meta {
+            color: #b91c1c;
+        }
+
         .batch-option-lot {
             font-weight: 600;
             color: #111827;
@@ -1513,9 +1529,34 @@
         return batch?.expirationDateDisplay != null && String(batch.expirationDateDisplay).trim() !== '';
     }
 
+    function batchExpired(batch) {
+        if (!batchHasExpiration(batch)) return false;
+        const parts = String(batch.expirationDateDisplay).trim().split('/');
+        if (parts.length !== 3) return false;
+        const day = Number(parts[0]);
+        const month = Number(parts[1]);
+        const year = Number(parts[2]);
+        if (!day || !month || !year) return false;
+        const expiry = new Date(year, month - 1, day);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        expiry.setHours(0, 0, 0, 0);
+        return expiry < today;
+    }
+
+    function isBatchExpired(batch) {
+        if (batch?.expired === true) return true;
+        if (batch?.expired === false) return false;
+        return batchExpired(batch);
+    }
+
+    function sellableBatches(product) {
+        return (product?.batches || []).filter(b => !isBatchExpired(b));
+    }
+
     /** Nearest-expiry in-stock batch; lots without HSD are only used when no dated lot exists. */
     function getDefaultBatch(product) {
-        const batches = product?.batches || [];
+        const batches = sellableBatches(product);
         if (!batches.length) return null;
         const withHsd = batches.filter(batchHasExpiration);
         return withHsd.length ? withHsd[0] : batches[0];
@@ -1532,7 +1573,7 @@
 
     function getBatchById(product, batchId) {
         if (!product?.batches || batchId == null) return null;
-        return product.batches.find(b => String(b.batchId) === String(batchId)) || null;
+        return sellableBatches(product).find(b => String(b.batchId) === String(batchId)) || null;
     }
 
     function getSelectedBatch(product, entryId) {
@@ -1557,7 +1598,7 @@
     function nextAvailableBatchForProduct(productId) {
         const product = productById[productId];
         const used = getUsedBatchIdsForProduct(productId);
-        return (product?.batches || []).find(b => !used.includes(String(b.batchId))) || null;
+        return sellableBatches(product).find(b => !used.includes(String(b.batchId))) || null;
     }
 
     function canAddBatchEntry(productId) {
@@ -1565,9 +1606,12 @@
     }
 
     function ensureDefaultBatch(entryId, product) {
-        if (selectedBatchByEntry[entryId] != null) return;
+        const currentId = selectedBatchByEntry[entryId];
+        if (currentId != null && getBatchById(product, currentId)) return;
         const id = getDefaultBatchId(product);
         if (id != null) selectedBatchByEntry[entryId] = id;
+        else delete selectedBatchByEntry[entryId];
+        delete batchManualByEntry[entryId];
     }
 
     function effectiveBaseStockForEntry(product, entryId) {
@@ -1648,14 +1692,19 @@
             .filter(b => !usedElsewhere.includes(String(b.batchId)))
             .map(b => {
                 const selected = String(b.batchId) === String(batchPickerSelectedId);
+                const expired = isBatchExpired(b);
                 const lot = b.batchCode || String(b.batchId);
                 const hsd = b.expirationDateDisplay ? 'HSD ' + b.expirationDateDisplay : '';
+                const expiryNote = expired
+                    ? (hsd ? hsd + ' — ' : '') + 'ĐÃ HẾT HẠN'
+                    : hsd;
                 return `
-                    <div class="batch-option ${selected ? 'selected' : ''}" data-batch-id="${b.batchId}"
+                    <div class="batch-option ${expired ? 'disabled' : ''} ${selected ? 'selected' : ''}"
+                         data-batch-id="${b.batchId}" data-expired="${expired ? '1' : '0'}"
                          onclick="pickBatchInModal(${b.batchId})">
                         <div>
                             <div class="batch-option-lot">${escapeHtml(lot)}</div>
-                            <div class="batch-option-meta">${escapeHtml(hsd)}</div>
+                            <div class="batch-option-meta">${escapeHtml(expiryNote)}</div>
                         </div>
                         <div class="batch-option-stock">Tồn: ${b.storageQuantity ?? 0}${baseName ? ' ' + escapeHtml(baseName) : ''}</div>
                     </div>`;
@@ -1713,8 +1762,14 @@
     }
 
     function pickBatchInModal(batchId) {
+        const option = document.querySelector(
+            '#batchPickerBody .batch-option[data-batch-id="' + batchId + '"]'
+        );
+        if (option?.dataset.expired === '1') {
+            return;
+        }
         batchPickerSelectedId = batchId;
-        document.querySelectorAll('#batchPickerBody .batch-option').forEach(el => {
+        document.querySelectorAll('#batchPickerBody .batch-option:not(.disabled)').forEach(el => {
             el.classList.toggle('selected', String(el.dataset.batchId) === String(batchId));
         });
     }
@@ -1723,7 +1778,13 @@
         if (batchPickerEntryId == null) { closeBatchPicker(); return; }
         const entryId = batchPickerEntryId;
         const productId = getEntryProductId(entryId);
+        const product = productById[productId];
         if (batchPickerSelectedId != null) {
+            const picked = getBatchById(product, batchPickerSelectedId);
+            if (!picked) {
+                alert('Lô đã chọn đã hết hạn hoặc không còn khả dụng — vui lòng chọn lô khác.');
+                return;
+            }
             selectedBatchByEntry[entryId] = batchPickerSelectedId;
             const defaultId = getDefaultBatchId(productById[productId]);
             if (String(batchPickerSelectedId) === String(defaultId)) {

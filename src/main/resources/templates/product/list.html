@@ -162,9 +162,20 @@
                 <h1 class="fs-4 mb-1">Danh sách hàng hóa</h1>
                 <p class="text-secondary mb-0">Quản lý thông tin và tồn kho hàng hóa của nhà thuốc</p>
             </div>
-            <a th:if="${basePath == '/owner/products'}" th:href="@{/owner/products/create}" class="btn btn-stock-primary">
-                <i class="ti ti-plus me-1"></i> Tạo hàng hóa
-            </a>
+            <div th:if="${basePath == '/owner/products'}" class="d-flex gap-2">
+                <a th:if="${(stats.lowStockCount + stats.outOfStockCount) > 0}"
+                   th:href="@{/owner/procurements/create-procurementplan(restockAll=true)}"
+                   class="btn btn-outline-warning"
+                   title="Tạo dự trù mua hàng cho toàn bộ sản phẩm sắp hết/hết hàng">
+                    <i class="ti ti-shopping-cart me-1"></i>
+                    Tạo dự trù hàng cần nhập
+                    <span class="badge bg-warning text-dark ms-1"
+                          th:text="${stats.lowStockCount + stats.outOfStockCount}">0</span>
+                </a>
+                <a th:href="@{/owner/products/create}" class="btn btn-stock-primary">
+                    <i class="ti ti-plus me-1"></i> Tạo hàng hóa
+                </a>
+            </div>
         </div>
 
         <div class="row g-3 mb-4">

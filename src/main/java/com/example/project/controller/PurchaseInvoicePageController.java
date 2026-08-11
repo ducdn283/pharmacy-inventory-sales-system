@@ -44,7 +44,6 @@ public class PurchaseInvoicePageController {
     @GetMapping({
             "/owner/purchase-invoices",
             "/accountant/purchase-invoices",
-            "/pharmacist/purchase-invoices"
     })
     public String listPurchaseInvoices(@RequestParam(name = "codeQuery", required = false) String codeQuery,
                                        @RequestParam(name = "supplierQuery", required = false) String supplierQuery,
@@ -285,8 +284,7 @@ public class PurchaseInvoicePageController {
 
     @GetMapping({
             "/owner/purchase-invoices/{purchaseId}",
-            "/accountant/purchase-invoices/{purchaseId}",
-            "/pharmacist/purchase-invoices/{purchaseId}"
+            "/accountant/purchase-invoices/{purchaseId}"
     })
     public String detailPage(@PathVariable Integer purchaseId,
                              HttpServletRequest request,
@@ -309,8 +307,7 @@ public class PurchaseInvoicePageController {
     }
 
     @PostMapping({
-            "/owner/purchase-invoices/{purchaseId}/cancel",
-            "/pharmacist/purchase-invoices/{purchaseId}/cancel"
+            "/owner/purchase-invoices/{purchaseId}/cancel"
     })
     public String cancelPurchaseInvoice(@PathVariable Integer purchaseId,
                                         @RequestParam(name = "reason", required = false) String reason,
@@ -328,8 +325,7 @@ public class PurchaseInvoicePageController {
 
     @GetMapping({
             "/owner/purchase-invoices/{purchaseId}/print",
-            "/accountant/purchase-invoices/{purchaseId}/print",
-            "/pharmacist/purchase-invoices/{purchaseId}/print"
+            "/accountant/purchase-invoices/{purchaseId}/print"
     })
     public String printPage(@PathVariable Integer purchaseId,
                             HttpServletRequest request,
@@ -369,6 +365,7 @@ public class PurchaseInvoicePageController {
         model.addAttribute("vatRateByProduct", purchaseinvoiceService.getVatRateByProduct());
         model.addAttribute("importUnitByProduct", purchaseinvoiceService.getImportUnitNameByProduct());
         model.addAttribute("sellPriceByProduct", purchaseinvoiceService.getSellPriceByProduct());
+        model.addAttribute("noExpirationProductIds", purchaseinvoiceService.getNoExpirationProductIds());
         model.addAttribute("basePath", resolveBasePath(request));
 
         model.addAttribute("formAction", formAction);
@@ -400,10 +397,9 @@ public class PurchaseInvoicePageController {
         if (uri.startsWith("/owner/purchase-invoices")) {
             return "/owner/purchase-invoices";
         }
-        if (uri.startsWith("/pharmacist/purchase-invoices")) {
-            return "/pharmacist/purchase-invoices";
+        if (uri.startsWith("/accountant/purchase-invoices")) {
+            return "/accountant/purchase-invoices";
         }
-
-        return "/accountant/purchase-invoices";
+        return "/";
     }
 }
