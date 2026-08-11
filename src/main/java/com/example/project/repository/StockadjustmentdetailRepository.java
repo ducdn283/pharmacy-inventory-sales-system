@@ -41,10 +41,10 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
      *       dòng biến động "0" vô nghĩa giữa bảng.</li>
      * </ul>
      *
-     * <p><b>⚠️ Còn lệch, KHÔNG sửa được từ đây:</b> bên tiêu thụ ({@code ProductService.loadRecentHistory})
-     * đang đổi dấu âm cho mọi dòng bất kể {@code direction}, nên dòng {@code IN} (hàng thừa của phiếu
-     * rà soát kho) vẫn hiện ngược dấu; nhãn vẫn ghi "Xuất kho - " và mã vẫn dựng tiền tố {@code SO-}
-     * trong khi phiếu thật mang mã {@code PDC-}. Đó là file của module Sản phẩm — đã báo, chưa sửa.</p>
+     * <p>Phía tiêu thụ ({@code ProductService.loadRecentHistory}) đã được sửa cùng ngày để khớp: dấu
+     * và nhãn "Nhập kho -"/"Xuất kho -" giờ theo đúng {@code direction} của từng dòng thay vì luôn trừ,
+     * và mã tham chiếu hiển thị đúng {@code stockAdjustmentCode} thật ({@code PDC-...}) thay vì tiền tố
+     * {@code SO-} tự dựng.</p>
      */
     @Query("""
        select d

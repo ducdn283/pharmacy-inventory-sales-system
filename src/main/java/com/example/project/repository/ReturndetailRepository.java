@@ -27,10 +27,10 @@ public interface ReturndetailRepository extends JpaRepository<Returndetail, Inte
      *       hàng hỏng) ghi 0, hiện ra chỉ là một dòng biến động "0".</li>
      * </ul>
      *
-     * <p><b>⚠️ Còn lệch, không sửa được từ đây:</b> {@code ProductService.loadRecentHistory} cộng
-     * {@code +baseQtyRestored} cho MỌI phiếu trả, trong khi trả NCC là hàng RỜI kho
-     * ({@code ReturnPurchaseService} ghi {@code baseQtyRestored = qty} rồi TRỪ {@code storageQuantity})
-     * ⇒ phiếu trả NCC hiện dấu cộng. File của module Sản phẩm — đã báo, chưa sửa.</p>
+     * <p>Phía tiêu thụ ({@code ProductService.loadRecentHistory}) đã được sửa cùng ngày để khớp: dấu
+     * theo đúng {@code Return.returnType} — {@code CUSTOMER} cộng tồn ("Khách trả hàng"), {@code
+     * SUPPLIER} trừ tồn ("Trả hàng NCC", đúng chiều {@code ReturnPurchaseService.applyReturnEffect()}
+     * đang trừ {@code storageQuantity}) — thay vì luôn cộng như trước.</p>
      */
     @Query("""
        select d
