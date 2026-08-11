@@ -93,12 +93,9 @@ public class Invoice {
     @Column(name = "returnStatus", length = 50)
     private String returnStatus;
 
-    @Column(name = "signAt")
-    private LocalDateTime signAt;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "signBy")
-    private Account signBy;
+    @Size(max = 255)
+    @Column(name = "image")
+    private String image;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shiftReportID")

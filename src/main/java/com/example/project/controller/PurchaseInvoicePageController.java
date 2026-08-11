@@ -29,9 +29,6 @@ import java.util.stream.Collectors;
 @Controller
 public class PurchaseInvoicePageController {
 
-    private static final String MSG_ACCOUNTANT_HANDLES_CREATE =
-            "Đã có Kế toán phụ trách tạo phiếu nhập — vui lòng vào phiếu \"Chờ duyệt\" để duyệt.";
-
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final CurrentUserContext currentUserContext;
 
@@ -99,15 +96,11 @@ public class PurchaseInvoicePageController {
     }
 
     // ------------------------------------------------------------------ Owner: direct one-step create
-    // Only reachable while there is no active Accountant — see PurchaseinvoiceService class javadoc.
+    // Always reachable — the Owner has full permission regardless of whether an Accountant is
+    // active, see PurchaseinvoiceService class javadoc.
 
     @GetMapping("/owner/purchase-invoices/create")
-    public String createPage(HttpServletRequest request, Model model, RedirectAttributes redirectAttributes) {
-        if (!purchaseinvoiceService.canCreatePurchaseInvoice(RoleConstants.OWNER)) {
-            redirectAttributes.addFlashAttribute("errorMessage", MSG_ACCOUNTANT_HANDLES_CREATE);
-            return "redirect:/owner/purchase-invoices";
-        }
-
+    public String createPage(HttpServletRequest request, Model model) {
         PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
         PurchaseInvoiceDetailCreateRequest firstItem = new PurchaseInvoiceDetailCreateRequest();
         form.getDetails().add(firstItem);
@@ -124,11 +117,6 @@ public class PurchaseInvoicePageController {
                                         HttpServletRequest request,
                                         Model model,
                                         RedirectAttributes redirectAttributes) {
-        if (!purchaseinvoiceService.canCreatePurchaseInvoice(RoleConstants.OWNER)) {
-            redirectAttributes.addFlashAttribute("errorMessage", MSG_ACCOUNTANT_HANDLES_CREATE);
-            return "redirect:/owner/purchase-invoices";
-        }
-
         if (bindingResult.hasErrors()) {
             addCreatePageData(request, model, "/owner/purchase-invoices/create", false, false);
             return "purchase-invoice/create";

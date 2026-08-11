@@ -63,4 +63,7 @@ public class Invoicedetail {
     @ColumnDefault("0")
     @Column(name = "returnedQty")
     private Integer returnedQty;
+
+    @Column(name = "note", columnDefinition = "TEXT")
+    private String note;
 }

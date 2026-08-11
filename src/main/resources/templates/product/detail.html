@@ -226,6 +226,7 @@
                         <th>Mã tham chiếu</th>
                         <th>Số lô</th>
                         <th class="text-end">SL thay đổi</th>
+                        <th class="text-end">Tổng tồn sau thay đổi</th>
                         <th>Ghi chú</th>
                     </tr>
                     </thead>
@@ -237,10 +238,12 @@
                         <td th:text="${h.lotNumber != null ? h.lotNumber : '—'}">LOT-001</td>
                         <td class="text-end" th:classappend="${h.quantityChange >= 0} ? ' qty-in' : ' qty-out'"
                             th:text="${(h.quantityChange > 0 ? '+' + h.quantityChange : h.quantityChange) + (h.unitName != null and !h.unitName.isEmpty() ? ' ' + h.unitName : '')}">+30 hộp</td>
+                        <td class="text-end"
+                            th:text="${h.resultingStock != null ? h.resultingStock + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName) : '—'}">1000 Viên</td>
                         <td th:text="${h.note != null and !h.note.isEmpty()} ? ${h.note} : '—'">—</td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(product.recentHistory)}">
-                        <td colspan="6" class="text-center text-secondary py-3">Chưa có biến động tồn kho gần đây.</td>
+                        <td colspan="7" class="text-center text-secondary py-3">Chưa có biến động tồn kho gần đây.</td>
                     </tr>
                     </tbody>
                 </table>
