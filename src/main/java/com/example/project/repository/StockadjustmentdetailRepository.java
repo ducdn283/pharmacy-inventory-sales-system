@@ -25,13 +25,35 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
            """)
     List<Stockadjustmentdetail> findByStockOutIdWithRelations(Integer stockOutId);
 
-    /** Most recent stock-out lines of one product, for the Product Detail history preview. */
+    /**
+     * Dòng phiếu điều chỉnh kho gần nhất của một sản phẩm, cho khối "Lịch sử tồn kho gần đây" ở màn chi
+     * tiết sản phẩm. <b>Chỉ những dòng THẬT SỰ làm đổi tồn kho.</b>
+     *
+     * <p>Hai điều kiện lọc thêm ngày 11/08/2026 — trước đó câu này lấy MỌI dòng nên bảng lịch sử ghi
+     * nhận cả những biến động chưa từng xảy ra:</p>
+     * <ul>
+     *   <li>{@code status = 'Hoàn thành'} (viết thẳng chuỗi vì JPQL không tham chiếu được hằng
+     *       {@code StockAdjustmentStatus.COMPLETED}) — {@code Nháp} chưa hề áp vào tồn, {@code Đã hủy} đã được
+     *       {@code StockadjustmentService.cancel} đảo ngược đúng phần đã cộng/trừ. Để chúng trong lịch
+     *       sử là cộng dồn ra một con số không bao giờ khớp {@code batch.storageQuantity}.</li>
+     *   <li>{@code direction <> 'NONE'} — dòng của phiếu {@code DATE_ADJUSTMENT} chỉ sửa
+     *       {@code batch.expirationDate}, {@code baseQtyDeducted} luôn bằng 0 nên nó hiện thành một
+     *       dòng biến động "0" vô nghĩa giữa bảng.</li>
+     * </ul>
+     *
+     * <p><b>⚠️ Còn lệch, KHÔNG sửa được từ đây:</b> bên tiêu thụ ({@code ProductService.loadRecentHistory})
+     * đang đổi dấu âm cho mọi dòng bất kể {@code direction}, nên dòng {@code IN} (hàng thừa của phiếu
+     * rà soát kho) vẫn hiện ngược dấu; nhãn vẫn ghi "Xuất kho - " và mã vẫn dựng tiền tố {@code SO-}
+     * trong khi phiếu thật mang mã {@code PDC-}. Đó là file của module Sản phẩm — đã báo, chưa sửa.</p>
+     */
     @Query("""
        select d
        from Stockadjustmentdetail d
        left join fetch d.stockAdjustmentID
        left join fetch d.batchID
        where d.productID.productID = :productId
+         and d.stockAdjustmentID.status = 'Hoàn thành'
+         and d.direction <> 'NONE'
        order by d.stockAdjustmentID.date desc
        """)
     List<Stockadjustmentdetail> findRecentStockOutsByProduct(@Param("productId") Integer productId,
