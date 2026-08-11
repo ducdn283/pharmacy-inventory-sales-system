@@ -83,6 +83,7 @@ public class InvoiceService {
     private static final String STATUS_SIGNED = "Đã ký";
     private static final String STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
+    private static final List<String> ALL_STATUSES = List.of(STATUS_COMPLETED, STATUS_DEBT);
     private static final String RETAIL_BUYER_PRINT_LABEL = "Bán cho người tiêu dùng";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -179,12 +180,7 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<String> listStatuses() {
-        return invoiceRepository.findAll().stream()
-                .map(Invoice::getStatus)
-                .filter(status -> status != null && !status.isBlank())
-                .distinct()
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
+        return ALL_STATUSES;
     }
 
     @Transactional(readOnly = true)
