@@ -593,7 +593,7 @@ public class InvoiceService {
             if (isBatchExpired(batch)) {
                 String code = batch.getBatchCode() != null ? batch.getBatchCode() : String.valueOf(batch.getId());
                 String hsd = formatLocalDate(batch.getExpirationDate());
-                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn"
+                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn sử dụng"
                         + (hsd.isBlank() ? "" : " (" + hsd + ") — không thể bán"));
             }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
@@ -630,6 +630,9 @@ public class InvoiceService {
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
         if (available < baseQty) {
+            if (hasOnlyExpiredStock(batches)) {
+                throwNoSellableBatchStock(product);
+            }
             BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0 ? ratio : BigDecimal.ONE;
             long availableInUnit = BigDecimal.valueOf(available)
                     .divide(safeRatio, 0, RoundingMode.DOWN).longValue();
@@ -1435,6 +1438,28 @@ public class InvoiceService {
     private boolean isBatchExpired(Batch batch) {
         LocalDate expiry = batch.getExpirationDate();
         return expiry != null && expiry.isBefore(todayInVn());
+    }
+
+    private boolean hasOnlyExpiredStock(List<Batch> batches) {
+        if (batches == null || batches.isEmpty()) {
+            return false;
+        }
+        long totalStock = batches.stream()
+                .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
+                .sum();
+        if (totalStock <= 0) {
+            return false;
+        }
+        long sellableStock = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
+                .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
+                .sum();
+        return sellableStock == 0;
+    }
+
+    private void throwNoSellableBatchStock(Product product) {
+        throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
+                + "\" đã hết lô còn hạn sử dụng — không thể bán.");
     }
 
     private LocalDate toLocalDate(LocalDateTime dateTime) {
