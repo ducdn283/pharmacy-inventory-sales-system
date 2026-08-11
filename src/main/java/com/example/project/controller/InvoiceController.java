@@ -142,42 +142,6 @@ public class InvoiceController {
         return "invoice/print";
     }
 
-    @PostMapping({"/owner/invoices/{invoiceId}/sign", "/accountant/invoices/{invoiceId}/sign"})
-    public String signInvoice(@PathVariable Integer invoiceId,
-                              HttpServletRequest request,
-                              RedirectAttributes redirectAttributes) {
-        String basePath = resolveBasePath(request);
-        try {
-            invoiceService.sign(invoiceId);
-            redirectAttributes.addFlashAttribute("success", "Đã ký hóa đơn thành công");
-        } catch (IllegalArgumentException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
-        }
-        return "redirect:" + basePath + "/" + invoiceId;
-    }
-
-    @PostMapping({"/owner/invoices/sign-bulk", "/accountant/invoices/sign-bulk"})
-    public String signInvoicesBulk(@RequestParam(name = "invoiceIds", required = false) List<Integer> invoiceIds,
-                                   @RequestParam(name = "search", required = false) String search,
-                                   @RequestParam(name = "fromDate", required = false) String fromDate,
-                                   @RequestParam(name = "toDate", required = false) String toDate,
-                                   @RequestParam(name = "paymentType", required = false) String paymentType,
-                                   @RequestParam(name = "status", required = false) String status,
-                                   @RequestParam(name = "sellerId", required = false) Integer sellerId,
-                                   @RequestParam(name = "page", defaultValue = "0") int page,
-                                   @RequestParam(name = "size", defaultValue = "5") int size,
-                                   HttpServletRequest request,
-                                   RedirectAttributes redirectAttributes) {
-        String basePath = resolveBasePath(request);
-        try {
-            int signed = invoiceService.signMany(invoiceIds);
-            redirectAttributes.addFlashAttribute("success", "Đã ký " + signed + " hóa đơn thành công");
-        } catch (IllegalArgumentException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
-        }
-        return "redirect:" + listRedirectUrl(basePath, search, fromDate, toDate, paymentType, status, sellerId, page, size);
-    }
-
     @GetMapping({"/owner/selling", "/pharmacist/selling"})
     public String sellingPage(HttpServletRequest request, Model model) {
         if (!model.containsAttribute("form")) {

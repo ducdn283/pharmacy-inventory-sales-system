@@ -16,7 +16,7 @@ public class InvoiceDetailPageResponse {
     private Integer id;
     private String invoiceCode;
     private String invoicePattern;
-    /** Mã số thuế đơn vị — chỉ hiển thị khi hóa đơn đã ký. */
+    /** Mã số thuế đơn vị. */
     private String taxCode;
 
     private LocalDateTime date;
@@ -31,12 +31,6 @@ public class InvoiceDetailPageResponse {
 
     private String statusName;
     private String statusCssClass;
-
-    /** {@code true} when {@code signAt} is set (or legacy {@code status = Đã ký}). */
-    private boolean signed;
-    private LocalDateTime signAt;
-    private String signAtDisplay;
-    private String signByName;
 
     private boolean prescriptionRequired;
     private String prescriptionCode;

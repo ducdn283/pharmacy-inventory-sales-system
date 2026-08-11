@@ -23,6 +23,7 @@ public class InvoicedetailResponse {
     private BigDecimal unitSellPrice;
     private BigDecimal subtotal;
     private Integer returnedQty;
+    private String note;
 
     public static InvoicedetailResponse from(Invoicedetail invoicedetail) {
         return new InvoicedetailResponse(
@@ -36,7 +37,8 @@ public class InvoicedetailResponse {
                 invoicedetail.getBaseQtyDeducted(),
                 invoicedetail.getUnitSellPrice(),
                 invoicedetail.getSubtotal(),
-                invoicedetail.getReturnedQty()
+                invoicedetail.getReturnedQty(),
+                invoicedetail.getNote()
         );
     }
 }
