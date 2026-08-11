@@ -12,13 +12,34 @@ import java.util.List;
 
 public interface ReturndetailRepository extends JpaRepository<Returndetail, Integer> {
 
-    /** Most recent return lines of one product, for the Product Detail history preview. */
+    /**
+     * Dòng phiếu trả hàng gần nhất của một sản phẩm, cho khối "Lịch sử tồn kho gần đây" ở màn chi tiết
+     * sản phẩm. <b>Chỉ những dòng THẬT SỰ làm đổi tồn kho.</b>
+     *
+     * <p>Hai điều kiện lọc thêm ngày 11/08/2026 (cùng lý do với
+     * {@code StockadjustmentdetailRepository.findRecentStockOutsByProduct}):</p>
+     * <ul>
+     *   <li>Trạng thái — bảng {@code return} dùng chung cho cả hai chiều nên phải liệt kê cả ba giá trị
+     *       mà tồn kho đã được áp: {@code Nợ} và {@code Hoàn thành} (trả khách, hàng nhập lại kho khi
+     *       duyệt) và {@code Đã duyệt} (trả NCC, hàng rời kho khi duyệt). {@code Nháp} /
+     *       {@code Chờ duyệt} / {@code Từ chối} chưa đụng tồn kho lần nào.</li>
+     *   <li>{@code baseQtyRestored > 0} — dòng khách trả mà KHÔNG nhập lại kho ({@code restockable = false},
+     *       hàng hỏng) ghi 0, hiện ra chỉ là một dòng biến động "0".</li>
+     * </ul>
+     *
+     * <p><b>⚠️ Còn lệch, không sửa được từ đây:</b> {@code ProductService.loadRecentHistory} cộng
+     * {@code +baseQtyRestored} cho MỌI phiếu trả, trong khi trả NCC là hàng RỜI kho
+     * ({@code ReturnPurchaseService} ghi {@code baseQtyRestored = qty} rồi TRỪ {@code storageQuantity})
+     * ⇒ phiếu trả NCC hiện dấu cộng. File của module Sản phẩm — đã báo, chưa sửa.</p>
+     */
     @Query("""
        select d
        from Returndetail d
        left join fetch d.returnID
        left join fetch d.batchID
        where d.productID.productID = :productId
+         and d.returnID.status in ('Nợ', 'Hoàn thành', 'Đã duyệt')
+         and d.baseQtyRestored > 0
        order by d.returnID.returnDate desc
        """)
     List<Returndetail> findRecentReturnsByProduct(@Param("productId") Integer productId,

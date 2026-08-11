@@ -165,14 +165,17 @@
                             <div class="mb-3">
                                 <label class="form-label">Tỷ lệ NCC chấp nhận hoàn <span class="text-danger">*</span></label>
                                 <div class="input-group input-group-sm">
+                                    <!-- Số nguyên phần trăm — xem ghi chú cùng ô ở return/create.html. -->
                                     <input type="number" class="form-control" id="refundRate" name="refundRate"
-                                           min="0.01" max="100" step="0.01"
+                                           min="1" max="100" step="1" inputmode="numeric"
+                                           data-invalid-message="Tỷ lệ NCC hoàn phải là số nguyên từ 1 đến 100"
                                            th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
                                     <span class="input-group-text">%</span>
                                 </div>
                                 <div class="form-text">
                                     Mặc định theo thiết lập tài chính
-                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 2, 'COMMA')}">80</span>%).
+                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 0, 'COMMA')}">80</span>%),
+                                    chỉ nhận số nguyên.
                                     Phần NCC không hoàn là khoản lỗ — chỉ được tính vào chi phí hợp lý nếu có
                                     biên bản trả hàng / xác nhận mức hoàn của NCC (đính kèm ở ghi chú).
                                 </div>

@@ -205,7 +205,7 @@
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Tỷ lệ NCC hoàn</span>
                             <strong th:text="${detail.appliedRefundRate == null} ? '100%'
-                                    : ${#numbers.formatDecimal(detail.appliedRefundRate, 0, 'POINT', 2, 'COMMA') + '%'}">80,00%</strong>
+                                    : ${#numbers.formatDecimal(detail.appliedRefundRate, 0, 'POINT', 0, 'COMMA') + '%'}">80%</strong>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between">

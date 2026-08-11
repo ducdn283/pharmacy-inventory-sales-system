@@ -29,9 +29,12 @@ public class ReturnPurchaseCreateRequest {
     private String note;
 
     /**
-     * Tỷ lệ % giá trị hàng trả mà NHÀ CUNG CẤP CHẤP NHẬN HOÀN ({@code 0 < rate ≤ 100}), áp cho mọi dòng
-     * của phiếu. Bỏ trống ⇒ lấy mặc định {@code Financialsetting.returnProductOnInvoiceValueRate}. Phần
-     * NCC không hoàn là khoản lỗ, tính động vào chi phí hợp lý TNCN nếu có chứng từ (mục 1.3 + 4.5).
+     * Tỷ lệ % giá trị hàng trả mà NHÀ CUNG CẤP CHẤP NHẬN HOÀN — <b>SỐ NGUYÊN</b> {@code 0 < rate ≤ 100},
+     * áp cho mọi dòng của phiếu. Bỏ trống ⇒ lấy mặc định
+     * {@code Financialsetting.returnProductOnInvoiceValueRate}. Phần NCC không hoàn là khoản lỗ, tính
+     * động vào chi phí hợp lý TNCN nếu có chứng từ (mục 1.3 + 4.5).
+     *
+     * <p>Vì sao vẫn là {@code BigDecimal}: xem {@link ReturnCreateRequest#getRefundRate()}.</p>
      */
     private BigDecimal refundRate;
 

@@ -284,15 +284,19 @@
                             <div class="mb-3">
                                 <label class="form-label">Tỷ lệ hoàn cho khách <span class="text-danger">*</span></label>
                                 <div class="input-group input-group-sm">
+                                    <!-- Số nguyên phần trăm: step="1" để trình duyệt chặn số lẻ ngay tại ô;
+                                         data-invalid-message cho fragment field-validation hiện đúng câu
+                                         mà server sẽ trả về, thay vì "Giá trị không hợp lệ" chung chung. -->
                                     <input type="number" class="form-control" id="refundRate" name="refundRate"
-                                           min="0.01" max="100" step="0.01"
+                                           min="1" max="100" step="1" inputmode="numeric"
+                                           data-invalid-message="Tỷ lệ hoàn phải là số nguyên từ 1 đến 100"
                                            th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
                                     <span class="input-group-text">%</span>
                                 </div>
                                 <div class="form-text">
                                     Mặc định theo thiết lập tài chính
-                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 2, 'COMMA')}">80</span>%),
-                                    sửa được cho từng phiếu. Phần không hoàn nhà thuốc giữ lại và vẫn tính là
+                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 0, 'COMMA')}">80</span>%),
+                                    sửa được cho từng phiếu — chỉ nhận số nguyên. Phần không hoàn nhà thuốc giữ lại và vẫn tính là
                                     doanh thu chịu thuế.
                                 </div>
                             </div>

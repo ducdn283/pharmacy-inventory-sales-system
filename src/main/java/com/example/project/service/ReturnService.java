@@ -1370,6 +1370,11 @@ public class ReturnService {
      * (đặc tả bổ sung 27/07 mục 1.1). Chưa cấu hình (NULL) hoặc ≤ 0 ⇒ hoàn 100%: không có chính sách giữ
      * lại thì không được tự ý giữ tiền của khách. Giá trị &gt; 100 bị kẹp về 100.
      *
+     * <p>Trả về SỐ NGUYÊN phần trăm (user chốt 11/08/2026 — xem {@link #resolveRefundRate}). Cột thiết
+     * lập là {@code decimal(5,2)} nên vẫn có thể chứa số lẻ của dữ liệu cũ; số lẻ đó được làm tròn về
+     * số nguyên gần nhất chứ không đẩy ra màn tạo, để ô "% hoàn" không bao giờ hiện giá trị mà chính
+     * nó từ chối lúc gửi.</p>
+     *
      * <p>Public để màn tạo điền sẵn ô "% hoàn" đúng theo thiết lập tài chính.</p>
      */
     @Transactional(readOnly = true)
@@ -1379,7 +1384,7 @@ public class ReturnService {
                 .filter(rate -> rate.signum() > 0)
                 .map(rate -> rate.min(FULL_REFUND_RATE))
                 .orElse(FULL_REFUND_RATE)
-                .setScale(2, RoundingMode.HALF_UP);
+                .setScale(0, RoundingMode.HALF_UP);
     }
 
     // isTaxExempt() đã bỏ 04/08/2026: màn trả hàng không còn hiển thị phần thuế nào nên không cần biết
@@ -1401,6 +1406,11 @@ public class ReturnService {
      * Tỷ lệ hoàn thực áp cho phiếu đang lập: người dùng nhập gì thì dùng nấy (0 &lt; rate ≤ 100), bỏ trống
      * thì lấy mặc định của hệ thống. Tỷ lệ nằm ở HEADER phiếu nên áp đồng loạt mọi dòng — muốn mỗi sản
      * phẩm một tỷ lệ khác nhau thì phải lập nhiều phiếu (giới hạn đã ghi rõ ở mục 1.4 của đặc tả).
+     *
+     * <p><b>Chỉ nhận SỐ NGUYÊN phần trăm (user chốt 11/08/2026).</b> Đây là con số hai bên thỏa thuận
+     * miệng tại quầy ("hoàn 80%"), không phải kết quả tính toán — phần lẻ phần trăm không có ý nghĩa
+     * nghiệp vụ nào mà chỉ đẻ ra số tiền lẻ khó đối chiếu. Chặn ở đây chứ không làm tròn giúp: làm tròn
+     * là âm thầm đổi số tiền hoàn của khách so với con số người lập đã gõ.</p>
      */
     private BigDecimal resolveRefundRate(BigDecimal requested) {
         if (requested == null) {
@@ -1409,7 +1419,11 @@ public class ReturnService {
         if (requested.signum() <= 0 || requested.compareTo(FULL_REFUND_RATE) > 0) {
             throw new IllegalArgumentException("Tỷ lệ hoàn phải lớn hơn 0 và không vượt quá 100%");
         }
-        return requested.setScale(2, RoundingMode.HALF_UP);
+        if (requested.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException(
+                    "Tỷ lệ hoàn phải là số nguyên phần trăm (ví dụ 80), không nhập số lẻ");
+        }
+        return requested.setScale(0, RoundingMode.UNNECESSARY);
     }
 
     /** The window as the create screen phrases it: "trong 3 ngày" / "không giới hạn thời gian". */
