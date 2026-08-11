@@ -1,6 +1,5 @@
 package com.example.project.service;
 
-import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
@@ -99,7 +98,6 @@ public class InvoiceService {
     private final FinancialsettingRepository financialsettingRepository;
     private final FinancialsettingService financialsettingService;
     private final ReturnRepository returnRepository;
-    private final CurrentUserContext currentUserContext;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
     // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
@@ -116,8 +114,7 @@ public class InvoiceService {
                           FinancialsettingRepository financialsettingRepository,
                           FinancialsettingService financialsettingService,
                           ReturnRepository returnRepository,
-                          ShiftreportService shiftreportService,
-                          CurrentUserContext currentUserContext) {
+                          ShiftreportService shiftreportService) {
         this.invoiceRepository = invoiceRepository;
         this.invoicedetailRepository = invoicedetailRepository;
         this.productRepository = productRepository;
@@ -129,7 +126,6 @@ public class InvoiceService {
         this.financialsettingService = financialsettingService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
-        this.currentUserContext = currentUserContext;
     }
 
     @Autowired
@@ -692,7 +688,6 @@ public class InvoiceService {
 
     /**
      * Ký hiệu hóa đơn 7 ký tự: 2 (bán hàng) + K (không mã CQT) + YY (năm) + M (máy tính tiền) + AA.
-     * Khi ký đẩy lên CQT, ký hiệu K được chuyển thành C (xem {@link #toSignedInvoicePattern}).
      * Hai ký tự cuối lấy từ {@code vatInvoiceSeries} trong thiết lập tài chính.
      */
     private String buildInvoicePattern(LocalDate date) {
@@ -715,14 +710,6 @@ public class InvoiceService {
 
         String yearPart = String.format("%02d", date.getYear() % 100);
         return "2K" + yearPart + "M" + sellerSuffix;
-    }
-
-    /** Chuyển ký hiệu K (không mã CQT) → C (có mã CQT) khi hóa đơn được ký. */
-    private String toSignedInvoicePattern(String pattern) {
-        if (pattern == null || pattern.length() < 2) {
-            return pattern;
-        }
-        return pattern.charAt(0) + "C" + pattern.substring(2);
     }
 
     private BigDecimal maxZero(BigDecimal value) {
@@ -771,63 +758,6 @@ public class InvoiceService {
                 .toList();
     }
 
-    /** Records e-invoice signing ({@code signAt}, {@code signBy}); does not change {@code status}. Owner and Accountant only. */
-    @Transactional
-    public void sign(Integer invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
-        if (isSigned(invoice)) {
-            throw new IllegalArgumentException("Hóa đơn đã được ký");
-        }
-        Account signer = resolveCurrentSigner();
-        invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
-        invoice.setSignAt(LocalDateTime.now(VN_ZONE));
-        invoice.setSignBy(signer);
-        saveInvoiceGuardingConcurrentEdit(invoice);
-    }
-
-    /** Signs multiple sale invoices. Skips ones already signed; returns how many were updated. */
-    @Transactional
-    public int signMany(List<Integer> invoiceIds) {
-        if (invoiceIds == null || invoiceIds.isEmpty()) {
-            throw new IllegalArgumentException("Vui lòng chọn ít nhất một hóa đơn");
-        }
-
-        Account signer = resolveCurrentSigner();
-        LocalDateTime signedAt = LocalDateTime.now(VN_ZONE);
-        int signed = 0;
-        for (Integer invoiceId : invoiceIds.stream().distinct().toList()) {
-            Invoice invoice = invoiceRepository.findById(invoiceId).orElse(null);
-            if (invoice == null || isSigned(invoice)) {
-                continue;
-            }
-            invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
-            invoice.setSignAt(signedAt);
-            invoice.setSignBy(signer);
-            saveInvoiceGuardingConcurrentEdit(invoice);
-            signed++;
-        }
-
-        if (signed == 0) {
-            throw new IllegalArgumentException("Không có hóa đơn nào được ký (có thể đã ký trước đó)");
-        }
-        return signed;
-    }
-
-    private boolean isSigned(Invoice invoice) {
-        return invoice != null
-                && (invoice.getSignAt() != null || isStatus(invoice.getStatus(), STATUS_SIGNED));
-    }
-
-    private Account resolveCurrentSigner() {
-        Integer accountId = currentUserContext.getCurrentAccountId();
-        if (accountId == null) {
-            throw new IllegalArgumentException("Không xác định được người ký");
-        }
-        return accountRepository.findById(accountId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản người ký"));
-    }
-
     /** Full sale-invoice detail for the detail page. */
     @Transactional(readOnly = true)
     public InvoiceDetailPageResponse getDetail(Integer invoiceId) {
@@ -864,8 +794,7 @@ public class InvoiceService {
 
         String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
-        boolean signed = isSigned(invoice);
-        String taxCode = signed && setting != null ? trimToNull(setting.getTaxCode()) : null;
+        String taxCode = setting != null ? trimToNull(setting.getTaxCode()) : null;
 
         return new InvoiceDetailPageResponse(
                 invoice.getId(),
@@ -880,10 +809,6 @@ public class InvoiceService {
                 invoiceTypeDisplay(invoice.getInvoiceType()),
                 statusName,
                 statusCssClass(invoice.getStatus()),
-                signed,
-                invoice.getSignAt(),
-                formatDate(invoice.getSignAt()),
-                invoice.getSignBy() != null ? invoice.getSignBy().getName() : null,
                 Boolean.TRUE.equals(invoice.getPrescriptionRequired()),
                 invoice.getPrescriptionCode(),
                 returnStatusDisplay(returnCode),
@@ -918,8 +843,8 @@ public class InvoiceService {
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        boolean signed = isSigned(invoice);
-        LocalDateTime signedAt = invoice.getSignAt() != null ? invoice.getSignAt() : invoice.getDate();
+        boolean signed = hasCqtCode(invoice);
+        LocalDateTime signedAt = invoice.getDate();
 
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         Customer customer = invoice.getCustomerID();
@@ -1102,8 +1027,7 @@ public class InvoiceService {
                 returnStatusDisplay(returnCode),
                 returnStatusCssClass(returnCode),
                 statusName,
-                statusCssClass(statusName),
-                isSigned(invoice));
+                statusCssClass(statusName));
     }
 
     private InvoiceLineResponse toLine(Invoicedetail line) {
@@ -1447,6 +1371,18 @@ public class InvoiceService {
 
     private boolean isStatus(String actual, String expected) {
         return normalize(actual).equals(normalize(expected));
+    }
+
+    /** Legacy: ký hiệu C (có mã CQT) hoặc trạng thái cũ "Đã ký". */
+    private boolean hasCqtCode(Invoice invoice) {
+        if (invoice == null) {
+            return false;
+        }
+        if (isStatus(invoice.getStatus(), STATUS_SIGNED)) {
+            return true;
+        }
+        String pattern = invoice.getInvoicePattern();
+        return pattern != null && pattern.length() >= 2 && pattern.charAt(1) == 'C';
     }
 
     private boolean isPositive(BigDecimal value) {
