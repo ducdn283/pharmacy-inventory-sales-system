@@ -902,6 +902,9 @@ public class InvoiceService {
                 invoiceTypeDisplay(invoice.getInvoiceType()),
                 signed,
                 formatDateLong(invoice.getDate()),
+                formatDate(invoice.getDate()),
+                pharmacyBrandShort(setting),
+                receiptInvoiceCode(invoice),
                 signed ? buildTaxAuthorityCode(invoice, setting) : null,
                 signed ? formatSignedAt(signedAt) : null,
                 setting != null ? nullToEmpty(setting.getLocationName()) : "",
@@ -1080,6 +1083,35 @@ public class InvoiceService {
     private String invoiceCode(Invoice invoice) {
         String number = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber().trim() : "";
         return number.isEmpty() ? "—" : number;
+    }
+
+    /** Mã hiển thị trên phiếu in POS: số hóa đơn 8 chữ số (vd. 00000018). */
+    private String receiptInvoiceCode(Invoice invoice) {
+        if (invoice == null) {
+            return "—";
+        }
+        String serial = formatInvoiceSerialNumber(invoice);
+        return serial.isEmpty() ? "—" : serial;
+    }
+
+    /** Tên thương hiệu ngắn lấy từ phần local-part email (vd. nhathuochangngoc). */
+    private String pharmacyBrandShort(Financialsetting setting) {
+        if (setting == null) {
+            return "";
+        }
+        String email = setting.getEmail();
+        if (email != null && !email.isBlank()) {
+            String normalized = email.trim().toLowerCase(Locale.ROOT);
+            int at = normalized.indexOf('@');
+            if (at > 0) {
+                return normalized.substring(0, at).replaceAll("\\d+$", "");
+            }
+        }
+        String locationName = setting.getLocationName();
+        if (locationName != null && !locationName.isBlank()) {
+            return locationName.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+        }
+        return "";
     }
 
     private boolean matchesKeyword(Invoice invoice, String normalizedKeyword) {

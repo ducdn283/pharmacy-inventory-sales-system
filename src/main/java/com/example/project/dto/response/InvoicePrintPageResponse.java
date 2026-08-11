@@ -19,6 +19,12 @@ public class InvoicePrintPageResponse {
     private boolean signed;
     /** Ngày 24 tháng 06 năm 2026 */
     private String dateLongDisplay;
+    /** dd/MM/yyyy HH:mm — phiếu in bán hàng (POS). */
+    private String dateDisplay;
+    /** Tên thương hiệu ngắn trên phiếu in (vd. nhathuochangngoc). */
+    private String pharmacyBrandName;
+    /** Mã hóa đơn trên phiếu in POS (vd. 00000018). */
+    private String receiptInvoiceCode;
     /** Mã CQT — chỉ có khi hóa đơn đã ký. */
     private String taxAuthorityCode;
     /** Thời điểm ký hiển thị trên khung chữ ký — chỉ có khi hóa đơn đã ký. */
