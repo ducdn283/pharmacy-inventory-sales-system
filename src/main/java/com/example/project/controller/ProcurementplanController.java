@@ -1,6 +1,7 @@
 package com.example.project.controller;
 
 import com.example.project.dto.request.ProcurementPlanCreateRequest;
+import com.example.project.dto.request.ProcurementPlanDetailCreateRequest;
 import com.example.project.dto.response.ProcurementPlanPrintPageResponse;
 import com.example.project.dto.response.ProcurementPlanDetailRowView;
 import com.example.project.dto.response.ProcurementProductSearchResponse;
@@ -122,10 +123,21 @@ public class ProcurementplanController {
     }
 
     // tạo form create
+    // restockAll (tuỳ chọn): mở form với sẵn tất cả sản phẩm đang sắp hết/hết hàng,
+    // dùng khi bấm nút "Tạo dự trù hàng cần nhập" ở Danh sách hàng hóa
     @GetMapping("/owner/procurements/create-procurementplan")
-    public String createProcurementPlanForm(HttpServletRequest request, Model model) {
+    public String createProcurementPlanForm(@RequestParam(name = "restockAll", required = false, defaultValue = "false") boolean restockAll,
+                                            HttpServletRequest request, Model model) {
         if (!model.containsAttribute("procurementPlanForm")) {
-            model.addAttribute("procurementPlanForm", new ProcurementPlanCreateRequest());
+            ProcurementPlanCreateRequest form = new ProcurementPlanCreateRequest();
+            if (restockAll) {
+                for (Integer productId : procurementplanService.findRestockNeededProductIds()) {
+                    ProcurementPlanDetailCreateRequest detail = new ProcurementPlanDetailCreateRequest();
+                    detail.setProductId(productId);
+                    form.getDetails().add(detail);
+                }
+            }
+            model.addAttribute("procurementPlanForm", form);
         }
 
         addFormPageData(request, model);
