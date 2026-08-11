@@ -284,89 +284,6 @@
             color: #111827;
         }
 
-        .signed-print-modal {
-            position: fixed;
-            inset: 0;
-            z-index: 2000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 24px 16px;
-        }
-
-        .signed-print-modal.open {
-            display: flex;
-        }
-
-        .signed-print-modal-backdrop {
-            position: absolute;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.55);
-        }
-
-        .signed-print-modal-dialog {
-            position: relative;
-            width: min(920px, 100%);
-            max-height: calc(100vh - 48px);
-            background: #fff;
-            border-radius: 16px;
-            box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .signed-print-modal-header,
-        .signed-print-modal-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 14px 18px;
-            background: #fff;
-        }
-
-        .signed-print-modal-header {
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .signed-print-modal-footer {
-            border-top: 1px solid #e5e7eb;
-            justify-content: flex-end;
-        }
-
-        .signed-print-modal-title {
-            margin: 0;
-            font-size: 16px;
-            font-weight: 700;
-        }
-
-        .signed-print-modal-close {
-            border: none;
-            background: transparent;
-            font-size: 24px;
-            line-height: 1;
-            color: #6b7280;
-            cursor: pointer;
-        }
-
-        .signed-print-modal-body {
-            flex: 1;
-            min-height: 0;
-            overflow: auto;
-            background: #f3f4f6;
-            padding: 16px;
-        }
-
-        .signed-print-frame {
-            display: block;
-            width: 100%;
-            height: 0;
-            border: none;
-            background: #fff;
-            overflow: hidden;
-        }
-
         @media (max-width: 991.98px) {
             .invoice-page-content {
                 padding-top: 84px !important;
@@ -703,15 +620,6 @@
                                 Hoàn thành
                             </span>
                         </div>
-
-                        <div class="d-flex justify-content-between mt-3" th:if="${detail.signed}">
-                            <span class="text-secondary">Thời gian ký</span>
-                            <span th:text="${detail.signAtDisplay}">01/08/2026 10:00</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2" th:if="${detail.signed and detail.signByName != null}">
-                            <span class="text-secondary">Người ký</span>
-                            <span th:text="${detail.signByName}">Kế toán A</span>
-                        </div>
                     </div>
                 </div>
 
@@ -723,27 +631,6 @@
                             <i class="ti ti-printer me-1"></i>
                             In hóa đơn
                         </button>
-
-                        <button type="button"
-                                th:if="${detail.signed}"
-                                id="viewSignedPrintBtn"
-                                th:data-print-url="${basePath + '/' + detail.id + '/print?embed=1'}"
-                                class="btn btn-invoice-primary w-100 mb-3">
-                            <i class="ti ti-photo me-1"></i>
-                            Xem hình ảnh hóa đơn
-                        </button>
-
-                        <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and !detail.signed}"
-                              th:action="${basePath + '/' + detail.id + '/sign'}"
-                              method="post"
-                              class="mb-3">
-                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                            <button type="submit" class="btn btn-invoice-primary w-100"
-                                    data-confirm="Ký hóa đơn này? Hệ thống sẽ ghi nhận thời gian và người ký, đồng thời bạn có thể xem hình ảnh hóa đơn có Mã CQT.">
-                                <i class="ti ti-writing-sign me-1"></i>
-                                Ký hóa đơn
-                            </button>
-                        </form>
 
                         <a th:href="${basePath}" class="btn btn-outline-invoice w-100">
                             <i class="ti ti-arrow-left me-1"></i>
@@ -757,25 +644,6 @@
     </div>
 </main>
 
-<div class="signed-print-modal" id="signedPrintModal" aria-hidden="true">
-    <div class="signed-print-modal-backdrop" id="signedPrintModalBackdrop"></div>
-    <div class="signed-print-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="signedPrintModalTitle">
-        <div class="signed-print-modal-header">
-            <h2 class="signed-print-modal-title" id="signedPrintModalTitle">Hình ảnh hóa đơn đã ký</h2>
-            <button type="button" class="signed-print-modal-close" id="closeSignedPrintModal" aria-label="Đóng">&times;</button>
-        </div>
-        <div class="signed-print-modal-body">
-            <iframe id="signedPrintFrame"
-                    class="signed-print-frame"
-                    scrolling="no"
-                    title="Hình ảnh hóa đơn đã ký"></iframe>
-        </div>
-        <div class="signed-print-modal-footer">
-            <button type="button" class="btn btn-outline-secondary" id="closeSignedPrintModalFooter">Đóng</button>
-        </div>
-    </div>
-</div>
-
 <script th:inline="none">
     (function () {
         var printBtn = document.getElementById('printInvoiceBtn');
@@ -784,77 +652,6 @@
                 openPrintDialog(printBtn.dataset.printUrl);
             });
         }
-
-        var viewSignedBtn = document.getElementById('viewSignedPrintBtn');
-        var signedPrintModal = document.getElementById('signedPrintModal');
-        var signedPrintFrame = document.getElementById('signedPrintFrame');
-        var closeButtons = [
-            document.getElementById('closeSignedPrintModal'),
-            document.getElementById('closeSignedPrintModalFooter'),
-            document.getElementById('signedPrintModalBackdrop')
-        ];
-
-        function resizeEmbedFrame(frame) {
-            if (!frame) {
-                return;
-            }
-            try {
-                var doc = frame.contentDocument || frame.contentWindow.document;
-                var height = Math.max(
-                    doc.body ? doc.body.scrollHeight : 0,
-                    doc.documentElement ? doc.documentElement.scrollHeight : 0
-                );
-                frame.style.height = height + 'px';
-            } catch (error) {
-                frame.style.height = '720px';
-            }
-        }
-
-        function openSignedPrintModal(printUrl) {
-            if (!signedPrintModal || !signedPrintFrame) {
-                return;
-            }
-            signedPrintFrame.style.height = '0';
-            signedPrintFrame.src = printUrl;
-            signedPrintModal.classList.add('open');
-            signedPrintModal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-
-        if (signedPrintFrame) {
-            signedPrintFrame.addEventListener('load', function () {
-                resizeEmbedFrame(signedPrintFrame);
-            });
-        }
-
-        function closeSignedPrintModal() {
-            if (!signedPrintModal || !signedPrintFrame) {
-                return;
-            }
-            signedPrintModal.classList.remove('open');
-            signedPrintModal.setAttribute('aria-hidden', 'true');
-            signedPrintFrame.style.height = '0';
-            signedPrintFrame.src = 'about:blank';
-            document.body.style.overflow = '';
-        }
-
-        if (viewSignedBtn) {
-            viewSignedBtn.addEventListener('click', function () {
-                openSignedPrintModal(viewSignedBtn.dataset.printUrl);
-            });
-        }
-
-        closeButtons.forEach(function (button) {
-            if (button) {
-                button.addEventListener('click', closeSignedPrintModal);
-            }
-        });
-
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') {
-                closeSignedPrintModal();
-            }
-        });
 
         function openPrintDialog(printUrl) {
             var iframe = document.createElement('iframe');
