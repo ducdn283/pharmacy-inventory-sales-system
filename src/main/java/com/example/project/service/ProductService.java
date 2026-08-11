@@ -812,9 +812,10 @@ public class ProductService {
     }
 
     /**
-     * Tồn tối thiểu / tối đa: cả hai đều không được âm và min không được lớn hơn max. Ô nhập trên
-     * form là {@code type=number min=0}, nhưng ràng buộc đó chỉ là của trình duyệt — một POST thẳng
-     * vẫn gửi được số âm, nên phải kiểm lại ở đây. Dùng chung cho cả tạo mới lẫn sửa.
+     * Tồn tối thiểu / tối đa: cả hai đều bắt buộc, không được âm và min không được lớn hơn max. Ô
+     * nhập trên form là {@code type=number min=0}, nhưng ràng buộc đó chỉ là của trình duyệt — một
+     * POST thẳng vẫn gửi được số âm hoặc bỏ trống, nên phải kiểm lại ở đây. Dùng chung cho cả tạo
+     * mới lẫn sửa.
      */
     private void validateStockBounds(ProductCreateRequest request, List<String> errors) {
         Integer minStock = request.getMinStock();
@@ -835,14 +836,8 @@ public class ProductService {
         }
     }
 
-    /** Nhà sản xuất, xuất xứ và loại hàng đều bắt buộc phải chọn/điền khi tạo hoặc sửa hàng hóa. */
+    /** Loại hàng vẫn bắt buộc; nhà sản xuất/xuất xứ đã nới lỏng thành tuỳ chọn. */
     private void validateRequiredFields(ProductCreateRequest request, List<String> errors) {
-        if (request.getProducerId() == null) {
-            errors.add("Nhà sản xuất không được để trống");
-        }
-        if (trimToNull(request.getOrigin()) == null) {
-            errors.add("Xuất xứ không được để trống");
-        }
         if (request.getTypeId() == null) {
             errors.add("Loại hàng không được để trống");
         }

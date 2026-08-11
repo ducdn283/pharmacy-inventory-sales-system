@@ -393,16 +393,14 @@
                                 Còn hàng
                             </span>
                         </td>
-                        <td class="text-end">
-                            <a class="btn btn-sm btn-outline-secondary"
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" title="Xem"
                                th:href="${basePath + '/' + item.productId}">
-                                <i class="ti ti-eye me-1"></i>
-                                Xem
+                                <i class="ti ti-eye"></i>
                             </a>
-                            <a th:if="${basePath == '/owner/products'}" class="btn btn-sm btn-outline-secondary"
+                            <a th:if="${basePath == '/owner/products'}" class="btn btn-sm btn-outline-secondary" title="Sửa"
                                th:href="@{/owner/products/{id}/edit(id=${item.productId})}">
-                                <i class="ti ti-edit me-1"></i>
-                                Sửa
+                                <i class="ti ti-edit"></i>
                             </a>
                         </td>
                     </tr>
