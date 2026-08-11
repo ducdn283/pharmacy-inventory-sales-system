@@ -20,6 +20,13 @@ public interface PositionRepository extends JpaRepository<Position, Integer> {
             """)
     List<Position> findByProductId(@Param("productId") Integer productId);
 
+    @Query("""
+            SELECT p FROM Position p
+            JOIN FETCH p.productID
+            ORDER BY p.productID.productID ASC, p.id ASC
+            """)
+    List<Position> findAllWithProduct();
+
     //tìm kiếm vị trí theo tên vị trí hoặc tên sản phẩm hoặc mã sản phẩm và hỗ trợ phân trang
     @Query("""
             SELECT p FROM Position p

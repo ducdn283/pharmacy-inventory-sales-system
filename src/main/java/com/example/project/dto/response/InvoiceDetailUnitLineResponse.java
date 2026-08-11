@@ -18,4 +18,5 @@ public class InvoiceDetailUnitLineResponse {
     private BigDecimal lineSubtotal;
     private Integer returnedQty;
     private String batchLabel;
+    private String note;
 }

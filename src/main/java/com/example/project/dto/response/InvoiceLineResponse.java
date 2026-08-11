@@ -19,4 +19,5 @@ public class InvoiceLineResponse {
     private BigDecimal unitSellPrice;
     private BigDecimal subtotal;
     private Integer returnedQty;
+    private String note;
 }

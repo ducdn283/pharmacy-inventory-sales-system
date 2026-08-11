@@ -27,4 +27,7 @@ public class InvoiceDetailCreateRequest {
 
     /** Optional batch to deduct from; null means FEFO across all batches. */
     private Integer batchId;
+
+    /** Optional sales note for this line (e.g. usage instructions). */
+    private String note;
 }

@@ -158,6 +158,61 @@
             text-align: right;
         }
 
+        .product-note-line {
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+            word-break: break-word;
+            flex: 1;
+            min-width: 0;
+            padding-top: 1px;
+        }
+
+        .entry-note-row td {
+            padding: 0 14px 14px;
+            border-bottom: 10px solid #f3f4f6;
+            background: #fff;
+        }
+
+        .entry-note-panel {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 12px;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            border-left: 3px solid #059669;
+        }
+
+        .entry-note-panel-readonly .entry-note-head {
+            padding-top: 0;
+        }
+
+        .entry-note-head {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        .entry-note-head i {
+            color: #059669;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        @media (max-width: 767.98px) {
+            .entry-note-panel {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+
         .sell-items-table .col-total {
             width: 100px;
             text-align: right;
@@ -178,8 +233,14 @@
             vertical-align: middle;
         }
 
-        tr.product-group-last td {
-            border-bottom: 1px solid #e5e7eb;
+        tr.product-group-last:not(:has(+ tr.entry-note-row)) td {
+            border-bottom: 10px solid #f3f4f6;
+            padding-bottom: 14px;
+        }
+
+        tr.product-group-last:has(+ tr.entry-note-row) td {
+            border-bottom: none;
+            padding-bottom: 6px;
         }
 
         .product-cell {
@@ -500,6 +561,21 @@
                                               th:text="${#numbers.formatDecimal(group.productSubtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                             0đ
                                         </span>
+                                    </td>
+                                </tr>
+                                <tr class="entry-note-row"
+                                    th:if="${group.lines.?[note != null && !#strings.isEmpty(note)].size() > 0}">
+                                    <td colspan="7" class="entry-note-cell">
+                                        <div class="entry-note-panel entry-note-panel-readonly">
+                                            <div class="entry-note-head">
+                                                <i class="ti ti-note"></i>
+                                                <span>Ghi chú bán hàng</span>
+                                            </div>
+                                            <div class="product-note-line"
+                                                 th:text="${group.lines.?[note != null && !#strings.isEmpty(note)][0].note}">
+                                                Uống sau ăn
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                             </th:block>

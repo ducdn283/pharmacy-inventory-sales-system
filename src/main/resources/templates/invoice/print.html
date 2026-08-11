@@ -385,7 +385,12 @@
                 <tbody>
                 <tr th:each="line, iterStat : ${printData.lines}">
                     <td class="text-center" th:text="${iterStat.index + 1}">1</td>
-                    <td th:text="${line.productName}">Que thử thai nhanh HCG-Allisa</td>
+                    <td>
+                        <span th:text="${line.productName}">Que thử thai nhanh HCG-Allisa</span>
+                        <div th:if="${line.note != null && !line.note.isBlank()}"
+                             style="font-size: 11px; font-style: italic; margin-top: 2px;"
+                             th:text="'Ghi chú: ' + ${line.note}">Ghi chú: Uống sau ăn</div>
+                    </td>
                     <td class="text-center" th:text="${line.unitName}">Hộp</td>
                     <td class="text-right" th:text="${line.quantity}">1</td>
                     <td class="text-right"

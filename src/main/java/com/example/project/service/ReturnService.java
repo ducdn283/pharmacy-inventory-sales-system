@@ -731,6 +731,7 @@ public class ReturnService {
         clone.setUnitName(source.getUnitName());
         clone.setUnitSellPrice(source.getUnitSellPrice());
         clone.setReturnedQty(0);
+        clone.setNote(source.getNote());
         return clone;
     }
 
