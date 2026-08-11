@@ -25,21 +25,20 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Who creates a purchase invoice, and whether it receives stock immediately, now depends on
- * whether the pharmacy has an active Accountant (BA, 2026-08-03 evening — supersedes the older
- * "always one step" note this javadoc used to carry, from the process spec sheet "Thay đổi Quy
- * trình Phê duyệt"):
+ * The Owner has full permission regardless of whether the pharmacy has an active Accountant (BA,
+ * 2026-08-11 — supersedes the earlier 2026-08-04 rule that blocked the Owner's direct-create path
+ * once an Accountant was active). Two independent paths into a purchase invoice now coexist:
  *
  * <ul>
- *   <li><strong>No active Accountant</strong> — the Owner creates directly via
- *       {@link #createPurchaseInvoice}, one step, exactly as before: {@link Batch} rows are
- *       created in the same transaction and {@code approvedAt} is stamped to the creation moment
- *       (the Owner is, in effect, both creator and approver).</li>
- *   <li><strong>Active Accountant</strong> — the Owner can no longer create at all
- *       ({@link #canCreatePurchaseInvoice}); the Accountant creates via
+ *   <li><strong>Owner</strong> — always creates directly via {@link #createPurchaseInvoice}, one
+ *       step, regardless of whether an Accountant is active: {@link Batch} rows are created in the
+ *       same transaction and {@code approvedAt} is stamped to the creation moment (the Owner is,
+ *       in effect, both creator and approver). {@link #canCreatePurchaseInvoice} is always
+ *       {@code true} for {@code OWNER}.</li>
+ *   <li><strong>Active Accountant</strong> — the Accountant may additionally create via
  *       {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval}, optionally
- *       edits a Nháp ({@link #updatePurchaseInvoiceDraft}/{@link #submitPurchaseInvoiceDraft}) or
- *       deletes it ({@link #deletePurchaseInvoiceDraft}), and the Owner approves
+ *       edit a Nháp ({@link #updatePurchaseInvoiceDraft}/{@link #submitPurchaseInvoiceDraft}) or
+ *       delete it ({@link #deletePurchaseInvoiceDraft}), and the Owner approves
  *       ({@link #approvePurchaseInvoice}) or rejects ({@link #rejectPurchaseInvoice}) it. Stock is
  *       received — {@link Batch} rows created, supplier cost price refreshed — and
  *       {@code approvedAt} stamped ONLY at {@link #approvePurchaseInvoice}, never before; a
@@ -106,28 +105,14 @@ public class PurchaseinvoiceService {
     // ------------------------------------------------------------------ who may create
 
     /**
-     * Whether the pharmacy currently employs an accountant with an enabled account — same live-data
-     * question {@code TaxperiodsnapshotService.hasActiveAccountant()} answers for "who closes a tax
-     * period", reused here for "who creates a purchase invoice" (BA: khi có Kế toán, Kế toán đảm
-     * nhiệm việc tạo phiếu nhập; Chủ nhà thuốc chỉ còn duyệt).
-     */
-    @Transactional(readOnly = true)
-    public boolean hasActiveAccountant() {
-        return accountpermissionRepository.existsActiveByRole(RoleConstants.ACCOUNTANT);
-    }
-
-    /**
      * Whether the given role may create a purchase invoice right now. The Accountant may always
      * create (when reachable at all — the {@code /accountant/**} URL prefix already implies an
-     * active accountant account); the Owner may only create directly while there is no active
-     * Accountant, otherwise their role is limited to approving/rejecting what the Accountant submits.
+     * active accountant account); the Owner has full permission and may always create directly too
+     * (2026-08-11 — the Owner is no longer locked out just because an Accountant is active).
      */
     @Transactional(readOnly = true)
     public boolean canCreatePurchaseInvoice(String role) {
-        if (RoleConstants.ACCOUNTANT.equals(role)) {
-            return true;
-        }
-        return RoleConstants.OWNER.equals(role) && !hasActiveAccountant();
+        return RoleConstants.ACCOUNTANT.equals(role) || RoleConstants.OWNER.equals(role);
     }
 
     /**
@@ -485,9 +470,10 @@ public class PurchaseinvoiceService {
     /**
      * The actual "hàng về kho" side effect — creates one {@link Batch} per line and refreshes the
      * supplier's reference cost price. Called exactly once per invoice, at the moment it becomes
-     * official: immediately for a direct Owner creation (no active Accountant, so the Owner IS the
-     * approval), or from {@link #approvePurchaseInvoice} once the Owner approves an Accountant's
-     * submission. Never called for a Nháp/Chờ duyệt row — see the class javadoc.
+     * official: immediately for a direct Owner creation (the Owner always has this path, regardless
+     * of whether an Accountant is active — the Owner IS the approval on this path), or from
+     * {@link #approvePurchaseInvoice} once the Owner approves an Accountant's submission. Never
+     * called for a Nháp/Chờ duyệt row — see the class javadoc.
      */
     private void receiveStockForInvoice(Purchaseinvoice invoice, List<Purchasedetail> details) {
         Supplier supplier = invoice.getSupplierID();
@@ -499,11 +485,12 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Direct, one-step creation — only valid while there is no active Accountant
-     * ({@link #canCreatePurchaseInvoice}), in which case the Owner both creates and, in effect,
-     * approves in the same action: stock is received immediately and {@code approvedAt} is stamped
-     * to the creation moment. When an Accountant is active, use
-     * {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval} instead.
+     * The Owner's direct, one-step creation path — always available ({@link #canCreatePurchaseInvoice}
+     * is always {@code true} for {@code OWNER}), regardless of whether an Accountant is active. The
+     * Owner both creates and, in effect, approves in the same action: stock is received immediately
+     * and {@code approvedAt} is stamped to the creation moment. An active Accountant may
+     * additionally create via {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval}
+     * — the two paths coexist, they are not mutually exclusive any more.
      */
     @Transactional
     public Integer createPurchaseInvoice(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
