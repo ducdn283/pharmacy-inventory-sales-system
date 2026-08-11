@@ -1140,7 +1140,8 @@
         }
 
         .print-modal-backdrop .pm-modal {
-            max-width: 420px;
+            width: calc(80mm + 48px);
+            max-width: calc(100vw - 32px);
             max-height: calc(100vh - 48px);
             display: flex;
             flex-direction: column;
@@ -1151,18 +1152,22 @@
             flex: 1;
             min-height: 0;
             max-height: none;
-            padding: 16px;
+            padding: 12px;
             overflow: auto;
             background: #f3f4f6;
+            display: flex;
+            justify-content: center;
         }
 
         .print-modal-frame {
             display: block;
-            width: 100%;
+            width: 80mm;
+            max-width: 100%;
             height: 0;
             border: none;
             background: #fff;
             overflow: hidden;
+            flex-shrink: 0;
         }
 
         .batch-option-meta {
