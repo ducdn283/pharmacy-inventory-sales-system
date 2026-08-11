@@ -186,10 +186,10 @@
                         <th>Ngày SX</th>
                         <th>Hạn SD</th>
                         <th class="text-end">Tồn kho (đơn vị cơ bản)</th>
-                        <th>Đơn vị nhập</th>
-                        <th class="text-end">Giá nhập</th>
-                        <th>Trạng thái</th>
-                        <th>Ghi chú</th>
+                        <th th:if="${basePath != '/pharmacist/products'}">Đơn vị nhập</th>
+                        <th th:if="${basePath != '/pharmacist/products'}" class="text-end">Giá nhập</th>
+                        <th th:if="${basePath != '/pharmacist/products'}">Trạng thái</th>
+                        <th th:if="${basePath != '/pharmacist/products'}">Ghi chú</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -200,13 +200,13 @@
                         <td th:text="${b.expirationDateDisplay}">01/01/2028</td>
                         <td class="text-end"
                             th:text="${b.storageQuantity + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName)}">0</td>
-                        <td th:text="${b.importUnitName}">Hộp</td>
-                        <td class="text-end" th:text="${b.importPrice != null ? #numbers.formatDecimal(b.importPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">50.000đ</td>
-                        <td><span class="status-badge badge-soft" th:text="${b.statusLabel}">Còn hiệu lực</span></td>
-                        <td th:text="${b.note != null and !b.note.isEmpty()} ? ${b.note} : '—'">—</td>
+                        <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.importUnitName}">Hộp</td>
+                        <td th:if="${basePath != '/pharmacist/products'}" class="text-end" th:text="${b.importPrice != null ? #numbers.formatDecimal(b.importPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">50.000đ</td>
+                        <td th:if="${basePath != '/pharmacist/products'}"><span class="status-badge badge-soft" th:text="${b.statusLabel}">Còn hiệu lực</span></td>
+                        <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.note != null and !b.note.isEmpty()} ? ${b.note} : '—'">—</td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(product.batches)}">
-                        <td colspan="9" class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
+                        <td th:attr="colspan=${basePath == '/pharmacist/products'} ? 5 : 9" class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
                     </tr>
                     </tbody>
                 </table>
