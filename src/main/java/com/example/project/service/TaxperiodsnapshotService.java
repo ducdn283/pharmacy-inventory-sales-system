@@ -674,22 +674,13 @@ public class TaxperiodsnapshotService {
     // ------------------------------------------------------------------ who may close a period
 
     /**
-     * Whether the pharmacy currently employs an accountant with an enabled account. The BA's rule
-     * hands the closing job to the Accountant and falls back to the Owner only when there is none,
-     * so this is a live-data question, not a static role matrix.
+     * Whether the given role may close a period right now. The Owner has full permission and may
+     * always close, regardless of whether an Accountant is active (2026-08-11 — supersedes the
+     * earlier rule that locked the Owner out once an Accountant existed).
      */
     @Transactional(readOnly = true)
-    public boolean hasActiveAccountant() {
-        return accountpermissionRepository.existsActiveByRole(RoleConstants.ACCOUNTANT);
-    }
-
-    /** Whether the given role may close a period right now. */
-    @Transactional(readOnly = true)
     public boolean canClose(String role) {
-        if (RoleConstants.ACCOUNTANT.equals(role)) {
-            return true;
-        }
-        return RoleConstants.OWNER.equals(role) && !hasActiveAccountant();
+        return RoleConstants.ACCOUNTANT.equals(role) || RoleConstants.OWNER.equals(role);
     }
 
     /**
@@ -699,8 +690,7 @@ public class TaxperiodsnapshotService {
     @Transactional(readOnly = true)
     public String closeBlockedReason(String role, TaxPeriod period) {
         if (!canClose(role)) {
-            return "Chỉ Kế toán được chốt kỳ thuế. Chủ nhà thuốc chỉ chốt thay khi nhà thuốc "
-                    + "không có tài khoản kế toán đang hoạt động.";
+            return "Chỉ Kế toán hoặc Chủ nhà thuốc mới được chốt kỳ thuế.";
         }
         if (taxperiodsnapshotRepository.existsByPeriodLabel(period.label())) {
             return "Kỳ " + period.label() + " đã được chốt.";

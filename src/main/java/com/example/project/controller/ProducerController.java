@@ -9,15 +9,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.util.Map;
 
 @Controller
 public class ProducerController {
@@ -72,6 +79,29 @@ public class ProducerController {
         model.addAttribute("pageTitle", "Tạo nhà sản xuất");
         model.addAttribute("basePath", resolveBasePath(request));
         return "owner/create-producer";
+    }
+
+    // Quick-add from the Product create/edit form's "+" button (Owner-only, since that's the only
+    // role with a product create/edit screen) — same JSON-in/JSON-out shape as the sale screen's
+    // "thêm khách hàng nhanh" endpoint (InvoiceController.createCustomerFromSelling).
+    @PostMapping(value = "/owner/producers/quick-create",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<?> quickCreateProducer(@Valid @RequestBody ProducerCreateRequest request,
+                                                 BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            String message = bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("Dữ liệu không hợp lệ");
+            return ResponseEntity.badRequest().body(Map.of("message", message));
+        }
+        try {
+            return ResponseEntity.ok(producerService.create(request));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
     }
 
     //tạo nhà sản xuất
