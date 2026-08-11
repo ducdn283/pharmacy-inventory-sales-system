@@ -287,6 +287,18 @@
             margin: 0 1px;
         }
 
+        .product-sell-price-hint {
+            margin-top: 4px;
+            font-size: 11px;
+            line-height: 1.35;
+            color: #6b7280;
+        }
+
+        .product-sell-price-hint .product-sell-price-value {
+            color: #059669;
+            font-weight: 600;
+        }
+
         .product-title {
             display: flex;
             flex-direction: column;
@@ -858,7 +870,7 @@
                             <div class="text-center">Tồn</div>
                             <div class="text-center">Đơn vị tồn</div>
                             <div class="text-center">Số lượng</div>
-                            <div class="text-center">Đơn vị thuốc</div>
+                            <div class="text-center">Đơn vị nhập</div>
                             <div>Nhà cung cấp</div>
                             <div class="text-end">Giá từng đơn vị</div>
                             <div class="text-end">Giá ước tính</div>
@@ -967,7 +979,7 @@
                     <tr>
                         <th style="width: 56px;">STT</th>
                         <th>Tên</th>
-                        <th style="width: 150px;" class="text-end">Giá bán lần cuối</th>
+                        <th style="width: 150px;" class="text-end">Giá nhập lần cuối</th>
                         <th style="width: 130px;" class="text-center">Số SP trong bảng</th>
                     </tr>
                     </thead>
@@ -1170,6 +1182,24 @@
         (items || []).forEach(product => {
             productMap[product.productID] = product;
         });
+    }
+
+    function renderSellPriceHint(product) {
+        const price = formatCurrentSellPrice(product);
+        return `<div class="product-sell-price-hint">Giá bán hiện tại: `
+            + `<span class="product-sell-price-value">${price}</span></div>`;
+    }
+
+    function formatCurrentSellPrice(product) {
+        if (!product) {
+            return '—';
+        }
+        const raw = product.currentSellPrice != null ? product.currentSellPrice : product.estimatedPrice;
+        if (raw == null || raw === '') {
+            return '—';
+        }
+        const num = Number(raw);
+        return Number.isFinite(num) ? formatLineMoney(num) + 'đ' : '—';
     }
 
     function buildDetailFromProduct(product, overrides = {}) {
@@ -1519,6 +1549,7 @@
         const quantity = detail.requestedQuantity != null ? detail.requestedQuantity : 1;
         const unit = detail.unit || '';
         const conversionHintsHtml = renderUnitConversionHints(product);
+        const sellPriceHintHtml = renderSellPriceHint(product);
         const supplierId = detail.supplierId != null ? detail.supplierId : '';
         const unitPrice = resolveUnitPriceFromDetail(detail);
         const lineTotalFromDb = detail.estimatedPrice != null ? Number(detail.estimatedPrice) : 0;
@@ -1543,6 +1574,7 @@
                         <div class="product-title-name">${escapeHtml(product.name)}</div>
                     </div>
                     ${conversionHintsHtml}
+                    ${sellPriceHintHtml}
                 </div>
                 <div class="stock-cell">
                     <span class="stock-display">${currentStock}</span>
@@ -1584,6 +1616,7 @@
                         <div class="product-title-name">${escapeHtml(product.name)}</div>
                     </div>
                     ${conversionHintsHtml}
+                    ${sellPriceHintHtml}
                 </div>
                 <div class="stock-cell">
                     <span class="stock-display">${currentStock}</span>
@@ -1801,7 +1834,7 @@
                     <div class="product-search-code">${escapeHtml(product.code)}</div>
                     <div class="product-search-name">${escapeHtml(product.name)}</div>
                     <div class="product-search-meta">
-                        ${product.unit ? escapeHtml(product.unit) : 'Chưa có đơn vị thuốc'}
+                        ${product.unit ? escapeHtml(product.unit) : 'Chưa có đơn vị nhập'}
                     </div>
                 </div>
                 <div class="product-search-stock">Tồn: ${product.currentStock != null ? product.currentStock : 0}${product.stockUnit ? ' ' + escapeHtml(product.stockUnit) : ''}</div>
