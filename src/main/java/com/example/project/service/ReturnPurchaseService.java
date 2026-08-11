@@ -118,7 +118,7 @@ public class ReturnPurchaseService {
                 .filter(rate -> rate.signum() > 0)
                 .map(rate -> rate.min(FULL_REFUND_RATE))
                 .orElse(FULL_REFUND_RATE)
-                .setScale(2, RoundingMode.HALF_UP);
+                .setScale(0, RoundingMode.HALF_UP);
     }
 
     /** Có tự động cấn trừ tiền NCC hoàn vào công nợ đang nợ NCC hay không ({@code autoOffsetDebtOnRefund}). */
@@ -129,7 +129,10 @@ public class ReturnPurchaseService {
                 .orElse(Boolean.TRUE);
     }
 
-    /** Tỷ lệ hoàn thực áp cho phiếu đang lập; bỏ trống thì lấy mặc định của hệ thống. */
+    /**
+     * Tỷ lệ hoàn thực áp cho phiếu đang lập; bỏ trống thì lấy mặc định của hệ thống. Chỉ nhận SỐ NGUYÊN
+     * phần trăm — cùng luật với chiều khách hàng, xem {@code ReturnService.resolveRefundRate}.
+     */
     private BigDecimal resolveRefundRate(BigDecimal requested) {
         if (requested == null) {
             return getDefaultRefundRate();
@@ -137,7 +140,11 @@ public class ReturnPurchaseService {
         if (requested.signum() <= 0 || requested.compareTo(FULL_REFUND_RATE) > 0) {
             throw new IllegalArgumentException("Tỷ lệ NCC hoàn phải lớn hơn 0 và không vượt quá 100%");
         }
-        return requested.setScale(2, RoundingMode.HALF_UP);
+        if (requested.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException(
+                    "Tỷ lệ NCC hoàn phải là số nguyên phần trăm (ví dụ 80), không nhập số lẻ");
+        }
+        return requested.setScale(0, RoundingMode.UNNECESSARY);
     }
 
     // ------------------------------------------------------------------ list / search
