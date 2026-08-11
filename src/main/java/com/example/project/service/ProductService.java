@@ -986,7 +986,7 @@ public class ProductService {
             rows.add(new HistoryRow(
                     adjustment.getDate(), formatInstant(adjustment.getDate()),
                     stockAdjustmentMovementLabel(detail),
-                    formatCode("SO", adjustment.getId()),
+                    adjustment.getStockAdjustmentCode(),
                     lotNumber(detail.getBatchID()), delta, baseUnit, detail.getNote(), delta));
         }
 
