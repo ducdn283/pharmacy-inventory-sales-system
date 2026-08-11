@@ -53,10 +53,28 @@
             vertical-align: middle;
         }
 
-        /* Ô "Sản phẩm" cao hơn các ô khác trong hàng vì có thêm dòng "Giá bán" bên dưới ô tìm
-           kiếm — canh trên cho cả hàng để các input còn lại không bị đẩy lệch xuống giữa. */
+        /* Ô "Sản phẩm"/"Giá nhập" cao hơn các ô khác trong hàng vì có thêm dòng tham chiếu (Giá
+           bán/Giá nhập trước) bên dưới ô nhập — canh trên cho cả hàng để các input còn lại không
+           bị đẩy lệch xuống giữa. */
         #detailTable tbody.detail-item > tr:first-child > td {
             vertical-align: top;
+        }
+
+        /* Các ô chỉ hiển thị chữ (không có khung input) — Thuế suất VAT/Giá trước thuế/Tiền
+           thuế/Thành tiền — canh trên giống cả hàng (quy tắc trên), nhưng cần thêm padding-top để
+           chữ nằm ngang tầm với chữ BÊN TRONG khung .form-control của các ô cạnh nó, thay vì dính
+           sát mép trên của ô như hiện tại. */
+        #detailTable tbody.detail-item > tr:first-child > td.readonly-line-cell {
+            padding-top: 21px;
+        }
+
+        /* Dòng tham chiếu "Giá bán"/"Giá nhập trước" không được xuống dòng — nếu wrap thành 2
+           dòng, cả hàng bị kéo cao hẳn ra (chiều cao hàng dùng chung theo ô cao nhất), làm lệch
+           canh giữa của mọi ô còn lại trong cùng hàng. Bảng đã nằm trong .table-responsive nên
+           cho phép cột rộng thêm một chút để chứa trọn 1 dòng là an toàn. */
+        .product-sell-price-display,
+        .product-cost-price-display {
+            white-space: nowrap;
         }
 
         /* Loại hàng không theo dõi hạn sử dụng (thiết bị y tế máy/không hạn) — ẩn hẳn ô "Hạn dùng",
@@ -394,27 +412,25 @@
                                                class="form-control price-input"
                                                th:field="*{details[__${iterStat.index}__].importPrice}"
                                                oninput="calculateSummary()">
+                                        <div class="small text-secondary mt-1 product-cost-price-display">Giá nhập trước: —</div>
                                         <div class="text-danger small mt-1"
                                              th:if="${#fields.hasErrors('details[__${iterStat.index}__].importPrice')}"
                                              th:errors="*{details[__${iterStat.index}__].importPrice}">
                                         </div>
                                     </td>
 
-                                    <td>
-                                        <input type="number"
-                                               min="0"
-                                               max="100"
-                                               step="0.01"
-                                               class="form-control vat-rate-input"
-                                               th:field="*{details[__${iterStat.index}__].vatRate}"
-                                               readonly>
+                                    <td class="readonly-line-cell text-secondary">
+                                        <span class="vat-rate-display">0%</span>
+                                        <input type="hidden"
+                                               class="vat-rate-input"
+                                               th:field="*{details[__${iterStat.index}__].vatRate}">
                                     </td>
 
-                                    <td class="pretax-display">0đ</td>
+                                    <td class="readonly-line-cell pretax-display">0đ</td>
 
-                                    <td class="tax-display">0đ</td>
+                                    <td class="readonly-line-cell tax-display">0đ</td>
 
-                                    <td class="fw-semibold line-total">0đ</td>
+                                    <td class="readonly-line-cell fw-semibold line-total">0đ</td>
 
                                     <td class="text-end">
                                         <button type="button"
@@ -618,14 +634,21 @@
         return (rate === undefined || rate === null) ? null : rate;
     }
 
-    // Luôn ghi đè theo Type khi đổi sản phẩm — ô readonly, không phải gợi ý mà là giá trị chốt.
+    // Luôn ghi đè theo Type khi đổi sản phẩm — chỉ để xem (chữ thường, không phải ô nhập), giá trị
+    // thật gửi lên form nằm trong input ẩn .vat-rate-input, không phải gợi ý mà là giá trị chốt.
     function applySuggestedVatRate(row) {
         const productInput = row.querySelector('.product-select');
         const vatRateInput = row.querySelector('.vat-rate-input');
+        const vatRateDisplay = row.querySelector('.vat-rate-display');
         if (!productInput || !vatRateInput) return;
 
         const rate = suggestedVatRate(productInput.value);
         vatRateInput.value = rate !== null ? rate : '';
+        if (vatRateDisplay) {
+            vatRateDisplay.textContent = rate !== null
+                ? Number(rate).toLocaleString('vi-VN') + '%'
+                : '—';
+        }
         calculateSummary();
     }
 
@@ -663,6 +686,28 @@
 
     function wireSellPriceSuggestion(row) {
         applySuggestedSellPrice(row);
+    }
+
+    // "Giá nhập trước" — dòng tham chiếu hiển thị dưới ô Giá nhập, ngang hàng với "Giá bán" bên
+    // cột Sản phẩm. Khác applySuggestedPrice (tự điền vào ô khi đang trống): dòng này CHỈ hiển
+    // thị, không bao giờ ghi vào ô Giá nhập, kể cả khi ô đó đã có giá trị. Phụ thuộc NCC đang
+    // chọn, giống applySuggestedPrice, nên phải được gọi lại mỗi khi đổi NCC (xem selectSupplier).
+    function applyPreviousCostPriceDisplay(row) {
+        const productInput = row.querySelector('.product-select');
+        const display = row.querySelector('.product-cost-price-display');
+        if (!productInput || !display) return;
+
+        const supplierSelect = document.getElementById('supplierId');
+        const supplierId = supplierSelect ? supplierSelect.value : '';
+        const price = suggestedCostPrice(supplierId, productInput.value);
+
+        display.textContent = (price === null)
+            ? 'Giá nhập trước: —'
+            : 'Giá nhập trước: ' + Number(price).toLocaleString('vi-VN') + 'đ';
+    }
+
+    function wirePreviousCostPriceDisplay(row) {
+        applyPreviousCostPriceDisplay(row);
     }
 
     // Thiết bị y tế (máy)/(không hạn) không theo dõi hạn sử dụng — ẩn hẳn ô "Hạn dùng", không có
@@ -834,6 +879,7 @@
         hideProductSearchResults(row);
 
         applySuggestedPrice(row);
+        applyPreviousCostPriceDisplay(row);
         applySuggestedVatRate(row);
         applyImportUnitDisplay(row);
         applySuggestedSellPrice(row);
@@ -910,8 +956,12 @@
         searchInput.value = supplierName;
         hideSupplierSearchResults();
 
-        // Đổi NCC có thể lộ ra giá gợi ý khác cho các dòng chưa có giá — áp lại cho toàn bộ.
-        document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => applySuggestedPrice(row));
+        // Đổi NCC có thể lộ ra giá gợi ý khác cho các dòng chưa có giá — áp lại cho toàn bộ, cùng
+        // với dòng tham chiếu "Giá nhập trước" (phụ thuộc NCC y hệt).
+        document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
+            applySuggestedPrice(row);
+            applyPreviousCostPriceDisplay(row);
+        });
         maybeFetchProcurementPlanDetails();
     }
 
@@ -1089,19 +1139,20 @@
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
                            oninput="calculateSummary()">
+                    <div class="small text-secondary mt-1 product-cost-price-display">Giá nhập trước: —</div>
                 </td>
 
-                <td>
-                    <input type="number" min="0" max="100" step="0.01" class="form-control vat-rate-input"
-                           data-field="vatRate" name="details[${index}].vatRate"
-                           readonly>
+                <td class="readonly-line-cell text-secondary">
+                    <span class="vat-rate-display">0%</span>
+                    <input type="hidden" class="vat-rate-input"
+                           data-field="vatRate" name="details[${index}].vatRate">
                 </td>
 
-                <td class="pretax-display">0đ</td>
+                <td class="readonly-line-cell pretax-display">0đ</td>
 
-                <td class="tax-display">0đ</td>
+                <td class="readonly-line-cell tax-display">0đ</td>
 
-                <td class="fw-semibold line-total">0đ</td>
+                <td class="readonly-line-cell fw-semibold line-total">0đ</td>
 
                 <td class="text-end">
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeItemRow(this)">
@@ -1142,6 +1193,7 @@
         refreshRowIndexes();
         wireProductSearch(tbody);
         wirePriceSuggestion(tbody);
+        wirePreviousCostPriceDisplay(tbody);
         wireVatRateSuggestion(tbody);
         wireImportUnitDisplay(tbody);
         wireSellPriceSuggestion(tbody);
@@ -1179,6 +1231,7 @@
 
             wireProductSearch(row);
             wirePriceSuggestion(row);
+            wirePreviousCostPriceDisplay(row);
             wireVatRateSuggestion(row);
             wireImportUnitDisplay(row);
             wireSellPriceSuggestion(row);
