@@ -23,4 +23,5 @@ public class InvoiceDetailItemResponse {
     private BigDecimal unitSellPrice;
     private BigDecimal subtotal;
     private Integer returnedQty;
+    private String note;
 }

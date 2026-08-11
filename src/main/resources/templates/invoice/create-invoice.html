@@ -637,6 +637,29 @@
             word-break: break-word;
         }
 
+        .product-position-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 1.4;
+            color: #6366f1;
+            margin-top: 2px;
+        }
+
+        .product-position-line:empty {
+            display: none;
+        }
+
+        .product-position-line i {
+            font-size: 13px;
+            line-height: 1.2;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+
         .empty-product-state {
             padding: 40px 24px;
             text-align: center;
@@ -736,13 +759,37 @@
         }
 
         .sell-items-table .col-qty {
-            width: 72px;
+            width: 96px;
+            min-width: 96px;
+            max-width: 96px;
+            text-align: right;
+        }
+
+        .unit-qty-cell {
+            text-align: right;
+        }
+
+        .unit-qty-cell .unit-qty-input {
+            width: 76px;
+            max-width: 100%;
+            margin-left: auto;
+            text-align: center;
+        }
+
+        .unit-price-cell .form-control {
             text-align: right;
         }
 
         .sell-items-table .col-price {
-            width: 108px;
+            width: 136px;
+            min-width: 136px;
+            max-width: 136px;
             text-align: right;
+        }
+
+        .unit-price-cell .unit-price-input {
+            width: 100%;
+            min-width: 112px;
         }
 
         .sell-items-table .col-line-total {
@@ -753,6 +800,86 @@
         .sell-items-table .col-total {
             width: 100px;
             text-align: right;
+        }
+
+        tr.unit-line-row:has(+ tr.entry-note-row) td {
+            border-bottom: none;
+            padding-bottom: 6px;
+        }
+
+        tr.unit-line-row.active:has(+ tr.entry-note-row) td {
+            background: #f0fdf4;
+        }
+
+        .entry-note-row td {
+            padding: 0 14px 14px;
+            border-bottom: 10px solid #f3f4f6;
+            background: #fff;
+        }
+
+        .entry-note-panel {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 12px;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            border-left: 3px solid #059669;
+        }
+
+        .entry-note-head {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            padding-top: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        .entry-note-head i {
+            color: #059669;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .entry-note-input {
+            flex: 1;
+            min-width: 0;
+            min-height: 36px;
+            max-height: 72px;
+            border: 1px solid #dbeafe;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            line-height: 1.45;
+            background: #fff;
+            resize: vertical;
+            transition: border-color .15s, box-shadow .15s;
+        }
+
+        .entry-note-input::placeholder {
+            color: #94a3b8;
+        }
+
+        .entry-note-input:focus {
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+            outline: none;
+        }
+
+        @media (max-width: 767.98px) {
+            .entry-note-panel {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .entry-note-head {
+                padding-top: 0;
+            }
         }
 
         tr.unit-line-row.active td {
@@ -1013,7 +1140,7 @@
         }
 
         .print-modal-backdrop .pm-modal {
-            max-width: 860px;
+            max-width: 420px;
             max-height: calc(100vh - 48px);
             display: flex;
             flex-direction: column;
@@ -1090,95 +1217,6 @@
             <div class="row g-4">
                 <div class="col-12 col-xl-8">
 
-                    <div class="sell-card p-4 mb-4">
-                        <div class="section-title mb-4">
-                            <i class="ti ti-user text-success me-1"></i>
-                            Thông tin hóa đơn
-                        </div>
-
-                        <div class="row g-3">
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">Khách hàng</label>
-                                <div class="customer-picker-row">
-                                    <div class="customer-picker" id="customerPicker">
-                                        <button type="button"
-                                                class="form-select customer-picker-trigger"
-                                                id="customerPickerTrigger"
-                                                aria-haspopup="listbox"
-                                                aria-expanded="false">
-                                            <i class="ti ti-user customer-picker-icon muted" id="customerPickerIcon"></i>
-                                            <span class="customer-picker-label" id="customerPickerLabel">Khách lẻ</span>
-                                        </button>
-                                        <input type="hidden" th:field="*{customerId}" id="customerId">
-                                        <div class="customer-picker-menu" id="customerPickerMenu" role="listbox">
-                                            <div class="customer-picker-option active"
-                                                 data-value=""
-                                                 data-label="Khách lẻ"
-                                                 data-icon="ti-user"
-                                                 data-muted="1">
-                                                <i class="ti ti-user"></i>
-                                                <span>Khách lẻ</span>
-                                            </div>
-                                            <div th:each="customer : ${customers}"
-                                                 class="customer-picker-option"
-                                                 th:data-value="${customer.id}"
-                                                 th:data-label="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"
-                                                 th:data-icon="${customer.customerType == 'COMPANY' ? 'ti-building' : 'ti-user'}">
-                                                <i th:class="${customer.customerType == 'COMPANY' ? 'ti ti-building' : 'ti ti-user'}"></i>
-                                                <span th:text="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button type="button"
-                                            class="btn btn-outline-success customer-add-btn"
-                                            id="customerAddBtn"
-                                            title="Thêm khách hàng mới">
-                                        <i class="ti ti-plus"></i>
-                                    </button>
-                                </div>
-                                <div id="customerCreateSuccess" class="customer-create-success d-none" role="status" aria-live="polite">
-                                    <i class="ti ti-circle-check"></i>
-                                    <span id="customerCreateSuccessText"></span>
-                                </div>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">Người bán</label>
-                                <input type="text" class="form-control" th:value="${sellerName}" disabled>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <div class="form-check mt-2">
-                                    <input class="form-check-input" type="checkbox" id="prescriptionRequired"
-                                           th:field="*{prescriptionRequired}">
-                                    <label class="form-check-label" for="prescriptionRequired">
-                                        Hóa đơn thuốc kê đơn
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <label class="form-label" for="prescriptionCode">Mã đơn thuốc</label>
-                                <input type="text" class="form-control" id="prescriptionCode"
-                                       th:field="*{prescriptionCode}" maxlength="14"
-                                       placeholder="VD: AB12Cd345xyz-c" disabled
-                                       autocomplete="off">
-                                <div class="invalid-feedback" id="prescriptionError">
-                                    Vui lòng nhập mã đơn thuốc.
-                                </div>
-                                <div class="form-text" id="prescriptionUnlockHint">
-                                    Tick "Hóa đơn thuốc kê đơn" và nhập đúng mã để tìm thuốc kê đơn.
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="form-label">Ghi chú</label>
-                                <textarea class="form-control" rows="2" th:field="*{note}"
-                                          placeholder="Nhập ghi chú nếu có"></textarea>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="sell-card">
                         <div class="p-4 border-bottom">
                             <div class="section-title mb-3">
@@ -1239,6 +1277,95 @@
                 </div>
 
                 <div class="col-12 col-xl-4">
+                    <div class="sell-card p-4 mb-4">
+                        <div class="section-title mb-4">
+                            <i class="ti ti-user text-success me-1"></i>
+                            Thông tin hóa đơn
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Khách hàng</label>
+                                <div class="customer-picker-row">
+                                    <div class="customer-picker" id="customerPicker">
+                                        <button type="button"
+                                                class="form-select customer-picker-trigger"
+                                                id="customerPickerTrigger"
+                                                aria-haspopup="listbox"
+                                                aria-expanded="false">
+                                            <i class="ti ti-user customer-picker-icon muted" id="customerPickerIcon"></i>
+                                            <span class="customer-picker-label" id="customerPickerLabel">Khách lẻ</span>
+                                        </button>
+                                        <input type="hidden" th:field="*{customerId}" id="customerId">
+                                        <div class="customer-picker-menu" id="customerPickerMenu" role="listbox">
+                                            <div class="customer-picker-option active"
+                                                 data-value=""
+                                                 data-label="Khách lẻ"
+                                                 data-icon="ti-user"
+                                                 data-muted="1">
+                                                <i class="ti ti-user"></i>
+                                                <span>Khách lẻ</span>
+                                            </div>
+                                            <div th:each="customer : ${customers}"
+                                                 class="customer-picker-option"
+                                                 th:data-value="${customer.id}"
+                                                 th:data-label="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"
+                                                 th:data-icon="${customer.customerType == 'COMPANY' ? 'ti-building' : 'ti-user'}">
+                                                <i th:class="${customer.customerType == 'COMPANY' ? 'ti ti-building' : 'ti ti-user'}"></i>
+                                                <span th:text="${customer.name + (customer.phoneNumber != null ? ' - ' + customer.phoneNumber : '')}"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="button"
+                                            class="btn btn-outline-success customer-add-btn"
+                                            id="customerAddBtn"
+                                            title="Thêm khách hàng mới">
+                                        <i class="ti ti-plus"></i>
+                                    </button>
+                                </div>
+                                <div id="customerCreateSuccess" class="customer-create-success d-none" role="status" aria-live="polite">
+                                    <i class="ti ti-circle-check"></i>
+                                    <span id="customerCreateSuccessText"></span>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Người bán</label>
+                                <input type="text" class="form-control" th:value="${sellerName}" disabled>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="prescriptionRequired"
+                                           th:field="*{prescriptionRequired}">
+                                    <label class="form-check-label" for="prescriptionRequired">
+                                        Hóa đơn thuốc kê đơn
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" for="prescriptionCode">Mã đơn thuốc</label>
+                                <input type="text" class="form-control" id="prescriptionCode"
+                                       th:field="*{prescriptionCode}" maxlength="14"
+                                       placeholder="VD: AB12Cd345xyz-c" disabled
+                                       autocomplete="off">
+                                <div class="invalid-feedback" id="prescriptionError">
+                                    Vui lòng nhập mã đơn thuốc.
+                                </div>
+                                <div class="form-text" id="prescriptionUnlockHint">
+                                    Tick "Hóa đơn thuốc kê đơn" và nhập đúng mã để tìm thuốc kê đơn.
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Ghi chú</label>
+                                <textarea class="form-control" rows="2" th:field="*{note}"
+                                          placeholder="Nhập ghi chú nếu có"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="sell-card p-4 mb-4">
                         <div class="section-title mb-4">
                             <i class="ti ti-calculator text-success me-1"></i>
@@ -1877,8 +2004,10 @@
         return product.units.find(u => String(u.id) === String(unitId)) || null;
     }
 
+    const SELL_TABLE_COLS = 7;
+
     function findEntryRows(entryId) {
-        return Array.from(document.querySelectorAll(`#detailRows tr[data-entry-id="${entryId}"]`));
+        return Array.from(document.querySelectorAll(`#detailRows tr.unit-line-row[data-entry-id="${entryId}"]`));
     }
 
     function findEntryRow(entryId) {
@@ -1896,7 +2025,7 @@
     }
 
     function getEntryIdsInTable() {
-        return [...new Set(Array.from(document.querySelectorAll('#detailRows tr[data-entry-id]'))
+        return [...new Set(Array.from(document.querySelectorAll('#detailRows tr.unit-line-row[data-entry-id]'))
             .map(row => row.dataset.entryId))];
     }
 
@@ -2054,6 +2183,17 @@
             .map((seg, index) => (index === 0 ? '' : ' = ')
                 + seg.amount + ' ' + seg.unitName)
             .join('');
+    }
+
+    function renderProductPositionsHtml(product) {
+        const positions = (product?.storagePositions || []).filter(Boolean);
+        if (!positions.length) {
+            return '';
+        }
+        return `<div class="product-position-line" title="Vị trí lưu trữ">
+            <i class="ti ti-map-pin"></i>
+            <span>${escapeHtml(positions.join(' · '))}</span>
+        </div>`;
     }
 
     function renderUnitConversionHints(product) {
@@ -2235,6 +2375,13 @@
         qtyInput.addEventListener('input', calculateSummary);
     }
 
+    function getEntryNote(entryId) {
+        const noteRow = document.querySelector(`#detailRows tr.entry-note-row[data-entry-id="${entryId}"]`);
+        if (!noteRow) return '';
+        const input = noteRow.querySelector('.entry-note-input');
+        return input ? input.value.trim() : '';
+    }
+
     function syncFormDetails() {
         const container = document.getElementById('detailFormFields');
         if (!container) return;
@@ -2253,6 +2400,7 @@
                 const productId = row.dataset.productId;
                 const unitId = row.dataset.unitId;
                 const price = unitSellPriceForRow(row);
+                const entryNote = getEntryNote(entryId);
                 const fields = [
                     ['productId', productId],
                     ['productUnitId', unitId],
@@ -2260,6 +2408,7 @@
                     ['unitSellPrice', price]
                 ];
                 if (batchId) fields.push(['batchId', batchId]);
+                if (entryNote) fields.push(['note', entryNote]);
 
                 fields.forEach(([field, value]) => {
                     const input = document.createElement('input');
@@ -2424,6 +2573,7 @@
                                 <div class="product-title-name">${escapeHtml(product.name)}</div>
                                 ${conversionHintsHtml}
                             </div>
+                            ${renderProductPositionsHtml(product)}
                             <div class="product-batch-line"></div>
                             <div class="stock-hint"></div>
                         </div>
@@ -2455,6 +2605,23 @@
             tbody.appendChild(row);
             wireUnitLineRow(row);
         });
+
+        const noteRow = document.createElement('tr');
+        noteRow.className = 'entry-note-row';
+        noteRow.dataset.entryId = entryId;
+        noteRow.innerHTML = `
+            <td colspan="${SELL_TABLE_COLS}" class="entry-note-cell">
+                <div class="entry-note-panel">
+                    <div class="entry-note-head">
+                        <i class="ti ti-note"></i>
+                        <span>Ghi chú bán hàng</span>
+                    </div>
+                    <textarea class="form-control entry-note-input" rows="1"
+                              placeholder="Nhập ghi chú cho sản phẩm này (nếu có)" maxlength="500"></textarea>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(noteRow);
 
         renderBatchLine(entryId);
         getEntryIdsInTable().forEach(eid => renderBatchLine(eid));
@@ -2504,6 +2671,7 @@
     function removeItemRow(button) {
         const entryId = button.closest('tr').dataset.entryId;
         findEntryRows(entryId).forEach(row => row.remove());
+        document.querySelector(`#detailRows tr.entry-note-row[data-entry-id="${entryId}"]`)?.remove();
         delete selectedBatchByEntry[entryId];
         delete batchManualByEntry[entryId];
         getEntryIdsInTable().forEach(eid => renderBatchLine(eid));
@@ -3082,7 +3250,9 @@
             return;
         }
 
-        results.innerHTML = items.map((product, index) => `
+        results.innerHTML = items.map((product, index) => {
+            const positionsHtml = renderProductPositionsHtml(product);
+            return `
             <div class="product-search-item ${index === activeSearchIndex ? 'active' : ''}"
                  data-product-id="${product.productId}"
                  onclick="selectSearchProduct(${product.productId})">
@@ -3090,10 +3260,12 @@
                     <div class="product-search-code">${escapeHtml(product.code)}</div>
                     <div class="product-search-name">${escapeHtml(product.name)}</div>
                     ${renderUnitConversionHints(product)}
+                    ${positionsHtml}
                 </div>
                 <div class="product-search-stock">Tồn: ${product.baseStock != null ? product.baseStock : 0}${baseUnitName(product) ? ' ' + escapeHtml(baseUnitName(product)) : ''}</div>
             </div>
-        `).join('');
+        `;
+        }).join('');
         results.classList.add('show');
     }
 
@@ -3166,6 +3338,12 @@
                     };
                 });
                 addItemRow(product, unitPresets, { entryId, batchId: group.batchId });
+                const entryNote = group.lines.map(d => d.note).find(n => n && String(n).trim()) || '';
+                if (entryNote) {
+                    const noteInput = document.querySelector(
+                        `#detailRows tr.entry-note-row[data-entry-id="${entryId}"] .entry-note-input`);
+                    if (noteInput) noteInput.value = entryNote;
+                }
             });
         }
         toggleEmptyState();

@@ -23,12 +23,14 @@ import com.example.project.entity.Invoice;
 import com.example.project.entity.Invoicedetail;
 import com.example.project.entity.Product;
 import com.example.project.entity.Productunit;
+import com.example.project.entity.Position;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.BatchRepository;
 import com.example.project.repository.CustomerRepository;
 import com.example.project.repository.FinancialsettingRepository;
 import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.InvoicedetailRepository;
+import com.example.project.repository.PositionRepository;
 import com.example.project.repository.ProductRepository;
 import com.example.project.repository.ProductunitRepository;
 import com.example.project.repository.ReturnRepository;
@@ -92,6 +94,7 @@ public class InvoiceService {
     private final InvoicedetailRepository invoicedetailRepository;
     private final ProductRepository productRepository;
     private final ProductunitRepository productunitRepository;
+    private final PositionRepository positionRepository;
     private final BatchRepository batchRepository;
     private final CustomerRepository customerRepository;
     private final AccountRepository accountRepository;
@@ -108,6 +111,7 @@ public class InvoiceService {
                           InvoicedetailRepository invoicedetailRepository,
                           ProductRepository productRepository,
                           ProductunitRepository productunitRepository,
+                          PositionRepository positionRepository,
                           BatchRepository batchRepository,
                           CustomerRepository customerRepository,
                           AccountRepository accountRepository,
@@ -119,6 +123,7 @@ public class InvoiceService {
         this.invoicedetailRepository = invoicedetailRepository;
         this.productRepository = productRepository;
         this.productunitRepository = productunitRepository;
+        this.positionRepository = positionRepository;
         this.batchRepository = batchRepository;
         this.customerRepository = customerRepository;
         this.accountRepository = accountRepository;
@@ -274,6 +279,21 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<SellProductOptionResponse> listSellableProducts() {
+        Map<Integer, List<String>> positionsByProduct = new LinkedHashMap<>();
+        for (Position position : positionRepository.findAllWithProduct()) {
+            Product product = position.getProductID();
+            if (product == null || product.getProductID() == null) {
+                continue;
+            }
+            String name = trimToNull(position.getName());
+            if (name == null) {
+                continue;
+            }
+            positionsByProduct
+                    .computeIfAbsent(product.getProductID(), ignored -> new ArrayList<>())
+                    .add(name);
+        }
+
         Map<Integer, List<Productunit>> unitsByProduct = new LinkedHashMap<>();
         for (Productunit unit : productunitRepository.findAllWithProduct()) {
             if (Boolean.FALSE.equals(unit.getIsActive()) || unit.getProductID() == null) {
@@ -331,7 +351,8 @@ public class InvoiceService {
                     baseStock,
                     unitOptions,
                     batchOptions,
-                    isPrescriptionProduct(product)));
+                    isPrescriptionProduct(product),
+                    positionsByProduct.getOrDefault(product.getProductID(), List.of())));
         }
 
         options.sort(Comparator.comparing(SellProductOptionResponse::getName,
@@ -494,6 +515,7 @@ public class InvoiceService {
             detail.setUnitSellPrice(unitSellPrice);
             detail.setSubtotal(lineSubtotal);
             detail.setReturnedQty(0);
+            detail.setNote(trimToNull(item.getNote()));
             invoicedetailRepository.save(detail);
             return lineSubtotal;
         }
@@ -541,6 +563,7 @@ public class InvoiceService {
             detail.setUnitSellPrice(unitSellPrice);
             detail.setSubtotal(chunkSubtotal);
             detail.setReturnedQty(0);
+            detail.setNote(trimToNull(item.getNote()));
             invoicedetailRepository.save(detail);
 
             remainingSubtotal = remainingSubtotal.subtract(chunkSubtotal);
@@ -570,7 +593,7 @@ public class InvoiceService {
             if (isBatchExpired(batch)) {
                 String code = batch.getBatchCode() != null ? batch.getBatchCode() : String.valueOf(batch.getId());
                 String hsd = formatLocalDate(batch.getExpirationDate());
-                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn"
+                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn sử dụng"
                         + (hsd.isBlank() ? "" : " (" + hsd + ") — không thể bán"));
             }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
@@ -607,6 +630,9 @@ public class InvoiceService {
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
         if (available < baseQty) {
+            if (hasOnlyExpiredStock(batches)) {
+                throwNoSellableBatchStock(product);
+            }
             BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0 ? ratio : BigDecimal.ONE;
             long availableInUnit = BigDecimal.valueOf(available)
                     .divide(safeRatio, 0, RoundingMode.DOWN).longValue();
@@ -876,6 +902,9 @@ public class InvoiceService {
                 invoiceTypeDisplay(invoice.getInvoiceType()),
                 signed,
                 formatDateLong(invoice.getDate()),
+                formatDate(invoice.getDate()),
+                pharmacyBrandShort(setting),
+                receiptInvoiceCode(invoice),
                 signed ? buildTaxAuthorityCode(invoice, setting) : null,
                 signed ? formatSignedAt(signedAt) : null,
                 setting != null ? nullToEmpty(setting.getLocationName()) : "",
@@ -914,7 +943,8 @@ public class InvoiceService {
                 line.getUnitName(),
                 line.getQuantity(),
                 line.getUnitSellPrice(),
-                line.getSubtotal());
+                line.getSubtotal(),
+                trimToNull(line.getNote()));
     }
 
     private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines) {
@@ -961,7 +991,8 @@ public class InvoiceService {
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
                 line.getReturnedQty() != null ? line.getReturnedQty() : 0,
-                formatBatchLabel(line.getBatchID()));
+                formatBatchLabel(line.getBatchID()),
+                trimToNull(line.getNote()));
     }
 
     private InvoiceDetailItemResponse toDetailItem(Invoicedetail line) {
@@ -982,7 +1013,8 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getReturnedQty() != null ? line.getReturnedQty() : 0);
+                line.getReturnedQty() != null ? line.getReturnedQty() : 0,
+                trimToNull(line.getNote()));
     }
 
     private String batchLotNumber(Batch batch) {
@@ -1043,13 +1075,43 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getReturnedQty() != null ? line.getReturnedQty() : 0);
+                line.getReturnedQty() != null ? line.getReturnedQty() : 0,
+                trimToNull(line.getNote()));
     }
 
     /** The visible invoice number (the {@code invoiceNumber} column). */
     private String invoiceCode(Invoice invoice) {
         String number = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber().trim() : "";
         return number.isEmpty() ? "—" : number;
+    }
+
+    /** Mã hiển thị trên phiếu in POS: số hóa đơn 8 chữ số (vd. 00000018). */
+    private String receiptInvoiceCode(Invoice invoice) {
+        if (invoice == null) {
+            return "—";
+        }
+        String serial = formatInvoiceSerialNumber(invoice);
+        return serial.isEmpty() ? "—" : serial;
+    }
+
+    /** Tên thương hiệu ngắn lấy từ phần local-part email (vd. nhathuochangngoc). */
+    private String pharmacyBrandShort(Financialsetting setting) {
+        if (setting == null) {
+            return "";
+        }
+        String email = setting.getEmail();
+        if (email != null && !email.isBlank()) {
+            String normalized = email.trim().toLowerCase(Locale.ROOT);
+            int at = normalized.indexOf('@');
+            if (at > 0) {
+                return normalized.substring(0, at).replaceAll("\\d+$", "");
+            }
+        }
+        String locationName = setting.getLocationName();
+        if (locationName != null && !locationName.isBlank()) {
+            return locationName.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+        }
+        return "";
     }
 
     private boolean matchesKeyword(Invoice invoice, String normalizedKeyword) {
@@ -1408,6 +1470,28 @@ public class InvoiceService {
     private boolean isBatchExpired(Batch batch) {
         LocalDate expiry = batch.getExpirationDate();
         return expiry != null && expiry.isBefore(todayInVn());
+    }
+
+    private boolean hasOnlyExpiredStock(List<Batch> batches) {
+        if (batches == null || batches.isEmpty()) {
+            return false;
+        }
+        long totalStock = batches.stream()
+                .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
+                .sum();
+        if (totalStock <= 0) {
+            return false;
+        }
+        long sellableStock = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
+                .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
+                .sum();
+        return sellableStock == 0;
+    }
+
+    private void throwNoSellableBatchStock(Product product) {
+        throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
+                + "\" đã hết lô còn hạn sử dụng — không thể bán.");
     }
 
     private LocalDate toLocalDate(LocalDateTime dateTime) {
