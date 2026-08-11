@@ -522,6 +522,11 @@ public class SidebarMenuService {
                         "Cung ứng",
                         ICON_SUPPLY,
                         i(
+                                "Danh sách nhà cung cấp",
+                                "/supplier",
+                                ICON_SUPPLY
+                        ),
+                        i(
                                 "Danh sách phiếu nhập",
                                 "/accountant/purchase-invoices",
                                 "ti ti-receipt"
