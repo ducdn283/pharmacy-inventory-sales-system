@@ -171,6 +171,52 @@
                 padding-top: 84px !important;
             }
         }
+
+        /* Quick "add supplier" modal — same lightweight pm-modal-backdrop pattern used elsewhere
+           (e.g. Product create's "+" nhà sản xuất), not Bootstrap's JS Modal component. */
+        .pm-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, .45);
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            z-index: 1080;
+            padding: 60px 16px;
+            overflow-y: auto;
+        }
+        .pm-modal-backdrop.open { display: flex; }
+        .pm-modal {
+            background: #fff;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, .25);
+        }
+        .pm-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-bottom: 1px solid #eef0f3;
+        }
+        .pm-modal-title { font-size: 15px; font-weight: 700; }
+        .pm-modal-body { padding: 16px 18px; }
+        .pm-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid #eef0f3;
+        }
+        .pm-modal-close {
+            border: none;
+            background: transparent;
+            font-size: 20px;
+            line-height: 1;
+            color: #6b7280;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -218,18 +264,23 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Nhà cung cấp <span class="text-danger">*</span></label>
-                                <div class="product-search-wrap">
-                                    <input type="text"
-                                           id="supplierSearchInput"
-                                           class="form-control product-search-input"
-                                           autocomplete="off"
-                                           required
-                                           data-required-message="Vui lòng chọn nhà cung cấp"
-                                           placeholder="Tìm nhà cung cấp theo tên"
-                                           th:value="${supplierNameById.get(form.supplierId) ?: ''}">
-                                    <input type="hidden"
-                                           th:field="*{supplierId}">
-                                    <div id="supplierSearchResults" class="product-search-results"></div>
+                                <div class="d-flex align-items-start gap-2">
+                                    <div class="product-search-wrap flex-grow-1">
+                                        <input type="text"
+                                               id="supplierSearchInput"
+                                               class="form-control product-search-input"
+                                               autocomplete="off"
+                                               required
+                                               data-required-message="Vui lòng chọn nhà cung cấp"
+                                               placeholder="Tìm nhà cung cấp theo tên"
+                                               th:value="${supplierNameById.get(form.supplierId) ?: ''}">
+                                        <input type="hidden"
+                                               th:field="*{supplierId}">
+                                        <div id="supplierSearchResults" class="product-search-results"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-secondary" id="addSupplierBtn" title="Thêm nhà cung cấp mới">
+                                        <i class="ti ti-plus"></i>
+                                    </button>
                                 </div>
                                 <div class="text-danger small mt-1"
                                      th:if="${#fields.hasErrors('supplierId')}"
@@ -580,6 +631,43 @@
 
     </div>
 </main>
+
+<!-- Quick "add supplier" modal -->
+<div class="pm-modal-backdrop" id="addSupplierModal">
+    <div class="pm-modal">
+        <div class="pm-modal-header">
+            <div class="pm-modal-title">Thêm nhà cung cấp mới</div>
+            <button type="button" class="pm-modal-close" id="addSupplierCloseBtn" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="pm-modal-body">
+            <div id="addSupplierError" class="alert alert-danger py-2 px-3 small d-none" role="alert"></div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Tên nhà cung cấp <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierName" placeholder="Tên nhà cung cấp" maxlength="255">
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Mã số thuế <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierTaxCode" placeholder="10 chữ số, vd 0101234567">
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Số điện thoại <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierPhone" placeholder="VD: 0912345678">
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Email <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierEmail" placeholder="VD: contact@congty.vn">
+            </div>
+            <div class="mb-0">
+                <label class="form-label small mb-1">Địa chỉ <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierAddress" placeholder="Địa chỉ nhà cung cấp">
+            </div>
+        </div>
+        <div class="pm-modal-footer">
+            <button type="button" class="btn btn-outline-secondary" id="addSupplierCancelBtn">Hủy</button>
+            <button type="button" class="btn btn-purchase-primary" id="addSupplierSaveBtn">Lưu</button>
+        </div>
+    </div>
+</div>
 
 <script th:inline="javascript">
     const basePath = /*[[${basePath}]]*/ '/owner/purchase-invoices';
@@ -1215,6 +1303,82 @@
         calculateSummary();
     }
 
+    // Quick "add supplier" modal — lets the user register a supplier that isn't in the system yet
+    // without leaving this form. Posts to SupplierController's JSON endpoint, then fills in both
+    // the visible search box and its hidden supplierId, same as picking an existing supplier would.
+    function wireAddSupplierModal() {
+        const modal = document.getElementById('addSupplierModal');
+        const errorBox = document.getElementById('addSupplierError');
+        const fields = {
+            name: document.getElementById('newSupplierName'),
+            taxCode: document.getElementById('newSupplierTaxCode'),
+            phone: document.getElementById('newSupplierPhone'),
+            email: document.getElementById('newSupplierEmail'),
+            address: document.getElementById('newSupplierAddress')
+        };
+        if (!modal || !fields.name) return;
+
+        function openModal() {
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+            Object.values(fields).forEach(input => { input.value = ''; });
+            modal.classList.add('open');
+            setTimeout(() => fields.name.focus(), 0);
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.classList.remove('d-none');
+        }
+
+        async function saveSupplier() {
+            const payload = {
+                name: fields.name.value.trim(),
+                taxCode: fields.taxCode.value.trim(),
+                phone: fields.phone.value.trim(),
+                email: fields.email.value.trim(),
+                address: fields.address.value.trim()
+            };
+            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
+                showError('Vui lòng điền đầy đủ các trường bắt buộc');
+                return;
+            }
+            try {
+                // The form's own _csrf hidden input is auto-injected by Spring's
+                // RequestDataValueProcessor — a plain fetch() never picks it up automatically,
+                // must attach it by hand (same as every other quick-add modal in this app).
+                const csrfInput = document.querySelector('input[name="_csrf"]');
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfInput) headers['X-CSRF-TOKEN'] = csrfInput.value;
+                const response = await fetch('/supplier/quick-create', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    showError(data.message || 'Không thể tạo nhà cung cấp');
+                    return;
+                }
+                suppliers.push({ id: data.id, name: data.name });
+                selectSupplier(data.id, data.name);
+                closeModal();
+            } catch (err) {
+                showError('Không thể kết nối máy chủ, vui lòng thử lại');
+            }
+        }
+
+        document.getElementById('addSupplierBtn')?.addEventListener('click', openModal);
+        document.getElementById('addSupplierCloseBtn')?.addEventListener('click', closeModal);
+        document.getElementById('addSupplierCancelBtn')?.addEventListener('click', closeModal);
+        document.getElementById('addSupplierSaveBtn')?.addEventListener('click', saveSupplier);
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
             row.querySelectorAll('select, input').forEach(input => {
@@ -1239,6 +1403,7 @@
         });
 
         wireSupplierSearch();
+        wireAddSupplierModal();
         wireVietnameseRequiredMessages(document);
 
         const requisitionSelect = document.getElementById('requisitionId');
