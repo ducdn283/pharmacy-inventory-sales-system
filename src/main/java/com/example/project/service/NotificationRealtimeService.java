@@ -1,5 +1,7 @@
 package com.example.project.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -13,6 +15,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class NotificationRealtimeService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(NotificationRealtimeService.class);
 
     private static final long CONNECTION_TIMEOUT_MS =
             30L * 60L * 1000L;
@@ -147,7 +152,28 @@ public class NotificationRealtimeService {
                  * Tab đã đóng hoặc kết nối đã hết hạn.
                  */
                 remove(accountId, emitter);
-                emitter.complete();
+
+                /*
+                 * emitter.complete() có thể tự ném IllegalStateException nếu
+                 * AsyncContext bên dưới đã ở trạng thái lỗi từ trước (ví dụ
+                 * trình duyệt vừa đóng tab đúng lúc này) — gọi từ luồng xử lý
+                 * request nghiệp vụ hiện tại (không phải luồng gốc của kết nối
+                 * SSE) bị Tomcat coi là "non-container thread" và chặn lại.
+                 * Đây chỉ là dọn dẹp một kết nối đã chết, không liên quan gì
+                 * đến nghiệp vụ vừa commit thành công (duyệt phiếu, tạo hóa
+                 * đơn, ...) nên tuyệt đối không được để lỗi này thoát ra ngoài
+                 * afterCommit() — nếu không, request nghiệp vụ đã commit xong
+                 * vẫn trả về lỗi 500 cho người dùng dù thao tác đã thành công.
+                 */
+                try {
+                    emitter.complete();
+                } catch (RuntimeException cleanupException) {
+                    log.debug(
+                            "Không thể đóng SSE emitter đã chết cho accountId={}",
+                            accountId,
+                            cleanupException
+                    );
+                }
             }
         }
     }
