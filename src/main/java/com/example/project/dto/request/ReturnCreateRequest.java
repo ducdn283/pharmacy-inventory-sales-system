@@ -29,10 +29,14 @@ public class ReturnCreateRequest {
     private String note;
 
     /**
-     * Tỷ lệ % giá trị hàng trả được hoàn cho khách ({@code 0 < rate ≤ 100}), áp cho MỌI dòng của phiếu.
-     * Bỏ trống ⇒ lấy mặc định {@code Financialsetting.returnProductOnInvoiceValueRate}. Người lập được
-     * chỉnh tay từng phiếu (đặc tả bổ sung 27/07 mục 1.1); muốn mỗi mặt hàng một tỷ lệ khác nhau thì
-     * phải lập nhiều phiếu (giới hạn ghi ở mục 1.4).
+     * Tỷ lệ % giá trị hàng trả được hoàn cho khách — <b>SỐ NGUYÊN</b> {@code 0 < rate ≤ 100}, áp cho MỌI
+     * dòng của phiếu. Bỏ trống ⇒ lấy mặc định {@code Financialsetting.returnProductOnInvoiceValueRate}.
+     * Người lập được chỉnh tay từng phiếu (đặc tả bổ sung 27/07 mục 1.1); muốn mỗi mặt hàng một tỷ lệ
+     * khác nhau thì phải lập nhiều phiếu (giới hạn ghi ở mục 1.4).
+     *
+     * <p>Kiểu vẫn là {@code BigDecimal} chứ không phải {@code Integer}: gõ số lẻ vào ô {@code Integer}
+     * làm Spring ném lỗi bind ⇒ người dùng nhận trang lỗi 400 thay vì câu tiếng Việt ngay dưới ô. Việc
+     * chặn số lẻ nằm ở {@code ReturnService.resolveRefundRate}.</p>
      */
     private BigDecimal refundRate;
 
