@@ -31,6 +31,16 @@
 
             <div class="pm-topbar-actions">
 
+                <a th:if="${currentSellingUrl != null}"
+                   class="pm-topbar-icon-btn"
+                   th:href="${currentSellingUrl}"
+                   href="#"
+                   role="button"
+                   aria-label="Bán hàng"
+                   title="Bán hàng">
+                    <i class="ti ti-shopping-cart"></i>
+                </a>
+
                 <div class="dropdown">
                     <a class="position-relative pm-topbar-icon-btn"
                        data-bs-toggle="dropdown"
@@ -279,6 +289,11 @@
         .pm-topbar-divider {
             height: 24px;
             opacity: .5;
+            /* Bootstrap's .vr sets align-self:stretch; with an explicit height that no longer
+               stretches the element, so it keeps the flex-start (top) fallback instead of
+               following .pm-topbar-actions' align-items:center like its siblings. Force it back
+               to center so the line sits level with the icon/avatar next to it. */
+            align-self: center;
         }
 
         .pm-topbar-user {
