@@ -29,4 +29,7 @@ public class SellProductOptionResponse {
 
     /** True when the product type is {@code Thuốc kê đơn}. */
     private boolean requiresPrescription;
+
+    /** Storage positions configured for this product (e.g. Kệ A1). */
+    private List<String> storagePositions;
 }

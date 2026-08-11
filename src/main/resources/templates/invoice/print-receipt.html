@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" class="embed-preview">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Phiếu bán hàng | PharmaManager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        :root {
+            --receipt-width: 80mm;
+            --receipt-pad-y: 4mm;
+            --receipt-pad-x: 5mm;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 13px;
+            color: #000;
+            background: #fff;
+            margin: 0 auto;
+            width: var(--receipt-width);
+            max-width: var(--receipt-width);
+            padding: var(--receipt-pad-y) var(--receipt-pad-x);
+            box-sizing: border-box;
+        }
+
+        html.embed-preview,
+        html.embed-preview body {
+            overflow: hidden;
+            height: auto;
+        }
+
+        .receipt {
+            width: 100%;
+            margin: 0;
+            padding: 0 1mm;
+            line-height: 1.45;
+            box-sizing: border-box;
+        }
+
+        .brand-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .info-line {
+            margin: 0;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+        }
+
+        .receipt-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 6px 0 2px;
+        }
+
+        .receipt-code {
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .item-header,
+        .item-values {
+            display: grid;
+            grid-template-columns: 1fr 44px 1fr;
+            column-gap: 6px;
+        }
+
+        .item-header {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .col-qty {
+            text-align: center;
+        }
+
+        .col-money {
+            text-align: right;
+        }
+
+        .item-name {
+            margin-bottom: 2px;
+            word-break: break-word;
+        }
+
+        .item-note {
+            font-size: 11px;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .item-values {
+            margin-bottom: 6px;
+        }
+
+        .summary {
+            margin-top: 4px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            line-height: 1.65;
+        }
+
+        .summary-label {
+            text-align: right;
+        }
+
+        .summary-value {
+            min-width: 88px;
+            text-align: right;
+        }
+
+        .summary-row.total {
+            font-weight: bold;
+        }
+
+        .empty-items {
+            text-align: center;
+            padding: 8px 0;
+            color: #555;
+        }
+
+        @media print {
+            body {
+                width: var(--receipt-width);
+                max-width: var(--receipt-width);
+                padding: var(--receipt-pad-y) var(--receipt-pad-x);
+            }
+
+            .receipt {
+                width: 100%;
+                padding: 0 1mm;
+            }
+
+            @page {
+                size: 80mm auto;
+                margin: 4mm 5mm;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="receipt">
+    <div class="brand-name" th:text="${printData.pharmacyBrandName}">nhathuochangngoc</div>
+    <div class="info-line">
+        Chi nhánh bán hàng:
+        <span th:text="${printData.pharmacyName}">Nhà Thuốc Hằng Ngọc 1</span>
+    </div>
+    <div class="info-line" th:if="${printData.pharmacyAddress != null && !printData.pharmacyAddress.isBlank()}">
+        Địa chỉ :
+        <span th:text="${printData.pharmacyAddress}">1</span>
+    </div>
+    <div class="info-line" th:if="${printData.pharmacyPhone != null && !printData.pharmacyPhone.isBlank()}">
+        Điện thoại:
+        <span th:text="${printData.pharmacyPhone}">+84904440333</span>
+    </div>
+
+    <hr class="divider">
+
+    <div class="info-line">
+        Ngày bán:
+        <span th:text="${printData.dateDisplay}">10/08/2026 22:33</span>
+    </div>
+
+    <div class="receipt-title">HÓA ĐƠN BÁN HÀNG</div>
+    <div class="receipt-code" th:text="${printData.receiptInvoiceCode}">00000018</div>
+
+    <div class="info-line">
+        Khách hàng:
+        <span th:text="${printData.customerName}">A Toan Hoa</span>
+    </div>
+    <div class="info-line">
+        Nhân viên bán:
+        <span th:text="${printData.employeeName}">Anh Ngọc</span>
+    </div>
+
+    <hr class="divider">
+
+    <div class="item-header">
+        <span>Đơn giá</span>
+        <span class="col-qty">SL</span>
+        <span class="col-money">Thành tiền</span>
+    </div>
+
+    <div th:if="${#lists.isEmpty(printData.lines)}" class="empty-items">Không có sản phẩm.</div>
+
+    <div th:each="line : ${printData.lines}">
+        <div class="item-name" th:text="${line.productName}">Thymolin H/3vix10vien</div>
+        <div class="item-note"
+             th:if="${line.note != null && !line.note.isBlank()}"
+             th:text="${line.note}">Ghi chú dòng</div>
+        <div class="item-values">
+            <span th:text="${#numbers.formatDecimal(line.unitSellPrice, 1, 'COMMA', 0, 'POINT')}">50,000</span>
+            <span class="col-qty" th:text="${line.quantity}">1</span>
+            <span class="col-money"
+                  th:text="${#numbers.formatDecimal(line.lineSubtotal, 1, 'COMMA', 0, 'POINT')}">50,000</span>
+        </div>
+        <hr class="divider">
+    </div>
+
+    <div class="summary" th:if="${!#lists.isEmpty(printData.lines)}">
+        <div class="summary-row">
+            <span class="summary-label">Tổng tiền hàng:</span>
+            <span class="summary-value"
+                  th:text="${#numbers.formatDecimal(printData.subtotal, 1, 'COMMA', 0, 'POINT')}">1,030,000</span>
+        </div>
+        <div class="summary-row">
+            <span class="summary-label">Chiết khấu:</span>
+            <span class="summary-value"
+                  th:text="${#numbers.formatDecimal(printData.discount, 1, 'COMMA', 0, 'POINT')}">0</span>
+        </div>
+        <div class="summary-row total">
+            <span class="summary-label">Tổng cộng:</span>
+            <span class="summary-value"
+                  th:text="${#numbers.formatDecimal(printData.total, 1, 'COMMA', 0, 'POINT')}">1,030,000</span>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

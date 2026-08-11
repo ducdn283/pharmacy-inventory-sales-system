@@ -15,4 +15,5 @@ public class InvoicePrintLineResponse {
     private Integer quantity;
     private BigDecimal unitSellPrice;
     private BigDecimal lineSubtotal;
+    private String note;
 }
