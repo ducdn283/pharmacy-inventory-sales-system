@@ -193,6 +193,14 @@
             padding: 0 20px;
         }
 
+        .restock-modal-search {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            padding: 16px 0 12px;
+            background: #fff;
+        }
+
         .restock-modal-footer {
             display: flex;
             align-items: center;
@@ -542,9 +550,19 @@
         </div>
 
         <div class="restock-modal-body">
+            <div class="restock-modal-search">
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="ti ti-search"></i></span>
+                    <input type="search"
+                           class="form-control"
+                           id="restockProductSearchInput"
+                           placeholder="Tìm theo tên, mã sản phẩm hoặc mã vạch..."
+                           autocomplete="off">
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 restock-table">
-                    <thead class="sticky-top">
+                    <thead>
                     <tr>
                         <th>
                             <input class="form-check-input" type="checkbox" id="restockSelectAll"
@@ -559,7 +577,9 @@
                     </tr>
                     </thead>
                     <tbody id="restockProductRows">
-                    <tr th:each="item : ${restockProducts}">
+                    <tr th:each="item : ${restockProducts}"
+                        class="restock-product-row"
+                        th:attr="data-product-name=${item.name},data-product-code=${item.code},data-product-barcode=${item.barcode}">
                         <td>
                             <input class="form-check-input restock-product-checkbox"
                                    type="checkbox"
@@ -586,6 +606,11 @@
                     </tr>
                     <tr th:if="${#lists.isEmpty(restockProducts)}">
                         <td colspan="7" class="text-center text-secondary py-5">Không có sản phẩm nào cần nhập thêm.</td>
+                    </tr>
+                    <tr id="restockNoSearchResult" style="display: none;">
+                        <td colspan="7" class="text-center text-secondary py-5">
+                            Không tìm thấy sản phẩm phù hợp.
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -615,16 +640,54 @@
         const selectAll = document.getElementById('restockSelectAll');
         const selectionCount = document.getElementById('restockSelectionCount');
         const submitButton = document.getElementById('createRestockPlanBtn');
+        const searchInput = document.getElementById('restockProductSearchInput');
+        const noSearchResult = document.getElementById('restockNoSearchResult');
 
         function productCheckboxes() {
             return Array.from(rows.querySelectorAll('.restock-product-checkbox'));
         }
 
+        function visibleProductCheckboxes() {
+            return productCheckboxes().filter(checkbox => checkbox.closest('.restock-product-row').style.display !== 'none');
+        }
+
+        function normalizeSearchValue(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\u0111/g, 'd')
+                .replace(/\u0110/g, 'D')
+                .toLowerCase()
+                .trim();
+        }
+
+        function filterProducts() {
+            const keyword = normalizeSearchValue(searchInput.value);
+            let visibleCount = 0;
+
+            rows.querySelectorAll('.restock-product-row').forEach(row => {
+                const searchableValue = normalizeSearchValue([
+                    row.dataset.productName,
+                    row.dataset.productCode,
+                    row.dataset.productBarcode
+                ].join(' '));
+                const matches = !keyword || searchableValue.includes(keyword);
+                row.style.display = matches ? '' : 'none';
+                if (matches) visibleCount++;
+            });
+
+            noSearchResult.style.display = productCheckboxes().length > 0 && visibleCount === 0 ? '' : 'none';
+            updateSelection();
+        }
+
         function updateSelection() {
             const checkboxes = productCheckboxes();
             const selected = checkboxes.filter(checkbox => checkbox.checked).length;
-            selectAll.checked = checkboxes.length > 0 && selected === checkboxes.length;
-            selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
+            const visibleCheckboxes = visibleProductCheckboxes();
+            const visibleSelected = visibleCheckboxes.filter(checkbox => checkbox.checked).length;
+            selectAll.checked = visibleCheckboxes.length > 0 && visibleSelected === visibleCheckboxes.length;
+            selectAll.indeterminate = visibleSelected > 0 && visibleSelected < visibleCheckboxes.length;
+            selectAll.disabled = visibleCheckboxes.length === 0;
             selectionCount.textContent = 'Đã chọn ' + selected + ' sản phẩm';
             submitButton.disabled = selected === 0;
         }
@@ -633,7 +696,7 @@
             modal.classList.add('show');
             modal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
-            document.getElementById('closeRestockModalBtn').focus();
+            searchInput.focus();
         }
 
         function closeModal() {
@@ -653,9 +716,10 @@
             if (event.target.classList.contains('restock-product-checkbox')) updateSelection();
         });
         selectAll.addEventListener('change', function () {
-            productCheckboxes().forEach(checkbox => checkbox.checked = selectAll.checked);
+            visibleProductCheckboxes().forEach(checkbox => checkbox.checked = selectAll.checked);
             updateSelection();
         });
+        searchInput.addEventListener('input', filterProducts);
         form.addEventListener('submit', function (event) {
             if (!productCheckboxes().some(checkbox => checkbox.checked)) event.preventDefault();
         });
