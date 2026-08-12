@@ -5,6 +5,7 @@ import com.example.project.dto.request.ProcurementPlanDetailCreateRequest;
 import com.example.project.dto.response.ProcurementPlanPrintPageResponse;
 import com.example.project.dto.response.ProcurementPlanDetailRowView;
 import com.example.project.dto.response.ProcurementProductSearchResponse;
+import com.example.project.dto.response.ProcurementProductStockResponse;
 import com.example.project.dto.response.ProcurementSupplierSearchResponse;
 import com.example.project.dto.response.ProcurementplanResponse;
 import com.example.project.dto.response.SupplierCostPriceResponse;
@@ -102,6 +103,13 @@ public class ProcurementplanController {
     public List<ProcurementProductSearchResponse> searchProducts(@RequestParam(name = "keyword") String keyword,
                                                                  @RequestParam(name = "limit", defaultValue = "12") int limit) {
         return procurementplanService.searchProducts(keyword, limit);
+    }
+
+    @GetMapping("/owner/procurements/products/stock-overview")
+    @ResponseBody
+    public List<ProcurementProductStockResponse> listProductStockOverview(
+            @RequestParam(name = "sort", defaultValue = "desc") String sort) {
+        return procurementplanService.listAllProductStocks(sort);
     }
 
     // api lấy giá nhập của 1 nhà cung cấp
