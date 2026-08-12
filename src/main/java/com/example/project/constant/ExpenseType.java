@@ -1,5 +1,6 @@
 package com.example.project.constant;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,9 @@ public final class ExpenseType {
     /** All valid types, in display order. */
     public static final List<String> ALL = List.of(
             GOODS_PAYMENT, OPERATIONAL, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
+
+    /** Dược sĩ chỉ được lập phiếu hoàn tiền có giá trị nhỏ hơn ngưỡng này. */
+    public static final BigDecimal PHARMACIST_REFUND_LIMIT = BigDecimal.valueOf(500_000);
 
     /**
      * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #GOODS_PAYMENT}

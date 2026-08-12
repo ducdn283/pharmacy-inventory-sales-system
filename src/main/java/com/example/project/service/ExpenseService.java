@@ -415,6 +415,11 @@ public class ExpenseService {
         Return linkedReturn = resolveCustomerReturn(request, expenseType);
         Purchaseinvoice linkedPurchase = resolvePurchaseInvoice(request, expenseType);
         BigDecimal amount = resolveAmount(request, linkedReturn, linkedPurchase);
+        if (ExpenseType.RETURN_REFUND_PAYOUT.equals(requiredExpenseType)
+                && amount.compareTo(ExpenseType.PHARMACIST_REFUND_LIMIT) >= 0) {
+            throw new IllegalArgumentException(
+                    "Dược sĩ chỉ được tạo phiếu hoàn tiền trả hàng dưới 500.000đ");
+        }
 
         // Every NOT NULL column (expenseType/reason/amount) must have a real value even for a
         // draft — unlike Stock Adjustment's items, Expense has no field that's genuinely optional
