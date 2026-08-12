@@ -737,9 +737,23 @@
              *
              * EventSource tự kết nối lại nếu kết nối bị timeout
              * hoặc mất mạng tạm thời.
+             *
+             * ĐÓNG LẠI KHI TAB BỊ ẨN — xem khối "kiểm tra phiên"
+             * bên dưới để biết lý do. SseEmitter đặt timeout đúng
+             * 30 phút, bằng luôn thời hạn phiên: mỗi lần nó tự kết
+             * nối lại là một request mới làm mới phiên ngay tại
+             * thời điểm phiên đáng lẽ hết hạn, nên chỉ cần một tab
+             * bỏ quên là tài khoản không bao giờ được nhả ra.
              */
-            if (window.EventSource) {
-                var notificationStream =
+            var notificationStream = null;
+
+            function openNotificationStream() {
+                if (!window.EventSource
+                    || notificationStream) {
+                    return;
+                }
+
+                notificationStream =
                     new EventSource(STREAM_URL);
 
                 notificationStream
@@ -747,14 +761,41 @@
                         'notification-refresh',
                         refreshNotificationTopbar
                     );
-
-                window.addEventListener(
-                    'beforeunload',
-                    function () {
-                        notificationStream.close();
-                    }
-                );
             }
+
+            function closeNotificationStream() {
+                if (!notificationStream) {
+                    return;
+                }
+
+                notificationStream.close();
+                notificationStream = null;
+            }
+
+            openNotificationStream();
+
+            window.addEventListener(
+                'beforeunload',
+                closeNotificationStream
+            );
+
+            document.addEventListener(
+                'visibilitychange',
+                function () {
+                    if (document.visibilityState
+                        === 'visible') {
+                        openNotificationStream();
+
+                        /*
+                         * Nạp lại một lần để bù phần thông báo
+                         * phát sinh trong lúc tab bị ẩn.
+                         */
+                        refreshNotificationTopbar();
+                    } else {
+                        closeNotificationStream();
+                    }
+                }
+            );
 
             /*
              * Logic kiểm tra phiên đăng nhập hiện tại.
@@ -763,6 +804,27 @@
 
             setInterval(
                 function () {
+                    /*
+                     * CHỈ hỏi khi tab đang hiển thị.
+                     *
+                     * Mọi request đều làm mới lastAccessedTime của
+                     * HttpSession, nên vòng lặp 30 giây này giữ
+                     * phiên sống VĨNH VIỄN — luật "30 phút không
+                     * thao tác thì hết phiên" (F-01) không bao giờ
+                     * có cơ hội chạy khi còn một tab bỏ quên ở đâu
+                     * đó. Cộng với maximumSessions(1) +
+                     * maxSessionsPreventsLogin(true) (F-02), người
+                     * dùng quên đăng xuất sẽ bị chặn ở mọi lần đăng
+                     * nhập sau, mà SessionRegistry nằm trong RAM
+                     * nên chỉ restart app mới gỡ được.
+                     *
+                     * Tab bị ẩn = người dùng không thao tác thật,
+                     * đúng nghĩa "không hoạt động" của F-01.
+                     */
+                    if (document.visibilityState !== 'visible') {
+                        return;
+                    }
+
                     fetch('/api/session/check')
                         .then(function (res) {
                             /*
