@@ -694,10 +694,9 @@
             <div class="mb-2">
                 <label class="form-label small mb-1" for="newSupplierTaxCode">Mã số thuế <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" id="newSupplierTaxCode"
-                       inputmode="numeric" autocomplete="off" data-digits="-" maxlength="14"
+                       inputmode="numeric" autocomplete="off" data-digits="-" maxlength="13"
                        pattern="[0-9]{10}(-[0-9]{3})?" required
-                       aria-describedby="newSupplierTaxCodeFeedback"
-                       placeholder="10 chữ số, vd 0101234567">
+                       aria-describedby="newSupplierTaxCodeFeedback">
                 <div class="invalid-feedback" id="newSupplierTaxCodeFeedback"></div>
             </div>
             <div class="mb-2">
@@ -705,8 +704,7 @@
                 <input type="tel" class="form-control" id="newSupplierPhone"
                        inputmode="numeric" autocomplete="tel" data-digits maxlength="10"
                        pattern="0(2|3|5|7|8|9)[0-9]{8}" required
-                       aria-describedby="newSupplierPhoneFeedback"
-                       placeholder="VD: 0912345678">
+                       aria-describedby="newSupplierPhoneFeedback">
                 <div class="invalid-feedback" id="newSupplierPhoneFeedback"></div>
             </div>
             <div class="mb-2">
@@ -714,8 +712,7 @@
                 <input type="email" class="form-control" id="newSupplierEmail"
                        inputmode="email" autocomplete="email" maxlength="100"
                        pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
-                       required aria-describedby="newSupplierEmailFeedback"
-                       placeholder="VD: contact@congty.vn">
+                       required aria-describedby="newSupplierEmailFeedback">
                 <div class="invalid-feedback" id="newSupplierEmailFeedback"></div>
             </div>
             <div class="mb-0">
