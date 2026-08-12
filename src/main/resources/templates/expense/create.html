@@ -216,12 +216,23 @@
                                 <div class="form-text"
                                      th:if="${customerReturns != null and customerReturns.isEmpty()}">
                                     <i class="ti ti-alert-circle me-1"></i>
-                                    Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                    <span th:if="${pharmacistRefundLimit != null}">
+                                        Không có phiếu trả hàng nào dược sĩ được phép hoàn tiền
+                                        (giá trị phải dưới
+                                        <span th:text="${#numbers.formatDecimal(pharmacistRefundLimit, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>).
+                                    </span>
+                                    <span th:unless="${pharmacistRefundLimit != null}">
+                                        Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                    </span>
                                 </div>
                                 <div class="form-text" th:unless="${customerReturns != null and customerReturns.isEmpty()}">
                                     <i class="ti ti-info-circle me-1"></i>
                                     Chỉ liệt kê phiếu trả hàng đã duyệt, còn phát sinh tiền hoàn và chưa có phiếu chi.
                                     Số tiền được lấy từ phiếu trả, không sửa được.
+                                    <span th:if="${pharmacistRefundLimit != null}">
+                                        Dược sĩ chỉ được tạo phiếu dưới
+                                        <span th:text="${#numbers.formatDecimal(pharmacistRefundLimit, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>.
+                                    </span>
                                 </div>
                             </div>
 

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -161,12 +162,24 @@ public class ExpensePageController {
      * validation-failure re-render so the customer-return picker survives a rejected submit.
      */
     private void addCreateFormOptions(Model model, String basePath) {
+        boolean pharmacist = currentUserContext.isPharmacist();
         model.addAttribute("expenseTypeLabels", currentUserContext.isPharmacist()
                 ? Map.of(ExpenseType.RETURN_REFUND_PAYOUT,
                         ExpenseType.vietnameseName(ExpenseType.RETURN_REFUND_PAYOUT))
                 : expenseService.expenseTypeLabels());
-        model.addAttribute("customerReturns", expenseService.listCustomerReturns());
-        model.addAttribute("customerReturnAmounts", expenseService.customerReturnAmounts());
+        var customerReturns = expenseService.listCustomerReturns();
+        if (pharmacist) {
+            customerReturns = customerReturns.stream()
+                    .filter(item -> item.getAmount() != null
+                            && item.getAmount().compareTo(ExpenseType.PHARMACIST_REFUND_LIMIT) < 0)
+                    .toList();
+        }
+        Map<Integer, BigDecimal> customerReturnAmounts = new LinkedHashMap<>();
+        customerReturns.forEach(item -> customerReturnAmounts.put(item.getId(), item.getAmount()));
+        model.addAttribute("customerReturns", customerReturns);
+        model.addAttribute("customerReturnAmounts", customerReturnAmounts);
+        model.addAttribute("pharmacistRefundLimit",
+                pharmacist ? ExpenseType.PHARMACIST_REFUND_LIMIT : null);
         model.addAttribute("purchaseInvoices", expenseService.listPayablePurchaseInvoices());
         model.addAttribute("purchaseInvoiceAmounts", expenseService.payablePurchaseInvoiceAmounts());
         model.addAttribute("purchaseLinkableTypes", expenseService.purchaseLinkableTypes());

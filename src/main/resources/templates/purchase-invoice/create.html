@@ -337,9 +337,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chi phí phát sinh</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{additionCost}"
                                        id="additionCost"
@@ -352,9 +352,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chiết khấu</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{discount}"
                                        id="discount"
@@ -476,9 +476,9 @@
                                     </td>
 
                                     <td>
-                                        <input type="number"
-                                               min="0"
-                                               step="1"
+                                        <input type="text"
+                                               inputmode="numeric"
+                                               data-money
                                                required
                                                data-required-message="Vui lòng nhập đơn giá"
                                                class="form-control price-input"
@@ -692,16 +692,28 @@
                 <input type="text" class="form-control" id="newSupplierName" placeholder="Tên nhà cung cấp" maxlength="255">
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1">Mã số thuế <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="newSupplierTaxCode" placeholder="10 chữ số, vd 0101234567">
+                <label class="form-label small mb-1" for="newSupplierTaxCode">Mã số thuế <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierTaxCode"
+                       inputmode="numeric" autocomplete="off" data-digits="-" maxlength="13"
+                       pattern="[0-9]{10}(-[0-9]{3})?" required
+                       aria-describedby="newSupplierTaxCodeFeedback">
+                <div class="invalid-feedback" id="newSupplierTaxCodeFeedback"></div>
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1">Số điện thoại <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="newSupplierPhone" placeholder="VD: 0912345678">
+                <label class="form-label small mb-1" for="newSupplierPhone">Số điện thoại <span class="text-danger">*</span></label>
+                <input type="tel" class="form-control" id="newSupplierPhone"
+                       inputmode="numeric" autocomplete="tel" data-digits maxlength="10"
+                       pattern="0(2|3|5|7|8|9)[0-9]{8}" required
+                       aria-describedby="newSupplierPhoneFeedback">
+                <div class="invalid-feedback" id="newSupplierPhoneFeedback"></div>
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1">Email <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="newSupplierEmail" placeholder="VD: contact@congty.vn">
+                <label class="form-label small mb-1" for="newSupplierEmail">Email <span class="text-danger">*</span></label>
+                <input type="email" class="form-control" id="newSupplierEmail"
+                       inputmode="email" autocomplete="email" maxlength="100"
+                       pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
+                       required aria-describedby="newSupplierEmailFeedback">
+                <div class="invalid-feedback" id="newSupplierEmailFeedback"></div>
             </div>
             <div class="mb-0">
                 <label class="form-label small mb-1">Địa chỉ <span class="text-danger">*</span></label>
@@ -747,7 +759,7 @@
         const priceInput = row.querySelector('.price-input');
         if (!productInput || !priceInput) return;
 
-        const hasValue = priceInput.value !== '' && Number(priceInput.value) > 0;
+        const hasValue = moneyValue(priceInput) > 0;
         if (hasValue) return;
 
         const supplierSelect = document.getElementById('supplierId');
@@ -756,6 +768,7 @@
 
         if (price !== null) {
             priceInput.value = price;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
             calculateSummary();
         }
     }
@@ -904,6 +917,14 @@
         return Number(input.value);
     }
 
+    function moneyValue(input) {
+        if (!input) return 0;
+        if (typeof window.pmMoneyValue === 'function') {
+            return window.pmMoneyValue(input);
+        }
+        return Number(String(input.value || '').replace(/\./g, '')) || 0;
+    }
+
     // "Đơn giá" có thể đã gồm thuế VAT hoặc là giá trước thuế, tùy công tắc #priceIncludesVatToggle
     // (mặc định đã gồm thuế — hành vi cũ). Khớp công thức PurchaseinvoiceService.prepareLine()/
     // grossUpUnitPrice()/calculateLinePreTaxAmount (chỉ để xem trước, server tự tính lại khi lưu).
@@ -947,7 +968,7 @@
 
         document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
             const quantity = numberValue(row.querySelector('.quantity-input'));
-            const price = numberValue(row.querySelector('.price-input'));
+            const price = moneyValue(row.querySelector('.price-input'));
             const vatRate = numberValue(row.querySelector('.vat-rate-input'));
 
             let lineTotal;
@@ -988,8 +1009,8 @@
             }
         });
 
-        const additionCost = numberValue(document.getElementById('additionCost'));
-        const discount = numberValue(document.getElementById('discount'));
+        const additionCost = moneyValue(document.getElementById('additionCost'));
+        const discount = moneyValue(document.getElementById('discount'));
 
         let totalAmount = subtotal + additionCost - discount;
         if (totalAmount < 0) {
@@ -1262,6 +1283,7 @@
         const priceInput = row.querySelector('.price-input');
         if (priceInput && item.unitPrice != null) {
             priceInput.value = item.unitPrice;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
@@ -1323,7 +1345,7 @@
                 </td>
 
                 <td>
-                    <input type="number" min="0" step="1" required data-required-message="Vui lòng nhập đơn giá"
+                    <input type="text" inputmode="numeric" data-money required data-required-message="Vui lòng nhập đơn giá"
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
                            oninput="calculateSummary()">
@@ -1378,6 +1400,9 @@
         `;
 
         table.appendChild(tbody);
+        if (typeof window.pmInitMoneyInputs === 'function') {
+            window.pmInitMoneyInputs(tbody);
+        }
         refreshRowIndexes();
         wireProductSearch(tbody);
         wirePriceSuggestion(tbody);
@@ -1418,10 +1443,58 @@
         };
         if (!modal || !fields.name) return;
 
+        const fieldMessages = {
+            taxCode: 'Mã số thuế phải gồm đúng 10 chữ số, hoặc 10 chữ số kèm 3 số chi nhánh (vd 0101234567-001)',
+            phone: 'Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09',
+            email: "Email chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
+        };
+
+        function clearFieldError(input) {
+            input.classList.remove('is-invalid');
+            input.setCustomValidity('');
+            const feedback = document.getElementById(input.getAttribute('aria-describedby'));
+            if (feedback) feedback.textContent = '';
+        }
+
+        function showFieldError(input, message) {
+            input.setCustomValidity(message);
+            input.classList.add('is-invalid');
+            const feedback = document.getElementById(input.getAttribute('aria-describedby'));
+            if (feedback) feedback.textContent = message;
+        }
+
+        function validateSupplierFields(payload) {
+            Object.values(fields).forEach(clearFieldError);
+
+            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
+                showError('Vui lòng điền đầy đủ các trường bắt buộc');
+                return false;
+            }
+            if (!/^[0-9]{10}(-[0-9]{3})?$/.test(payload.taxCode)) {
+                showFieldError(fields.taxCode, fieldMessages.taxCode);
+                fields.taxCode.focus();
+                return false;
+            }
+            if (!/^0(2|3|5|7|8|9)[0-9]{8}$/.test(payload.phone)) {
+                showFieldError(fields.phone, fieldMessages.phone);
+                fields.phone.focus();
+                return false;
+            }
+            if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(payload.email)) {
+                showFieldError(fields.email, fieldMessages.email);
+                fields.email.focus();
+                return false;
+            }
+            return true;
+        }
+
         function openModal() {
             errorBox.classList.add('d-none');
             errorBox.textContent = '';
-            Object.values(fields).forEach(input => { input.value = ''; });
+            Object.values(fields).forEach(input => {
+                input.value = '';
+                clearFieldError(input);
+            });
             modal.classList.add('open');
             setTimeout(() => fields.name.focus(), 0);
         }
@@ -1443,8 +1516,9 @@
                 email: fields.email.value.trim(),
                 address: fields.address.value.trim()
             };
-            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
-                showError('Vui lòng điền đầy đủ các trường bắt buộc');
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+            if (!validateSupplierFields(payload)) {
                 return;
             }
             try {
@@ -1476,6 +1550,9 @@
         document.getElementById('addSupplierCloseBtn')?.addEventListener('click', closeModal);
         document.getElementById('addSupplierCancelBtn')?.addEventListener('click', closeModal);
         document.getElementById('addSupplierSaveBtn')?.addEventListener('click', saveSupplier);
+        Object.values(fields).forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
         modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
     }
 
@@ -1519,7 +1596,10 @@
     });
 </script>
 
-<!-- Chặn 'e' / '+' / '-' trong các ô số (số lượng, giá nhập, chi phí phát sinh, chiết khấu). -->
+<!-- Định dạng các ô tiền và chuyển về số thuần trước khi submit. -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+<!-- Chặn ký hiệu không hợp lệ trong ô số lượng; các trường tiền dùng money-input phía trên. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
