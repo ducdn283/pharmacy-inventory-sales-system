@@ -75,6 +75,70 @@
             position: relative;
         }
 
+        .product-search-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .product-search-toolbar .product-search-wrap {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .btn-view-stock {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+            border-radius: 10px;
+            min-height: 48px;
+            padding: 0 18px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid #6ee7b7;
+            background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+            color: #047857;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+            transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease, color .15s ease;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .btn-view-stock i {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .btn-view-stock:hover {
+            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+            border-color: #059669;
+            color: #065f46;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, .16);
+            transform: translateY(-1px);
+        }
+
+        .btn-view-stock:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+        }
+
+        .btn-view-stock:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .18);
+        }
+
+        @media (max-width: 575.98px) {
+            .product-search-toolbar {
+                flex-direction: column;
+            }
+
+            .btn-view-stock {
+                width: 100%;
+            }
+        }
+
         .product-search-field {
             position: relative;
         }
@@ -487,6 +551,99 @@
             padding: 24px 12px;
         }
 
+        .stock-modal {
+            max-width: 960px;
+        }
+
+        .stock-modal-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .stock-modal-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stock-modal-toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .stock-modal-toolbar label {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .stock-sort-select {
+            border-radius: 10px;
+            min-height: 38px;
+            width: auto;
+            min-width: 190px;
+        }
+
+        .stock-search-input {
+            border-radius: 10px;
+            min-height: 38px;
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .stock-overview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .stock-overview-table th,
+        .stock-overview-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eef0f3;
+            vertical-align: middle;
+        }
+
+        .stock-overview-table th {
+            background: #f8fafc;
+            color: #6b7280;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .stock-overview-empty {
+            text-align: center;
+            color: #6b7280;
+            padding: 24px 12px;
+        }
+
+        .stock-row-check {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .stock-row-selected {
+            background: #f0fdf4;
+        }
+
+        .btn-add-selected-stock {
+            border-radius: 10px;
+            min-height: 38px;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
         .unit-badge-display {
             display: flex;
             align-items: center;
@@ -730,15 +887,21 @@
                 <div class="col-12 col-lg-9">
                     <div class="owner-card">
                         <div class="p-4 border-bottom">
-                            <div class="product-search-wrap">
-                                <div class="product-search-field">
-                                    <i class="ti ti-search product-search-icon"></i>
-                                    <input type="text" id="productSearchInput"
-                                           class="form-control product-search-input"
-                                           placeholder="Tìm hàng theo tên, mã hoặc barcode"
-                                           autocomplete="off">
-                                    <div id="productSearchResults" class="product-search-results"></div>
+                            <div class="product-search-toolbar">
+                                <div class="product-search-wrap">
+                                    <div class="product-search-field">
+                                        <i class="ti ti-search product-search-icon"></i>
+                                        <input type="text" id="productSearchInput"
+                                               class="form-control product-search-input"
+                                               placeholder="Tìm hàng theo tên, mã hoặc barcode"
+                                               autocomplete="off">
+                                        <div id="productSearchResults" class="product-search-results"></div>
+                                    </div>
                                 </div>
+                                <button type="button" id="viewProductStockBtn" class="btn-view-stock">
+                                    <i class="ti ti-stack-2"></i>
+                                    <span>Xem tồn sản phẩm</span>
+                                </button>
                             </div>
                         </div>
 
@@ -835,6 +998,55 @@
     </div>
 </div>
 
+<div class="supplier-modal-backdrop" id="productStockModal">
+    <div class="supplier-modal stock-modal">
+        <div class="supplier-modal-header">
+            <h2 class="fs-6 mb-0">Tồn kho sản phẩm</h2>
+            <button type="button" class="supplier-modal-close" id="closeProductStockModalBtn">&times;</button>
+        </div>
+        <div class="supplier-modal-body">
+            <div class="stock-modal-toolbar">
+                <div class="stock-modal-toolbar-left">
+                    <input type="text" id="productStockSearchInput" class="form-control stock-search-input"
+                           placeholder="Gõ từ đầu tên, mã hoặc barcode" autocomplete="off">
+                    <label for="productStockSortSelect">Sắp xếp tồn:</label>
+                    <select id="productStockSortSelect" class="form-select stock-sort-select">
+                        <option value="desc" selected>Giảm dần</option>
+                        <option value="asc">Tăng dần</option>
+                    </select>
+                </div>
+                <div class="stock-modal-toolbar-right">
+                    <button type="button" id="addSelectedStockProductsBtn"
+                            class="btn btn-owner-primary btn-add-selected-stock" disabled>
+                        Thêm vào dự trù
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="stock-overview-table">
+                    <thead>
+                    <tr>
+                        <th style="width: 44px;" class="text-center">
+                            <input type="checkbox" id="productStockSelectAll" class="form-check-input stock-row-check"
+                                   title="Chọn tất cả">
+                        </th>
+                        <th style="width: 56px;">STT</th>
+                        <th style="width: 120px;">Mã</th>
+                        <th>Tên sản phẩm</th>
+                        <th style="width: 100px;" class="text-end">Tồn tối thiểu</th>
+                        <th style="width: 100px;" class="text-end">Tồn tối đa</th>
+                        <th style="width: 130px;" class="text-end">Tồn hiện tại</th>
+                    </tr>
+                    </thead>
+                    <tbody id="productStockModalBody">
+                    <tr><td colspan="7" class="stock-overview-empty">Đang tải...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script th:inline="javascript">
     const basePath = /*[[${basePath}]]*/ '/owner/procurements';
     const suppliers = /*[[${suppliers}]]*/ [];
@@ -856,6 +1068,242 @@
     let supplierSearchAbortController = null;
     let supplierSearchRequestId = 0;
     let lastSupplierItems = [];
+
+    let productStockAbortController = null;
+    let productStockRequestId = 0;
+    let allProductStockItems = [];
+    let lastProductStockItems = [];
+    let selectedStockProductIds = new Set();
+    let productStockSearchTimer = null;
+
+    function normalizeSearchText(value) {
+        if (!value) return '';
+        return String(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/Đ/g, 'D')
+            .replace(/đ/g, 'd')
+            .toLowerCase()
+            .trim();
+    }
+
+    function startsWithNormalizedSearch(value, keyword) {
+        const normalizedValue = normalizeSearchText(value);
+        const normalizedKeyword = normalizeSearchText(keyword);
+        if (!normalizedKeyword) return true;
+        return normalizedValue.startsWith(normalizedKeyword);
+    }
+
+    function matchesStockSearch(item, keyword) {
+        const normalized = normalizeSearchText(keyword);
+        if (!normalized) return true;
+        return startsWithNormalizedSearch(item.code, normalized)
+            || startsWithNormalizedSearch(item.name, normalized)
+            || startsWithNormalizedSearch(item.barcode, normalized);
+    }
+
+    function filterProductStockItems(items, keyword) {
+        return (items || []).filter(item => matchesStockSearch(item, keyword));
+    }
+
+    function applyProductStockFilter() {
+        const input = document.getElementById('productStockSearchInput');
+        const keyword = input ? input.value : '';
+        const filtered = filterProductStockItems(allProductStockItems, keyword);
+        renderProductStockRows(filtered, {
+            emptyMessage: keyword.trim() ? 'Không tìm thấy sản phẩm' : 'Không có sản phẩm nào'
+        });
+    }
+
+    function scheduleProductStockSearch(keyword) {
+        clearTimeout(productStockSearchTimer);
+        productStockSearchTimer = setTimeout(() => applyProductStockFilter(), 200);
+    }
+
+    function formatStockValue(value) {
+        if (value == null || value === '') return '—';
+        return Number(value).toLocaleString('vi-VN');
+    }
+
+    function stockItemToSearchProduct(item) {
+        return {
+            productID: item.productID,
+            name: item.name,
+            code: item.code,
+            barcode: item.barcode,
+            currentStock: item.currentStock,
+            stockUnit: item.stockUnit,
+            unit: item.unit,
+            unitRatio: item.unitRatio,
+            estimatedPrice: item.estimatedPrice,
+            units: item.units || [],
+            currentSellPrice: item.currentSellPrice
+        };
+    }
+
+    function updateStockSelectionUi() {
+        const addBtn = document.getElementById('addSelectedStockProductsBtn');
+        const selectAll = document.getElementById('productStockSelectAll');
+        const count = selectedStockProductIds.size;
+
+        if (addBtn) {
+            addBtn.disabled = count === 0;
+            addBtn.textContent = count > 0 ? `Thêm vào dự trù (${count})` : 'Thêm vào dự trù';
+        }
+
+        if (selectAll && lastProductStockItems.length) {
+            const visibleIds = lastProductStockItems.map(item => Number(item.productID));
+            const allSelected = visibleIds.length > 0
+                && visibleIds.every(id => selectedStockProductIds.has(id));
+            const someSelected = visibleIds.some(id => selectedStockProductIds.has(id));
+            selectAll.checked = allSelected;
+            selectAll.indeterminate = !allSelected && someSelected;
+        } else if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
+    }
+
+    function toggleStockProductSelection(productId, checked) {
+        const id = Number(productId);
+        if (checked) {
+            selectedStockProductIds.add(id);
+        } else {
+            selectedStockProductIds.delete(id);
+        }
+        updateStockSelectionUi();
+    }
+
+    function renderProductStockRows(items, options = {}) {
+        const tbody = document.getElementById('productStockModalBody');
+        if (!tbody) return;
+
+        if (options.loading) {
+            tbody.innerHTML = '<tr><td colspan="7" class="stock-overview-empty"><span class="product-search-loading"><span class="product-search-spinner"></span>Đang tải...</span></td></tr>';
+            updateStockSelectionUi();
+            return;
+        }
+
+        if (!items || !items.length) {
+            const message = options.emptyMessage || 'Không có sản phẩm nào';
+            tbody.innerHTML = `<tr><td colspan="7" class="stock-overview-empty">${escapeHtml(message)}</td></tr>`;
+            lastProductStockItems = [];
+            updateStockSelectionUi();
+            return;
+        }
+
+        lastProductStockItems = items;
+
+        tbody.innerHTML = items.map((item, index) => {
+            const productId = Number(item.productID);
+            const isSelected = selectedStockProductIds.has(productId);
+            const stockText = `${formatStockValue(item.currentStock)}${item.stockUnit ? ' ' + escapeHtml(item.stockUnit) : ''}`;
+            return `
+                <tr class="${isSelected ? 'stock-row-selected' : ''}" data-stock-product-id="${productId}">
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input stock-row-check stock-product-checkbox"
+                               data-product-id="${productId}" ${isSelected ? 'checked' : ''}
+                               aria-label="Chọn ${escapeHtml(item.name || '')}">
+                    </td>
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(item.code || '—')}</td>
+                    <td>${escapeHtml(item.name || '—')}</td>
+                    <td class="text-end">${formatStockValue(item.minStock)}</td>
+                    <td class="text-end">${formatStockValue(item.maxStock)}</td>
+                    <td class="text-end text-success fw-semibold">${stockText}</td>
+                </tr>`;
+        }).join('');
+
+        tbody.querySelectorAll('.stock-product-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function () {
+                const row = this.closest('tr');
+                toggleStockProductSelection(this.dataset.productId, this.checked);
+                if (row) {
+                    row.classList.toggle('stock-row-selected', this.checked);
+                }
+            });
+        });
+
+        updateStockSelectionUi();
+    }
+
+    function addSelectedStockProductsToPlan() {
+        if (!selectedStockProductIds.size) return;
+
+        const selectedItems = allProductStockItems.filter(item =>
+            selectedStockProductIds.has(Number(item.productID)));
+
+        cacheSearchProducts(selectedItems.map(stockItemToSearchProduct));
+
+        selectedItems.forEach(item => {
+            addProductById(item.productID, productMap[item.productID]);
+        });
+
+        selectedStockProductIds.clear();
+        document.querySelectorAll('#productStockModalBody .stock-product-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        document.querySelectorAll('#productStockModalBody tr.stock-row-selected').forEach(row => {
+            row.classList.remove('stock-row-selected');
+        });
+
+        initLineSupplierPrices();
+        toggleEmptyState();
+        calculateSummary();
+        updateStockSelectionUi();
+        closeProductStockModal();
+    }
+
+    function openProductStockModal() {
+        selectedStockProductIds.clear();
+        allProductStockItems = [];
+        const searchInput = document.getElementById('productStockSearchInput');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        updateStockSelectionUi();
+        document.getElementById('productStockModal').classList.add('open');
+        loadProductStockOverview();
+    }
+
+    function closeProductStockModal() {
+        document.getElementById('productStockModal').classList.remove('open');
+        if (productStockAbortController) {
+            productStockAbortController.abort();
+            productStockAbortController = null;
+        }
+    }
+
+    async function loadProductStockOverview() {
+        const sortSelect = document.getElementById('productStockSortSelect');
+        const sort = sortSelect ? sortSelect.value : 'desc';
+        const requestId = ++productStockRequestId;
+
+        if (productStockAbortController) {
+            productStockAbortController.abort();
+        }
+        productStockAbortController = new AbortController();
+
+        renderProductStockRows([], { loading: true });
+
+        try {
+            const response = await fetch(`${basePath}/products/stock-overview?sort=${encodeURIComponent(sort)}`, {
+                signal: productStockAbortController.signal
+            });
+            if (!response.ok) {
+                throw new Error('Failed to load stock overview');
+            }
+            const items = await response.json();
+            if (requestId !== productStockRequestId) return;
+            allProductStockItems = items;
+            applyProductStockFilter();
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            if (requestId !== productStockRequestId) return;
+            allProductStockItems = [];
+            renderProductStockRows([], { emptyMessage: 'Không thể tải danh sách tồn kho' });
+        }
+    }
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -1621,8 +2069,42 @@
     document.getElementById('supplierSearchInput').addEventListener('input', function (event) {
         scheduleSupplierSearch(event.target.value);
     });
+
+    document.getElementById('viewProductStockBtn').addEventListener('click', openProductStockModal);
+    document.getElementById('closeProductStockModalBtn').addEventListener('click', closeProductStockModal);
+    document.getElementById('productStockModal').addEventListener('click', function (event) {
+        if (event.target === this) closeProductStockModal();
+    });
+    document.getElementById('productStockSortSelect').addEventListener('change', loadProductStockOverview);
+    document.getElementById('productStockSearchInput').addEventListener('input', function (event) {
+        scheduleProductStockSearch(event.target.value);
+    });
+    document.getElementById('addSelectedStockProductsBtn').addEventListener('click', addSelectedStockProductsToPlan);
+    document.getElementById('productStockSelectAll').addEventListener('change', function (event) {
+        const checked = event.target.checked;
+        lastProductStockItems.forEach(item => {
+            const id = Number(item.productID);
+            if (checked) {
+                selectedStockProductIds.add(id);
+            } else {
+                selectedStockProductIds.delete(id);
+            }
+        });
+        document.querySelectorAll('#productStockModalBody .stock-product-checkbox').forEach(checkbox => {
+            checkbox.checked = checked;
+            const row = checkbox.closest('tr');
+            if (row) {
+                row.classList.toggle('stock-row-selected', checked);
+            }
+        });
+        updateStockSelectionUi();
+    });
+
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') closeSupplierModal();
+        if (event.key === 'Escape') {
+            closeSupplierModal();
+            closeProductStockModal();
+        }
     });
 
     document.getElementById('productSearchInput').addEventListener('input', function (event) {
