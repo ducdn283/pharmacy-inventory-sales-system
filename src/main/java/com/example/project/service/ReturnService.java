@@ -990,8 +990,7 @@ public class ReturnService {
         //   • L4      = lô gốc mà hàng được bán ra (batchID=4) → truy ngược nguồn gốc ngay trên mã lô.
         batch.setBatchCode(truncate("RT-" + String.format("%06d", ret.getId())
                 + "-L" + (origBatchId != null ? origBatchId : 0), 50));
-        batch.setBatchName(truncate("Hàng trả " + (original != null && original.getBatchName() != null
-                ? original.getBatchName() : ""), 50));
+        batch.setBatchName(returnBatchName(original, ret));
         batch.setProductID(original != null ? original.getProductID() : null);
         // Giữ liên kết về ĐÚNG dòng phiếu nhập mà hàng này ban đầu mua về (BA chốt 05/08/2026). Hàng
         // khách trả lại vẫn là hàng của nhà cung cấp đó, giá nhập không đổi — nên phải trả về NCC đó
@@ -1002,12 +1001,21 @@ public class ReturnService {
         batch.setPurchaseDetailID(original != null ? original.getPurchaseDetailID() : null);
         batch.setStorageQuantity(quantity);
         batch.setImportUnitID(original != null ? original.getImportUnitID() : null);
-        batch.setImportQtyInUnit(original != null ? original.getImportQtyInUnit() : null);
+        // Số lượng THỰC được trả về, quy sang đơn vị nhập — KHÔNG copy của lô gốc. Copy nguyên số của
+        // lô gốc là khai lô hàng trả có đúng bằng số đã nhập ban đầu: lô gốc nhập 100 Hộp mà khách chỉ
+        // trả lại 5 Hộp thì màn Lịch sử tồn kho của Sản phẩm vẫn hiện "+100 Hộp" (nó lấy thẳng cột
+        // này), và PurchaseinvoiceService.batchWasTouchedSinceImport cũng so sai.
+        batch.setImportQtyInUnit(toImportUnitQuantity(quantity, original));
         batch.setImportPrice(original != null && original.getImportPrice() != null
                 ? original.getImportPrice() : BigDecimal.ZERO);
         batch.setImportPricePerBase(original != null && original.getImportPricePerBase() != null
                 ? original.getImportPricePerBase() : BigDecimal.ZERO);
-        batch.setImportDate(nowVn());
+        // Instant.now() = mốc UTC THẬT, KHÔNG dùng nowVn(). nowVn() nhét giờ VN vào một Instant gắn
+        // nhãn UTC (xem javadoc của nó) — đúng cho các cột do chính module này đọc lại bằng
+        // ZoneOffset.UTC, nhưng batch.importDate lại do màn Sản phẩm/Lô hàng đọc và quy đổi UTC→VN,
+        // nên dùng nowVn() ở đây là bị cộng 7 tiếng HAI LẦN (23:52 hôm nay hiện thành 06:52 hôm sau).
+        // PurchaseinvoiceService cũng ghi cột này bằng Instant.now() — phải cùng quy ước.
+        batch.setImportDate(Instant.now());
         batch.setProductionDate(original != null ? original.getProductionDate() : null);
         batch.setExpirationDate(original != null ? original.getExpirationDate() : null);
         batch.setLotNumber(original != null ? original.getLotNumber() : null);
@@ -1032,6 +1040,50 @@ public class ReturnService {
         }
 
         return savedBatch;
+    }
+
+    /**
+     * Tên lô hàng trả = <strong>{@code <số lô gốc>-TH<id phiếu trả>}</strong>, ví dụ
+     * {@code LOT-002-TH000001}.
+     *
+     * <p>Dựng từ {@code lotNumber} chứ không phải {@code batchName} của lô gốc: {@code batchName} của
+     * lô nhập hiện còn kèm tên sản phẩm ở đầu ("Bifina R Health Aid - LOT-002"), nối thêm vào sẽ vừa
+     * dài quá 50 ký tự vừa lặp tên sản phẩm — trong khi cột này đứng cạnh cột tên sản phẩm rồi.</p>
+     *
+     * <p><strong>Đuôi mã phiếu trả là bắt buộc, không bỏ được.</strong> Hàng khách trả về đúng là lô
+     * {@code LOT-002} thật, nhưng nó nằm ở một dòng {@code batch} RIÊNG (tách ra để phân biệt hàng đã
+     * qua tay khách). Cùng một sản phẩm không được có hai lô trùng tên (chốt 13/08/2026), nên phải có
+     * phần đuôi; lấy mã phiếu trả thì vừa duy nhất vừa truy ngược được ngay phiếu nào sinh ra lô.</p>
+     */
+    private String returnBatchName(Batch original, Return ret) {
+        String lot = original != null ? trimToNull(original.getLotNumber()) : null;
+        if (lot == null) {
+            // Lô gốc không ghi số lô — lùi về tên lô gốc để vẫn còn manh mối truy nguồn.
+            lot = original != null ? trimToNull(original.getBatchName()) : null;
+        }
+        String suffix = "TH" + String.format("%06d", ret.getId());
+        return truncate(lot == null ? suffix : lot + "-" + suffix, 50);
+    }
+
+    /**
+     * Quy số lượng ở ĐƠN VỊ CƠ SỞ về đơn vị nhập của lô, cho cột {@code batch.importQtyInUnit}.
+     *
+     * <p>Ví dụ lô nhập theo Hộp (1 Hộp = 20 Cái), khách trả lại 100 Cái ⇒ ghi 5 Hộp. Nhờ vậy màn Lịch
+     * sử tồn kho hiện "+5 Hộp" đúng bằng 100 Cái thật sự vào kho, thay vì "+100 Hộp".</p>
+     *
+     * <p>Không có đơn vị nhập / tỉ lệ quy đổi thì trả nguyên số cơ sở (coi tỉ lệ = 1). Phép chia làm
+     * tròn HALF_UP: hàng chỉ nhập lại kho khi bán bằng đơn vị đóng gói mặc định nên gần như luôn chia
+     * hết; nếu lệch thì chỉ lệch ở con số hiển thị, {@code storageQuantity} vẫn là số cơ sở chính xác.</p>
+     */
+    private Integer toImportUnitQuantity(int baseQuantity, Batch original) {
+        Productunit importUnit = original != null ? original.getImportUnitID() : null;
+        BigDecimal ratio = importUnit != null ? importUnit.getRatio() : null;
+        if (ratio == null || ratio.compareTo(BigDecimal.ZERO) <= 0) {
+            return baseQuantity;
+        }
+        return BigDecimal.valueOf(baseQuantity)
+                .divide(ratio, 0, RoundingMode.HALF_UP)
+                .intValue();
     }
 
     /**
@@ -1175,7 +1227,8 @@ public class ReturnService {
         return new ReturnDetailItemResponse(
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
-                batch != null ? batch.getLotNumber() : "",
+                // TÊN lô, không phải SỐ lô — xem javadoc của ReturnDetailItemResponse.batchName.
+                batch != null ? batch.getBatchName() : "",
                 batch != null ? formatLocalDate(batch.getExpirationDate()) : "",
                 unit != null ? unit.getUnitName() : "",
                 detail.getReturnQty(),
@@ -1195,7 +1248,7 @@ public class ReturnService {
                 line.getId(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
-                batch != null ? batch.getLotNumber() : "",
+                batch != null ? batch.getBatchName() : "",
                 batch != null ? formatLocalDate(batch.getExpirationDate()) : "",
                 line.getUnitName(),
                 line.getQuantity(),

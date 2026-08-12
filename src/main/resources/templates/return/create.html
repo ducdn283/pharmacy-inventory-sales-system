@@ -233,7 +233,7 @@
                                 <thead>
                                 <tr>
                                     <th>Tên hàng hóa</th>
-                                    <th>Lô</th>
+                                    <th>Tên lô</th>
                                     <th>HSD</th>
                                     <th>Đơn vị</th>
                                     <th>Đã bán</th>
@@ -559,7 +559,7 @@
                 const tr = document.createElement('tr');
                 tr.innerHTML =
                     '<td>' + escapeHtml(line.productName) + '</td>' +
-                    '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(line.lotNumber || '') + '</span></td>' +
+                    '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(line.batchName || '') + '</span></td>' +
                     '<td>' + escapeHtml(line.expirationDateDisplay || '') + '</td>' +
                     '<td>' + escapeHtml(line.unitName || '') + '</td>' +
                     '<td>' + line.soldQty + '</td>' +
