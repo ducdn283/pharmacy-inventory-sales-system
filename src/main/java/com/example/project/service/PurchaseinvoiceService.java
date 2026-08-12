@@ -34,7 +34,11 @@ import java.util.stream.Collectors;
  *       step, regardless of whether an Accountant is active: {@link Batch} rows are created in the
  *       same transaction and {@code approvedAt} is stamped to the creation moment (the Owner is,
  *       in effect, both creator and approver). {@link #canCreatePurchaseInvoice} is always
- *       {@code true} for {@code OWNER}.</li>
+ *       {@code true} for {@code OWNER}. The Owner may also save a Nháp first via
+ *       {@link #createPurchaseInvoiceDraft} and come back later — editing it via
+ *       {@link #updatePurchaseInvoiceDraft} (stay Nháp) or {@link #finalizePurchaseInvoiceDraft}
+ *       (create the batches and approve in the same action, since the Owner never needs a separate
+ *       approval step from themselves).</li>
  *   <li><strong>Active Accountant</strong> — the Accountant may additionally create via
  *       {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval}, optionally
  *       edit a Nháp ({@link #updatePurchaseInvoiceDraft}/{@link #submitPurchaseInvoiceDraft}) or
@@ -508,9 +512,9 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Accountant "Lưu Nháp" — persists the header and lines so the Accountant can come back later,
-     * but nothing else: no stock, no cost-price refresh, no {@code approvedAt}. Editable/deletable
-     * only while it stays {@link PurchaseInvoiceStatus#DRAFT}.
+     * "Lưu Nháp" — persists the header and lines so the creator (Accountant or Owner, see class
+     * javadoc) can come back later, but nothing else: no stock, no cost-price refresh, no
+     * {@code approvedAt}. Editable/deletable only while it stays {@link PurchaseInvoiceStatus#DRAFT}.
      */
     @Transactional
     public Integer createPurchaseInvoiceDraft(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
@@ -591,8 +595,50 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Accountant deletes a Nháp outright — the only status this is allowed from, since nothing else
-     * (no {@link Batch}, no debt, no payment) has ever been attached to it yet.
+     * Owner edits a Nháp (their own or an Accountant's — the Owner has full permission regardless of
+     * origin) and approves it in the same action: unlike {@link #submitPurchaseInvoiceDraft}, there
+     * is no intermediate {@link PurchaseInvoiceStatus#PENDING_APPROVAL} step, since the Owner is
+     * always both creator and approver on this path (see class javadoc / {@link #createPurchaseInvoice}).
+     * Stock is received here — same {@link #receiveStockForInvoice} call {@link #createPurchaseInvoice}
+     * and {@link #approvePurchaseInvoice} use — the moment this row stops being a Nháp.
+     */
+    @Transactional
+    public Integer finalizePurchaseInvoiceDraft(Integer purchaseId, PurchaseInvoiceCreateRequest request,
+                                                Integer currentAccountId) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Chỉ có thể sửa phiếu nhập đang ở trạng thái Nháp");
+        }
+
+        PreparedInvoiceHeader header = prepareInvoiceHeader(request, currentAccountId);
+
+        invoice.setSupplierID(header.supplier());
+        invoice.setProcurementID(header.procurementPlan());
+        invoice.setAdditionCost(header.additionCost());
+        invoice.setDiscount(header.discount());
+        invoice.setTotalAmount(header.totalAmount());
+        invoice.setNote(request.getNote());
+        invoice.setVatInvoiceNumber(trimToNull(request.getVatInvoiceNumber()));
+        invoice.setVatInvoiceDate(request.getVatInvoiceDate());
+        invoice.setDueDate(request.getDueDate());
+        invoice.setStatus(resolveInvoiceStatus(header.totalAmount(), BigDecimal.ZERO));
+        invoice.setApprovedAt(LocalDateTime.now());
+
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        purchasedetailRepository.deleteAll(purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId));
+        List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
+        receiveStockForInvoice(savedInvoice, savedDetails);
+
+        return savedInvoice.getId();
+    }
+
+    /**
+     * Deletes a Nháp outright — the only status this is allowed from, since nothing else (no
+     * {@link Batch}, no debt, no payment) has ever been attached to it yet. Reachable by the
+     * Accountant or the Owner (see class javadoc), not restricted to the row's own creator.
      */
     @Transactional
     public void deletePurchaseInvoiceDraft(Integer purchaseId) {

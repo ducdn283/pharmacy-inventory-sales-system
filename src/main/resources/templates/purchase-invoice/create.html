@@ -230,11 +230,14 @@
         <div class="d-flex justify-content-between align-items-start mb-4">
             <div>
                 <h1 class="fs-4 mb-1" th:text="${editMode} ? 'Sửa phiếu nhập' : 'Tạo phiếu nhập'">Tạo phiếu nhập</h1>
-                <p class="text-secondary mb-0"
-                   th:text="${dualSubmit}
-                       ? 'Lưu nháp để sửa sau, hoặc nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho sau khi được duyệt'
-                       : 'Tạo phiếu nhập hàng từ nhà cung cấp và tự động tạo lô hàng'">
+                <p class="text-secondary mb-0" th:if="${!dualSubmit}">
                     Tạo phiếu nhập hàng từ nhà cung cấp và tự động tạo lô hàng
+                </p>
+                <p class="text-secondary mb-0" th:if="${dualSubmit and selfApprove}">
+                    Lưu nháp để sửa sau, hoặc tạo phiếu ngay — hàng về kho ngay khi tạo phiếu
+                </p>
+                <p class="text-secondary mb-0" th:if="${dualSubmit and !selfApprove}">
+                    Lưu nháp để sửa sau, hoặc nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho sau khi được duyệt
                 </p>
             </div>
 
@@ -545,7 +548,21 @@
                         </a>
                     </div>
 
-                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit}">
+                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit and selfApprove}">
+                        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary px-4">
+                            Lưu Nháp
+                        </button>
+
+                        <button type="submit" name="action" value="submit" class="btn btn-purchase-primary px-4">
+                            Tạo phiếu nhập
+                        </button>
+
+                        <a th:href="${basePath}" class="btn btn-outline-secondary px-4">
+                            Hủy
+                        </a>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit and !selfApprove}">
                         <button type="submit" name="action" value="draft" class="btn btn-outline-secondary px-4">
                             Lưu Nháp
                         </button>
@@ -600,7 +617,12 @@
                             Phiếu nhập luôn được lập ở trạng thái "Nợ". Ghi nhận thanh toán bằng cách
                             lập phiếu chi trỏ tới phiếu nhập này.
                         </div>
-                        <div class="text-secondary small mt-2" th:if="${dualSubmit}">
+                        <div class="text-secondary small mt-2" th:if="${dualSubmit and selfApprove}">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Lưu Nháp để sửa sau; hoặc tạo phiếu ngay — hàng về kho và phiếu chuyển
+                            sang "Nợ" ngay lập tức, không cần duyệt riêng.
+                        </div>
+                        <div class="text-secondary small mt-2" th:if="${dualSubmit and !selfApprove}">
                             <i class="ti ti-info-circle me-1"></i>
                             Lưu Nháp để sửa sau; Nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho và
                             phiếu chỉ chuyển sang "Nợ" khi được duyệt.
@@ -618,7 +640,13 @@
                             <p class="mb-2">3. Mỗi dòng nhập luôn tạo một lô hàng mới — nhập đúng số lô, ngày SX, hạn dùng theo phiếu giao hàng của nhà cung cấp.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
-                        <div class="text-secondary small" th:if="${dualSubmit}">
+                        <div class="text-secondary small" th:if="${dualSubmit and selfApprove}">
+                            <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
+                            <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng".</p>
+                            <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi tạo phiếu (hoặc duyệt lại phiếu nháp), mỗi dòng nhập mới tạo một lô hàng mới.</p>
+                            <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
+                        </div>
+                        <div class="text-secondary small" th:if="${dualSubmit and !selfApprove}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
                             <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng".</p>
                             <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi Chủ nhà thuốc duyệt, mỗi dòng nhập mới tạo một lô hàng mới.</p>
