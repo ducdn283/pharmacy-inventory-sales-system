@@ -378,6 +378,18 @@ public class ProcurementplanService {
                 .toList();
     }
 
+    /** Sản phẩm đang hết hoặc sắp hết hàng, dùng cho bước chọn trước khi tạo phiếu dự trù. */
+    @Transactional(readOnly = true)
+    public List<ProcurementProductStockResponse> listRestockNeededProducts() {
+        return listAllProductStocks("asc").stream()
+                .filter(product -> {
+                    int stock = product.getCurrentStock() == null ? 0 : product.getCurrentStock();
+                    int minStock = product.getMinStock() == null ? 0 : product.getMinStock();
+                    return stock <= minStock;
+                })
+                .toList();
+    }
+
     private ProcurementProductStockResponse toStockResponse(Product product,
                                                             Map<Integer, Long> stockByProduct,
                                                             Map<Integer, Productunit> mainUnitByProduct,
@@ -697,6 +709,7 @@ public class ProcurementplanService {
 
     // lưu chi tiết dự trù
     private void saveDetails(Procurementplan plan, List<ProcurementPlanDetailCreateRequest> details) {
+        Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         for (ProcurementPlanDetailCreateRequest item : details) {
             Product product = productRepository.findById(item.getProductId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm"));
@@ -711,7 +724,11 @@ public class ProcurementplanService {
             detail.setProcurementID(plan);
             detail.setProductID(product);
             detail.setRequestedQuantity(item.getRequestedQuantity());
-            detail.setUnit(trimToNull(item.getUnit()));
+            String requestedUnit = trimToNull(item.getUnit());
+            Productunit defaultImportUnit = mainUnitByProduct.get(product.getProductID());
+            detail.setUnit(requestedUnit != null
+                    ? requestedUnit
+                    : defaultImportUnit != null ? trimToNull(defaultImportUnit.getUnitName()) : null);
             detail.setEstimatedPrice(resolveEstimatedPrice(item));
             detail.setSupplierID(supplier);
             detail.setCurrentStock((int) batchRepository.sumStorageByProduct(product.getProductID()));

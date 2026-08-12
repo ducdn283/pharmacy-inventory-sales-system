@@ -147,6 +147,69 @@
         .expandable-search-panel.open {
             display: block;
         }
+
+        .restock-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1055;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(15, 23, 42, .52);
+        }
+
+        .restock-modal-overlay.show {
+            display: flex;
+        }
+
+        .restock-modal-dialog {
+            width: min(960px, 100%);
+            max-height: calc(100vh - 48px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+        }
+
+        .restock-modal-header,
+        .restock-modal-footer {
+            padding: 16px 20px;
+            border-color: #e5e7eb;
+        }
+
+        .restock-modal-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .restock-modal-body {
+            overflow: auto;
+            padding: 0 20px;
+        }
+
+        .restock-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .restock-table th:first-child,
+        .restock-table td:first-child {
+            width: 44px;
+            text-align: center;
+        }
+
+        .restock-table tbody tr:has(.restock-product-checkbox:checked) {
+            background: #ecfdf5;
+        }
     </style>
 </head>
 
@@ -163,15 +226,16 @@
                 <p class="text-secondary mb-0">Quản lý thông tin và tồn kho hàng hóa của nhà thuốc</p>
             </div>
             <div th:if="${basePath == '/owner/products'}" class="d-flex gap-2">
-                <a th:if="${(stats.lowStockCount + stats.outOfStockCount) > 0}"
-                   th:href="@{/owner/procurements/create-procurementplan(restockAll=true)}"
-                   class="btn btn-outline-warning"
-                   title="Tạo dự trù mua hàng cho toàn bộ sản phẩm sắp hết/hết hàng">
+                <button th:if="${!#lists.isEmpty(restockProducts)}"
+                        type="button"
+                        id="openRestockModalBtn"
+                        class="btn btn-outline-warning"
+                        title="Chọn sản phẩm sắp hết/hết hàng để thêm vào dự trù">
                     <i class="ti ti-shopping-cart me-1"></i>
                     Tạo dự trù hàng cần nhập
                     <span class="badge bg-warning text-dark ms-1"
-                          th:text="${stats.lowStockCount + stats.outOfStockCount}">0</span>
-                </a>
+                          th:text="${#lists.size(restockProducts)}">0</span>
+                </button>
                 <a th:href="@{/owner/products/create}" class="btn btn-stock-primary">
                     <i class="ti ti-plus me-1"></i> Tạo hàng hóa
                 </a>
@@ -458,5 +522,148 @@
 
     </div>
 </main>
+
+<div id="restockProductModal"
+     class="restock-modal-overlay"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="restockModalTitle"
+     aria-hidden="true">
+    <form class="restock-modal-dialog"
+          method="get"
+          th:action="@{/owner/procurements/create-procurementplan}"
+          id="restockProductForm">
+        <div class="restock-modal-header">
+            <div>
+                <h2 class="fs-5 mb-1" id="restockModalTitle">Chọn hàng hóa cần dự trù</h2>
+                <p class="text-secondary small mb-0">Danh sách chỉ gồm sản phẩm sắp hết hoặc đã hết hàng.</p>
+            </div>
+            <button type="button" class="btn-close" id="closeRestockModalBtn" aria-label="Đóng"></button>
+        </div>
+
+        <div class="restock-modal-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 restock-table">
+                    <thead class="sticky-top">
+                    <tr>
+                        <th>
+                            <input class="form-check-input" type="checkbox" id="restockSelectAll"
+                                   aria-label="Chọn tất cả sản phẩm">
+                        </th>
+                        <th>Mã hàng</th>
+                        <th>Tên hàng hóa</th>
+                        <th class="text-end">Tồn kho</th>
+                        <th class="text-end">Tồn tối thiểu</th>
+                        <th>Đơn vị nhập</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                    </thead>
+                    <tbody id="restockProductRows">
+                    <tr th:each="item : ${restockProducts}">
+                        <td>
+                            <input class="form-check-input restock-product-checkbox"
+                                   type="checkbox"
+                                   name="productIds"
+                                   th:value="${item.productID}"
+                                   th:attr="aria-label=${'Chọn ' + item.name}">
+                        </td>
+                        <td class="fw-semibold text-success" th:text="${item.code}">SP000001</td>
+                        <td th:text="${item.name}">Tên hàng hóa</td>
+                        <td class="text-end"
+                            th:text="${item.currentStock + (item.stockUnit != null ? ' ' + item.stockUnit : '')}">0</td>
+                        <td class="text-end"
+                            th:text="${item.minStock + (item.stockUnit != null ? ' ' + item.stockUnit : '')}">0</td>
+                        <td>
+                            <span th:if="${item.unit != null and !item.unit.isBlank()}" th:text="${item.unit}">Hộp</span>
+                            <span th:unless="${item.unit != null and !item.unit.isBlank()}"
+                                  class="text-danger">Chưa thiết lập</span>
+                        </td>
+                        <td>
+                            <span class="status-badge"
+                                  th:classappend="${item.currentStock <= 0 ? ' status-out' : ' status-low'}"
+                                  th:text="${item.currentStock <= 0 ? 'Hết hàng' : 'Sắp hết'}">Sắp hết</span>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(restockProducts)}">
+                        <td colspan="7" class="text-center text-secondary py-5">Không có sản phẩm nào cần nhập thêm.</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="restock-modal-footer">
+            <span class="text-secondary small" id="restockSelectionCount">Đã chọn 0 sản phẩm</span>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary" id="cancelRestockModalBtn">Hủy</button>
+                <button type="submit" class="btn btn-stock-primary" id="createRestockPlanBtn" disabled>
+                    Thêm vào phiếu dự trù
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script th:inline="none">
+    (function () {
+        const openButton = document.getElementById('openRestockModalBtn');
+        const modal = document.getElementById('restockProductModal');
+        if (!openButton || !modal) return;
+
+        const form = document.getElementById('restockProductForm');
+        const rows = document.getElementById('restockProductRows');
+        const selectAll = document.getElementById('restockSelectAll');
+        const selectionCount = document.getElementById('restockSelectionCount');
+        const submitButton = document.getElementById('createRestockPlanBtn');
+
+        function productCheckboxes() {
+            return Array.from(rows.querySelectorAll('.restock-product-checkbox'));
+        }
+
+        function updateSelection() {
+            const checkboxes = productCheckboxes();
+            const selected = checkboxes.filter(checkbox => checkbox.checked).length;
+            selectAll.checked = checkboxes.length > 0 && selected === checkboxes.length;
+            selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
+            selectionCount.textContent = 'Đã chọn ' + selected + ' sản phẩm';
+            submitButton.disabled = selected === 0;
+        }
+
+        function openModal() {
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('closeRestockModalBtn').focus();
+        }
+
+        function closeModal() {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            openButton.focus();
+        }
+
+        openButton.addEventListener('click', openModal);
+        document.getElementById('closeRestockModalBtn').addEventListener('click', closeModal);
+        document.getElementById('cancelRestockModalBtn').addEventListener('click', closeModal);
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) closeModal();
+        });
+        rows.addEventListener('change', function (event) {
+            if (event.target.classList.contains('restock-product-checkbox')) updateSelection();
+        });
+        selectAll.addEventListener('change', function () {
+            productCheckboxes().forEach(checkbox => checkbox.checked = selectAll.checked);
+            updateSelection();
+        });
+        form.addEventListener('submit', function (event) {
+            if (!productCheckboxes().some(checkbox => checkbox.checked)) event.preventDefault();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) closeModal();
+        });
+        updateSelection();
+    })();
+</script>
 </body>
 </html>

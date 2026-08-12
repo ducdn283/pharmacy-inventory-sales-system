@@ -33,8 +33,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Controller
 public class ProcurementplanController {
@@ -135,15 +137,23 @@ public class ProcurementplanController {
     // dùng khi bấm nút "Tạo dự trù hàng cần nhập" ở Danh sách hàng hóa
     @GetMapping("/owner/procurements/create-procurementplan")
     public String createProcurementPlanForm(@RequestParam(name = "restockAll", required = false, defaultValue = "false") boolean restockAll,
+                                            @RequestParam(name = "productIds", required = false) List<Integer> productIds,
                                             HttpServletRequest request, Model model) {
         if (!model.containsAttribute("procurementPlanForm")) {
             ProcurementPlanCreateRequest form = new ProcurementPlanCreateRequest();
-            if (restockAll) {
-                for (Integer productId : procurementplanService.findRestockNeededProductIds()) {
-                    ProcurementPlanDetailCreateRequest detail = new ProcurementPlanDetailCreateRequest();
-                    detail.setProductId(productId);
-                    form.getDetails().add(detail);
-                }
+            Set<Integer> requestedProductIds = new LinkedHashSet<>();
+            if (productIds != null) {
+                productIds.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .forEach(requestedProductIds::add);
+            } else if (restockAll) {
+                requestedProductIds.addAll(procurementplanService.findRestockNeededProductIds());
+            }
+
+            for (Integer productId : requestedProductIds) {
+                ProcurementPlanDetailCreateRequest detail = new ProcurementPlanDetailCreateRequest();
+                detail.setProductId(productId);
+                form.getDetails().add(detail);
             }
             model.addAttribute("procurementPlanForm", form);
         }
