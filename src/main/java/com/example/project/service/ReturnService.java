@@ -239,20 +239,21 @@ public class ReturnService {
         // Resolved once, not per invoice — the window is a single setting row, not per-invoice data.
         int windowDays = getReturnWindowDays();
 
-        // Lọc những điều kiện RẺ (chỉ đọc cột của chính hóa đơn) TRƯỚC, rồi mới tính returnCode cho
-        // phần còn lại: returnCode phải đọc các dòng chi tiết, nên tính cho mọi hóa đơn trong bảng là
-        // lãng phí. Tính đúng MỘT lần cho mỗi ứng viên và dùng lại cho cả bước lọc lẫn bước hiển thị.
+        // Lọc những điều kiện RẺ (chỉ đọc cột của chính hóa đơn) TRƯỚC, rồi mới đọc dòng chi tiết cho
+        // phần còn lại — đọc dòng của mọi hóa đơn trong bảng là lãng phí. Đọc đúng MỘT lần cho mỗi ứng
+        // viên rồi dùng lại cho cả trạng thái trả, bộ lọc từ khóa lẫn phần hiển thị.
         return invoiceRepository.findAll().stream()
                 .filter(this::isNormalInvoice)
                 .filter(this::isReturnEligibleStatus)
                 .filter(invoice -> !Boolean.TRUE.equals(invoice.getPrescriptionRequired()))
-                .filter(invoice -> matchesInvoiceKeyword(invoice, normalizedKeyword))
-                .map(invoice -> Map.entry(invoice, invoiceReturnCode(invoice)))
-                .filter(entry -> isReturnable(entry.getKey(), windowDays, entry.getValue()))
-                .sorted(Comparator.comparing(entry -> entry.getKey().getDate(),
+                .map(this::returnableCandidateOf)
+                .filter(candidate -> isReturnable(candidate.invoice(), windowDays, candidate.returnCode()))
+                .filter(candidate -> matchesInvoiceKeyword(candidate, normalizedKeyword))
+                .sorted(Comparator.comparing(candidate -> candidate.invoice().getDate(),
                         Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(entry -> {
-                    Invoice invoice = entry.getKey();
+                .map(candidate -> {
+                    Invoice invoice = candidate.invoice();
+                    String productSummary = productSummaryOf(candidate.lines());
                     return new ReturnableInvoiceResponse(
                             invoice.getId(),
                             // Số hóa đơn (HD00000x) — duy nhất, để phân biệt; KHÔNG dùng invoicePattern.
@@ -264,9 +265,75 @@ public class ReturnService {
                             // Công nợ còn lại của chính hóa đơn — số sẽ bị cấn trừ vào tiền hoàn khi duyệt
                             // phiếu trả (netting). Hiển thị ngay ở bảng chọn để người lập biết trước.
                             nz(invoice.getDebtAmount()),
-                            returnStatusDisplay(entry.getValue()));
+                            returnStatusDisplay(candidate.returnCode()),
+                            productSummary,
+                            searchTextOf(invoice, candidate.lines()));
                 })
                 .toList();
+    }
+
+    /** Một hóa đơn ứng viên kèm dòng chi tiết đã đọc sẵn — xem {@link #listReturnableInvoices}. */
+    private record ReturnableCandidate(Invoice invoice, List<Invoicedetail> lines, String returnCode) {
+    }
+
+    private ReturnableCandidate returnableCandidateOf(Invoice invoice) {
+        List<Invoicedetail> lines = invoiceLinesOf(invoice.getId());
+        return new ReturnableCandidate(invoice, lines, returnCodeOf(lines));
+    }
+
+    /** Các dòng còn trả được của hóa đơn — nguồn của cả phần hiển thị lẫn phần tìm theo sản phẩm. */
+    private List<Invoicedetail> stillReturnableLines(List<Invoicedetail> lines) {
+        return lines.stream()
+                .filter(line -> {
+                    int returned = line.getReturnedQty() != null ? line.getReturnedQty() : 0;
+                    int quantity = line.getQuantity() != null ? line.getQuantity() : 0;
+                    return returned < quantity;
+                })
+                .filter(line -> isReturnableProductType(line.getProductID()))
+                .toList();
+    }
+
+    /**
+     * Tên các mặt hàng còn trả được, hiện thành một dòng phụ dưới số hóa đơn ở bảng chọn: khi người
+     * lập tìm theo tên thuốc, dòng này cho biết ngay vì sao hóa đơn đó khớp.
+     */
+    private String productSummaryOf(List<Invoicedetail> lines) {
+        return stillReturnableLines(lines).stream()
+                .map(line -> line.getProductID() != null ? line.getProductID().getName() : null)
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .collect(Collectors.joining(" · "));
+    }
+
+    /**
+     * Chuỗi để lọc phía màn hình: số hóa đơn + tên khách + tên và MÃ của các mặt hàng còn trả được.
+     *
+     * <p><strong>KHÔNG có số điện thoại.</strong> Bảng chọn không hiển thị cột nào chứa số điện thoại
+     * — hóa đơn khách lẻ còn không có bản ghi khách hàng để mà lưu — nên tìm theo số điện thoại chỉ
+     * làm người dùng gõ vào rồi không hiểu vì sao không ra kết quả.</p>
+     */
+    private String searchTextOf(Invoice invoice, List<Invoicedetail> lines) {
+        StringBuilder text = new StringBuilder();
+        appendSearchPart(text, invoice.getInvoiceNumber());
+        appendSearchPart(text, invoice.getCustomerID() != null ? invoice.getCustomerID().getName() : "Khách lẻ");
+        for (Invoicedetail line : stillReturnableLines(lines)) {
+            Product product = line.getProductID();
+            if (product != null) {
+                appendSearchPart(text, product.getName());
+                appendSearchPart(text, product.getCode());
+            }
+        }
+        return text.toString();
+    }
+
+    private void appendSearchPart(StringBuilder target, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (!target.isEmpty()) {
+            target.append(' ');
+        }
+        target.append(value.trim());
     }
 
     /** The still-returnable lines of one invoice, for the create screen (JSON). */
@@ -371,6 +438,11 @@ public class ReturnService {
         BigDecimal totalRefund = prepared.values().stream()
                 .map(PreparedLine::lineRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // KHÔNG chặn theo hạn mức tiền mặt ở đây: phiếu trả chỉ ghi nhận việc khách trả hàng và số
+        // tiền nhà thuốc NỢ lại khách — dược sĩ vẫn phải lập được đầy đủ dù số tiền lớn. Hạn mức nằm
+        // ở bước CHI tiền thật (ExpenseService.assertCashRefundWithinLimit), nơi mới biết phần thực
+        // hoàn sau khi cấn trừ công nợ.
+
         String status = asDraft ? ReturnStatus.DRAFT : (isOwner ? ReturnStatus.DEBT : ReturnStatus.PENDING);
         boolean approvedNow = ReturnStatus.DEBT.equals(status);
 
@@ -971,7 +1043,11 @@ public class ReturnService {
      * nhanh. Nhờ vậy hóa đơn cũ chưa backfill cột vẫn được đánh giá đúng.</p>
      */
     private String invoiceReturnCode(Invoice invoice) {
-        List<Invoicedetail> lines = invoiceLinesOf(invoice.getId());
+        return returnCodeOf(invoiceLinesOf(invoice.getId()));
+    }
+
+    /** Bản nhận sẵn dòng chi tiết, cho người gọi đã đọc chúng một lần rồi (xem {@link ReturnableCandidate}). */
+    private String returnCodeOf(List<Invoicedetail> lines) {
         if (lines.isEmpty()) {
             // Hóa đơn không có dòng nào thì không còn gì để trả — coi như đã trả hết để nó bị loại khỏi
             // danh sách chọn (chặn cả hóa đơn "Thay thế" rỗng do bản cũ sinh ra trước khi fix).
@@ -1476,14 +1552,15 @@ public class ReturnService {
         });
     }
 
-    private boolean matchesInvoiceKeyword(Invoice invoice, String normalizedKeyword) {
+    /**
+     * Cùng luật với bộ lọc phía màn hình (xem {@link #searchTextOf}): số hóa đơn, tên khách, tên/mã
+     * sản phẩm còn trả được — KHÔNG có số điện thoại.
+     */
+    private boolean matchesInvoiceKeyword(ReturnableCandidate candidate, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
         }
-        Customer customer = invoice.getCustomerID();
-        return containsNormalized(invoice.getInvoiceNumber(), normalizedKeyword)
-                || containsNormalized(customer != null ? customer.getName() : null, normalizedKeyword)
-                || containsNormalized(customer != null ? customer.getPhoneNumber() : null, normalizedKeyword);
+        return containsNormalized(searchTextOf(candidate.invoice(), candidate.lines()), normalizedKeyword);
     }
 
     private boolean matchesDate(Return ret, LocalDate from, LocalDate to) {

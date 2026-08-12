@@ -367,14 +367,17 @@
             <button type="button" class="pm-modal-close" id="closeModalBtn">&times;</button>
         </div>
         <div class="pm-modal-body">
+            <!-- KHÔNG tìm theo số điện thoại: bảng dưới không có cột nào chứa số điện thoại, và hóa
+                 đơn khách lẻ còn không có bản ghi khách hàng để lưu số. Đổi sang tìm theo TÊN/MÃ
+                 SẢN PHẨM — khách mang thuốc tới trả thường không cầm theo số hóa đơn. -->
             <input type="text" class="form-control mb-3" id="invoiceSearch"
-                   placeholder="Tìm theo số hóa đơn, tên khách hoặc số điện thoại">
+                   placeholder="Tìm theo số hóa đơn, tên khách hoặc tên/mã sản phẩm">
 
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
                     <tr>
-                        <th>Số hóa đơn</th>
+                        <th>Số hóa đơn / Sản phẩm</th>
                         <th>Ngày bán</th>
                         <th>Nhân viên</th>
                         <th>Khách hàng</th>
@@ -392,8 +395,15 @@
                                  data-customer=${inv.customerName},
                                  data-date=${inv.dateDisplay},
                                  data-debt=${inv.debtAmount},
-                                 data-search=${inv.invoiceCode + ' ' + inv.customerName}">
-                        <td class="fw-semibold text-success" th:text="${inv.invoiceCode}">HD000046</td>
+                                 data-search=${inv.searchText}">
+                        <td>
+                            <div class="fw-semibold text-success" th:text="${inv.invoiceCode}">HD000046</div>
+                            <div class="text-secondary small text-truncate"
+                                 style="max-width: 220px;"
+                                 th:if="${inv.productSummary != null and !inv.productSummary.isEmpty()}"
+                                 th:title="${inv.productSummary}"
+                                 th:text="${inv.productSummary}">Paracetamol · Vitamin C</div>
+                        </td>
                         <td th:text="${inv.dateDisplay}">06/07/2026 16:32</td>
                         <td th:text="${inv.employeeName}">Dược sĩ A</td>
                         <td th:text="${inv.customerName}">Anh Hoàng</td>
@@ -469,10 +479,21 @@
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('open'); });
 
         // ---- Modal client-side search ----
+        // Bỏ dấu cả 2 vế: tìm sản phẩm mà bắt gõ đúng dấu thì gõ "thuoc" không ra "Thuốc" nào.
+        function normalizeSearch(value) {
+            return (value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\u0111/g, 'd')
+                .replace(/\u0110/g, 'D')
+                .toLowerCase()
+                .trim();
+        }
+
         document.getElementById('invoiceSearch').addEventListener('input', function () {
-            const q = this.value.trim().toLowerCase();
+            const q = normalizeSearch(this.value);
             document.querySelectorAll('#invoicePickBody .pick-row').forEach(row => {
-                const hay = (row.getAttribute('data-search') || '').toLowerCase();
+                const hay = normalizeSearch(row.getAttribute('data-search'));
                 row.style.display = hay.includes(q) ? '' : 'none';
             });
         });
