@@ -10,7 +10,6 @@ import com.example.project.dto.response.ProductBatchDetailResponse;
 import com.example.project.dto.response.ProductDetailResponse;
 import com.example.project.dto.response.ProductListStatsResponse;
 import com.example.project.dto.response.ProductRecentHistoryResponse;
-import com.example.project.dto.response.ProductResponse;
 import com.example.project.dto.response.ProductRowResponse;
 import com.example.project.dto.response.ProductUnitDetailResponse;
 import com.example.project.entity.*;
@@ -143,14 +142,6 @@ public class ProductService {
     @org.springframework.beans.factory.annotation.Autowired
     public void setStockadjustmentService(StockadjustmentService stockadjustmentService) {
         this.stockadjustmentService = stockadjustmentService;
-    }
-
-    @Transactional(readOnly = true)
-    public List<ProductResponse> getAll() {
-        return productRepository.findAll()
-                .stream()
-                .map(ProductResponse::from)
-                .toList();
     }
 
     /**

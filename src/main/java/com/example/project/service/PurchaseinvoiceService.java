@@ -119,17 +119,6 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Giữ lại method cũ để PurchaseinvoiceController REST không bị lỗi compile.
-     */
-    @Transactional(readOnly = true)
-    public List<PurchaseinvoiceResponse> getAll() {
-        return purchaseinvoiceRepository.findAllWithRelations()
-                .stream()
-                .map(PurchaseinvoiceResponse::from)
-                .toList();
-    }
-
-    /**
      * Purchase Invoice List search: three independent, optional, ANDed fields (mã phiếu / nhà cung
      * cấp / sản phẩm — the expandable search box) plus date range and payment-status filters, then
      * in-memory pagination. The old single combined {@code keyword} field and the exact-id supplier

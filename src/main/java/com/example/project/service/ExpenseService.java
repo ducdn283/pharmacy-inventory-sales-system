@@ -8,7 +8,6 @@ import com.example.project.dto.request.ExpenseCreateRequest;
 import com.example.project.dto.response.ExpenseDetailResponse;
 import com.example.project.dto.response.ExpenseListItemResponse;
 import com.example.project.dto.response.ExpenseReferenceOptionResponse;
-import com.example.project.dto.response.ExpenseResponse;
 import com.example.project.dto.response.ExpenseStatsResponse;
 import com.example.project.entity.Account;
 import com.example.project.entity.Customer;
@@ -131,16 +130,6 @@ public class ExpenseService {
         this.workflowNotificationService = workflowNotificationService;
         this.financialsettingService = financialsettingService;
         this.returnService = returnService;
-    }
-
-    // ------------------------------------------------------------------ generated-REST passthrough
-
-    @Transactional(readOnly = true)
-    public List<ExpenseResponse> getAll() {
-        return expenseRepository.findAll()
-                .stream()
-                .map(ExpenseResponse::from)
-                .toList();
     }
 
     // ------------------------------------------------------------------ list / search
