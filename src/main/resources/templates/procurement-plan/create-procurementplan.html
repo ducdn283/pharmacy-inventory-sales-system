@@ -77,7 +77,7 @@
 
         .product-search-toolbar {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: stretch;
         }
 
@@ -87,21 +87,56 @@
         }
 
         .btn-view-stock {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             white-space: nowrap;
             border-radius: 10px;
             min-height: 48px;
-            padding: 0 16px;
+            padding: 0 18px;
             font-size: 14px;
             font-weight: 600;
-            border: 1px solid #d1d5db;
-            background: #fff;
-            color: #374151;
+            border: 1px solid #6ee7b7;
+            background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+            color: #047857;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+            transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease, color .15s ease;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .btn-view-stock i {
+            font-size: 18px;
+            line-height: 1;
         }
 
         .btn-view-stock:hover {
-            background: #f9fafb;
-            border-color: #9ca3af;
-            color: #111827;
+            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+            border-color: #059669;
+            color: #065f46;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, .16);
+            transform: translateY(-1px);
+        }
+
+        .btn-view-stock:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+        }
+
+        .btn-view-stock:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, .18);
+        }
+
+        @media (max-width: 575.98px) {
+            .product-search-toolbar {
+                flex-direction: column;
+            }
+
+            .btn-view-stock {
+                width: 100%;
+            }
         }
 
         .product-search-field {
@@ -863,8 +898,9 @@
                                         <div id="productSearchResults" class="product-search-results"></div>
                                     </div>
                                 </div>
-                                <button type="button" id="viewProductStockBtn" class="btn btn-view-stock">
-                                    <i class="ti ti-package me-1"></i>Xem tồn sản phẩm
+                                <button type="button" id="viewProductStockBtn" class="btn-view-stock">
+                                    <i class="ti ti-stack-2"></i>
+                                    <span>Xem tồn sản phẩm</span>
                                 </button>
                             </div>
                         </div>
@@ -972,7 +1008,7 @@
             <div class="stock-modal-toolbar">
                 <div class="stock-modal-toolbar-left">
                     <input type="text" id="productStockSearchInput" class="form-control stock-search-input"
-                           placeholder="Tìm theo tên, mã hoặc barcode" autocomplete="off">
+                           placeholder="Gõ từ đầu tên, mã hoặc barcode" autocomplete="off">
                     <label for="productStockSortSelect">Sắp xếp tồn:</label>
                     <select id="productStockSortSelect" class="form-select stock-sort-select">
                         <option value="desc" selected>Giảm dần</option>
@@ -1051,12 +1087,19 @@
             .trim();
     }
 
+    function startsWithNormalizedSearch(value, keyword) {
+        const normalizedValue = normalizeSearchText(value);
+        const normalizedKeyword = normalizeSearchText(keyword);
+        if (!normalizedKeyword) return true;
+        return normalizedValue.startsWith(normalizedKeyword);
+    }
+
     function matchesStockSearch(item, keyword) {
         const normalized = normalizeSearchText(keyword);
         if (!normalized) return true;
-        return normalizeSearchText(item.code).includes(normalized)
-            || normalizeSearchText(item.name).includes(normalized)
-            || normalizeSearchText(item.barcode).includes(normalized);
+        return startsWithNormalizedSearch(item.code, normalized)
+            || startsWithNormalizedSearch(item.name, normalized)
+            || startsWithNormalizedSearch(item.barcode, normalized);
     }
 
     function filterProductStockItems(items, keyword) {
