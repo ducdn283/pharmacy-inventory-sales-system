@@ -99,16 +99,6 @@
             padding-bottom: 8px;
         }
 
-        .price-cell-form {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
-
-        .price-cell-form .input-group {
-            max-width: 180px;
-        }
-
         .base-unit-badge {
             font-size: 10px;
         }
@@ -399,49 +389,56 @@
                         th:id="${'units-' + row.productId}"
                         th:classappend="${expandProductId != null and expandProductId == row.productId} ? '' : ' d-none'">
                         <td colspan="7" class="px-4 py-3">
-                            <table class="table unit-table align-middle mb-0">
-                                <thead>
-                                <tr>
-                                    <th>Đơn vị</th>
-                                    <th>Tỷ lệ quy đổi</th>
-                                    <th style="min-width: 280px;">Giá bán hiện tại</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <tr th:each="unit : ${row.units}">
-                                    <td>
-                                        <span th:text="${unit.unitName}">Hộp</span>
-                                        <span th:if="${unit.baseUnit}"
-                                              class="badge bg-secondary-subtle text-secondary base-unit-badge ms-1">
-                                            Đơn vị cơ bản
-                                        </span>
-                                    </td>
-                                    <td class="text-secondary"
-                                        th:text="${unit.ratio != null} ? ${#numbers.formatDecimal(unit.ratio, 0, 'POINT', 0, 'COMMA')} : '—'">1
-                                    </td>
-                                    <td>
-                                        <form method="post" th:action="@{/owner/price-settings/cell}"
-                                              class="price-cell-form mb-0">
-                                            <input type="hidden" th:if="${_csrf}"
-                                                   th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <!-- Một form cho CẢ sản phẩm — mỗi đơn vị từng có form/nút "Lưu" riêng,
+                                 giờ gộp lại: mọi đơn vị của sản phẩm này lưu cùng lúc bằng một nút. -->
+                            <form method="post" th:action="@{/owner/price-settings/product}">
+                                <input type="hidden" th:if="${_csrf}"
+                                       th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                <input type="hidden" name="productId" th:value="${row.productId}">
+                                <input type="hidden" name="expandProductId" th:value="${row.productId}">
+                                <input type="hidden" name="keyword" th:value="${keyword}">
+                                <input type="hidden" name="typeId" th:value="${filterTypeId}">
+                                <input type="hidden" name="sort" th:value="${sort}">
+                                <input type="hidden" name="page" th:value="${currentPage}">
+                                <input type="hidden" name="size" th:value="${pageSize}">
+
+                                <table class="table unit-table align-middle mb-3">
+                                    <thead>
+                                    <tr>
+                                        <th>Đơn vị</th>
+                                        <th>Tỷ lệ quy đổi</th>
+                                        <th style="min-width: 200px;">Giá bán hiện tại</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="unit : ${row.units}">
+                                        <td>
+                                            <span th:text="${unit.unitName}">Hộp</span>
+                                            <span th:if="${unit.baseUnit}"
+                                                  class="badge bg-secondary-subtle text-secondary base-unit-badge ms-1">
+                                                Đơn vị cơ bản
+                                            </span>
+                                        </td>
+                                        <td class="text-secondary"
+                                            th:text="${unit.ratio != null} ? ${#numbers.formatDecimal(unit.ratio, 0, 'POINT', 0, 'COMMA')} : '—'">1
+                                        </td>
+                                        <td>
                                             <input type="hidden" name="productUnitId" th:value="${unit.productUnitId}">
-                                            <input type="hidden" name="expandProductId" th:value="${row.productId}">
-                                            <input type="hidden" name="keyword" th:value="${keyword}">
-                                            <input type="hidden" name="typeId" th:value="${filterTypeId}">
-                                            <input type="hidden" name="sort" th:value="${sort}">
-                                            <input type="hidden" name="page" th:value="${currentPage}">
-                                            <input type="hidden" name="size" th:value="${pageSize}">
-                                            <div class="input-group input-group-sm">
+                                            <div class="input-group input-group-sm" style="max-width: 180px;">
                                                 <input type="number" min="0" step="1" class="form-control"
                                                        name="sellPrice" th:value="${unit.currentSellPrice}">
                                                 <span class="input-group-text">đ</span>
                                             </div>
-                                            <button type="submit" class="btn btn-sm btn-price-primary">Lưu</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                </tbody>
-                            </table>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+
+                                <button type="submit" class="btn btn-sm btn-price-primary">
+                                    <i class="ti ti-device-floppy me-1"></i>
+                                    Lưu
+                                </button>
+                            </form>
                         </td>
                     </tr>
                     </tbody>
