@@ -160,45 +160,6 @@
             }
         }
 
-        .expandable-search {
-            position: relative;
-        }
-
-        .expandable-search-trigger {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            color: #6b7280;
-            user-select: none;
-        }
-
-        .expandable-search-trigger .active-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #059669;
-            margin-left: auto;
-            flex: none;
-        }
-
-        .expandable-search-panel {
-            display: none;
-            position: absolute;
-            z-index: 20;
-            top: calc(100% + 4px);
-            left: 0;
-            right: 0;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
-            padding: 14px;
-        }
-
-        .expandable-search-panel.open {
-            display: block;
-        }
-
         .date-preset-wrap {
             position: relative;
         }
@@ -348,26 +309,10 @@
                 <input type="hidden" name="size" th:value="${pageSize}">
 
                 <div class="row g-3">
-                    <div class="col-12 col-xl-4 expandable-search" id="invoiceSearchBox">
-                        <div class="form-control expandable-search-trigger" id="invoiceSearchTrigger" tabindex="0">
-                            <span>Tìm theo mã phiếu, nhà cung cấp hoặc sản phẩm</span>
-                            <span class="active-dot"
-                                  th:if="${(codeQuery != null and !codeQuery.isEmpty()) or (supplierQuery != null and !supplierQuery.isEmpty()) or (productQuery != null and !productQuery.isEmpty())}"></span>
-                        </div>
-                        <div class="expandable-search-panel" id="invoiceSearchPanel">
-                            <div class="mb-2">
-                                <label class="form-label small text-secondary mb-1">Mã phiếu</label>
-                                <input type="text" class="form-control form-control-sm" name="codeQuery" th:value="${codeQuery}">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small text-secondary mb-1">Nhà cung cấp</label>
-                                <input type="text" class="form-control form-control-sm" name="supplierQuery" th:value="${supplierQuery}">
-                            </div>
-                            <div class="mb-0">
-                                <label class="form-label small text-secondary mb-1">Sản phẩm</label>
-                                <input type="text" class="form-control form-control-sm" name="productQuery" th:value="${productQuery}">
-                            </div>
-                        </div>
+                    <div class="col-12 col-xl-4">
+                        <input type="search" class="form-control" name="keyword" th:value="${keyword}"
+                               placeholder="Tìm theo mã phiếu, nhà cung cấp hoặc sản phẩm"
+                               aria-label="Tìm kiếm phiếu nhập">
                     </div>
 
                     <div class="col-12 col-xl-2 date-preset-wrap" id="datePresetWrap">
@@ -421,29 +366,6 @@
 
         <script th:inline="none">
             (function () {
-                const box = document.getElementById('invoiceSearchBox');
-                const trigger = document.getElementById('invoiceSearchTrigger');
-                const panel = document.getElementById('invoiceSearchPanel');
-                if (box && trigger && panel) {
-                    const hasValue = Array.from(panel.querySelectorAll('input')).some(input => input.value.trim() !== '');
-                    if (hasValue) {
-                        panel.classList.add('open');
-                    }
-                    trigger.addEventListener('click', function () {
-                        panel.classList.toggle('open');
-                    });
-                    document.addEventListener('click', function (event) {
-                        if (!box.contains(event.target)) {
-                            panel.classList.remove('open');
-                        }
-                    });
-                    document.addEventListener('keydown', function (event) {
-                        if (event.key === 'Escape') {
-                            panel.classList.remove('open');
-                        }
-                    });
-                }
-
                 const presetWrap = document.getElementById('datePresetWrap');
                 const preset = document.getElementById('dateRangePreset');
                 const popover = document.getElementById('datePopover');
@@ -632,7 +554,7 @@
                     <ul class="pagination mb-0">
                         <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(codeQuery=${codeQuery}, supplierQuery=${supplierQuery}, productQuery=${productQuery}, fromDate=${fromDate}, toDate=${toDate}, paymentStatus=${filterPaymentStatus}, page=${currentPage - 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, paymentStatus=${filterPaymentStatus}, page=${currentPage - 1}, size=${pageSize})}">
                                 Trước
                             </a>
                         </li>
@@ -642,14 +564,14 @@
                             th:classappend="${pageNumber == currentPage} ? ' active'">
                             <a class="page-link"
                                th:text="${pageNumber + 1}"
-                               th:href="@{${basePath}(codeQuery=${codeQuery}, supplierQuery=${supplierQuery}, productQuery=${productQuery}, fromDate=${fromDate}, toDate=${toDate}, paymentStatus=${filterPaymentStatus}, page=${pageNumber}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, paymentStatus=${filterPaymentStatus}, page=${pageNumber}, size=${pageSize})}">
                                 1
                             </a>
                         </li>
 
                         <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(codeQuery=${codeQuery}, supplierQuery=${supplierQuery}, productQuery=${productQuery}, fromDate=${fromDate}, toDate=${toDate}, paymentStatus=${filterPaymentStatus}, page=${currentPage + 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, fromDate=${fromDate}, toDate=${toDate}, paymentStatus=${filterPaymentStatus}, page=${currentPage + 1}, size=${pageSize})}">
                                 Sau
                             </a>
                         </li>

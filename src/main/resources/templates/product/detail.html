@@ -181,7 +181,7 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead>
                     <tr>
-                        <th>Số lô</th>
+                        <th>Tên lô</th>
                         <th>Ngày nhập</th>
                         <th>Ngày SX</th>
                         <th>Hạn SD</th>
@@ -194,7 +194,7 @@
                     </thead>
                     <tbody>
                     <tr th:each="b : ${product.batches}">
-                        <td class="fw-semibold" th:text="${b.lotNumber != null ? b.lotNumber : b.batchName}">LOT-001</td>
+                        <td class="fw-semibold" th:text="${b.batchName != null and !b.batchName.isEmpty() ? b.batchName : '—'}">Lô nhập tháng 08</td>
                         <td th:text="${b.importDateDisplay}">01/06/2026 09:00</td>
                         <td th:text="${b.productionDateDisplay}">01/01/2026</td>
                         <td th:text="${b.expirationDateDisplay}">01/01/2028</td>
