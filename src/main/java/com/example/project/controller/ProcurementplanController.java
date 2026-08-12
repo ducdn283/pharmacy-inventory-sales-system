@@ -40,6 +40,9 @@ import java.util.Set;
 
 @Controller
 public class ProcurementplanController {
+    private static final String OWNER_BASE = "/owner/procurements";
+    private static final String ACCOUNTANT_BASE = "/accountant/procurements";
+
     private final ProcurementplanService procurementplanService;
 
     public ProcurementplanController(ProcurementplanService procurementplanService) {
@@ -55,7 +58,7 @@ public class ProcurementplanController {
 
     // như position
     // hiện danh sách dự trù
-    @GetMapping("/owner/procurements")
+    @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
     public String procurementPlanList(@RequestParam(name = "search", required = false) String search,
                                       @RequestParam(name = "fromDate", required = false) String fromDate,
                                       @RequestParam(name = "toDate", required = false) String toDate,
@@ -191,7 +194,8 @@ public class ProcurementplanController {
     }
 
     // tạo form update
-    @GetMapping("/owner/procurements/update-procurementplan/{id}")
+    @GetMapping({OWNER_BASE + "/update-procurementplan/{id}",
+            ACCOUNTANT_BASE + "/update-procurementplan/{id}"})
     public String updateProcurementPlanForm(@PathVariable Integer id,
                                             HttpServletRequest request,
                                             Model model,
@@ -199,7 +203,8 @@ public class ProcurementplanController {
         String basePath = resolveBasePath(request);
         try {
             ProcurementplanResponse procurementPlan = procurementplanService.getById(id);
-            boolean viewOnly = procurementplanService.isCompleted(id);
+            boolean viewOnly = request.getRequestURI().startsWith(ACCOUNTANT_BASE)
+                    || procurementplanService.isCompleted(id);
 
             if (!model.containsAttribute("procurementPlanForm")) {
                 model.addAttribute("procurementPlanForm", procurementplanService.buildUpdateForm(id));
@@ -262,7 +267,7 @@ public class ProcurementplanController {
     }
 
     // in phiếu dự trù
-    @GetMapping("/owner/procurements/{id}/print")
+    @GetMapping({OWNER_BASE + "/{id}/print", ACCOUNTANT_BASE + "/{id}/print"})
     public String printPage(@PathVariable Integer id,
                             HttpServletRequest request,
                             Model model) {
@@ -327,6 +332,6 @@ public class ProcurementplanController {
 
     //lấy url
     private String resolveBasePath(HttpServletRequest request) {
-        return "/owner/procurements";
+        return request.getRequestURI().startsWith(ACCOUNTANT_BASE) ? ACCOUNTANT_BASE : OWNER_BASE;
     }
 }

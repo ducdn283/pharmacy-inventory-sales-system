@@ -384,7 +384,7 @@
               <th>Ngày chỉnh sửa cuối</th>
               <th>Trạng thái</th>
               <th>Ghi chú</th>
-              <th th:if="${currentRole == 'OWNER'}" style="text-align:center;">Thao tác</th>
+              <th style="text-align:center;">Thao tác</th>
               <th th:if="${currentRole == 'OWNER'}" style="text-align:center;">Xóa</th>
             </tr>
           </thead>
@@ -402,14 +402,14 @@
                 </span>
               </td>
               <td class="sup-note" th:text="${plan.note != null and !#strings.isEmpty(plan.note) ? plan.note : '—'}">Ghi chú</td>
-              <td th:if="${currentRole == 'OWNER'}" style="text-align:center;">
-                <a th:if="${plan.status != 'Đã hoàn thành'}"
+              <td style="text-align:center;">
+                <a th:if="${currentRole == 'OWNER' and plan.status != 'Đã hoàn thành'}"
                    class="update-link"
                    th:href="${basePath + '/update-procurementplan/' + plan.id}"
                    title="Cập nhật dự trù">
                   <i class="ti ti-edit"></i>
                 </a>
-                <a th:if="${plan.status == 'Đã hoàn thành'}"
+                <a th:if="${currentRole != 'OWNER' or plan.status == 'Đã hoàn thành'}"
                    class="view-link"
                    th:href="${basePath + '/update-procurementplan/' + plan.id}"
                    title="Xem chi tiết dự trù">
@@ -438,7 +438,7 @@
             </tr>
 
             <tr th:if="${#lists.isEmpty(procurementPlans)}" class="empty-row">
-              <td th:colspan="${currentRole == 'OWNER' ? 6 : 4}" style="text-align:center;">
+              <td th:colspan="${currentRole == 'OWNER' ? 6 : 5}" style="text-align:center;">
                 Không tìm thấy dự trù mua hàng nào.
               </td>
             </tr>
