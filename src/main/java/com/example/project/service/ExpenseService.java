@@ -152,6 +152,17 @@ public class ExpenseService {
                                                  String expenseType,
                                                  String status,
                                                  Pageable pageable) {
+        return search(keyword, fromDate, toDate, expenseType, status, pageable, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ExpenseListItemResponse> search(String keyword,
+                                                 String fromDate,
+                                                 String toDate,
+                                                 String expenseType,
+                                                 String status,
+                                                 Pageable pageable,
+                                                 Integer applicantAccountId) {
         final String normalizedKeyword = normalize(keyword);
         final LocalDate from = parseDate(fromDate);
         final LocalDate to = parseDate(toDate);
@@ -159,6 +170,7 @@ public class ExpenseService {
         List<Expense> expenses = expenseRepository.findAll();
 
         List<ExpenseListItemResponse> filtered = expenses.stream()
+                .filter(expense -> belongsToApplicant(expense, applicantAccountId))
                 .filter(expense -> matchesKeyword(expense, normalizedKeyword))
                 .filter(expense -> matchesDate(expense, from, to))
                 .filter(expense -> expenseType == null || expenseType.isBlank()
@@ -184,7 +196,14 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public ExpenseStatsResponse getStats() {
-        List<Expense> expenses = expenseRepository.findAll();
+        return getStats(null);
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseStatsResponse getStats(Integer applicantAccountId) {
+        List<Expense> expenses = expenseRepository.findAll().stream()
+                .filter(expense -> belongsToApplicant(expense, applicantAccountId))
+                .toList();
         YearMonth currentMonth = YearMonth.now();
 
         List<Expense> thisMonth = expenses.stream()
@@ -219,15 +238,6 @@ public class ExpenseService {
     /** Which types show the purchase-invoice picker — fed to the form so JS can't drift from Java. */
     public List<String> purchaseLinkableTypes() {
         return ExpenseType.PURCHASE_LINKABLE;
-    }
-
-    /** Which types the "trên 5 triệu bắt buộc chuyển khoản" rule applies to — same reason. */
-    public List<String> cashLimitApplicableTypes() {
-        return ExpenseType.CASH_LIMIT_APPLICABLE;
-    }
-
-    public BigDecimal cashLimitThreshold() {
-        return ExpenseType.CASH_LIMIT_THRESHOLD;
     }
 
     // ------------------------------------------------------------------ reference documents
@@ -366,8 +376,14 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public ExpenseDetailResponse getDetail(Integer expenseId) {
+        return getDetail(expenseId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseDetailResponse getDetail(Integer expenseId, Integer requiredApplicantAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        ensureApplicantAccess(expense, requiredApplicantAccountId);
         return toDetail(expense);
     }
 
@@ -383,7 +399,16 @@ public class ExpenseService {
     @Transactional
     public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
                                   boolean asDraft) {
+        return createExpense(request, currentAccountId, isOwner, asDraft, isOwner, null);
+    }
+
+    @Transactional
+    public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
+                                  boolean asDraft, boolean canPayCash, String requiredExpenseType) {
         String expenseType = resolveExpenseType(request.getExpenseType());
+        if (requiredExpenseType != null && !requiredExpenseType.equals(expenseType)) {
+            throw new IllegalArgumentException("Tài khoản này chỉ được tạo phiếu chi hoàn tiền trả hàng");
+        }
 
         // Both links are resolved before validation because whenever a slip points at a document,
         // that document decides the amount — the posted value is display-only and never trusted.
@@ -421,7 +446,7 @@ public class ExpenseService {
 
         // Một phiếu là một lần chi: tiền đã chi luôn đúng bằng số tiền của phiếu, không có phiếu
         // "chi thiếu so với chính nó". Chi thiếu so với CHỨNG TỪ thì nằm ở chỗ khác — chứng từ còn nợ.
-        BigDecimal[] split = resolveSplit(request, amount, isOwner, expenseType);
+        BigDecimal[] split = resolveSplit(request, amount, canPayCash);
         expense.setPaid(amount);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
@@ -456,8 +481,17 @@ public class ExpenseService {
     /** Sends a {@link ExpenseStatus#DRAFT} slip forward, same shape as {@code StockadjustmentService#submit}. */
     @Transactional
     public void submit(Integer expenseId, Integer currentAccountId, boolean isOwner) {
+        submit(expenseId, currentAccountId, isOwner, false);
+    }
+
+    @Transactional
+    public void submit(Integer expenseId, Integer currentAccountId, boolean isOwner,
+                       boolean restrictToApplicant) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        if (restrictToApplicant) {
+            ensureApplicantAccess(expense, currentAccountId);
+        }
 
         if (!ExpenseStatus.DRAFT.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Chỉ có thể gửi duyệt phiếu đang ở trạng thái nháp");
@@ -531,8 +565,14 @@ public class ExpenseService {
      */
     @Transactional
     public void cancel(Integer expenseId, String reason) {
+        cancel(expenseId, reason, null);
+    }
+
+    @Transactional
+    public void cancel(Integer expenseId, String reason, Integer requiredApplicantAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        ensureApplicantAccess(expense, requiredApplicantAccountId);
 
         if (ExpenseStatus.CANCELLED.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Phiếu chi này đã bị hủy trước đó");
@@ -576,6 +616,18 @@ public class ExpenseService {
                 expense.getStatus(),
                 statusCssClass(expense.getStatus())
         );
+    }
+
+    private boolean belongsToApplicant(Expense expense, Integer applicantAccountId) {
+        return applicantAccountId == null
+                || expense.getApplicantID() != null
+                && applicantAccountId.equals(expense.getApplicantID().getId());
+    }
+
+    private void ensureApplicantAccess(Expense expense, Integer requiredApplicantAccountId) {
+        if (!belongsToApplicant(expense, requiredApplicantAccountId)) {
+            throw new IllegalArgumentException("Bạn không có quyền xem hoặc thao tác phiếu chi này");
+        }
     }
 
     /**
@@ -1028,45 +1080,26 @@ public class ExpenseService {
     /**
      * Returns {@code [paidByCash, paidByBanking]}.
      *
-     * <p><strong>Only the Owner may pay in cash</strong>: an Accountant settles by transfer and never
-     * opens the drawer — which is also why they have no shift. Enforcing it here
-     * is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe: an Accountant's
-     * slip has no shift, so any cash on it would be money no register could ever account for. The
-     * default therefore flips with the role — an unsplit amount is all cash for the Owner and all
-     * banking for anyone else, rather than silently landing in the drawer.</p>
+     * <p><strong>Only roles operating the register may pay in cash</strong>: Owner and Pharmacist
+     * have shifts; Accountant settles by transfer and never opens the drawer. Enforcing it here is
+     * what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe. The default is
+     * therefore all cash for a register role and all banking for Accountant.</p>
      *
-     * <p><strong>Trên {@link ExpenseType#CASH_LIMIT_THRESHOLD}, một phiếu thuộc
-     * {@link ExpenseType#CASH_LIMIT_APPLICABLE} không được có phần tiền mặt nào, kể cả một phần</strong>
-     * — bắt buộc chuyển khoản toàn bộ. Kiểm tra này chạy trước cả rào "chỉ Chủ nhà thuốc mới được chi
-     * tiền mặt" nên áp dụng cho mọi vai trò như nhau; unsplit mặc định cũng đổi sang toàn bộ chuyển
-     * khoản thay vì rơi vào tiền mặt của Chủ nhà thuốc.</p>
      */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean isOwner,
-                                      String expenseType) {
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean canPayCash) {
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
-        boolean bankTransferRequired = ExpenseType.requiresBankTransfer(expenseType, amount);
         BigDecimal cash = request.getPaidByCash();
         BigDecimal banking = request.getPaidByBanking();
         if (cash == null && banking == null) {
-            if (bankTransferRequired) {
-                return new BigDecimal[]{BigDecimal.ZERO, amount};
-            }
-            return isOwner
+            return canPayCash
                     ? new BigDecimal[]{amount, BigDecimal.ZERO}
                     : new BigDecimal[]{BigDecimal.ZERO, amount};
         }
         cash = nullToZero(cash);
         banking = nullToZero(banking);
-        assertCashAllowed(cash, isOwner);
-        if (bankTransferRequired && cash.compareTo(BigDecimal.ZERO) > 0) {
-            throw new IllegalArgumentException(
-                    "Phiếu chi loại này trên "
-                            + String.format(Locale.forLanguageTag("vi-VN"), "%,.0fđ",
-                                    ExpenseType.CASH_LIMIT_THRESHOLD)
-                            + " bắt buộc chuyển khoản toàn bộ, không được chi tiền mặt");
-        }
+        assertCashAllowed(cash, canPayCash);
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
                 .compareTo(amount.setScale(2, RoundingMode.HALF_UP)) != 0) {
             throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền chi");
@@ -1075,8 +1108,8 @@ public class ExpenseService {
     }
 
     /** @see #resolveSplit */
-    private void assertCashAllowed(BigDecimal cash, boolean isOwner) {
-        if (!isOwner && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
+    private void assertCashAllowed(BigDecimal cash, boolean canPayCash) {
+        if (!canPayCash && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException(
                     "Kế toán chỉ được chi qua chuyển khoản; phần tiền mặt phải do Chủ nhà thuốc chi");
         }
