@@ -9,6 +9,7 @@ import com.example.project.entity.Shiftreport;
 import com.example.project.service.ShiftreportService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
@@ -23,6 +24,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 
 /**
@@ -36,6 +40,8 @@ import java.util.Optional;
  */
 @Controller
 public class ShiftreportController {
+
+    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private static final String OWNER_BASE = "/owner/shift-reports";
     private static final String PHARMACIST_BASE = "/pharmacist/shift-reports";
@@ -93,6 +99,53 @@ public class ShiftreportController {
         model.addAttribute("basePath", resolveBasePath(request));
 
         return "shift-report/list";
+    }
+
+    /**
+     * Mở ca thủ công cho ngày không phát sinh giao dịch nào (ca vốn chỉ tự tạo khi có giao dịch đầu
+     * tiên). Không map cho Kế toán — họ không trực quầy, và service cũng chặn lại lần nữa.
+     *
+     * <p><strong>Giờ mở ca lấy từ mốc ĐĂNG NHẬP</strong> (BA chốt 12/08/2026), không còn ô cho người
+     * dùng gõ: bấm nút lúc 22h mà lấy giờ bấm thì ra một ca dài 5 phút, còn cho gõ tay thì không có
+     * cách nào kiểm chứng con số họ khai. {@code HttpSession.getCreationTime()} là mốc thật, hệ thống
+     * tự biết.</p>
+     *
+     * <p>Mốc thô này còn được {@code ShiftreportService.resolveManualStart} kẹp lại (đầu ngày hôm nay
+     * / lúc ca trước kết thúc) trước khi dùng — xem javadoc ở đó, đặc biệt là ca phiên đăng nhập sống
+     * xuyên nửa đêm.</p>
+     */
+    @PostMapping({
+            OWNER_BASE + "/create",
+            PHARMACIST_BASE + "/create"
+    })
+    public String createManual(HttpServletRequest request,
+                               RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+        try {
+            Integer shiftId = shiftreportService.createManualShift(
+                    currentUserContext.getCurrentAccountId(), sessionStartedAt(request));
+            redirectAttributes.addFlashAttribute("successMessage",
+                    "Đã mở ca thủ công — nhớ chốt ca trước khi đăng xuất");
+            return "redirect:" + basePath + "/" + shiftId;
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:" + basePath;
+        }
+    }
+
+    /**
+     * Thời điểm phiên đăng nhập hiện tại được tạo, quy về giờ VN.
+     *
+     * <p>{@code getSession(false)} chứ không phải {@code getSession()}: request này đã qua Spring
+     * Security nên chắc chắn có phiên — nhưng nếu vì lý do nào đó không có, tạo mới một phiên rỗng ở
+     * đây sẽ cho mốc "vừa xong", tức ca dài 0 phút, đúng cái lỗi đang muốn tránh.</p>
+     */
+    private LocalDateTime sessionStartedAt(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(session.getCreationTime()), VN_ZONE);
     }
 
     @GetMapping({

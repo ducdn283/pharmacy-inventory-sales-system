@@ -36,4 +36,10 @@ public interface ShiftreportRepository extends JpaRepository<Shiftreport, Intege
      * looking at the newest would miss it.
      */
     Optional<Shiftreport> findFirstByCashierID_IdAndStatusOrderByStartTimeAsc(Integer cashierId, String status);
+
+    /**
+     * Ca gần nhất của một người, bất kể trạng thái — mốc chặn ca mở tay bị nhập giờ đè lên ca trước
+     * (xem {@code ShiftreportService.createManualShift}).
+     */
+    Optional<Shiftreport> findFirstByCashierID_IdOrderByStartTimeDesc(Integer cashierId);
 }
