@@ -50,6 +50,17 @@ public class PurchaseInvoiceCreateRequest {
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate dueDate;
 
+    /**
+     * Whether every line's "Đơn giá" was typed as already including VAT (gross, mặc định — giữ
+     * nguyên hành vi cũ) or as a pre-tax amount (giá trước thuế) that the server must gross up
+     * before storing — some nhà cung cấp báo giá trước thuế, một số báo giá đã gồm thuế. Applies to
+     * the whole invoice at once, not per line — see {@code PurchaseinvoiceService#prepareLine}.
+     * Whatever gets stored is always gross either way (the schema-wide "importPrice is gross"
+     * convention never changes); this only controls how the typed number is interpreted on the way
+     * in.
+     */
+    private boolean priceIncludesVat = true;
+
     @Valid
     @NotEmpty(message = "Phiếu nhập phải có ít nhất một sản phẩm")
     private List<PurchaseInvoiceDetailCreateRequest> details = new ArrayList<>();

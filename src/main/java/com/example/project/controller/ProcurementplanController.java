@@ -5,6 +5,7 @@ import com.example.project.dto.request.ProcurementPlanDetailCreateRequest;
 import com.example.project.dto.response.ProcurementPlanPrintPageResponse;
 import com.example.project.dto.response.ProcurementPlanDetailRowView;
 import com.example.project.dto.response.ProcurementProductSearchResponse;
+import com.example.project.dto.response.ProcurementProductStockResponse;
 import com.example.project.dto.response.ProcurementSupplierSearchResponse;
 import com.example.project.dto.response.ProcurementplanResponse;
 import com.example.project.dto.response.SupplierCostPriceResponse;
@@ -32,11 +33,16 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Controller
 public class ProcurementplanController {
+    private static final String OWNER_BASE = "/owner/procurements";
+    private static final String ACCOUNTANT_BASE = "/accountant/procurements";
+
     private final ProcurementplanService procurementplanService;
 
     public ProcurementplanController(ProcurementplanService procurementplanService) {
@@ -52,7 +58,7 @@ public class ProcurementplanController {
 
     // như position
     // hiện danh sách dự trù
-    @GetMapping("/owner/procurements")
+    @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
     public String procurementPlanList(@RequestParam(name = "search", required = false) String search,
                                       @RequestParam(name = "fromDate", required = false) String fromDate,
                                       @RequestParam(name = "toDate", required = false) String toDate,
@@ -104,6 +110,13 @@ public class ProcurementplanController {
         return procurementplanService.searchProducts(keyword, limit);
     }
 
+    @GetMapping("/owner/procurements/products/stock-overview")
+    @ResponseBody
+    public List<ProcurementProductStockResponse> listProductStockOverview(
+            @RequestParam(name = "sort", defaultValue = "desc") String sort) {
+        return procurementplanService.listAllProductStocks(sort);
+    }
+
     // api lấy giá nhập của 1 nhà cung cấp
     @GetMapping("/owner/procurements/supplier-cost-price")
     @ResponseBody
@@ -127,15 +140,23 @@ public class ProcurementplanController {
     // dùng khi bấm nút "Tạo dự trù hàng cần nhập" ở Danh sách hàng hóa
     @GetMapping("/owner/procurements/create-procurementplan")
     public String createProcurementPlanForm(@RequestParam(name = "restockAll", required = false, defaultValue = "false") boolean restockAll,
+                                            @RequestParam(name = "productIds", required = false) List<Integer> productIds,
                                             HttpServletRequest request, Model model) {
         if (!model.containsAttribute("procurementPlanForm")) {
             ProcurementPlanCreateRequest form = new ProcurementPlanCreateRequest();
-            if (restockAll) {
-                for (Integer productId : procurementplanService.findRestockNeededProductIds()) {
-                    ProcurementPlanDetailCreateRequest detail = new ProcurementPlanDetailCreateRequest();
-                    detail.setProductId(productId);
-                    form.getDetails().add(detail);
-                }
+            Set<Integer> requestedProductIds = new LinkedHashSet<>();
+            if (productIds != null) {
+                productIds.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .forEach(requestedProductIds::add);
+            } else if (restockAll) {
+                requestedProductIds.addAll(procurementplanService.findRestockNeededProductIds());
+            }
+
+            for (Integer productId : requestedProductIds) {
+                ProcurementPlanDetailCreateRequest detail = new ProcurementPlanDetailCreateRequest();
+                detail.setProductId(productId);
+                form.getDetails().add(detail);
             }
             model.addAttribute("procurementPlanForm", form);
         }
@@ -173,7 +194,8 @@ public class ProcurementplanController {
     }
 
     // tạo form update
-    @GetMapping("/owner/procurements/update-procurementplan/{id}")
+    @GetMapping({OWNER_BASE + "/update-procurementplan/{id}",
+            ACCOUNTANT_BASE + "/update-procurementplan/{id}"})
     public String updateProcurementPlanForm(@PathVariable Integer id,
                                             HttpServletRequest request,
                                             Model model,
@@ -181,7 +203,8 @@ public class ProcurementplanController {
         String basePath = resolveBasePath(request);
         try {
             ProcurementplanResponse procurementPlan = procurementplanService.getById(id);
-            boolean viewOnly = procurementplanService.isCompleted(id);
+            boolean viewOnly = request.getRequestURI().startsWith(ACCOUNTANT_BASE)
+                    || procurementplanService.isCompleted(id);
 
             if (!model.containsAttribute("procurementPlanForm")) {
                 model.addAttribute("procurementPlanForm", procurementplanService.buildUpdateForm(id));
@@ -244,7 +267,7 @@ public class ProcurementplanController {
     }
 
     // in phiếu dự trù
-    @GetMapping("/owner/procurements/{id}/print")
+    @GetMapping({OWNER_BASE + "/{id}/print", ACCOUNTANT_BASE + "/{id}/print"})
     public String printPage(@PathVariable Integer id,
                             HttpServletRequest request,
                             Model model) {
@@ -309,6 +332,6 @@ public class ProcurementplanController {
 
     //lấy url
     private String resolveBasePath(HttpServletRequest request) {
-        return "/owner/procurements";
+        return request.getRequestURI().startsWith(ACCOUNTANT_BASE) ? ACCOUNTANT_BASE : OWNER_BASE;
     }
 }

@@ -53,8 +53,8 @@
             vertical-align: middle;
         }
 
-        /* Ô "Sản phẩm"/"Giá nhập" cao hơn các ô khác trong hàng vì có thêm dòng tham chiếu (Giá
-           bán/Giá nhập trước) bên dưới ô nhập — canh trên cho cả hàng để các input còn lại không
+        /* Ô "Sản phẩm"/"Đơn giá" cao hơn các ô khác trong hàng vì có thêm dòng tham chiếu (Giá
+           bán/Đơn giá lần trước) bên dưới ô nhập — canh trên cho cả hàng để các input còn lại không
            bị đẩy lệch xuống giữa. */
         #detailTable tbody.detail-item > tr:first-child > td {
             vertical-align: top;
@@ -68,7 +68,7 @@
             padding-top: 21px;
         }
 
-        /* Dòng tham chiếu "Giá bán"/"Giá nhập trước" không được xuống dòng — nếu wrap thành 2
+        /* Dòng tham chiếu "Giá bán"/"Đơn giá lần trước" không được xuống dòng — nếu wrap thành 2
            dòng, cả hàng bị kéo cao hẳn ra (chiều cao hàng dùng chung theo ô cao nhất), làm lệch
            canh giữa của mọi ô còn lại trong cùng hàng. Bảng đã nằm trong .table-responsive nên
            cho phép cột rộng thêm một chút để chứa trọn 1 dòng là an toàn. */
@@ -82,6 +82,7 @@
         .expiration-field.is-not-applicable {
             display: none;
         }
+
 
         .money-summary-row {
             display: flex;
@@ -230,11 +231,14 @@
         <div class="d-flex justify-content-between align-items-start mb-4">
             <div>
                 <h1 class="fs-4 mb-1" th:text="${editMode} ? 'Sửa phiếu nhập' : 'Tạo phiếu nhập'">Tạo phiếu nhập</h1>
-                <p class="text-secondary mb-0"
-                   th:text="${dualSubmit}
-                       ? 'Lưu nháp để sửa sau, hoặc nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho sau khi được duyệt'
-                       : 'Tạo phiếu nhập hàng từ nhà cung cấp và tự động tạo lô hàng'">
+                <p class="text-secondary mb-0" th:if="${!dualSubmit}">
                     Tạo phiếu nhập hàng từ nhà cung cấp và tự động tạo lô hàng
+                </p>
+                <p class="text-secondary mb-0" th:if="${dualSubmit and selfApprove}">
+                    Lưu nháp để sửa sau, hoặc tạo phiếu ngay — hàng về kho ngay khi tạo phiếu
+                </p>
+                <p class="text-secondary mb-0" th:if="${dualSubmit and !selfApprove}">
+                    Lưu nháp để sửa sau, hoặc nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho sau khi được duyệt
                 </p>
             </div>
 
@@ -333,9 +337,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chi phí phát sinh</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{additionCost}"
                                        id="additionCost"
@@ -348,9 +352,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chiết khấu</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{discount}"
                                        id="discount"
@@ -393,6 +397,23 @@
                             </button>
                         </div>
 
+                        <div class="px-4 pt-3 pb-2 border-bottom">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="priceIncludesVatToggle"
+                                       th:field="*{priceIncludesVat}"
+                                       onchange="calculateSummary()">
+                                <label class="form-check-label small" for="priceIncludesVatToggle">
+                                    Đơn giá đã bao gồm VAT
+                                </label>
+                            </div>
+                            <div class="form-text small mb-0">
+                                Tắt nếu nhà cung cấp báo đơn giá TRƯỚC thuế — hệ thống sẽ tự cộng thêm
+                                VAT theo thuế suất của từng sản phẩm trước khi lưu (số tiền lưu lại
+                                luôn là giá đã gồm thuế, bất kể bật/tắt ở đây).
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" id="detailTable">
                                 <thead>
@@ -400,7 +421,7 @@
                                     <th style="min-width: 220px;">Sản phẩm</th>
                                     <th style="min-width: 110px;">Số lượng</th>
                                     <th style="min-width: 100px;">Đơn vị</th>
-                                    <th style="min-width: 140px;">Giá nhập</th>
+                                    <th style="min-width: 140px;">Đơn giá</th>
                                     <th style="min-width: 110px;">Thuế suất VAT (%)</th>
                                     <th style="min-width: 130px;">Giá trước thuế</th>
                                     <th style="min-width: 120px;">Tiền thuế</th>
@@ -455,15 +476,15 @@
                                     </td>
 
                                     <td>
-                                        <input type="number"
-                                               min="0"
-                                               step="1"
+                                        <input type="text"
+                                               inputmode="numeric"
+                                               data-money
                                                required
-                                               data-required-message="Vui lòng nhập giá nhập"
+                                               data-required-message="Vui lòng nhập đơn giá"
                                                class="form-control price-input"
                                                th:field="*{details[__${iterStat.index}__].importPrice}"
                                                oninput="calculateSummary()">
-                                        <div class="small text-secondary mt-1 product-cost-price-display">Giá nhập trước: —</div>
+                                        <div class="small text-secondary mt-1 product-cost-price-display">Đơn giá lần trước: —</div>
                                         <div class="text-danger small mt-1"
                                              th:if="${#fields.hasErrors('details[__${iterStat.index}__].importPrice')}"
                                              th:errors="*{details[__${iterStat.index}__].importPrice}">
@@ -545,7 +566,21 @@
                         </a>
                     </div>
 
-                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit}">
+                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit and selfApprove}">
+                        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary px-4">
+                            Lưu Nháp
+                        </button>
+
+                        <button type="submit" name="action" value="submit" class="btn btn-purchase-primary px-4">
+                            Tạo phiếu nhập
+                        </button>
+
+                        <a th:href="${basePath}" class="btn btn-outline-secondary px-4">
+                            Hủy
+                        </a>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit and !selfApprove}">
                         <button type="submit" name="action" value="draft" class="btn btn-outline-secondary px-4">
                             Lưu Nháp
                         </button>
@@ -600,7 +635,12 @@
                             Phiếu nhập luôn được lập ở trạng thái "Nợ". Ghi nhận thanh toán bằng cách
                             lập phiếu chi trỏ tới phiếu nhập này.
                         </div>
-                        <div class="text-secondary small mt-2" th:if="${dualSubmit}">
+                        <div class="text-secondary small mt-2" th:if="${dualSubmit and selfApprove}">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Lưu Nháp để sửa sau; hoặc tạo phiếu ngay — hàng về kho và phiếu chuyển
+                            sang "Nợ" ngay lập tức, không cần duyệt riêng.
+                        </div>
+                        <div class="text-secondary small mt-2" th:if="${dualSubmit and !selfApprove}">
                             <i class="ti ti-info-circle me-1"></i>
                             Lưu Nháp để sửa sau; Nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho và
                             phiếu chỉ chuyển sang "Nợ" khi được duyệt.
@@ -618,7 +658,13 @@
                             <p class="mb-2">3. Mỗi dòng nhập luôn tạo một lô hàng mới — nhập đúng số lô, ngày SX, hạn dùng theo phiếu giao hàng của nhà cung cấp.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
-                        <div class="text-secondary small" th:if="${dualSubmit}">
+                        <div class="text-secondary small" th:if="${dualSubmit and selfApprove}">
+                            <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
+                            <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng".</p>
+                            <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi tạo phiếu (hoặc duyệt lại phiếu nháp), mỗi dòng nhập mới tạo một lô hàng mới.</p>
+                            <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
+                        </div>
+                        <div class="text-secondary small" th:if="${dualSubmit and !selfApprove}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
                             <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng".</p>
                             <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi Chủ nhà thuốc duyệt, mỗi dòng nhập mới tạo một lô hàng mới.</p>
@@ -646,16 +692,28 @@
                 <input type="text" class="form-control" id="newSupplierName" placeholder="Tên nhà cung cấp" maxlength="255">
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1">Mã số thuế <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="newSupplierTaxCode" placeholder="10 chữ số, vd 0101234567">
+                <label class="form-label small mb-1" for="newSupplierTaxCode">Mã số thuế <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierTaxCode"
+                       inputmode="numeric" autocomplete="off" data-digits="-" maxlength="13"
+                       pattern="[0-9]{10}(-[0-9]{3})?" required
+                       aria-describedby="newSupplierTaxCodeFeedback">
+                <div class="invalid-feedback" id="newSupplierTaxCodeFeedback"></div>
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1">Số điện thoại <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="newSupplierPhone" placeholder="VD: 0912345678">
+                <label class="form-label small mb-1" for="newSupplierPhone">Số điện thoại <span class="text-danger">*</span></label>
+                <input type="tel" class="form-control" id="newSupplierPhone"
+                       inputmode="numeric" autocomplete="tel" data-digits maxlength="10"
+                       pattern="0(2|3|5|7|8|9)[0-9]{8}" required
+                       aria-describedby="newSupplierPhoneFeedback">
+                <div class="invalid-feedback" id="newSupplierPhoneFeedback"></div>
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1">Email <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="newSupplierEmail" placeholder="VD: contact@congty.vn">
+                <label class="form-label small mb-1" for="newSupplierEmail">Email <span class="text-danger">*</span></label>
+                <input type="email" class="form-control" id="newSupplierEmail"
+                       inputmode="email" autocomplete="email" maxlength="100"
+                       pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
+                       required aria-describedby="newSupplierEmailFeedback">
+                <div class="invalid-feedback" id="newSupplierEmailFeedback"></div>
             </div>
             <div class="mb-0">
                 <label class="form-label small mb-1">Địa chỉ <span class="text-danger">*</span></label>
@@ -680,7 +738,11 @@
     const noExpirationProductIds = /*[[${noExpirationProductIds}]]*/ [];
     const noExpirationProductIdSet = new Set((noExpirationProductIds || []).map(String));
 
-    // "Giá nhập" gợi ý = SupplierProduct.costPrice gần nhất của cặp (NCC đang chọn, sản phẩm của dòng này).
+    // "Đơn giá" gợi ý = SupplierProduct.costPrice gần nhất của cặp (NCC đang chọn, sản phẩm của
+    // dòng này) — luôn LÀ giá đã gồm thuế, giống mọi costPrice lưu trong hệ thống. Chỉ chính xác
+    // như một gợi ý điền sẵn khi "Đơn giá đã bao gồm VAT" đang bật (mặc định); nếu người dùng tắt
+    // toggle để nhập giá trước thuế, con số gợi ý này KHÔNG được tự quy đổi lại — vẫn điền y hệt,
+    // người dùng tự nhận biết và sửa nếu cần.
     function suggestedCostPrice(supplierId, productId) {
         if (!supplierId || !productId) return null;
 
@@ -697,7 +759,7 @@
         const priceInput = row.querySelector('.price-input');
         if (!productInput || !priceInput) return;
 
-        const hasValue = priceInput.value !== '' && Number(priceInput.value) > 0;
+        const hasValue = moneyValue(priceInput) > 0;
         if (hasValue) return;
 
         const supplierSelect = document.getElementById('supplierId');
@@ -706,6 +768,7 @@
 
         if (price !== null) {
             priceInput.value = price;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
             calculateSummary();
         }
     }
@@ -724,19 +787,16 @@
 
     // Luôn ghi đè theo Type khi đổi sản phẩm — chỉ để xem (chữ thường, không phải ô nhập), giá trị
     // thật gửi lên form nằm trong input ẩn .vat-rate-input, không phải gợi ý mà là giá trị chốt.
+    // Nhãn hiển thị (vat-rate-display) do updateVatRateDisplay() quyết định — xem hàm đó để biết vì
+    // sao không chỉ là "X%" trơn.
     function applySuggestedVatRate(row) {
         const productInput = row.querySelector('.product-select');
         const vatRateInput = row.querySelector('.vat-rate-input');
-        const vatRateDisplay = row.querySelector('.vat-rate-display');
         if (!productInput || !vatRateInput) return;
 
         const rate = suggestedVatRate(productInput.value);
         vatRateInput.value = rate !== null ? rate : '';
-        if (vatRateDisplay) {
-            vatRateDisplay.textContent = rate !== null
-                ? Number(rate).toLocaleString('vi-VN') + '%'
-                : '—';
-        }
+        updateVatRateDisplay(row);
         calculateSummary();
     }
 
@@ -776,10 +836,13 @@
         applySuggestedSellPrice(row);
     }
 
-    // "Giá nhập trước" — dòng tham chiếu hiển thị dưới ô Giá nhập, ngang hàng với "Giá bán" bên
+    // "Đơn giá lần trước" — dòng tham chiếu hiển thị dưới ô Đơn giá, ngang hàng với "Giá bán" bên
     // cột Sản phẩm. Khác applySuggestedPrice (tự điền vào ô khi đang trống): dòng này CHỈ hiển
-    // thị, không bao giờ ghi vào ô Giá nhập, kể cả khi ô đó đã có giá trị. Phụ thuộc NCC đang
+    // thị, không bao giờ ghi vào ô Đơn giá, kể cả khi ô đó đã có giá trị. Phụ thuộc NCC đang
     // chọn, giống applySuggestedPrice, nên phải được gọi lại mỗi khi đổi NCC (xem selectSupplier).
+    // Giá trị tham chiếu này luôn LÀ giá đã gồm thuế (SupplierProduct.costPrice, xem
+    // PurchaseinvoiceService.upsertSupplierProductCostPrice) — không phụ thuộc trạng thái bật/tắt
+    // VAT hiện tại của phiếu đang lập.
     function applyPreviousCostPriceDisplay(row) {
         const productInput = row.querySelector('.product-select');
         const display = row.querySelector('.product-cost-price-display');
@@ -790,8 +853,8 @@
         const price = suggestedCostPrice(supplierId, productInput.value);
 
         display.textContent = (price === null)
-            ? 'Giá nhập trước: —'
-            : 'Giá nhập trước: ' + Number(price).toLocaleString('vi-VN') + 'đ';
+            ? 'Đơn giá lần trước: —'
+            : 'Đơn giá lần trước: ' + Number(price).toLocaleString('vi-VN') + 'đ';
     }
 
     function wirePreviousCostPriceDisplay(row) {
@@ -854,22 +917,78 @@
         return Number(input.value);
     }
 
-    // "Giá nhập" đã bao gồm thuế VAT — tách ngược ra giá trước thuế/tiền thuế để hiển thị, khớp
-    // công thức PurchaseinvoiceService.calculateLinePreTaxAmount (chỉ để xem trước, server tự tính lại khi lưu).
+    function moneyValue(input) {
+        if (!input) return 0;
+        if (typeof window.pmMoneyValue === 'function') {
+            return window.pmMoneyValue(input);
+        }
+        return Number(String(input.value || '').replace(/\./g, '')) || 0;
+    }
+
+    // "Đơn giá" có thể đã gồm thuế VAT hoặc là giá trước thuế, tùy công tắc #priceIncludesVatToggle
+    // (mặc định đã gồm thuế — hành vi cũ). Khớp công thức PurchaseinvoiceService.prepareLine()/
+    // grossUpUnitPrice()/calculateLinePreTaxAmount (chỉ để xem trước, server tự tính lại khi lưu).
+    function priceAlreadyIncludesVat() {
+        const toggle = document.getElementById('priceIncludesVatToggle');
+        return !toggle || toggle.checked;
+    }
+
+    // Nhãn ô "Thuế suất VAT (%)" của một dòng — không chỉ hiện số % trơn, mà nói rõ đơn giá đã cộng
+    // thuế hay chưa, tránh hiểu lầm. Đọc từ .vat-rate-input (giá trị chốt thật sự gửi lên form), để
+    // luôn khớp với con số server sẽ dùng, không phải gọi lại suggestedVatRate().
+    function updateVatRateDisplay(row) {
+        const vatRateInput = row.querySelector('.vat-rate-input');
+        const vatRateDisplay = row.querySelector('.vat-rate-display');
+        if (!vatRateInput || !vatRateDisplay) return;
+
+        const rate = vatRateInput.value === '' ? null : Number(vatRateInput.value);
+        if (rate === null) {
+            vatRateDisplay.textContent = '—';
+            return;
+        }
+
+        const rateText = rate.toLocaleString('vi-VN') + '%';
+        vatRateDisplay.textContent = priceAlreadyIncludesVat()
+            ? rateText + ' (đã gồm)'
+            : rateText + ' (chưa gồm)';
+    }
+
+    // Gọi lại cho MỌI dòng mỗi khi công tắc đổi trạng thái (chưa chắc người dùng đụng lại ô sản
+    // phẩm để applySuggestedVatRate() tự chạy) — xem calculateSummary().
+    function refreshVatRateLabels() {
+        document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
+            updateVatRateDisplay(row);
+        });
+    }
+
     function calculateSummary() {
         let subtotal = 0;
+        const includesVat = priceAlreadyIncludesVat();
+        refreshVatRateLabels();
 
         document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
             const quantity = numberValue(row.querySelector('.quantity-input'));
-            const price = numberValue(row.querySelector('.price-input'));
+            const price = moneyValue(row.querySelector('.price-input'));
             const vatRate = numberValue(row.querySelector('.vat-rate-input'));
-            const lineTotal = quantity * price;
 
-            let preTaxAmount = lineTotal;
-            let taxAmount = 0;
-            if (vatRate > 0) {
-                preTaxAmount = lineTotal / (1 + vatRate / 100);
-                taxAmount = lineTotal - preTaxAmount;
+            let lineTotal;
+            let preTaxAmount;
+            let taxAmount;
+
+            if (includesVat) {
+                // "Đơn giá" đã gồm thuế — tách ngược ra giá trước thuế/tiền thuế để hiển thị.
+                lineTotal = quantity * price;
+                preTaxAmount = lineTotal;
+                taxAmount = 0;
+                if (vatRate > 0) {
+                    preTaxAmount = lineTotal / (1 + vatRate / 100);
+                    taxAmount = lineTotal - preTaxAmount;
+                }
+            } else {
+                // "Đơn giá" là giá TRƯỚC thuế — cộng thêm VAT ra giá đã gồm thuế (Thành tiền).
+                preTaxAmount = quantity * price;
+                taxAmount = preTaxAmount * (vatRate / 100);
+                lineTotal = preTaxAmount + taxAmount;
             }
 
             subtotal += lineTotal;
@@ -890,8 +1009,8 @@
             }
         });
 
-        const additionCost = numberValue(document.getElementById('additionCost'));
-        const discount = numberValue(document.getElementById('discount'));
+        const additionCost = moneyValue(document.getElementById('additionCost'));
+        const discount = moneyValue(document.getElementById('discount'));
 
         let totalAmount = subtotal + additionCost - discount;
         if (totalAmount < 0) {
@@ -1045,7 +1164,7 @@
         hideSupplierSearchResults();
 
         // Đổi NCC có thể lộ ra giá gợi ý khác cho các dòng chưa có giá — áp lại cho toàn bộ, cùng
-        // với dòng tham chiếu "Giá nhập trước" (phụ thuộc NCC y hệt).
+        // với dòng tham chiếu "Đơn giá lần trước" (phụ thuộc NCC y hệt).
         document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
             applySuggestedPrice(row);
             applyPreviousCostPriceDisplay(row);
@@ -1158,10 +1277,13 @@
             quantityInput.value = item.requestedQuantity;
         }
 
-        // unitPrice = estimatedPrice ÷ requestedQuantity, đã gồm VAT — khớp thẳng với "Giá nhập".
+        // unitPrice = estimatedPrice ÷ requestedQuantity, đã gồm VAT — khớp thẳng với "Đơn giá" khi
+        // toggle "Đơn giá đã bao gồm VAT" đang bật (mặc định). Nếu người dùng tắt toggle, con số
+        // này vẫn điền y hệt dù nay bị hiểu là giá trước thuế — không tự quy đổi lại.
         const priceInput = row.querySelector('.price-input');
         if (priceInput && item.unitPrice != null) {
             priceInput.value = item.unitPrice;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
@@ -1223,11 +1345,11 @@
                 </td>
 
                 <td>
-                    <input type="number" min="0" step="1" required data-required-message="Vui lòng nhập giá nhập"
+                    <input type="text" inputmode="numeric" data-money required data-required-message="Vui lòng nhập đơn giá"
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
                            oninput="calculateSummary()">
-                    <div class="small text-secondary mt-1 product-cost-price-display">Giá nhập trước: —</div>
+                    <div class="small text-secondary mt-1 product-cost-price-display">Đơn giá lần trước: —</div>
                 </td>
 
                 <td class="readonly-line-cell text-secondary">
@@ -1278,6 +1400,9 @@
         `;
 
         table.appendChild(tbody);
+        if (typeof window.pmInitMoneyInputs === 'function') {
+            window.pmInitMoneyInputs(tbody);
+        }
         refreshRowIndexes();
         wireProductSearch(tbody);
         wirePriceSuggestion(tbody);
@@ -1318,10 +1443,58 @@
         };
         if (!modal || !fields.name) return;
 
+        const fieldMessages = {
+            taxCode: 'Mã số thuế phải gồm đúng 10 chữ số, hoặc 10 chữ số kèm 3 số chi nhánh (vd 0101234567-001)',
+            phone: 'Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09',
+            email: "Email chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
+        };
+
+        function clearFieldError(input) {
+            input.classList.remove('is-invalid');
+            input.setCustomValidity('');
+            const feedback = document.getElementById(input.getAttribute('aria-describedby'));
+            if (feedback) feedback.textContent = '';
+        }
+
+        function showFieldError(input, message) {
+            input.setCustomValidity(message);
+            input.classList.add('is-invalid');
+            const feedback = document.getElementById(input.getAttribute('aria-describedby'));
+            if (feedback) feedback.textContent = message;
+        }
+
+        function validateSupplierFields(payload) {
+            Object.values(fields).forEach(clearFieldError);
+
+            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
+                showError('Vui lòng điền đầy đủ các trường bắt buộc');
+                return false;
+            }
+            if (!/^[0-9]{10}(-[0-9]{3})?$/.test(payload.taxCode)) {
+                showFieldError(fields.taxCode, fieldMessages.taxCode);
+                fields.taxCode.focus();
+                return false;
+            }
+            if (!/^0(2|3|5|7|8|9)[0-9]{8}$/.test(payload.phone)) {
+                showFieldError(fields.phone, fieldMessages.phone);
+                fields.phone.focus();
+                return false;
+            }
+            if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(payload.email)) {
+                showFieldError(fields.email, fieldMessages.email);
+                fields.email.focus();
+                return false;
+            }
+            return true;
+        }
+
         function openModal() {
             errorBox.classList.add('d-none');
             errorBox.textContent = '';
-            Object.values(fields).forEach(input => { input.value = ''; });
+            Object.values(fields).forEach(input => {
+                input.value = '';
+                clearFieldError(input);
+            });
             modal.classList.add('open');
             setTimeout(() => fields.name.focus(), 0);
         }
@@ -1343,8 +1516,9 @@
                 email: fields.email.value.trim(),
                 address: fields.address.value.trim()
             };
-            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
-                showError('Vui lòng điền đầy đủ các trường bắt buộc');
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+            if (!validateSupplierFields(payload)) {
                 return;
             }
             try {
@@ -1376,6 +1550,9 @@
         document.getElementById('addSupplierCloseBtn')?.addEventListener('click', closeModal);
         document.getElementById('addSupplierCancelBtn')?.addEventListener('click', closeModal);
         document.getElementById('addSupplierSaveBtn')?.addEventListener('click', saveSupplier);
+        Object.values(fields).forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
         modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
     }
 
@@ -1419,7 +1596,10 @@
     });
 </script>
 
-<!-- Chặn 'e' / '+' / '-' trong các ô số (số lượng, giá nhập, chi phí phát sinh, chiết khấu). -->
+<!-- Định dạng các ô tiền và chuyển về số thuần trước khi submit. -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+<!-- Chặn ký hiệu không hợp lệ trong ô số lượng; các trường tiền dùng money-input phía trên. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>

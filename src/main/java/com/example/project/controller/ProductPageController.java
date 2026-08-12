@@ -7,6 +7,7 @@ import com.example.project.dto.response.ProductRowResponse;
 import com.example.project.entity.Type;
 import com.example.project.service.ProductService;
 import com.example.project.service.ProductValidationException;
+import com.example.project.service.ProcurementplanService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,9 +32,12 @@ import java.util.Optional;
 public class ProductPageController {
 
     private final ProductService productService;
+    private final ProcurementplanService procurementplanService;
 
-    public ProductPageController(ProductService productService) {
+    public ProductPageController(ProductService productService,
+                                 ProcurementplanService procurementplanService) {
         this.productService = productService;
+        this.procurementplanService = procurementplanService;
     }
 
     @GetMapping({
@@ -83,7 +87,11 @@ public class ProductPageController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", productPage.getTotalElements());
 
-        model.addAttribute("basePath", resolveBasePath(request));
+        String basePath = resolveBasePath(request);
+        model.addAttribute("basePath", basePath);
+        model.addAttribute("restockProducts", "/owner/products".equals(basePath)
+                ? procurementplanService.listRestockNeededProducts()
+                : List.of());
 
         return "product/list";
     }

@@ -5,6 +5,7 @@ import com.example.project.dto.request.ProcurementPlanDetailCreateRequest;
 import com.example.project.dto.response.ProcurementPlanPrintLineResponse;
 import com.example.project.dto.response.ProcurementPlanPrintPageResponse;
 import com.example.project.dto.response.ProcurementProductSearchResponse;
+import com.example.project.dto.response.ProcurementProductStockResponse;
 import com.example.project.dto.response.ProcurementProductUnitResponse;
 import com.example.project.dto.response.ProcurementSupplierSearchResponse;
 import com.example.project.dto.response.ProcurementplanResponse;
@@ -330,10 +331,6 @@ public class ProcurementplanService {
         return normalized.toPlainString();
     }
 
-    // thanh tìm sản phẩm (hiện tồn theo đơn vị nhỏ nhất, hiện đơn vị nhập từ nhà cung cấp )
-    //buildStockByProduct: số lượng tồn
-    //loadMainUnitByProduct: đơn vị nhập từ nhà cung cấp
-    //loadBaseUnitByProduct: đơn vị nhỏ nhất
     @Transactional(readOnly = true)
     public List<ProcurementProductSearchResponse> searchProducts(String keyword, int limit) {
         String normalizedKeyword = normalize(keyword);
@@ -357,6 +354,65 @@ public class ProcurementplanService {
                 .limit(maxResults)
                 .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
                 .toList();
+    }
+
+    /** Danh sách tồn kho tất cả sản phẩm (dùng modal "Xem tồn sản phẩm" trên form tạo dự trù). */
+    @Transactional(readOnly = true)
+    public List<ProcurementProductStockResponse> listAllProductStocks(String stockSort) {
+        Map<Integer, Long> stockByProduct = buildStockByProduct();
+        Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
+        Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
+        Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
+        boolean ascending = "asc".equalsIgnoreCase(normalize(stockSort));
+
+        Comparator<Product> byStock = ascending
+                ? Comparator.comparing(product -> stockByProduct.getOrDefault(product.getProductID(), 0L))
+                : Comparator.<Product, Long>comparing(product -> stockByProduct.getOrDefault(product.getProductID(), 0L)).reversed();
+
+        return productRepository.findAllWithRelations().stream()
+                .filter(product -> Boolean.TRUE.equals(product.getStatus()))
+                .filter(product -> !isComboProduct(product))
+                .sorted(byStock.thenComparing(product -> product.getName() == null ? "" : product.getName()))
+                .map(product -> toStockResponse(
+                        product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
+                .toList();
+    }
+
+    /** Sản phẩm đang hết hoặc sắp hết hàng, dùng cho bước chọn trước khi tạo phiếu dự trù. */
+    @Transactional(readOnly = true)
+    public List<ProcurementProductStockResponse> listRestockNeededProducts() {
+        return listAllProductStocks("asc").stream()
+                .filter(product -> {
+                    int stock = product.getCurrentStock() == null ? 0 : product.getCurrentStock();
+                    int minStock = product.getMinStock() == null ? 0 : product.getMinStock();
+                    return stock <= minStock;
+                })
+                .toList();
+    }
+
+    private ProcurementProductStockResponse toStockResponse(Product product,
+                                                            Map<Integer, Long> stockByProduct,
+                                                            Map<Integer, Productunit> mainUnitByProduct,
+                                                            Map<Integer, Productunit> baseUnitByProduct,
+                                                            Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
+        ProcurementProductSearchResponse search = toSearchResponse(
+                product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct);
+
+        return new ProcurementProductStockResponse(
+                search.getProductID(),
+                search.getName(),
+                search.getCode(),
+                search.getBarcode(),
+                product.getMinStock(),
+                product.getMaxStock(),
+                search.getCurrentStock(),
+                search.getStockUnit(),
+                search.getUnit(),
+                search.getUnitRatio(),
+                search.getEstimatedPrice(),
+                search.getUnits(),
+                search.getCurrentSellPrice()
+        );
     }
 
     /**
@@ -653,6 +709,7 @@ public class ProcurementplanService {
 
     // lưu chi tiết dự trù
     private void saveDetails(Procurementplan plan, List<ProcurementPlanDetailCreateRequest> details) {
+        Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         for (ProcurementPlanDetailCreateRequest item : details) {
             Product product = productRepository.findById(item.getProductId())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm"));
@@ -667,7 +724,11 @@ public class ProcurementplanService {
             detail.setProcurementID(plan);
             detail.setProductID(product);
             detail.setRequestedQuantity(item.getRequestedQuantity());
-            detail.setUnit(trimToNull(item.getUnit()));
+            String requestedUnit = trimToNull(item.getUnit());
+            Productunit defaultImportUnit = mainUnitByProduct.get(product.getProductID());
+            detail.setUnit(requestedUnit != null
+                    ? requestedUnit
+                    : defaultImportUnit != null ? trimToNull(defaultImportUnit.getUnitName()) : null);
             detail.setEstimatedPrice(resolveEstimatedPrice(item));
             detail.setSupplierID(supplier);
             detail.setCurrentStock((int) batchRepository.sumStorageByProduct(product.getProductID()));

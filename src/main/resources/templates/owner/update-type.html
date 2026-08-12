@@ -237,7 +237,7 @@
                             <datalist id="sortTypeOptions">
                                 <option th:each="group : ${typeGroups}" th:value="${group}"></option>
                             </datalist>
-                            <div class="form-text">Ví dụ: thuốc, hàng hóa, thiết bị y tế, combo</div>
+                            <div class="form-text">Ví dụ: thuốc, hàng hóa, thiết bị y tế</div>
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('sortType')}" th:errors="*{sortType}"></div>
                         </div>
 

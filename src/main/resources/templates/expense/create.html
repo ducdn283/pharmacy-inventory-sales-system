@@ -216,12 +216,23 @@
                                 <div class="form-text"
                                      th:if="${customerReturns != null and customerReturns.isEmpty()}">
                                     <i class="ti ti-alert-circle me-1"></i>
-                                    Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                    <span th:if="${pharmacistRefundLimit != null}">
+                                        Không có phiếu trả hàng nào dược sĩ được phép hoàn tiền
+                                        (giá trị phải dưới
+                                        <span th:text="${#numbers.formatDecimal(pharmacistRefundLimit, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>).
+                                    </span>
+                                    <span th:unless="${pharmacistRefundLimit != null}">
+                                        Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                    </span>
                                 </div>
                                 <div class="form-text" th:unless="${customerReturns != null and customerReturns.isEmpty()}">
                                     <i class="ti ti-info-circle me-1"></i>
                                     Chỉ liệt kê phiếu trả hàng đã duyệt, còn phát sinh tiền hoàn và chưa có phiếu chi.
                                     Số tiền được lấy từ phiếu trả, không sửa được.
+                                    <span th:if="${pharmacistRefundLimit != null}">
+                                        Dược sĩ chỉ được tạo phiếu dưới
+                                        <span th:text="${#numbers.formatDecimal(pharmacistRefundLimit, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>.
+                                    </span>
                                 </div>
                             </div>
 
@@ -324,12 +335,6 @@
                             </div>
                             <div class="form-text" th:unless="${canPayCash}">
                                 Kế toán chỉ chi qua chuyển khoản; phần tiền mặt phải do chủ nhà thuốc chi.
-                            </div>
-                            <div class="form-text" id="cashLimitHint" style="display: none;">
-                                <i class="ti ti-info-circle me-1"></i>
-                                Phiếu chi loại này trên
-                                <span th:text="${#numbers.formatDecimal(cashLimitThreshold, 0, 'POINT', 0, 'COMMA') + 'đ'}">5.000.000đ</span>
-                                bắt buộc chuyển khoản toàn bộ, không được chi tiền mặt.
                             </div>
                         </div>
 
@@ -438,9 +443,6 @@
     const PURCHASE_PAYABLE_AMOUNTS = /*[[${purchaseInvoiceAmounts}]]*/ {};
     // Từ ExpenseType.PURCHASE_LINKABLE — không hardcode ở đây để JS không lệch khỏi Java.
     const PURCHASE_LINKABLE_TYPES = /*[[${purchaseLinkableTypes}]]*/ [];
-    // Từ ExpenseType.CASH_LIMIT_APPLICABLE/.CASH_LIMIT_THRESHOLD — cùng lý do.
-    const CASH_LIMIT_APPLICABLE_TYPES = /*[[${cashLimitApplicableTypes}]]*/ [];
-    const CASH_LIMIT_THRESHOLD = /*[[${cashLimitThreshold}]]*/ 5000000;
     const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
     // Số dư quỹ hiện tại — chỉ để cảnh báo trước khi tạo phiếu nếu quỹ - số tiền chi sẽ âm, xem
     // fundShortageWarning() bên dưới. Tiền chỉ thực sự rời quỹ ở bước "Xác nhận đã thanh toán"
@@ -476,38 +478,6 @@
     function currentPayMethod() {
         const picked = document.querySelector('input[name="payMethod"]:checked');
         return picked ? picked.value : 'banking';
-    }
-
-    function cashTransferRequired() {
-        const total = pmMoneyValue(document.getElementById('amountInput'));
-        return CASH_LIMIT_APPLICABLE_TYPES.indexOf(currentType()) !== -1 && total > CASH_LIMIT_THRESHOLD;
-    }
-
-    /**
-     * Trên CASH_LIMIT_THRESHOLD, phiếu thuộc CASH_LIMIT_APPLICABLE_TYPES không được chọn "Tiền mặt"
-     * hay "Tiền mặt + Chuyển khoản" — khoá hai lựa chọn đó và ép về "Chuyển khoản". Server cũng chặn
-     * lại y hệt (xem ExpenseService.resolveSplit) nên đây chỉ là phản ánh cho người dùng thấy trước.
-     */
-    function applyCashLimit() {
-        const required = cashTransferRequired();
-        const payCash = document.getElementById('payCash');
-        const payBoth = document.getElementById('payBoth');
-        const payBanking = document.getElementById('payBanking');
-
-        [payCash, payBoth].forEach(function (radio) {
-            if (radio) {
-                radio.disabled = required;
-            }
-        });
-        if (required && payBanking && !payBanking.checked) {
-            payBanking.checked = true;
-            applyPayMethod();
-        }
-
-        const hint = document.getElementById('cashLimitHint');
-        if (hint) {
-            hint.style.display = required ? '' : 'none';
-        }
     }
 
     /**
@@ -774,7 +744,6 @@
             syncRefundAmount();
         }
         applyAmountLock();
-        applyCashLimit();
         syncPayment();
     }
 
@@ -783,7 +752,6 @@
             radio.addEventListener('change', applyPayMethod);
         });
         document.getElementById('amountInput').addEventListener('input', function () {
-            applyCashLimit();
             syncPayment();
         });
         // Gõ (hoặc bấm mũi tên) vào ô chia tiền là người dùng tự quyết -> JS thôi gợi ý. Phân biệt với
@@ -850,12 +818,6 @@
             const paymentProblem = paymentErrorFor(amount, paid, currentPayMethod() === 'both');
             if (paymentProblem) {
                 reject(paymentProblem);
-                return;
-            }
-
-            if (cashTransferRequired() && pmMoneyValue(cashInput) > 0) {
-                reject('Phiếu chi loại này trên ' + money(CASH_LIMIT_THRESHOLD)
-                    + ' bắt buộc chuyển khoản toàn bộ, không được chi tiền mặt.');
                 return;
             }
 

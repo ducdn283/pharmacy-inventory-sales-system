@@ -34,7 +34,11 @@ import java.util.stream.Collectors;
  *       step, regardless of whether an Accountant is active: {@link Batch} rows are created in the
  *       same transaction and {@code approvedAt} is stamped to the creation moment (the Owner is,
  *       in effect, both creator and approver). {@link #canCreatePurchaseInvoice} is always
- *       {@code true} for {@code OWNER}.</li>
+ *       {@code true} for {@code OWNER}. The Owner may also save a Nháp first via
+ *       {@link #createPurchaseInvoiceDraft} and come back later — editing it via
+ *       {@link #updatePurchaseInvoiceDraft} (stay Nháp) or {@link #finalizePurchaseInvoiceDraft}
+ *       (create the batches and approve in the same action, since the Owner never needs a separate
+ *       approval step from themselves).</li>
  *   <li><strong>Active Accountant</strong> — the Accountant may additionally create via
  *       {@link #createPurchaseInvoiceDraft}/{@link #createPurchaseInvoiceForApproval}, optionally
  *       edit a Nháp ({@link #updatePurchaseInvoiceDraft}/{@link #submitPurchaseInvoiceDraft}) or
@@ -97,7 +101,6 @@ public class PurchaseinvoiceService {
     // Product types (Type.sortType / Type.name) that need special handling on purchase invoice
     // creation. Compared accent/case-insensitively against normalize(...) — same idiom
     // ReturnService.isReturnableProductType() already uses for the identical sortType/name pair.
-    private static final String SORT_COMBO = "combo";
     private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
     private static final String DEVICE_MACHINE_MARK = "may";
     private static final String DEVICE_NO_EXPIRY_MARK = "khong han";
@@ -388,9 +391,11 @@ public class PurchaseinvoiceService {
                         .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dự trù mua hàng"));
 
         // Resolve every line's product + VAT rate up front (from Type, never the client) so totals can
-        // be computed before the invoice's first save — see prepareLine().
+        // be computed before the invoice's first save — see prepareLine(). priceIncludesVat is a
+        // whole-invoice toggle (not per line), see PurchaseInvoiceCreateRequest's own javadoc.
+        boolean priceIncludesVat = request.isPriceIncludesVat();
         List<PreparedPurchaseLine> lines = request.getDetails().stream()
-                .map(this::prepareLine)
+                .map(item -> prepareLine(item, priceIncludesVat))
                 .toList();
 
         BigDecimal subtotal = lines.stream()
@@ -399,7 +404,9 @@ public class PurchaseinvoiceService {
 
         BigDecimal additionCost = safe(request.getAdditionCost());
         BigDecimal discount = safe(request.getDiscount());
-        // importPrice is already VAT-inclusive (gross) — nothing is added on top of subtotal.
+        // Every PreparedPurchaseLine.grossAmount is already VAT-inclusive by this point regardless
+        // of priceIncludesVat (prepareLine() grosses up a pre-tax entry before this) — nothing is
+        // added on top of subtotal.
         BigDecimal totalAmount = subtotal.add(additionCost).subtract(discount);
 
         if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
@@ -450,7 +457,10 @@ public class PurchaseinvoiceService {
             detail.setPurchaseID(savedInvoice);
             detail.setProductID(line.product());
             detail.setQuantity(item.getQuantity());
-            detail.setImportPrice(item.getImportPrice());
+            // Luôn lưu đơn giá ĐÃ GỒM THUẾ (gross) bất kể người dùng gõ giá trước hay sau thuế lúc
+            // nhập — xem prepareLine()/unitPriceGross(). KHÔNG đọc thẳng item.getImportPrice() ở
+            // đây, vì khi priceIncludesVat=false, giá trị đó là giá TRƯỚC thuế, không phải giá lưu.
+            detail.setImportPrice(line.unitPriceGross());
             detail.setProductionDate(item.getProductionDate());
             // Loại hàng không theo dõi hạn sử dụng (xem requiresExpirationDate) luôn lưu null, bất kể
             // client gửi gì.
@@ -508,9 +518,9 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Accountant "Lưu Nháp" — persists the header and lines so the Accountant can come back later,
-     * but nothing else: no stock, no cost-price refresh, no {@code approvedAt}. Editable/deletable
-     * only while it stays {@link PurchaseInvoiceStatus#DRAFT}.
+     * "Lưu Nháp" — persists the header and lines so the creator (Accountant or Owner, see class
+     * javadoc) can come back later, but nothing else: no stock, no cost-price refresh, no
+     * {@code approvedAt}. Editable/deletable only while it stays {@link PurchaseInvoiceStatus#DRAFT}.
      */
     @Transactional
     public Integer createPurchaseInvoiceDraft(PurchaseInvoiceCreateRequest request, Integer currentAccountId) {
@@ -591,8 +601,50 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Accountant deletes a Nháp outright — the only status this is allowed from, since nothing else
-     * (no {@link Batch}, no debt, no payment) has ever been attached to it yet.
+     * Owner edits a Nháp (their own or an Accountant's — the Owner has full permission regardless of
+     * origin) and approves it in the same action: unlike {@link #submitPurchaseInvoiceDraft}, there
+     * is no intermediate {@link PurchaseInvoiceStatus#PENDING_APPROVAL} step, since the Owner is
+     * always both creator and approver on this path (see class javadoc / {@link #createPurchaseInvoice}).
+     * Stock is received here — same {@link #receiveStockForInvoice} call {@link #createPurchaseInvoice}
+     * and {@link #approvePurchaseInvoice} use — the moment this row stops being a Nháp.
+     */
+    @Transactional
+    public Integer finalizePurchaseInvoiceDraft(Integer purchaseId, PurchaseInvoiceCreateRequest request,
+                                                Integer currentAccountId) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())) {
+            throw new IllegalArgumentException("Chỉ có thể sửa phiếu nhập đang ở trạng thái Nháp");
+        }
+
+        PreparedInvoiceHeader header = prepareInvoiceHeader(request, currentAccountId);
+
+        invoice.setSupplierID(header.supplier());
+        invoice.setProcurementID(header.procurementPlan());
+        invoice.setAdditionCost(header.additionCost());
+        invoice.setDiscount(header.discount());
+        invoice.setTotalAmount(header.totalAmount());
+        invoice.setNote(request.getNote());
+        invoice.setVatInvoiceNumber(trimToNull(request.getVatInvoiceNumber()));
+        invoice.setVatInvoiceDate(request.getVatInvoiceDate());
+        invoice.setDueDate(request.getDueDate());
+        invoice.setStatus(resolveInvoiceStatus(header.totalAmount(), BigDecimal.ZERO));
+        invoice.setApprovedAt(LocalDateTime.now());
+
+        Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+
+        purchasedetailRepository.deleteAll(purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId));
+        List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
+        receiveStockForInvoice(savedInvoice, savedDetails);
+
+        return savedInvoice.getId();
+    }
+
+    /**
+     * Deletes a Nháp outright — the only status this is allowed from, since nothing else (no
+     * {@link Batch}, no debt, no payment) has ever been attached to it yet. Reachable by the
+     * Accountant or the Owner (see class javadoc), not restricted to the row's own creator.
      */
     @Transactional
     public void deletePurchaseInvoiceDraft(Integer purchaseId) {
@@ -775,33 +827,51 @@ public class PurchaseinvoiceService {
         return base.isEmpty() ? addition : base + " | " + addition;
     }
 
-    /** One purchase line with its product and VAT breakdown resolved, ready to price and persist. */
+    /**
+     * One purchase line with its product and VAT breakdown resolved, ready to price and persist.
+     * {@code unitPriceGross} is what actually gets stored ({@code Purchasedetail.importPrice}) —
+     * always gross, regardless of how the line's price was typed; see {@link #prepareLine}.
+     */
     private record PreparedPurchaseLine(PurchaseInvoiceDetailCreateRequest item, Product product,
-                                        BigDecimal grossAmount, BigDecimal vatRate,
+                                        BigDecimal unitPriceGross, BigDecimal grossAmount, BigDecimal vatRate,
                                         BigDecimal preTaxAmount, BigDecimal vatAmount) {}
 
-    private PreparedPurchaseLine prepareLine(PurchaseInvoiceDetailCreateRequest item) {
+    /**
+     * @param priceIncludesVat whole-invoice toggle (see {@code PurchaseInvoiceCreateRequest
+     *                         #priceIncludesVat}) — {@code true} means {@code item.getImportPrice()}
+     *                         is already gross (the long-standing default behavior); {@code false}
+     *                         means it's a pre-tax "giá trước thuế" that must be grossed up here
+     *                         before anything downstream (persistence, totals) ever sees it, so the
+     *                         rest of the app can keep assuming every stored price is gross.
+     */
+    private PreparedPurchaseLine prepareLine(PurchaseInvoiceDetailCreateRequest item, boolean priceIncludesVat) {
         Product product = productRepository.findById(item.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + item.getProductId()));
 
-        if (isComboProduct(product)) {
-            throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
-                    + "\" là hàng combo — combo được lắp từ các sản phẩm thành phần, không thể nhập trực tiếp");
-        }
         validateExpirationForType(product, item);
 
         BigDecimal vatRate = resolvePurchaseVatRate(product);
-        BigDecimal grossAmount = calculateLineGrossAmount(item);
+        BigDecimal enteredUnitPrice = safe(item.getImportPrice());
+        BigDecimal unitPriceGross = priceIncludesVat
+                ? enteredUnitPrice.setScale(2, RoundingMode.HALF_UP)
+                : grossUpUnitPrice(enteredUnitPrice, vatRate);
+
+        int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+        BigDecimal grossAmount = unitPriceGross.multiply(BigDecimal.valueOf(quantity));
         BigDecimal preTaxAmount = calculateLinePreTaxAmount(grossAmount, vatRate);
         BigDecimal vatAmount = grossAmount.subtract(preTaxAmount);
 
-        return new PreparedPurchaseLine(item, product, grossAmount, vatRate, preTaxAmount, vatAmount);
+        return new PreparedPurchaseLine(item, product, unitPriceGross, grossAmount, vatRate, preTaxAmount, vatAmount);
     }
 
-    /** Combo là hàng lắp từ các sản phẩm thành phần khi bán — không được nhập trực tiếp từ NCC. */
-    private boolean isComboProduct(Product product) {
-        Type type = product.getTypeID();
-        return type != null && SORT_COMBO.equals(normalize(type.getSortType()));
+    /** Reverse of {@link #calculateLinePreTaxAmount}: grosses up a pre-tax unit price by {@code vatRate}. */
+    private BigDecimal grossUpUnitPrice(BigDecimal preTaxUnitPrice, BigDecimal vatRate) {
+        BigDecimal rate = safe(vatRate);
+        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
+            return preTaxUnitPrice.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal multiplier = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
+        return preTaxUnitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
     }
 
     /**
@@ -855,12 +925,6 @@ public class PurchaseinvoiceService {
                     + "\" chưa có loại hàng hoặc thuế suất VAT mặc định");
         }
         return type.getDefaultVATRate();
-    }
-
-    /** "Tiền hàng" of one purchase line — importPrice × quantity. importPrice is already VAT-inclusive (gross). */
-    private BigDecimal calculateLineGrossAmount(PurchaseInvoiceDetailCreateRequest item) {
-        return safe(item.getImportPrice())
-                .multiply(BigDecimal.valueOf(item.getQuantity() == null ? 0 : item.getQuantity()));
     }
 
     /** Reverse-splits a VAT-inclusive gross amount into its pre-tax portion — gross ÷ (1 + vatRate/100). */
@@ -1180,8 +1244,10 @@ public class PurchaseinvoiceService {
 
     /**
      * "estimatedPrice" trên dự trù là TỔNG giá dự kiến cho requestedQuantity, đã bao gồm VAT (theo
-     * xác nhận của BA) — chia đều cho requestedQuantity ra "unitPrice" để gợi ý thẳng vào "Giá nhập"
-     * của phiếu nhập, vốn cũng là giá đã gồm VAT (xem {@link #calculateLineGrossAmount}).
+     * xác nhận của BA) — chia đều cho requestedQuantity ra "unitPrice" để gợi ý thẳng vào "Đơn giá"
+     * của phiếu nhập. Gợi ý này giả định phiếu nhập vẫn để {@code priceIncludesVat = true} (mặc
+     * định) — nếu người dùng chuyển sang nhập giá trước thuế, con số gợi ý này (vẫn là giá đã gồm
+     * VAT) sẽ bị hiểu sai thành giá trước thuế; xem {@link #prepareLine}.
      */
     private ProcurementPlanDetailOptionResponse toProcurementPlanDetailOption(Procurementplandetail detail) {
         Product product = detail.getProductID();
@@ -1216,9 +1282,6 @@ public class PurchaseinvoiceService {
         return productRepository.findAllWithRelations()
                 .stream()
                 .filter(product -> Boolean.TRUE.equals(product.getStatus()))
-                // Combo là hàng lắp từ các sản phẩm thành phần, không tồn kho trực tiếp — không thể
-                // nhập từ nhà cung cấp, nên không xuất hiện trong bộ chọn sản phẩm của phiếu nhập.
-                .filter(product -> !isComboProduct(product))
                 .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
                 .map(product -> new ProductOptionResponse(product.getProductID(), product.getName()))
                 .toList();
@@ -1263,16 +1326,16 @@ public class PurchaseinvoiceService {
             }
 
             if (detail.getImportPrice() == null || detail.getImportPrice().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("Giá nhập phải lớn hơn 0");
+                throw new IllegalArgumentException("Đơn giá phải lớn hơn 0");
             }
 
             if (detail.getLotNumber() == null || detail.getLotNumber().isBlank()) {
                 throw new IllegalArgumentException("Vui lòng nhập số lô cho tất cả sản phẩm");
             }
 
-            // Combo-rejection and the type-aware expiration-date rule both need the resolved
-            // Product (see requiresExpirationDate) — checked per-line in prepareLine() instead of
-            // here, right after each line's Product is looked up, to avoid fetching it twice.
+            // The type-aware expiration-date rule needs the resolved Product (see
+            // requiresExpirationDate) — checked per-line in prepareLine() instead of here, right
+            // after each line's Product is looked up, to avoid fetching it twice.
         }
     }
 
