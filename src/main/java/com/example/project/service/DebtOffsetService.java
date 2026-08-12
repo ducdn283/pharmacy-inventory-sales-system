@@ -28,10 +28,13 @@ import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.SupplierRepository;
-import org.springframework.stereotype.Component;
+import org.hibernate.Interceptor;
+import org.hibernate.type.Type;
+import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -47,12 +50,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
-public class DebtOffsetService {
+public class DebtOffsetService implements HibernatePropertiesCustomizer {
 
     private static final String PARTY_CUSTOMER = "CUSTOMER";
     private static final String PARTY_SUPPLIER = "SUPPLIER";
     private static final String INCOME_STATUS_COMPLETED = "Hoàn thành";
     private static final String INCOME_STATUS_REJECTED = "Từ chối";
+    private static final String INCOME_STATUS_CANCELLED = "Đã hủy";
+    private static final String STATUS_PROPERTY = "status";
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
     static final String OFFSET_REASON = "Bù trừ công nợ";
@@ -597,75 +602,19 @@ public class DebtOffsetService {
     }
 
     private boolean isPositive(BigDecimal value) {
-        return value != null && value.compareTo(BigDecimal.ZERO) > 0;
+        return isPositiveAmount(value);
     }
 
     private BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
-}
-
-@Component
-class DebtOffsetSlipHibernateCustomizer
-        implements org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer {
 
     @Override
     public void customize(Map<String, Object> hibernateProperties) {
-        hibernateProperties.put("hibernate.session_factory.interceptor", DebtOffsetSlipCancelGuard.INSTANCE);
-    }
-}
-
-/**
- * Blocks cancellation of phiếu thu/chi created by {@link DebtOffsetService#applyOffset} without
- * touching {@code IncomeService} / {@code ExpenseService}.
- */
-final class DebtOffsetSlipCancelGuard implements org.hibernate.Interceptor, java.io.Serializable {
-
-    static final DebtOffsetSlipCancelGuard INSTANCE = new DebtOffsetSlipCancelGuard();
-
-    private static final String STATUS_PROPERTY = "status";
-    private static final String INCOME_STATUS_CANCELLED = "Đã hủy";
-
-    private DebtOffsetSlipCancelGuard() {
+        hibernateProperties.put("hibernate.session_factory.interceptor", SlipCancelInterceptor.INSTANCE);
     }
 
-    @Override
-    public boolean onFlushDirty(Object entity,
-                                Object id,
-                                Object[] currentState,
-                                Object[] previousState,
-                                String[] propertyNames,
-                                org.hibernate.type.Type[] types) {
-        int statusIndex = indexOf(propertyNames, STATUS_PROPERTY);
-        if (statusIndex < 0 || currentState[statusIndex] == null) {
-            return false;
-        }
-        String newStatus = String.valueOf(currentState[statusIndex]);
-        String oldStatus = previousState[statusIndex] == null
-                ? null
-                : String.valueOf(previousState[statusIndex]);
-        if (Objects.equals(newStatus, oldStatus)) {
-            return false;
-        }
-
-        if (entity instanceof Income income && isDebtOffsetSlip(income)) {
-            if (INCOME_STATUS_CANCELLED.equals(newStatus)) {
-                throw new IllegalArgumentException("Phiếu thu bù trừ công nợ không thể hủy");
-            }
-        } else if (entity instanceof Expense expense && isDebtOffsetSlip(expense)) {
-            if (ExpenseStatus.CANCELLED.equals(newStatus)) {
-                throw new IllegalArgumentException("Phiếu chi bù trừ công nợ không thể hủy");
-            }
-        }
-        return false;
-    }
-
-    private static boolean isDebtOffsetSlip(Income income) {
-        return matchesOffsetPayment(income.getReason(),
-                income.getPaidByCash(), income.getPaidByBanking(), income.getPaidByCredit());
-    }
-
-    /** Used by {@code IncomeService} to block cancel on offset slips created by {@link DebtOffsetService}. */
+    /** Used by {@code IncomeService} to block cancel on offset slips created by {@link #applyOffset}. */
     public static boolean isDebtOffsetIncome(Income income) {
         return isDebtOffsetSlip(income);
     }
@@ -676,16 +625,21 @@ final class DebtOffsetSlipCancelGuard implements org.hibernate.Interceptor, java
         }
     }
 
+    private static boolean isDebtOffsetSlip(Income income) {
+        return matchesOffsetPayment(income.getReason(),
+                income.getPaidByCash(), income.getPaidByBanking(), income.getPaidByCredit());
+    }
+
     private static boolean isDebtOffsetSlip(Expense expense) {
         return matchesOffsetPayment(expense.getReason(),
                 expense.getPaidByCash(), expense.getPaidByBanking(), expense.getPaidByCredit());
     }
 
     private static boolean matchesOffsetPayment(String reason,
-                                                java.math.BigDecimal paidByCash,
-                                                java.math.BigDecimal paidByBanking,
-                                                java.math.BigDecimal paidByCredit) {
-        if (!DebtOffsetService.OFFSET_REASON.equals(reason)) {
+                                                BigDecimal paidByCash,
+                                                BigDecimal paidByBanking,
+                                                BigDecimal paidByCredit) {
+        if (!OFFSET_REASON.equals(reason)) {
             return false;
         }
         return isPositiveAmount(paidByCredit)
@@ -693,8 +647,8 @@ final class DebtOffsetSlipCancelGuard implements org.hibernate.Interceptor, java
                 && !isPositiveAmount(paidByBanking);
     }
 
-    private static boolean isPositiveAmount(java.math.BigDecimal value) {
-        return value != null && value.compareTo(java.math.BigDecimal.ZERO) > 0;
+    private static boolean isPositiveAmount(BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
 
     private static int indexOf(String[] propertyNames, String target) {
@@ -704,5 +658,48 @@ final class DebtOffsetSlipCancelGuard implements org.hibernate.Interceptor, java
             }
         }
         return -1;
+    }
+
+    /**
+     * Blocks cancellation of phiếu thu/chi created by {@link #applyOffset} without touching
+     * {@code IncomeService} / {@code ExpenseService}.
+     */
+    private static final class SlipCancelInterceptor implements Interceptor, Serializable {
+
+        static final SlipCancelInterceptor INSTANCE = new SlipCancelInterceptor();
+
+        private SlipCancelInterceptor() {
+        }
+
+        @Override
+        public boolean onFlushDirty(Object entity,
+                                    Object id,
+                                    Object[] currentState,
+                                    Object[] previousState,
+                                    String[] propertyNames,
+                                    Type[] types) {
+            int statusIndex = indexOf(propertyNames, STATUS_PROPERTY);
+            if (statusIndex < 0 || currentState[statusIndex] == null) {
+                return false;
+            }
+            String newStatus = String.valueOf(currentState[statusIndex]);
+            String oldStatus = previousState[statusIndex] == null
+                    ? null
+                    : String.valueOf(previousState[statusIndex]);
+            if (Objects.equals(newStatus, oldStatus)) {
+                return false;
+            }
+
+            if (entity instanceof Income income && isDebtOffsetSlip(income)) {
+                if (INCOME_STATUS_CANCELLED.equals(newStatus)) {
+                    throw new IllegalArgumentException("Phiếu thu bù trừ công nợ không thể hủy");
+                }
+            } else if (entity instanceof Expense expense && isDebtOffsetSlip(expense)) {
+                if (ExpenseStatus.CANCELLED.equals(newStatus)) {
+                    throw new IllegalArgumentException("Phiếu chi bù trừ công nợ không thể hủy");
+                }
+            }
+            return false;
+        }
     }
 }
