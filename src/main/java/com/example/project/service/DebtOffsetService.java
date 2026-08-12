@@ -30,8 +30,10 @@ import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.SupplierRepository;
 import org.hibernate.Interceptor;
 import org.hibernate.type.Type;
+import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +53,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
+@Import(DebtOffsetService.HibernateConfiguration.class)
 public class DebtOffsetService {
 
     private static final String PARTY_CUSTOMER = "CUSTOMER";
@@ -610,7 +613,7 @@ public class DebtOffsetService {
         return value != null ? value : BigDecimal.ZERO;
     }
 
-    static org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer slipCancelInterceptorCustomizer() {
+    static HibernatePropertiesCustomizer slipCancelInterceptorCustomizer() {
         return hibernateProperties ->
                 hibernateProperties.put("hibernate.session_factory.interceptor", SlipCancelInterceptor.INSTANCE);
     }
@@ -703,13 +706,13 @@ public class DebtOffsetService {
             return false;
         }
     }
-}
 
-@Configuration
-class DebtOffsetHibernateConfiguration {
+    @Configuration
+    static class HibernateConfiguration {
 
-    @Bean
-    org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer debtOffsetSlipCancelInterceptorCustomizer() {
-        return DebtOffsetService.slipCancelInterceptorCustomizer();
+        @Bean
+        static HibernatePropertiesCustomizer debtOffsetSlipCancelInterceptorCustomizer() {
+            return slipCancelInterceptorCustomizer();
+        }
     }
 }
