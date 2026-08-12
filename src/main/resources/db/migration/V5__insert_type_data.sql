@@ -79,13 +79,4 @@ WHERE NOT EXISTS (
       AND name = 'Thiết bị y tế (không hạn)'
 );
 
-INSERT INTO type (typeID, sortType, name, defaultVATRate)
-SELECT 10, 'combo', 'Combo', 0.00
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM type
-    WHERE sortType = 'combo'
-      AND name = 'Combo'
-);
-
 ALTER TABLE type AUTO_INCREMENT = 11;

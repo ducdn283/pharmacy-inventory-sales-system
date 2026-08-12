@@ -103,14 +103,6 @@ WHERE NOT EXISTS (
 );
 
 INSERT INTO product (name, code, barcode, typeID, maxStock, minStock, producerID, origin, registrationNumber, status, vatRateOverride, note)
-SELECT 'COMBO: 11-12-13', 'SP5122432', NULL, 10, 0, 0, NULL, NULL, NULL, 1, 0.00, NULL
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM product
-    WHERE code = 'SP5122432'
-);
-
-INSERT INTO product (name, code, barcode, typeID, maxStock, minStock, producerID, origin, registrationNumber, status, vatRateOverride, note)
 SELECT 'Thuốc Đại Tràng Trường Phúc', 'SP5122433', NULL, 2, 200, 0, 19, 'Việt Nam', 'VD-32592-19', 1, 5.00, NULL
 WHERE NOT EXISTS (
     SELECT 1

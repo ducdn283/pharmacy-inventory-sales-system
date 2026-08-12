@@ -7,13 +7,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
+        :root {
+            --receipt-width: 80mm;
+            --receipt-pad-y: 4mm;
+            --receipt-pad-x: 5mm;
+        }
+
         body {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 13px;
             color: #000;
             background: #fff;
-            margin: 0;
-            padding: 10px 14px 18px;
+            margin: 0 auto;
+            width: var(--receipt-width);
+            max-width: var(--receipt-width);
+            padding: var(--receipt-pad-y) var(--receipt-pad-x);
+            box-sizing: border-box;
         }
 
         html.embed-preview,
@@ -23,9 +32,11 @@
         }
 
         .receipt {
-            max-width: 360px;
-            margin: 0 auto;
+            width: 100%;
+            margin: 0;
+            padding: 0 1mm;
             line-height: 1.45;
+            box-sizing: border-box;
         }
 
         .brand-name {
@@ -125,16 +136,19 @@
 
         @media print {
             body {
-                padding: 0;
+                width: var(--receipt-width);
+                max-width: var(--receipt-width);
+                padding: var(--receipt-pad-y) var(--receipt-pad-x);
             }
 
             .receipt {
-                max-width: none;
+                width: 100%;
+                padding: 0 1mm;
             }
 
             @page {
                 size: 80mm auto;
-                margin: 4mm;
+                margin: 4mm 5mm;
             }
         }
     </style>

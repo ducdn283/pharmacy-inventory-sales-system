@@ -23,4 +23,6 @@ public class ProcurementProductSearchResponse {
     private BigDecimal unitRatio;
     private BigDecimal estimatedPrice;
     private List<ProcurementProductUnitResponse> units;
+    /** Giá bán của đơn vị nhập hiện tại ({@code Productunit.sellPrice}). */
+    private BigDecimal currentSellPrice;
 }
