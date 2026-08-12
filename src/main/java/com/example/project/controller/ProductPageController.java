@@ -46,10 +46,6 @@ public class ProductPageController {
             "/accountant/products"
     })
     public String listProducts(@RequestParam(name = "keyword", required = false) String keyword,
-                               @RequestParam(name = "codeQuery", required = false) String codeQuery,
-                               @RequestParam(name = "nameQuery", required = false) String nameQuery,
-                               @RequestParam(name = "barcodeQuery", required = false) String barcodeQuery,
-                               @RequestParam(name = "producerQuery", required = false) String producerQuery,
                                @RequestParam(name = "typeId", required = false) Integer typeId,
                                @RequestParam(name = "stockStatus", required = false) String stockStatus,
                                @RequestParam(name = "nearExpiryOnly", defaultValue = "false") boolean nearExpiryOnly,
@@ -64,8 +60,8 @@ public class ProductPageController {
             size = 10;
         }
 
-        Page<ProductRowResponse> productPage = productService.searchProducts(keyword, codeQuery, nameQuery,
-                barcodeQuery, producerQuery, typeId, stockStatus, nearExpiryOnly, PageRequest.of(page, size));
+        Page<ProductRowResponse> productPage = productService.searchProducts(keyword, null, null,
+                null, null, typeId, stockStatus, nearExpiryOnly, PageRequest.of(page, size));
 
         model.addAttribute("productPage", productPage);
         model.addAttribute("products", productPage.getContent());
@@ -74,10 +70,6 @@ public class ProductPageController {
         model.addAttribute("types", productService.listTypes());
 
         model.addAttribute("keyword", keyword);
-        model.addAttribute("codeQuery", codeQuery);
-        model.addAttribute("nameQuery", nameQuery);
-        model.addAttribute("barcodeQuery", barcodeQuery);
-        model.addAttribute("producerQuery", producerQuery);
         model.addAttribute("filterTypeId", typeId);
         model.addAttribute("filterStockStatus", stockStatus);
         model.addAttribute("nearExpiryOnly", nearExpiryOnly);

@@ -119,21 +119,49 @@ public class PurchaseinvoiceService {
     }
 
     /**
-     * Giữ lại method cũ để PurchaseinvoiceController REST không bị lỗi compile.
+     * Purchase Invoice List search: one keyword over mã phiếu / nhà cung cấp / sản phẩm, plus date
+     * range and payment-status filters, then in-memory pagination.
      */
     @Transactional(readOnly = true)
-    public List<PurchaseinvoiceResponse> getAll() {
-        return purchaseinvoiceRepository.findAllWithRelations()
-                .stream()
-                .map(PurchaseinvoiceResponse::from)
+    public Page<PurchaseInvoiceListItemResponse> searchPurchaseInvoices(String keyword,
+                                                                        String fromDate,
+                                                                        String toDate,
+                                                                        String paymentStatus,
+                                                                        Pageable pageable) {
+        String normalizedKeyword = normalize(keyword);
+        LocalDate from = parseDate(fromDate);
+        LocalDate to = parseDate(toDate);
+
+        List<Purchaseinvoice> invoices = purchaseinvoiceRepository.findAllWithRelations();
+        List<Purchasedetail> allDetails = purchasedetailRepository.findAllWithRelations();
+
+        Map<Integer, List<Purchasedetail>> detailMap = allDetails.stream()
+                .filter(detail -> detail.getPurchaseID() != null)
+                .collect(Collectors.groupingBy(detail -> detail.getPurchaseID().getId()));
+
+        List<PurchaseInvoiceListItemResponse> filtered = invoices.stream()
+                .filter(invoice -> matchesKeyword(invoice,
+                        detailMap.getOrDefault(invoice.getId(), List.of()), normalizedKeyword))
+                .filter(invoice -> matchesDate(invoice, from, to))
+                .map(invoice -> toListItem(invoice, detailMap.getOrDefault(invoice.getId(), List.of())))
+                .filter(item -> paymentStatus == null || paymentStatus.isBlank()
+                        || paymentStatus.equals(item.getPaymentStatus()))
                 .toList();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+
+        List<PurchaseInvoiceListItemResponse> content = start >= filtered.size()
+                ? List.of()
+                : filtered.subList(start, end);
+
+        return new PageImpl<>(content, pageable, filtered.size());
     }
 
     /**
-     * Purchase Invoice List search: three independent, optional, ANDed fields (mã phiếu / nhà cung
-     * cấp / sản phẩm — the expandable search box) plus date range and payment-status filters, then
-     * in-memory pagination. The old single combined {@code keyword} field and the exact-id supplier
-     * dropdown filter were both replaced by this — see the Product List filter for the same idea.
+     * Backward-compatible entry point for callers that still provide the former three independent
+     * fields. Those fields retain their original AND semantics; the list-page UI now uses the
+     * single-keyword overload above.
      */
     @Transactional(readOnly = true)
     public Page<PurchaseInvoiceListItemResponse> searchPurchaseInvoices(String codeQuery,
@@ -151,7 +179,6 @@ public class PurchaseinvoiceService {
 
         List<Purchaseinvoice> invoices = purchaseinvoiceRepository.findAllWithRelations();
         List<Purchasedetail> allDetails = purchasedetailRepository.findAllWithRelations();
-
         Map<Integer, List<Purchasedetail>> detailMap = allDetails.stream()
                 .filter(detail -> detail.getPurchaseID() != null)
                 .collect(Collectors.groupingBy(detail -> detail.getPurchaseID().getId()));
@@ -159,7 +186,8 @@ public class PurchaseinvoiceService {
         List<PurchaseInvoiceListItemResponse> filtered = invoices.stream()
                 .filter(invoice -> matchesCode(invoice, normalizedCode))
                 .filter(invoice -> matchesSupplier(invoice, normalizedSupplier))
-                .filter(invoice -> matchesProduct(detailMap.getOrDefault(invoice.getId(), List.of()), normalizedProduct))
+                .filter(invoice -> matchesProduct(
+                        detailMap.getOrDefault(invoice.getId(), List.of()), normalizedProduct))
                 .filter(invoice -> matchesDate(invoice, from, to))
                 .map(invoice -> toListItem(invoice, detailMap.getOrDefault(invoice.getId(), List.of())))
                 .filter(item -> paymentStatus == null || paymentStatus.isBlank()
@@ -168,11 +196,9 @@ public class PurchaseinvoiceService {
 
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), filtered.size());
-
         List<PurchaseInvoiceListItemResponse> content = start >= filtered.size()
                 ? List.of()
                 : filtered.subList(start, end);
-
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
@@ -486,10 +512,19 @@ public class PurchaseinvoiceService {
      * called for a Nháp/Chờ duyệt row — see the class javadoc.
      */
     private void receiveStockForInvoice(Purchaseinvoice invoice, List<Purchasedetail> details) {
+        receiveStockForInvoice(invoice, details, List.of());
+    }
+
+    private void receiveStockForInvoice(Purchaseinvoice invoice, List<Purchasedetail> details,
+                                        List<PreparedPurchaseLine> sourceLines) {
         Supplier supplier = invoice.getSupplierID();
-        for (Purchasedetail detail : details) {
+        for (int index = 0; index < details.size(); index++) {
+            Purchasedetail detail = details.get(index);
             Product product = detail.getProductID();
-            createBatchForDetail(invoice, detail, product);
+            String batchName = index < sourceLines.size()
+                    ? sourceLines.get(index).item().getBatchName().trim()
+                    : generateBatchName(product, detail);
+            createBatchForDetail(invoice, detail, product, batchName);
             upsertSupplierProductCostPrice(supplier, product, detail.getImportPrice());
         }
     }
@@ -512,7 +547,7 @@ public class PurchaseinvoiceService {
         Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
 
         List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
-        receiveStockForInvoice(savedInvoice, savedDetails);
+        receiveStockForInvoice(savedInvoice, savedDetails, header.lines());
 
         return savedInvoice.getId();
     }
@@ -636,7 +671,7 @@ public class PurchaseinvoiceService {
 
         purchasedetailRepository.deleteAll(purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId));
         List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
-        receiveStockForInvoice(savedInvoice, savedDetails);
+        receiveStockForInvoice(savedInvoice, savedDetails, header.lines());
 
         return savedInvoice.getId();
     }
@@ -739,6 +774,7 @@ public class PurchaseinvoiceService {
             item.setImportPrice(detail.getImportPrice());
             item.setProductionDate(detail.getProductionDate());
             item.setExpirationDate(detail.getExpirationDate());
+            item.setBatchName(generateBatchName(detail.getProductID(), detail));
             item.setLotNumber(detail.getLotNumber());
             item.setVatRate(detail.getVatRate());
             details.add(item);
@@ -1036,7 +1072,8 @@ public class PurchaseinvoiceService {
     }
 
     /** Creates the Batch (stock) row for one just-saved Purchasedetail — see class javadoc. */
-    private void createBatchForDetail(Purchaseinvoice invoice, Purchasedetail detail, Product product) {
+    private void createBatchForDetail(Purchaseinvoice invoice, Purchasedetail detail, Product product,
+                                      String batchName) {
         Productunit importUnit = resolveImportUnit(product);
 
         BigDecimal importPrice = safe(detail.getImportPrice());
@@ -1045,7 +1082,7 @@ public class PurchaseinvoiceService {
 
         Batch batch = new Batch();
         batch.setBatchCode(generateBatchCode(invoice.getId(), detail.getId()));
-        batch.setBatchName(generateBatchName(product, detail));
+        batch.setBatchName(batchName);
         batch.setProductID(product);
         batch.setPurchaseDetailID(detail);
         batch.setStorageQuantity(storageQuantity);
@@ -1168,13 +1205,10 @@ public class PurchaseinvoiceService {
         String productName = product != null && product.getName() != null
                 ? product.getName()
                 : "Sản phẩm";
-
         String lot = detail.getLotNumber() != null && !detail.getLotNumber().isBlank()
                 ? detail.getLotNumber()
                 : "Không số lô";
-
         String name = productName + " - " + lot;
-
         return name.length() > 50 ? name.substring(0, 50) : name;
     }
 
@@ -1329,8 +1363,12 @@ public class PurchaseinvoiceService {
                 throw new IllegalArgumentException("Đơn giá phải lớn hơn 0");
             }
 
-            if (detail.getLotNumber() == null || detail.getLotNumber().isBlank()) {
-                throw new IllegalArgumentException("Vui lòng nhập số lô cho tất cả sản phẩm");
+            if (detail.getBatchName() == null || detail.getBatchName().isBlank()) {
+                throw new IllegalArgumentException("Vui lòng nhập tên lô cho tất cả sản phẩm");
+            }
+
+            if (detail.getBatchName().trim().length() > 50) {
+                throw new IllegalArgumentException("Tên lô không được vượt quá 50 ký tự");
             }
 
             // The type-aware expiration-date rule needs the resolved Product (see
@@ -1392,7 +1430,15 @@ public class PurchaseinvoiceService {
         );
     }
 
-    // --- expandable search fields (Mã phiếu / Nhà cung cấp / Sản phẩm) — ANDed when combined ---
+    // --- combined search (Mã phiếu / Nhà cung cấp / Sản phẩm) ---
+
+    private boolean matchesKeyword(Purchaseinvoice invoice, List<Purchasedetail> details,
+                                   String normalizedKeyword) {
+        return normalizedKeyword.isBlank()
+                || matchesCode(invoice, normalizedKeyword)
+                || matchesSupplier(invoice, normalizedKeyword)
+                || matchesProduct(details, normalizedKeyword);
+    }
 
     private boolean matchesCode(Purchaseinvoice invoice, String normalizedCode) {
         return normalizedCode.isBlank() || containsNormalized(formatPurchaseCode(invoice.getId()), normalizedCode);

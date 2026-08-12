@@ -42,9 +42,7 @@ public class PurchaseInvoicePageController {
             "/owner/purchase-invoices",
             "/accountant/purchase-invoices",
     })
-    public String listPurchaseInvoices(@RequestParam(name = "codeQuery", required = false) String codeQuery,
-                                       @RequestParam(name = "supplierQuery", required = false) String supplierQuery,
-                                       @RequestParam(name = "productQuery", required = false) String productQuery,
+    public String listPurchaseInvoices(@RequestParam(name = "keyword", required = false) String keyword,
                                        @RequestParam(name = "fromDate", required = false) String fromDate,
                                        @RequestParam(name = "toDate", required = false) String toDate,
                                        @RequestParam(name = "paymentStatus", required = false) String paymentStatus,
@@ -62,9 +60,7 @@ public class PurchaseInvoicePageController {
 
         Page<PurchaseInvoiceListItemResponse> invoicePage =
                 purchaseinvoiceService.searchPurchaseInvoices(
-                        codeQuery,
-                        supplierQuery,
-                        productQuery,
+                        keyword,
                         fromDate,
                         toDate,
                         paymentStatus,
@@ -77,9 +73,7 @@ public class PurchaseInvoicePageController {
 
         model.addAttribute("paymentStatuses", purchaseinvoiceService.listPaymentStatuses());
 
-        model.addAttribute("codeQuery", codeQuery);
-        model.addAttribute("supplierQuery", supplierQuery);
-        model.addAttribute("productQuery", productQuery);
+        model.addAttribute("keyword", keyword);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
         model.addAttribute("filterPaymentStatus", paymentStatus);

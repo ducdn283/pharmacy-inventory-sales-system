@@ -10,7 +10,6 @@ import com.example.project.dto.response.ProductBatchDetailResponse;
 import com.example.project.dto.response.ProductDetailResponse;
 import com.example.project.dto.response.ProductListStatsResponse;
 import com.example.project.dto.response.ProductRecentHistoryResponse;
-import com.example.project.dto.response.ProductResponse;
 import com.example.project.dto.response.ProductRowResponse;
 import com.example.project.dto.response.ProductUnitDetailResponse;
 import com.example.project.entity.*;
@@ -36,6 +35,7 @@ import java.math.RoundingMode;
 import java.text.Collator;
 import java.text.Normalizer;
 import java.util.Arrays;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -78,6 +78,7 @@ public class ProductService {
     // Return.returnType (see ReturnService/ReturnPurchaseService) — a SUPPLIER return deducts stock,
     // not adds it; the `return`/`returndetail` tables carry both kinds, undistinguished otherwise.
     private static final String TYPE_SUPPLIER_RETURN = "SUPPLIER";
+    private static final String INVOICE_TYPE_REPLACEMENT = "Thay thế";
     // Used by toInstantForSort() below.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     // normalize("Thuốc kê đơn") — there is no boolean column for this, only the Type's name.
@@ -143,14 +144,6 @@ public class ProductService {
     @org.springframework.beans.factory.annotation.Autowired
     public void setStockadjustmentService(StockadjustmentService stockadjustmentService) {
         this.stockadjustmentService = stockadjustmentService;
-    }
-
-    @Transactional(readOnly = true)
-    public List<ProductResponse> getAll() {
-        return productRepository.findAll()
-                .stream()
-                .map(ProductResponse::from)
-                .toList();
     }
 
     /**
@@ -926,7 +919,7 @@ public class ProductService {
                 batch.getId(),
                 batch.getBatchName(),
                 batch.getLotNumber(),
-                formatInstant(batch.getImportDate()),
+                formatBatchImportDate(batch),
                 formatDate(batch.getProductionDate()),
                 formatDate(batch.getExpirationDate()),
                 batch.getStorageQuantity(),
@@ -968,6 +961,11 @@ public class ProductService {
 
         for (Invoicedetail detail : invoicedetailRepository.findRecentSalesByProduct(productId, top)) {
             Invoice invoice = detail.getInvoiceID();
+            // A replacement invoice describes the goods the customer still keeps; creating it does
+            // not deduct stock again. The original sale and the return are the two real movements.
+            if (invoice != null && INVOICE_TYPE_REPLACEMENT.equalsIgnoreCase(invoice.getInvoiceType())) {
+                continue;
+            }
             int delta = -nullSafe(detail.getBaseQtyDeducted());
             rows.add(new HistoryRow(
                     toInstantForSort(invoice.getDate()), formatLocalDateTime(invoice.getDate()), "Bán hàng",
@@ -994,8 +992,9 @@ public class ProductService {
             boolean isSupplierReturn = TYPE_SUPPLIER_RETURN.equals(detail.getReturnID().getReturnType());
             int magnitude = nullSafe(detail.getBaseQtyRestored());
             int delta = isSupplierReturn ? -magnitude : magnitude;
+            Instant occurredAt = normalizeVnEncoded(detail.getReturnID().getReturnDate());
             rows.add(new HistoryRow(
-                    detail.getReturnID().getReturnDate(), formatInstant(detail.getReturnID().getReturnDate()),
+                    occurredAt, formatInstant(occurredAt),
                     isSupplierReturn ? "Trả hàng NCC" : "Khách trả hàng",
                     formatCode("RT", detail.getReturnID().getId()),
                     lotNumber(detail.getBatchID()), delta, baseUnit, null, delta));
@@ -1110,7 +1109,33 @@ public class ProductService {
         if (instant == null) {
             return "";
         }
-        return DATE_TIME.withZone(ZoneId.systemDefault()).format(instant);
+        return DATE_TIME.withZone(VN_ZONE).format(instant);
+    }
+
+    /**
+     * Purchase batches carry a genuine UTC import timestamp, while customer-return batches created
+     * by ReturnService use its legacy VN-wall-clock-as-UTC convention. Return batches have the
+     * stable RT-{returnId}-L{originalBatchId} code, so only those timestamps need normalizing.
+     */
+    private String formatBatchImportDate(Batch batch) {
+        if (batch == null) {
+            return "";
+        }
+        Instant importDate = batch.getImportDate();
+        String batchCode = batch.getBatchCode();
+        if (batchCode != null && batchCode.startsWith("RT-")) {
+            importDate = normalizeVnEncoded(importDate);
+        }
+        return formatInstant(importDate);
+    }
+
+    /**
+     * ReturnService stores Vietnam wall-clock digits as a UTC Instant. Convert that legacy storage
+     * convention back to a real instant before sorting it together with genuine UTC timestamps
+     * from purchases and stock adjustments.
+     */
+    private Instant normalizeVnEncoded(Instant vnEncoded) {
+        return vnEncoded == null ? null : vnEncoded.minus(Duration.ofHours(7));
     }
 
     /** Invoice.date is stored as a VN wall-clock LocalDateTime — format directly, no zone conversion. */
@@ -1197,6 +1222,8 @@ public class ProductService {
         return containsNormalized(product.getCode(), normalizedKeyword)
                 || containsNormalized(product.getName(), normalizedKeyword)
                 || containsNormalized(product.getBarcode(), normalizedKeyword)
+                || containsNormalized(product.getProducerID() != null ? product.getProducerID().getName() : null,
+                        normalizedKeyword)
                 || containsNormalized(String.valueOf(product.getProductID()), normalizedKeyword);
     }
 

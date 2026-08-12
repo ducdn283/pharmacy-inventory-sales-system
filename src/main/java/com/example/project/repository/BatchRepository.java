@@ -89,6 +89,12 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    select b
    from Batch b
    where b.productID.productID = :productId
+     and not exists (
+       select 1
+       from Returndetail rd
+       where rd.batchID = b
+         and rd.returnID.returnType = 'CUSTOMER'
+     )
    order by b.importDate desc
    """)
     List<Batch> findRecentImportsByProduct(@Param("productId") Integer productId,

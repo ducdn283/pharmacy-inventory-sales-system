@@ -109,45 +109,6 @@
             }
         }
 
-        .expandable-search {
-            position: relative;
-        }
-
-        .expandable-search-trigger {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            color: #6b7280;
-            user-select: none;
-        }
-
-        .expandable-search-trigger .active-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #059669;
-            margin-left: auto;
-            flex: none;
-        }
-
-        .expandable-search-panel {
-            display: none;
-            position: absolute;
-            z-index: 20;
-            top: calc(100% + 4px);
-            left: 0;
-            right: 0;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
-            padding: 14px;
-        }
-
-        .expandable-search-panel.open {
-            display: block;
-        }
-
         .restock-modal-overlay {
             position: fixed;
             inset: 0;
@@ -318,30 +279,10 @@
                 <input type="hidden" name="size" th:value="${pageSize}">
 
                 <div class="row g-3">
-                    <div class="col-12 col-xl-6 expandable-search" id="productSearchBox">
-                        <div class="form-control expandable-search-trigger" id="productSearchTrigger" tabindex="0">
-                            <span>Tìm theo mã sản phẩm, tên sản phẩm, mã vạch hoặc nhà sản xuất</span>
-                            <span class="active-dot"
-                                  th:if="${(codeQuery != null and !codeQuery.isEmpty()) or (nameQuery != null and !nameQuery.isEmpty()) or (barcodeQuery != null and !barcodeQuery.isEmpty()) or (producerQuery != null and !producerQuery.isEmpty())}"></span>
-                        </div>
-                        <div class="expandable-search-panel" id="productSearchPanel">
-                            <div class="mb-2">
-                                <label class="form-label small text-secondary mb-1">Mã sản phẩm</label>
-                                <input type="text" class="form-control form-control-sm" name="codeQuery" th:value="${codeQuery}">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small text-secondary mb-1">Tên sản phẩm</label>
-                                <input type="text" class="form-control form-control-sm" name="nameQuery" th:value="${nameQuery}">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small text-secondary mb-1">Mã vạch</label>
-                                <input type="text" class="form-control form-control-sm" name="barcodeQuery" th:value="${barcodeQuery}">
-                            </div>
-                            <div class="mb-0">
-                                <label class="form-label small text-secondary mb-1">Nhà sản xuất</label>
-                                <input type="text" class="form-control form-control-sm" name="producerQuery" th:value="${producerQuery}">
-                            </div>
-                        </div>
+                    <div class="col-12 col-xl-6">
+                        <input type="search" class="form-control" name="keyword" th:value="${keyword}"
+                               placeholder="Tìm theo mã, tên sản phẩm, mã vạch hoặc nhà sản xuất"
+                               aria-label="Tìm kiếm sản phẩm">
                     </div>
 
                     <div class="col-12 col-md-6 col-xl-2">
@@ -388,34 +329,6 @@
                 </div>
             </form>
         </div>
-
-        <script th:inline="none">
-            (function () {
-                const box = document.getElementById('productSearchBox');
-                const trigger = document.getElementById('productSearchTrigger');
-                const panel = document.getElementById('productSearchPanel');
-                if (!box || !trigger || !panel) {
-                    return;
-                }
-                const hasValue = Array.from(panel.querySelectorAll('input')).some(input => input.value.trim() !== '');
-                if (hasValue) {
-                    panel.classList.add('open');
-                }
-                trigger.addEventListener('click', function () {
-                    panel.classList.toggle('open');
-                });
-                document.addEventListener('click', function (event) {
-                    if (!box.contains(event.target)) {
-                        panel.classList.remove('open');
-                    }
-                });
-                document.addEventListener('keydown', function (event) {
-                    if (event.key === 'Escape') {
-                        panel.classList.remove('open');
-                    }
-                });
-            })();
-        </script>
 
         <div class="stock-card p-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -502,7 +415,7 @@
                     <ul class="pagination mb-0">
                         <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, codeQuery=${codeQuery}, nameQuery=${nameQuery}, barcodeQuery=${barcodeQuery}, producerQuery=${producerQuery}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage - 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage - 1}, size=${pageSize})}">
                                 Trước
                             </a>
                         </li>
@@ -512,14 +425,14 @@
                             th:classappend="${pageNumber == currentPage} ? ' active'">
                             <a class="page-link"
                                th:text="${pageNumber + 1}"
-                               th:href="@{${basePath}(keyword=${keyword}, codeQuery=${codeQuery}, nameQuery=${nameQuery}, barcodeQuery=${barcodeQuery}, producerQuery=${producerQuery}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${pageNumber}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${pageNumber}, size=${pageSize})}">
                                 1
                             </a>
                         </li>
 
                         <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, codeQuery=${codeQuery}, nameQuery=${nameQuery}, barcodeQuery=${barcodeQuery}, producerQuery=${producerQuery}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage + 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage + 1}, size=${pageSize})}">
                                 Sau
                             </a>
                         </li>
