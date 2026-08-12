@@ -55,14 +55,6 @@ public class FinancialsettingService {
     }
 
     @Transactional(readOnly = true)
-    public List<FinancialsettingResponse> getAll() {
-        return financialsettingRepository.findAll()
-                .stream()
-                .map(FinancialsettingResponse::from)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
     public FinancialsettingResponse getSettings() {
         return financialsettingRepository.findFirstByOrderByIdAsc()
                 .map(FinancialsettingResponse::from)

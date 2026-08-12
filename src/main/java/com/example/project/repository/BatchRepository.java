@@ -94,6 +94,18 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
      * đây nữa là một lần nhập hàng hiện thành HAI dòng, và hai dòng đó còn khác đơn vị nhau (dòng lô
      * ghi theo đơn vị nhập "+5 Hộp", dòng trả hàng ghi theo đơn vị cơ sở "+100 Cái") nên rất dễ đọc
      * thành nhập kho hai lần.</p>
+     *
+     * <p><strong>Lọc theo TIỀN TỐ MÃ LÔ, không lọc theo "có dòng trả hàng nào trỏ vào lô này".</strong>
+     * Bản merge 402a111 dùng {@code not exists (select 1 from Returndetail rd where rd.batchID = b
+     * and rd.returnID.returnType = 'CUSTOMER')}; cách đó ẩn nhầm chính LÔ NHẬP GỐC trong hai trường
+     * hợp, vì {@code returndetail.batchID} chỉ được trỏ sang lô {@code RT-} mới lúc phiếu trả được
+     * DUYỆT và chỉ với dòng nhập lại kho:</p>
+     * <ul>
+     *   <li>dòng hàng KHÔNG nhập lại kho ({@code restockable = false}) giữ nguyên batchID = lô gốc;</li>
+     *   <li>phiếu trả còn Nháp / Chờ duyệt cũng đang trỏ vào lô gốc.</li>
+     * </ul>
+     * <p>Cả hai đều làm lô nhập thật biến mất khỏi lịch sử. Ngoài ra cách đó cũng không lọc lô
+     * {@code KK-}. Tiền tố mã lô do chính hai service sinh ra đặt nên không có ca nào nhầm.</p>
      */
     @Query("""
    select b

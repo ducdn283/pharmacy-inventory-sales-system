@@ -19,6 +19,7 @@ public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, In
        left join fetch d.invoiceID
        left join fetch d.batchID
        where d.productID.productID = :productId
+         and (d.invoiceID.invoiceType is null or d.invoiceID.invoiceType <> 'Thay thế')
        order by d.invoiceID.date desc
        """)
     List<Invoicedetail> findRecentSalesByProduct(@Param("productId") Integer productId,

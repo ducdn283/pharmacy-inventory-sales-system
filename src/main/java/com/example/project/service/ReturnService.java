@@ -1010,12 +1010,17 @@ public class ReturnService {
                 ? original.getImportPrice() : BigDecimal.ZERO);
         batch.setImportPricePerBase(original != null && original.getImportPricePerBase() != null
                 ? original.getImportPricePerBase() : BigDecimal.ZERO);
-        // Instant.now() = mốc UTC THẬT, KHÔNG dùng nowVn(). nowVn() nhét giờ VN vào một Instant gắn
-        // nhãn UTC (xem javadoc của nó) — đúng cho các cột do chính module này đọc lại bằng
-        // ZoneOffset.UTC, nhưng batch.importDate lại do màn Sản phẩm/Lô hàng đọc và quy đổi UTC→VN,
-        // nên dùng nowVn() ở đây là bị cộng 7 tiếng HAI LẦN (23:52 hôm nay hiện thành 06:52 hôm sau).
-        // PurchaseinvoiceService cũng ghi cột này bằng Instant.now() — phải cùng quy ước.
-        batch.setImportDate(Instant.now());
+        // ⚠️ PHẢI GIỮ nowVn(), ĐỪNG "sửa cho đúng" thành Instant.now().
+        //
+        // Giá trị này KHÔNG phải mốc UTC thật: nowVn() nhét giờ VN vào một Instant gắn nhãn UTC. Bản
+        // thân cách lưu đó là sai, nhưng màn Sản phẩm đã bù trừ đúng theo nó —
+        // ProductService.formatBatchImportDate() nhận diện lô mã "RT-" rồi trừ đi 7 tiếng trước khi
+        // hiển thị. Đổi chỗ này sang Instant.now() là bị trừ 7 tiếng khống, ngày nhập của lô hàng trả
+        // hiện SỚM hơn thực tế 7 tiếng.
+        //
+        // Sửa cho đúng phải làm ĐỒNG THỜI hai đầu (bỏ nowVn() ở đây + bỏ bù trừ bên ProductService),
+        // và nằm trong đợt dọn quy ước nowVn() của cả dự án — xem CLAUDE.local.md, mục lệch 7 tiếng.
+        batch.setImportDate(nowVn());
         batch.setProductionDate(original != null ? original.getProductionDate() : null);
         batch.setExpirationDate(original != null ? original.getExpirationDate() : null);
         batch.setLotNumber(original != null ? original.getLotNumber() : null);

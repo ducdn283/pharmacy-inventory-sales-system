@@ -68,13 +68,10 @@
             padding-top: 21px;
         }
 
-        /* Dòng tham chiếu "Giá bán"/"Đơn giá lần trước" không được xuống dòng — nếu wrap thành 2
-           dòng, cả hàng bị kéo cao hẳn ra (chiều cao hàng dùng chung theo ô cao nhất), làm lệch
-           canh giữa của mọi ô còn lại trong cùng hàng. Bảng đã nằm trong .table-responsive nên
-           cho phép cột rộng thêm một chút để chứa trọn 1 dòng là an toàn. */
+        /* Cho phép dòng tham chiếu xuống dòng để bảng không ép rộng quá khung nội dung. */
         .product-sell-price-display,
         .product-cost-price-display {
-            white-space: nowrap;
+            white-space: normal;
         }
 
         /* Loại hàng không theo dõi hạn sử dụng (thiết bị y tế máy/không hạn) — ẩn hẳn ô "Hạn dùng",
@@ -93,8 +90,34 @@
 
         .product-search-wrap {
             position: relative;
-            min-width: 220px;
+            min-width: 0;
         }
+
+        .purchase-lines-table-wrap {
+            overflow-x: visible;
+        }
+
+        #detailTable {
+            width: 100%;
+            table-layout: auto;
+        }
+
+        #detailTable th,
+        #detailTable td {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        /* Dành nhiều chỗ hơn cho sản phẩm và đơn giá thay vì chia đều 9 cột khiến dòng hàng bị bó. */
+        #detailTable th:nth-child(1) { width: 22%; }
+        #detailTable th:nth-child(2) { width: 8%; }
+        #detailTable th:nth-child(3) { width: 9%; }
+        #detailTable th:nth-child(4) { width: 14%; }
+        #detailTable th:nth-child(5) { width: 7%; }
+        #detailTable th:nth-child(6) { width: 12%; }
+        #detailTable th:nth-child(7) { width: 10%; }
+        #detailTable th:nth-child(8) { width: 13%; }
+        #detailTable th:nth-child(9) { width: 5%; }
 
         .product-search-results {
             position: absolute;
@@ -132,20 +155,99 @@
 
         .detail-subrow td {
             background: #fafafa;
-            padding-top: 10px;
-            padding-bottom: 12px;
+            padding: 16px;
             border-top: none;
         }
 
         .subrow-fields {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            column-gap: 24px;
+            row-gap: 16px;
         }
 
         .subrow-field {
-            min-width: 180px;
-            flex: 1;
+            min-width: 0;
+        }
+
+        /* Khi vùng nội dung hẹp (sidebar hoặc tablet), mỗi mặt hàng trở thành một card grid. Các
+           trường xuống hàng thay vì kéo rộng bảng và tạo thanh cuộn ngang. */
+        @media (max-width: 1399.98px) {
+            .purchase-lines-table-wrap {
+                overflow: visible;
+            }
+
+            #detailTable,
+            #detailTable tbody,
+            #detailTable tr,
+            #detailTable td {
+                display: block;
+                width: 100%;
+            }
+
+            #detailTable thead {
+                display: none;
+            }
+
+            #detailTable tbody.detail-item {
+                margin-bottom: 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                overflow: visible;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                padding: 14px;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td {
+                padding: 0;
+                border: 0;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td:first-child {
+                grid-column: span 2;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td::before {
+                content: attr(data-label);
+                display: block;
+                margin-bottom: 5px;
+                color: #6b7280;
+                font-size: 11px;
+                font-weight: 600;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td.readonly-line-cell {
+                padding-top: 0;
+            }
+
+            #detailTable .detail-subrow td {
+                padding: 16px;
+                border-top: 1px solid #e5e7eb;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            #detailTable tbody.detail-item > tr:first-child {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td:first-child {
+                grid-column: 1 / -1;
+            }
+
+            .subrow-fields {
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+
+            .subrow-field {
+                min-width: 0;
+            }
         }
 
         .subrow-field label {
@@ -414,18 +516,18 @@
                             </div>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="table-responsive purchase-lines-table-wrap">
                             <table class="table table-hover align-middle mb-0" id="detailTable">
                                 <thead>
                                 <tr>
-                                    <th style="min-width: 220px;">Sản phẩm</th>
-                                    <th style="min-width: 110px;">Số lượng</th>
-                                    <th style="min-width: 100px;">Đơn vị</th>
-                                    <th style="min-width: 140px;">Đơn giá</th>
-                                    <th style="min-width: 110px;">Thuế suất VAT (%)</th>
-                                    <th style="min-width: 130px;">Giá trước thuế</th>
-                                    <th style="min-width: 120px;">Tiền thuế</th>
-                                    <th style="min-width: 130px;">Thành tiền</th>
+                                    <th>Sản phẩm</th>
+                                    <th>Số lượng</th>
+                                    <th>Đơn vị</th>
+                                    <th>Đơn giá</th>
+                                    <th>VAT</th>
+                                    <th>Trước thuế</th>
+                                    <th>Tiền thuế</th>
+                                    <th>Thành tiền</th>
                                     <th class="text-end">Xóa</th>
                                 </tr>
                                 </thead>
@@ -433,7 +535,7 @@
                                 <tbody class="detail-item"
                                        th:each="detail, iterStat : *{details}">
                                 <tr>
-                                    <td>
+                                    <td data-label="Sản phẩm">
                                         <div class="product-search-wrap">
                                             <input type="text"
                                                    class="form-control product-search-input"
@@ -454,7 +556,7 @@
                                         </div>
                                     </td>
 
-                                    <td>
+                                    <td data-label="Số lượng">
                                         <input type="number"
                                                min="1"
                                                required
@@ -468,14 +570,14 @@
                                         </div>
                                     </td>
 
-                                    <td>
+                                    <td data-label="Đơn vị">
                                         <input type="text"
                                                class="form-control import-unit-display"
                                                readonly
                                                placeholder="—">
                                     </td>
 
-                                    <td>
+                                    <td data-label="Đơn giá">
                                         <input type="text"
                                                inputmode="numeric"
                                                data-money
@@ -491,20 +593,20 @@
                                         </div>
                                     </td>
 
-                                    <td class="readonly-line-cell text-secondary">
+                                    <td class="readonly-line-cell text-secondary" data-label="Thuế suất VAT">
                                         <span class="vat-rate-display">0%</span>
                                         <input type="hidden"
                                                class="vat-rate-input"
                                                th:field="*{details[__${iterStat.index}__].vatRate}">
                                     </td>
 
-                                    <td class="readonly-line-cell pretax-display">0đ</td>
+                                    <td class="readonly-line-cell pretax-display" data-label="Giá trước thuế">0đ</td>
 
-                                    <td class="readonly-line-cell tax-display">0đ</td>
+                                    <td class="readonly-line-cell tax-display" data-label="Tiền thuế">0đ</td>
 
-                                    <td class="readonly-line-cell fw-semibold line-total">0đ</td>
+                                    <td class="readonly-line-cell fw-semibold line-total" data-label="Thành tiền">0đ</td>
 
-                                    <td class="text-end">
+                                    <td class="text-end" data-label="Xóa">
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-danger"
                                                 onclick="removeItemRow(this)">
@@ -517,13 +619,25 @@
                                     <td colspan="9">
                                         <div class="subrow-fields">
                                             <div class="subrow-field">
-                                                <label>Số lô <span class="text-danger">*</span></label>
+                                                <label>Tên lô <span class="text-danger">*</span></label>
+                                                <input type="text"
+                                                       class="form-control batch-name-input"
+                                                       th:field="*{details[__${iterStat.index}__].batchName}"
+                                                       maxlength="50"
+                                                       required
+                                                       data-required-message="Vui lòng nhập tên lô">
+                                                <div class="text-danger small mt-1"
+                                                     th:if="${#fields.hasErrors('details[__${iterStat.index}__].batchName')}"
+                                                     th:errors="*{details[__${iterStat.index}__].batchName}">
+                                                </div>
+                                            </div>
+
+                                            <div class="subrow-field">
+                                                <label>Số lô</label>
                                                 <input type="text"
                                                        class="form-control lot-number-input"
                                                        th:field="*{details[__${iterStat.index}__].lotNumber}"
-                                                       required
-                                                       data-required-message="Vui lòng nhập số lô"
-                                                       placeholder="VD: LOT-001">
+                                                       maxlength="50">
                                             </div>
 
                                             <div class="subrow-field">
@@ -654,19 +768,19 @@
 
                         <div class="text-secondary small" th:if="${!dualSubmit}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng" — lô hàng được tạo ngay khi lưu phiếu.</p>
+                            <p class="mb-2">2. Tên lô luôn bắt buộc; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm — lô hàng được tạo ngay khi lưu phiếu.</p>
                             <p class="mb-2">3. Mỗi dòng nhập luôn tạo một lô hàng mới — nhập đúng số lô, ngày SX, hạn dùng theo phiếu giao hàng của nhà cung cấp.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
                         <div class="text-secondary small" th:if="${dualSubmit and selfApprove}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng".</p>
+                            <p class="mb-2">2. Tên lô luôn bắt buộc; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
                             <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi tạo phiếu (hoặc duyệt lại phiếu nháp), mỗi dòng nhập mới tạo một lô hàng mới.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
                         <div class="text-secondary small" th:if="${dualSubmit and !selfApprove}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng".</p>
+                            <p class="mb-2">2. Tên lô luôn bắt buộc; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
                             <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi Chủ nhà thuốc duyệt, mỗi dòng nhập mới tạo một lô hàng mới.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
@@ -1321,7 +1435,7 @@
         tbody.className = 'detail-item';
         tbody.innerHTML = `
             <tr>
-                <td>
+                <td data-label="Sản phẩm">
                     <div class="product-search-wrap">
                         <input type="text" class="form-control product-search-input" autocomplete="off" required
                                data-required-message="Vui lòng chọn sản phẩm"
@@ -1333,18 +1447,18 @@
                     <div class="small text-secondary mt-1 product-sell-price-display">Giá bán: —</div>
                 </td>
 
-                <td>
+                <td data-label="Số lượng">
                     <input type="number" min="1" required data-required-message="Vui lòng nhập số lượng"
                            class="form-control quantity-input"
                            data-field="quantity" name="details[${index}].quantity"
                            oninput="calculateSummary()">
                 </td>
 
-                <td>
+                <td data-label="Đơn vị">
                     <input type="text" class="form-control import-unit-display" readonly placeholder="—">
                 </td>
 
-                <td>
+                <td data-label="Đơn giá">
                     <input type="text" inputmode="numeric" data-money required data-required-message="Vui lòng nhập đơn giá"
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
@@ -1352,19 +1466,19 @@
                     <div class="small text-secondary mt-1 product-cost-price-display">Đơn giá lần trước: —</div>
                 </td>
 
-                <td class="readonly-line-cell text-secondary">
+                <td class="readonly-line-cell text-secondary" data-label="Thuế suất VAT">
                     <span class="vat-rate-display">0%</span>
                     <input type="hidden" class="vat-rate-input"
                            data-field="vatRate" name="details[${index}].vatRate">
                 </td>
 
-                <td class="readonly-line-cell pretax-display">0đ</td>
+                <td class="readonly-line-cell pretax-display" data-label="Giá trước thuế">0đ</td>
 
-                <td class="readonly-line-cell tax-display">0đ</td>
+                <td class="readonly-line-cell tax-display" data-label="Tiền thuế">0đ</td>
 
-                <td class="readonly-line-cell fw-semibold line-total">0đ</td>
+                <td class="readonly-line-cell fw-semibold line-total" data-label="Thành tiền">0đ</td>
 
-                <td class="text-end">
+                <td class="text-end" data-label="Xóa">
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeItemRow(this)">
                         <i class="ti ti-trash"></i>
                     </button>
@@ -1375,11 +1489,16 @@
                 <td colspan="9">
                     <div class="subrow-fields">
                         <div class="subrow-field">
-                            <label>Số lô <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control lot-number-input" required
-                                   data-required-message="Vui lòng nhập số lô"
-                                   data-field="lotNumber" name="details[${index}].lotNumber"
-                                   placeholder="VD: LOT-001">
+                            <label>Tên lô <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control batch-name-input" required maxlength="50"
+                                   data-required-message="Vui lòng nhập tên lô"
+                                   data-field="batchName" name="details[${index}].batchName">
+                        </div>
+
+                        <div class="subrow-field">
+                            <label>Số lô</label>
+                            <input type="text" class="form-control lot-number-input" maxlength="50"
+                                   data-field="lotNumber" name="details[${index}].lotNumber">
                         </div>
 
                         <div class="subrow-field">

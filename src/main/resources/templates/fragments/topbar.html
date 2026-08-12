@@ -32,13 +32,14 @@
             <div class="pm-topbar-actions">
 
                 <a th:if="${currentSellingUrl != null}"
-                   class="pm-topbar-icon-btn"
+                   class="pm-topbar-icon-btn pm-selling-btn"
                    th:href="${currentSellingUrl}"
                    href="#"
                    role="button"
                    aria-label="Bán hàng"
                    title="Bán hàng">
                     <i class="ti ti-shopping-cart"></i>
+                    <span class="pm-selling-btn-label">Bán hàng</span>
                 </a>
 
                 <div class="dropdown">
@@ -275,6 +276,41 @@
             line-height: 1;
         }
 
+        .pm-selling-btn {
+            width: auto;
+            height: 38px;
+            gap: 7px;
+            padding: 0 14px;
+            border-color: #059669;
+            border-radius: 10px;
+            background: #059669;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(5, 150, 105, .22);
+        }
+
+        .pm-selling-btn:hover,
+        .pm-selling-btn:focus-visible {
+            border-color: #047857;
+            background: #047857;
+            color: #ffffff;
+            box-shadow: 0 5px 14px rgba(5, 150, 105, .3);
+            transform: translateY(-1px);
+        }
+
+        .pm-selling-btn:active {
+            background: #065f46;
+            border-color: #065f46;
+            box-shadow: none;
+            transform: translateY(0);
+        }
+
+        .pm-selling-btn-label {
+            line-height: 1;
+        }
+
         .pm-notification-dot {
             position: absolute;
             top: 7px;
@@ -420,6 +456,11 @@
         @media (max-width: 767.98px) {
             .pm-topbar-actions {
                 gap: 10px;
+            }
+
+            .pm-selling-btn {
+                height: 36px;
+                padding: 0 11px;
             }
         }
     </style>

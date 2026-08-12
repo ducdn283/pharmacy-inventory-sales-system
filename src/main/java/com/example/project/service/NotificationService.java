@@ -54,14 +54,6 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public List<NotificationResponse> getAll() {
-        return notificationRepository.findAll()
-                .stream()
-                .map(NotificationResponse::from)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
     public Page<NotificationResponse> search(
             Integer accountId,
             String keyword,
