@@ -106,8 +106,7 @@ public class ReturnService {
 
     // Product types (Type.sortType / Type.name) that cannot be returned. Compared
     // accent/case-insensitively against normalize(...). Medical-device "máy" carries a warranty so it
-    // is handled via warranty, not return; a combo is a bundle and is not taken back.
-    private static final String SORT_COMBO = "combo";
+    // is handled via warranty, not return.
     private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
     private static final String DEVICE_MACHINE_MARK = "may";
 
@@ -284,9 +283,9 @@ public class ReturnService {
     }
 
     /**
-     * Whether a product may be returned at all, by its {@link Type}. Blocks combos and the
-     * medical-device "máy" sub-type (warranty items); other medical devices (có hạn / không hạn) and
-     * all drugs / goods are allowed. Unknown/missing type → allowed (don't over-block).
+     * Whether a product may be returned at all, by its {@link Type}. Blocks the medical-device "máy"
+     * sub-type (warranty items); other medical devices (có hạn / không hạn) and all drugs / goods are
+     * allowed. Unknown/missing type → allowed (don't over-block).
      */
     private boolean isReturnableProductType(Product product) {
         if (product == null || product.getTypeID() == null) {
@@ -295,9 +294,6 @@ public class ReturnService {
         Type type = product.getTypeID();
         String sort = normalize(type.getSortType());
         String name = normalize(type.getName());
-        if (SORT_COMBO.equals(sort)) {
-            return false;
-        }
         return !(SORT_MEDICAL_DEVICE.equals(sort) && name.contains(DEVICE_MACHINE_MARK));
     }
 
@@ -351,7 +347,7 @@ public class ReturnService {
             }
             if (!isReturnableProductType(line.getProductID())) {
                 throw new IllegalArgumentException("Sản phẩm \"" + productName(line)
-                        + "\" không được phép trả (thiết bị y tế máy hoặc combo)");
+                        + "\" không được phép trả (thiết bị y tế máy)");
             }
             int alreadyReturned = line.getReturnedQty() != null ? line.getReturnedQty() : 0;
             int returnable = line.getQuantity() - alreadyReturned;
@@ -362,8 +358,8 @@ public class ReturnService {
             }
             // Restockable is hard-coded by item type: only the manufacturer's default
             // packaging unit (productunit.isDefault) goes back to stock; loose units do not. No manual
-            // checkbox — the client value is ignored. (Combo / medical-device "máy" / prescription
-            // invoices are already blocked from return upstream.)
+            // checkbox — the client value is ignored. (Medical-device "máy" / prescription invoices
+            // are already blocked from return upstream.)
             boolean restockable = isRestockableUnit(line);
             prepared.put(line.getId(), preparedLineOf(line, qty, restockable, refundRate));
         }
@@ -1136,7 +1132,7 @@ public class ReturnService {
     /**
      * Restockable only when the sold unit is the manufacturer's default packaging unit
      * ({@code productunit.isDefault}). Loose units (isDefault=false) cannot go back to
-     * stock; combo / medical-device "máy" / prescription invoices are already blocked from return
+     * stock; medical-device "máy" / prescription invoices are already blocked from return
      * upstream. This is hard-coded (no manual checkbox).
      */
     private boolean isRestockableUnit(Invoicedetail line) {

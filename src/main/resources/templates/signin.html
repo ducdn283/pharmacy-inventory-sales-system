@@ -108,5 +108,14 @@
     </div>
   </main>
 </div>
+
+<!--
+  Chặn bấm "Đăng nhập" nhiều lần. Hệ thống chỉ cho MỘT phiên trên mỗi tài khoản
+  (maximumSessions(1) + maxSessionsPreventsLogin(true) trong SecurityConfig), nên lần POST thứ hai
+  của cùng một cú double click sẽ thấy phiên vừa tạo ở lần thứ nhất và bị từ chối với
+  /signin?sessionLimit — người dùng tưởng mình bị khoá tài khoản dù đăng nhập đã thành công.
+  Bộ gõ tiếng Việt cũng sinh ra ca này khi phím Enter bắn hai lần lúc đang ghép chữ.
+-->
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>
