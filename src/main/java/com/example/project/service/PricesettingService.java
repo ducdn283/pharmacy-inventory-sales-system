@@ -131,9 +131,10 @@ public class PricesettingService {
     }
 
     /**
-     * Updates a single {@code ProductUnit.sellPrice}. Each row on the screen saves independently
-     * (same pattern as the Permission Table's per-cell save), so one bad value never blocks the
-     * rest.
+     * Updates a single {@code ProductUnit.sellPrice}. The screen itself now saves every unit of a
+     * product together in one action (see {@link #updatePrices}, which calls this once per changed
+     * unit) rather than posting one row at a time — this method is the single-unit primitive both
+     * that orchestration and its own dedicated tests build on.
      *
      * <p><strong>Base-unit cascade:</strong> when the edited row is the product's base unit, every
      * sibling unit whose current price still exactly matches {@code oldBasePrice × ratio} is
@@ -169,6 +170,59 @@ public class PricesettingService {
             return 0;
         }
         return cascadeToSiblings(unit, oldBasePrice, roundedPrice);
+    }
+
+    /** Result of a whole-product save — see {@link #updatePrices}. */
+    public record PriceUpdateResult(int explicitCount, int cascadedCount) {
+    }
+
+    /**
+     * Saves every changed unit price for one product in a single action — the screen used to post a
+     * separate {@code /cell} request per unit row (one "Lưu" button each); this is the one-button
+     * replacement, called once per product with every row's price at once.
+     *
+     * <p>A row whose submitted price is unchanged from what's stored is skipped entirely — no
+     * wasted write, no wasted cascade check. Any base-unit edit in the batch is applied
+     * <strong>last</strong>, after every other changed unit in the same submission — so
+     * {@link #updatePrice}'s existing cascade-to-siblings rule (see its javadoc) still fires
+     * correctly, and a sibling the user ALSO typed an explicit new price for in this same
+     * submission keeps that explicit value: by the time the base unit's cascade runs, that
+     * sibling's stored price no longer matches the old ratio formula, so the cascade's own
+     * "still-following-the-formula" check naturally leaves it alone.</p>
+     *
+     * @param sellPriceByUnitId every row's posted price, keyed by {@code Productunit.id}; a unit
+     *                          with no entry (or a {@code null} value) is left untouched
+     * @return how many rows were explicitly changed, and how many more were cascaded as a side effect
+     */
+    @Transactional
+    public PriceUpdateResult updatePrices(Integer productId, Map<Integer, BigDecimal> sellPriceByUnitId) {
+        List<Productunit> units = productunitRepository.findByProductId(productId);
+        if (units.isEmpty()) {
+            throw new IllegalArgumentException("Không tìm thấy sản phẩm");
+        }
+
+        List<Productunit> changed = units.stream()
+                .filter(unit -> isPriceChanged(unit, sellPriceByUnitId.get(unit.getId())))
+                // false < true, so a base-unit row always sorts after every non-base row.
+                .sorted(Comparator.comparing(unit -> Boolean.TRUE.equals(unit.getIsBaseUnit())))
+                .toList();
+
+        int explicitCount = 0;
+        int cascadedCount = 0;
+        for (Productunit unit : changed) {
+            cascadedCount += updatePrice(unit.getId(), sellPriceByUnitId.get(unit.getId()));
+            explicitCount++;
+        }
+
+        return new PriceUpdateResult(explicitCount, cascadedCount);
+    }
+
+    private boolean isPriceChanged(Productunit unit, BigDecimal submitted) {
+        if (submitted == null) {
+            return false;
+        }
+        BigDecimal current = unit.getSellPrice();
+        return current == null || roundMoney(current).compareTo(roundMoney(submitted)) != 0;
     }
 
     private int cascadeToSiblings(Productunit baseUnit, BigDecimal oldBasePrice, BigDecimal newBasePrice) {

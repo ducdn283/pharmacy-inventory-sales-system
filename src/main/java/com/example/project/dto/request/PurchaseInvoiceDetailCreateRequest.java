@@ -21,8 +21,8 @@ public class PurchaseInvoiceDetailCreateRequest {
     @Min(value = 1, message = "Số lượng phải lớn hơn 0")
     private Integer quantity;
 
-    @NotNull(message = "Giá nhập không được để trống")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Giá nhập phải lớn hơn 0")
+    @NotNull(message = "Đơn giá không được để trống")
+    @DecimalMin(value = "0.0", inclusive = false, message = "Đơn giá phải lớn hơn 0")
     private BigDecimal importPrice;
 
     // Xem PurchaseInvoiceCreateRequest.vatInvoiceDate cho lý do cần @DateTimeFormat trên LocalDate.

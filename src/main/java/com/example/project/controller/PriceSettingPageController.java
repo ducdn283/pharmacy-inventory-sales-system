@@ -16,13 +16,17 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Owner-only "Cài đặt giá bán" screen — lets the Owner change any product's sell price directly
  * from one list instead of opening each product's own edit page (see
  * {@link PricesettingService} for the full framing). Same permission scope as Product
- * create/edit, which are also Owner-only. Each unit row saves independently via {@code /cell},
- * same shape as {@code PermissionController}'s per-cell save.
+ * create/edit, which are also Owner-only. Every unit row of one product saves together, in one
+ * action, via {@code /product} — a product with several units used to need one "Lưu" click per
+ * row; now it's one click for the whole product.
  */
 @Controller
 @RequestMapping("/owner/price-settings")
@@ -91,22 +95,32 @@ public class PriceSettingPageController {
         return pricesettingService.getDetail(productId);
     }
 
-    @PostMapping("/cell")
-    public String saveCell(@RequestParam Integer productUnitId,
-                            @RequestParam BigDecimal sellPrice,
-                            @RequestParam(required = false) String keyword,
-                            @RequestParam(required = false) Integer typeId,
-                            @RequestParam(required = false) String sort,
-                            @RequestParam(required = false, defaultValue = "0") int page,
-                            @RequestParam(required = false, defaultValue = "10") int size,
-                            @RequestParam(required = false) Integer expandProductId,
-                            RedirectAttributes redirectAttributes) {
+    /**
+     * Saves every unit row of one product at once — {@code productUnitId}/{@code sellPrice} are
+     * two same-length, position-matched lists (one pair per unit row rendered on the product's
+     * expanded panel), which Spring collects from the repeated same-name form fields in submission
+     * order. See {@link PricesettingService#updatePrices} for the save/cascade semantics.
+     */
+    @PostMapping("/product")
+    public String saveProduct(@RequestParam Integer productId,
+                               @RequestParam("productUnitId") List<Integer> productUnitIds,
+                               @RequestParam("sellPrice") List<BigDecimal> sellPrices,
+                               @RequestParam(required = false) String keyword,
+                               @RequestParam(required = false) Integer typeId,
+                               @RequestParam(required = false) String sort,
+                               @RequestParam(required = false, defaultValue = "0") int page,
+                               @RequestParam(required = false, defaultValue = "10") int size,
+                               @RequestParam(required = false) Integer expandProductId,
+                               RedirectAttributes redirectAttributes) {
         try {
-            int cascaded = pricesettingService.updatePrice(productUnitId, sellPrice);
-            String message = cascaded > 0
-                    ? "Đã cập nhật giá bán (đồng bộ theo tỷ lệ cho " + cascaded + " đơn vị khác)"
-                    : "Đã cập nhật giá bán";
-            redirectAttributes.addFlashAttribute("successMessage", message);
+            Map<Integer, BigDecimal> sellPriceByUnitId = new LinkedHashMap<>();
+            for (int i = 0; i < productUnitIds.size() && i < sellPrices.size(); i++) {
+                sellPriceByUnitId.put(productUnitIds.get(i), sellPrices.get(i));
+            }
+
+            PricesettingService.PriceUpdateResult result =
+                    pricesettingService.updatePrices(productId, sellPriceByUnitId);
+            redirectAttributes.addFlashAttribute("successMessage", describeResult(result));
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
@@ -127,5 +141,16 @@ public class PriceSettingPageController {
         }
 
         return "redirect:/owner/price-settings";
+    }
+
+    private String describeResult(PricesettingService.PriceUpdateResult result) {
+        if (result.explicitCount() == 0) {
+            return "Không có thay đổi nào để lưu";
+        }
+        if (result.cascadedCount() > 0) {
+            return "Đã cập nhật giá bán cho " + result.explicitCount() + " đơn vị (đồng bộ theo tỷ lệ thêm "
+                    + result.cascadedCount() + " đơn vị khác)";
+        }
+        return "Đã cập nhật giá bán cho " + result.explicitCount() + " đơn vị";
     }
 }

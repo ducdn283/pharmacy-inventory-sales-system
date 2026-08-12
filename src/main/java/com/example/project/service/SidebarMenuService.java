@@ -443,6 +443,11 @@ public class SidebarMenuService {
                                 "Danh sách khoản thu",
                                 "/pharmacist/incomes",
                                 ICON_FINANCE
+                        ),
+                        i(
+                                "Danh sách khoản chi",
+                                "/pharmacist/expenses",
+                                "ti ti-cash"
                         )
                 ),
 
@@ -530,6 +535,11 @@ public class SidebarMenuService {
                                 "Danh sách phiếu nhập",
                                 "/accountant/purchase-invoices",
                                 "ti ti-receipt"
+                        ),
+                        i(
+                                "Danh sách dự trù",
+                                "/accountant/procurements",
+                                "ti ti-clipboard-list"
                         )
                 ),
 

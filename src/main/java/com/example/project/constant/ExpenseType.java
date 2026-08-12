@@ -1,6 +1,5 @@
 package com.example.project.constant;
 
-import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,21 +49,6 @@ public final class ExpenseType {
      */
     public static final List<String> PURCHASE_LINKABLE = List.of(GOODS_PAYMENT);
 
-    /**
-     * Types the "trên 5 triệu bắt buộc chuyển khoản" rule below applies to (BA, 2026-08). Cùng
-     * ngưỡng 5 triệu Điều 26 Nghị định 181/2025/NĐ-CP đã dùng cho
-     * {@code PurchaseinvoiceService.VAT_DEDUCTION_THRESHOLD} (hóa đơn ≥5tr cần chứng từ thanh toán
-     * không dùng tiền mặt mới hợp lệ khấu trừ/tính vào chi phí hợp lý) — áp cho ba loại phát sinh
-     * chi phí hợp lý hoặc thanh toán NCC: {@link #GOODS_PAYMENT}, {@link #OPERATIONAL},
-     * {@link #RETURN_REFUND_PAYOUT}. {@link #EMPLOYEE_ADVANCE_REPAYMENT} và {@link #OTHER} không bị
-     * ràng buộc — BA xác nhận trực tiếp.
-     */
-    public static final List<String> CASH_LIMIT_APPLICABLE =
-            List.of(GOODS_PAYMENT, OPERATIONAL, RETURN_REFUND_PAYOUT);
-
-    /** Ngưỡng của {@link #CASH_LIMIT_APPLICABLE} — trên mức này, phiếu bắt buộc chuyển khoản. */
-    public static final BigDecimal CASH_LIMIT_THRESHOLD = BigDecimal.valueOf(5_000_000);
-
     private ExpenseType() {
     }
 
@@ -75,15 +59,6 @@ public final class ExpenseType {
     /** Whether a slip of this type may point at a purchase invoice. Never required, only allowed. */
     public static boolean supportsPurchaseInvoiceLink(String type) {
         return type != null && PURCHASE_LINKABLE.contains(type);
-    }
-
-    /**
-     * Whether a slip of this type and amount may NOT be paid (even partially) in cash — must go
-     * through chuyển khoản instead. See {@link #CASH_LIMIT_APPLICABLE}/{@link #CASH_LIMIT_THRESHOLD}.
-     */
-    public static boolean requiresBankTransfer(String type, BigDecimal amount) {
-        return type != null && CASH_LIMIT_APPLICABLE.contains(type)
-                && amount != null && amount.compareTo(CASH_LIMIT_THRESHOLD) > 0;
     }
 
     /** Vietnamese display label, e.g. {@code OPERATIONAL -> "Chi phí vận hành"}. */

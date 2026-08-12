@@ -1824,7 +1824,7 @@
         const currentStock = detail.currentStock != null ? detail.currentStock : getStock(product.productID);
         const stockUnit = product.stockUnit || getStockUnit(product.productID);
         const quantity = detail.requestedQuantity != null ? detail.requestedQuantity : 1;
-        const unit = detail.unit || '';
+        const unit = detail.unit || product.unit || '';
         const conversionHintsHtml = renderUnitConversionHints(product);
         const sellPriceHintHtml = renderSellPriceHint(product);
         const supplierId = detail.supplierId != null ? detail.supplierId : '';
