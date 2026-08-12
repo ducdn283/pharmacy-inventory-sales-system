@@ -1165,8 +1165,17 @@ public class StockadjustmentService {
         BigDecimal estimatedCost = estimateImportPricePerBase(sourceBatch);
 
         Batch batch = new Batch();
-        // KK-{id phiếu điều chỉnh}-L{id lô được đếm} — nhìn mã là truy ngược được cả phiếu lẫn lô gốc.
-        batch.setBatchCode(truncate("KK-" + String.format("%06d", adjustment.getId())
+        // RS-{id phiếu điều chỉnh}-L{id lô được đếm} — nhìn mã là truy ngược được cả phiếu lẫn lô gốc.
+        // RS = Rà Soát (kho). Trước 13/08/2026 là "KK-" (kiểm kê), đổi cho khớp cách gọi hiện tại.
+        //
+        // ⚠️ TIỀN TỐ NÀY LÀ DỮ LIỆU NGHIỆP VỤ, KHÔNG PHẢI CHUỖI TRANG TRÍ. Hai truy vấn JPQL đang so
+        // khớp nó bằng chuỗi cứng (JPQL không tham chiếu được hằng Java), đổi ở đây mà quên sửa chúng
+        // là hỏng âm thầm:
+        //   • StockadjustmentdetailRepository.sumUnknownOriginIncreaseCostInPeriod — lọc 'RS-%' để
+        //     tính phần thu nhập chịu thuế của hàng thừa không rõ nguồn gốc ⇒ quên là số THUẾ về 0;
+        //   • BatchRepository.findRecentImportsByProduct — loại 'RS-%' khỏi lịch sử nhập kho ⇒ quên
+        //     là một lần rà soát hiện thành hai dòng.
+        batch.setBatchCode(truncate("RS-" + String.format("%06d", adjustment.getId())
                 + "-L" + (sourceBatch.getId() != null ? sourceBatch.getId() : 0), 50));
         batch.setBatchName(truncate("Hàng thừa rà soát kho "
                 + (sourceBatch.getBatchName() != null ? sourceBatch.getBatchName() : ""), 50));

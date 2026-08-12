@@ -88,8 +88,9 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
      * Most recent import (batch) events of one product, for the history preview.
      *
      * <p><strong>Chỉ lô NHẬP THẬT từ nhà cung cấp.</strong> Loại hai nhóm lô do hệ thống tự sinh:
-     * {@code RT-} (hàng khách trả lại, {@code ReturnService.cloneReturnBatch}) và {@code KK-} (hàng
-     * thừa khi rà soát kho, {@code StockadjustmentService}). Hai nhóm đó ĐÃ có dòng riêng trong màn
+     * {@code RT-} (hàng khách trả lại, {@code ReturnService.cloneReturnBatch}) và {@code RS-} (hàng
+     * thừa khi rà soát kho, {@code StockadjustmentService}; {@code KK-} là tiền tố cũ trước
+     * 13/08/2026, giữ lại để dữ liệu cũ vẫn được lọc). Hai nhóm đó ĐÃ có dòng riêng trong màn
      * Lịch sử tồn kho — lấy từ {@code returndetail} và {@code stockadjustmentdetail} — nên để chúng ở
      * đây nữa là một lần nhập hàng hiện thành HAI dòng, và hai dòng đó còn khác đơn vị nhau (dòng lô
      * ghi theo đơn vị nhập "+5 Hộp", dòng trả hàng ghi theo đơn vị cơ sở "+100 Cái") nên rất dễ đọc
@@ -112,6 +113,7 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    from Batch b
    where b.productID.productID = :productId
      and b.batchCode not like 'RT-%'
+     and b.batchCode not like 'RS-%'
      and b.batchCode not like 'KK-%'
    order by b.importDate desc
    """)
