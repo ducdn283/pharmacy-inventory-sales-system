@@ -101,7 +101,6 @@ public class PurchaseinvoiceService {
     // Product types (Type.sortType / Type.name) that need special handling on purchase invoice
     // creation. Compared accent/case-insensitively against normalize(...) — same idiom
     // ReturnService.isReturnableProductType() already uses for the identical sortType/name pair.
-    private static final String SORT_COMBO = "combo";
     private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
     private static final String DEVICE_MACHINE_MARK = "may";
     private static final String DEVICE_NO_EXPIRY_MARK = "khong han";
@@ -849,10 +848,6 @@ public class PurchaseinvoiceService {
         Product product = productRepository.findById(item.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + item.getProductId()));
 
-        if (isComboProduct(product)) {
-            throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
-                    + "\" là hàng combo — combo được lắp từ các sản phẩm thành phần, không thể nhập trực tiếp");
-        }
         validateExpirationForType(product, item);
 
         BigDecimal vatRate = resolvePurchaseVatRate(product);
@@ -877,12 +872,6 @@ public class PurchaseinvoiceService {
         }
         BigDecimal multiplier = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
         return preTaxUnitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    /** Combo là hàng lắp từ các sản phẩm thành phần khi bán — không được nhập trực tiếp từ NCC. */
-    private boolean isComboProduct(Product product) {
-        Type type = product.getTypeID();
-        return type != null && SORT_COMBO.equals(normalize(type.getSortType()));
     }
 
     /**
@@ -1293,9 +1282,6 @@ public class PurchaseinvoiceService {
         return productRepository.findAllWithRelations()
                 .stream()
                 .filter(product -> Boolean.TRUE.equals(product.getStatus()))
-                // Combo là hàng lắp từ các sản phẩm thành phần, không tồn kho trực tiếp — không thể
-                // nhập từ nhà cung cấp, nên không xuất hiện trong bộ chọn sản phẩm của phiếu nhập.
-                .filter(product -> !isComboProduct(product))
                 .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
                 .map(product -> new ProductOptionResponse(product.getProductID(), product.getName()))
                 .toList();
@@ -1347,9 +1333,9 @@ public class PurchaseinvoiceService {
                 throw new IllegalArgumentException("Vui lòng nhập số lô cho tất cả sản phẩm");
             }
 
-            // Combo-rejection and the type-aware expiration-date rule both need the resolved
-            // Product (see requiresExpirationDate) — checked per-line in prepareLine() instead of
-            // here, right after each line's Product is looked up, to avoid fetching it twice.
+            // The type-aware expiration-date rule needs the resolved Product (see
+            // requiresExpirationDate) — checked per-line in prepareLine() instead of here, right
+            // after each line's Product is looked up, to avoid fetching it twice.
         }
     }
 
