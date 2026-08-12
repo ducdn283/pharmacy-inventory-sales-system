@@ -337,9 +337,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chi phí phát sinh</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{additionCost}"
                                        id="additionCost"
@@ -352,9 +352,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chiết khấu</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{discount}"
                                        id="discount"
@@ -476,9 +476,9 @@
                                     </td>
 
                                     <td>
-                                        <input type="number"
-                                               min="0"
-                                               step="1"
+                                        <input type="text"
+                                               inputmode="numeric"
+                                               data-money
                                                required
                                                data-required-message="Vui lòng nhập đơn giá"
                                                class="form-control price-input"
@@ -747,7 +747,7 @@
         const priceInput = row.querySelector('.price-input');
         if (!productInput || !priceInput) return;
 
-        const hasValue = priceInput.value !== '' && Number(priceInput.value) > 0;
+        const hasValue = moneyValue(priceInput) > 0;
         if (hasValue) return;
 
         const supplierSelect = document.getElementById('supplierId');
@@ -756,6 +756,7 @@
 
         if (price !== null) {
             priceInput.value = price;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
             calculateSummary();
         }
     }
@@ -904,6 +905,14 @@
         return Number(input.value);
     }
 
+    function moneyValue(input) {
+        if (!input) return 0;
+        if (typeof window.pmMoneyValue === 'function') {
+            return window.pmMoneyValue(input);
+        }
+        return Number(String(input.value || '').replace(/\./g, '')) || 0;
+    }
+
     // "Đơn giá" có thể đã gồm thuế VAT hoặc là giá trước thuế, tùy công tắc #priceIncludesVatToggle
     // (mặc định đã gồm thuế — hành vi cũ). Khớp công thức PurchaseinvoiceService.prepareLine()/
     // grossUpUnitPrice()/calculateLinePreTaxAmount (chỉ để xem trước, server tự tính lại khi lưu).
@@ -947,7 +956,7 @@
 
         document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
             const quantity = numberValue(row.querySelector('.quantity-input'));
-            const price = numberValue(row.querySelector('.price-input'));
+            const price = moneyValue(row.querySelector('.price-input'));
             const vatRate = numberValue(row.querySelector('.vat-rate-input'));
 
             let lineTotal;
@@ -988,8 +997,8 @@
             }
         });
 
-        const additionCost = numberValue(document.getElementById('additionCost'));
-        const discount = numberValue(document.getElementById('discount'));
+        const additionCost = moneyValue(document.getElementById('additionCost'));
+        const discount = moneyValue(document.getElementById('discount'));
 
         let totalAmount = subtotal + additionCost - discount;
         if (totalAmount < 0) {
@@ -1262,6 +1271,7 @@
         const priceInput = row.querySelector('.price-input');
         if (priceInput && item.unitPrice != null) {
             priceInput.value = item.unitPrice;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
@@ -1323,7 +1333,7 @@
                 </td>
 
                 <td>
-                    <input type="number" min="0" step="1" required data-required-message="Vui lòng nhập đơn giá"
+                    <input type="text" inputmode="numeric" data-money required data-required-message="Vui lòng nhập đơn giá"
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
                            oninput="calculateSummary()">
@@ -1378,6 +1388,9 @@
         `;
 
         table.appendChild(tbody);
+        if (typeof window.pmInitMoneyInputs === 'function') {
+            window.pmInitMoneyInputs(tbody);
+        }
         refreshRowIndexes();
         wireProductSearch(tbody);
         wirePriceSuggestion(tbody);
@@ -1519,7 +1532,10 @@
     });
 </script>
 
-<!-- Chặn 'e' / '+' / '-' trong các ô số (số lượng, giá nhập, chi phí phát sinh, chiết khấu). -->
+<!-- Định dạng các ô tiền và chuyển về số thuần trước khi submit. -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+<!-- Chặn ký hiệu không hợp lệ trong ô số lượng; các trường tiền dùng money-input phía trên. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
