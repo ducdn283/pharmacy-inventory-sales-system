@@ -392,9 +392,11 @@ public class PurchaseinvoiceService {
                         .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dự trù mua hàng"));
 
         // Resolve every line's product + VAT rate up front (from Type, never the client) so totals can
-        // be computed before the invoice's first save — see prepareLine().
+        // be computed before the invoice's first save — see prepareLine(). priceIncludesVat is a
+        // whole-invoice toggle (not per line), see PurchaseInvoiceCreateRequest's own javadoc.
+        boolean priceIncludesVat = request.isPriceIncludesVat();
         List<PreparedPurchaseLine> lines = request.getDetails().stream()
-                .map(this::prepareLine)
+                .map(item -> prepareLine(item, priceIncludesVat))
                 .toList();
 
         BigDecimal subtotal = lines.stream()
@@ -403,7 +405,9 @@ public class PurchaseinvoiceService {
 
         BigDecimal additionCost = safe(request.getAdditionCost());
         BigDecimal discount = safe(request.getDiscount());
-        // importPrice is already VAT-inclusive (gross) — nothing is added on top of subtotal.
+        // Every PreparedPurchaseLine.grossAmount is already VAT-inclusive by this point regardless
+        // of priceIncludesVat (prepareLine() grosses up a pre-tax entry before this) — nothing is
+        // added on top of subtotal.
         BigDecimal totalAmount = subtotal.add(additionCost).subtract(discount);
 
         if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
@@ -454,7 +458,10 @@ public class PurchaseinvoiceService {
             detail.setPurchaseID(savedInvoice);
             detail.setProductID(line.product());
             detail.setQuantity(item.getQuantity());
-            detail.setImportPrice(item.getImportPrice());
+            // Luôn lưu đơn giá ĐÃ GỒM THUẾ (gross) bất kể người dùng gõ giá trước hay sau thuế lúc
+            // nhập — xem prepareLine()/unitPriceGross(). KHÔNG đọc thẳng item.getImportPrice() ở
+            // đây, vì khi priceIncludesVat=false, giá trị đó là giá TRƯỚC thuế, không phải giá lưu.
+            detail.setImportPrice(line.unitPriceGross());
             detail.setProductionDate(item.getProductionDate());
             // Loại hàng không theo dõi hạn sử dụng (xem requiresExpirationDate) luôn lưu null, bất kể
             // client gửi gì.
@@ -821,12 +828,24 @@ public class PurchaseinvoiceService {
         return base.isEmpty() ? addition : base + " | " + addition;
     }
 
-    /** One purchase line with its product and VAT breakdown resolved, ready to price and persist. */
+    /**
+     * One purchase line with its product and VAT breakdown resolved, ready to price and persist.
+     * {@code unitPriceGross} is what actually gets stored ({@code Purchasedetail.importPrice}) —
+     * always gross, regardless of how the line's price was typed; see {@link #prepareLine}.
+     */
     private record PreparedPurchaseLine(PurchaseInvoiceDetailCreateRequest item, Product product,
-                                        BigDecimal grossAmount, BigDecimal vatRate,
+                                        BigDecimal unitPriceGross, BigDecimal grossAmount, BigDecimal vatRate,
                                         BigDecimal preTaxAmount, BigDecimal vatAmount) {}
 
-    private PreparedPurchaseLine prepareLine(PurchaseInvoiceDetailCreateRequest item) {
+    /**
+     * @param priceIncludesVat whole-invoice toggle (see {@code PurchaseInvoiceCreateRequest
+     *                         #priceIncludesVat}) — {@code true} means {@code item.getImportPrice()}
+     *                         is already gross (the long-standing default behavior); {@code false}
+     *                         means it's a pre-tax "giá trước thuế" that must be grossed up here
+     *                         before anything downstream (persistence, totals) ever sees it, so the
+     *                         rest of the app can keep assuming every stored price is gross.
+     */
+    private PreparedPurchaseLine prepareLine(PurchaseInvoiceDetailCreateRequest item, boolean priceIncludesVat) {
         Product product = productRepository.findById(item.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + item.getProductId()));
 
@@ -837,11 +856,27 @@ public class PurchaseinvoiceService {
         validateExpirationForType(product, item);
 
         BigDecimal vatRate = resolvePurchaseVatRate(product);
-        BigDecimal grossAmount = calculateLineGrossAmount(item);
+        BigDecimal enteredUnitPrice = safe(item.getImportPrice());
+        BigDecimal unitPriceGross = priceIncludesVat
+                ? enteredUnitPrice.setScale(2, RoundingMode.HALF_UP)
+                : grossUpUnitPrice(enteredUnitPrice, vatRate);
+
+        int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+        BigDecimal grossAmount = unitPriceGross.multiply(BigDecimal.valueOf(quantity));
         BigDecimal preTaxAmount = calculateLinePreTaxAmount(grossAmount, vatRate);
         BigDecimal vatAmount = grossAmount.subtract(preTaxAmount);
 
-        return new PreparedPurchaseLine(item, product, grossAmount, vatRate, preTaxAmount, vatAmount);
+        return new PreparedPurchaseLine(item, product, unitPriceGross, grossAmount, vatRate, preTaxAmount, vatAmount);
+    }
+
+    /** Reverse of {@link #calculateLinePreTaxAmount}: grosses up a pre-tax unit price by {@code vatRate}. */
+    private BigDecimal grossUpUnitPrice(BigDecimal preTaxUnitPrice, BigDecimal vatRate) {
+        BigDecimal rate = safe(vatRate);
+        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
+            return preTaxUnitPrice.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal multiplier = BigDecimal.ONE.add(rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
+        return preTaxUnitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
     }
 
     /** Combo là hàng lắp từ các sản phẩm thành phần khi bán — không được nhập trực tiếp từ NCC. */
@@ -901,12 +936,6 @@ public class PurchaseinvoiceService {
                     + "\" chưa có loại hàng hoặc thuế suất VAT mặc định");
         }
         return type.getDefaultVATRate();
-    }
-
-    /** "Tiền hàng" of one purchase line — importPrice × quantity. importPrice is already VAT-inclusive (gross). */
-    private BigDecimal calculateLineGrossAmount(PurchaseInvoiceDetailCreateRequest item) {
-        return safe(item.getImportPrice())
-                .multiply(BigDecimal.valueOf(item.getQuantity() == null ? 0 : item.getQuantity()));
     }
 
     /** Reverse-splits a VAT-inclusive gross amount into its pre-tax portion — gross ÷ (1 + vatRate/100). */
@@ -1226,8 +1255,10 @@ public class PurchaseinvoiceService {
 
     /**
      * "estimatedPrice" trên dự trù là TỔNG giá dự kiến cho requestedQuantity, đã bao gồm VAT (theo
-     * xác nhận của BA) — chia đều cho requestedQuantity ra "unitPrice" để gợi ý thẳng vào "Giá nhập"
-     * của phiếu nhập, vốn cũng là giá đã gồm VAT (xem {@link #calculateLineGrossAmount}).
+     * xác nhận của BA) — chia đều cho requestedQuantity ra "unitPrice" để gợi ý thẳng vào "Đơn giá"
+     * của phiếu nhập. Gợi ý này giả định phiếu nhập vẫn để {@code priceIncludesVat = true} (mặc
+     * định) — nếu người dùng chuyển sang nhập giá trước thuế, con số gợi ý này (vẫn là giá đã gồm
+     * VAT) sẽ bị hiểu sai thành giá trước thuế; xem {@link #prepareLine}.
      */
     private ProcurementPlanDetailOptionResponse toProcurementPlanDetailOption(Procurementplandetail detail) {
         Product product = detail.getProductID();
@@ -1309,7 +1340,7 @@ public class PurchaseinvoiceService {
             }
 
             if (detail.getImportPrice() == null || detail.getImportPrice().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("Giá nhập phải lớn hơn 0");
+                throw new IllegalArgumentException("Đơn giá phải lớn hơn 0");
             }
 
             if (detail.getLotNumber() == null || detail.getLotNumber().isBlank()) {
