@@ -12,6 +12,7 @@ public class PurchaseInvoiceDetailItemResponse {
 
     private Integer productId;
     private String productName;
+    private String batchName;
     private String lotNumber;
     private LocalDate productionDate;
     private String productionDateDisplay;

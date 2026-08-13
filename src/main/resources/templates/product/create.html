@@ -208,13 +208,18 @@
                         <label class="info-label">Tồn tối đa <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" th:field="*{maxStock}" min="0" placeholder="Ví dụ: 200">
                     </div>
-                    <div class="col-12 col-md-3">
+                    <!-- Tạo mới: trạng thái luôn mặc định "Đang kinh doanh" (newFormWithBaseUnit()
+                         set sẵn status=true), không cho chọn ngay lúc tạo — chỉ hiện ô chọn khi
+                         sửa hàng hóa đã tồn tại (isEdit=true). Vẫn cần input ẩn để giá trị true
+                         thật sự được submit lên khi tạo mới. -->
+                    <div class="col-12 col-md-3" th:if="${isEdit}">
                         <label class="info-label">Trạng thái</label>
                         <select class="form-select" th:field="*{status}">
                             <option th:value="true">Đang kinh doanh</option>
                             <option th:value="false">Ngừng kinh doanh</option>
                         </select>
                     </div>
+                    <input type="hidden" th:unless="${isEdit}" th:field="*{status}">
                     <div class="col-12 col-md-6">
                         <label class="info-label">Ảnh sản phẩm</label>
                         <input type="file" class="form-control" id="imageFileInput" name="imageFile" accept="image/*">

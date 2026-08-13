@@ -4,13 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <title>Phiếu bán hàng | PharmaManager</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=80mm, initial-scale=1">
 
     <style>
         :root {
             --receipt-width: 80mm;
-            --receipt-pad-y: 4mm;
-            --receipt-pad-x: 5mm;
+            --receipt-margin-x: 0.04in;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: var(--receipt-width);
+            max-width: var(--receipt-width);
+            box-sizing: border-box;
         }
 
         body {
@@ -18,23 +26,21 @@
             font-size: 13px;
             color: #000;
             background: #fff;
-            margin: 0 auto;
-            width: var(--receipt-width);
-            max-width: var(--receipt-width);
-            padding: var(--receipt-pad-y) var(--receipt-pad-x);
-            box-sizing: border-box;
+            padding: 0 var(--receipt-margin-x) 0.08in;
         }
 
-        html.embed-preview,
-        html.embed-preview body {
-            overflow: hidden;
-            height: auto;
+        @media screen {
+            html.embed-preview,
+            html.embed-preview body {
+                overflow: hidden;
+                height: auto;
+            }
         }
 
         .receipt {
             width: 100%;
             margin: 0;
-            padding: 0 1mm;
+            padding: 0;
             line-height: 1.45;
             box-sizing: border-box;
         }
@@ -104,8 +110,15 @@
             margin-bottom: 6px;
         }
 
+        .item-block {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
         .summary {
             margin-top: 4px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .summary-row {
@@ -135,23 +148,75 @@
         }
 
         @media print {
+            html,
             body {
-                width: var(--receipt-width);
-                max-width: var(--receipt-width);
-                padding: var(--receipt-pad-y) var(--receipt-pad-x);
+                width: var(--receipt-width) !important;
+                max-width: var(--receipt-width) !important;
+                min-width: var(--receipt-width) !important;
+                height: auto !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 var(--receipt-margin-x) 0.08in !important;
+                overflow: visible !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
             .receipt {
                 width: 100%;
-                padding: 0 1mm;
-            }
-
-            @page {
-                size: 80mm auto;
-                margin: 4mm 5mm;
+                padding: 0;
             }
         }
     </style>
+    <script th:inline="none">
+        (function () {
+            var PAGE_WIDTH_MM = 80;
+            var PX_TO_MM = 25.4 / 96;
+
+            function measurePageHeightMm() {
+                var body = document.body;
+                var html = document.documentElement;
+                var heightPx = Math.max(
+                    body.scrollHeight,
+                    body.offsetHeight,
+                    html.scrollHeight,
+                    html.offsetHeight
+                );
+                return Math.max(Math.ceil(heightPx * PX_TO_MM) + 2, 50);
+            }
+
+            function applyFixedPageSize() {
+                var heightMm = measurePageHeightMm();
+                var pageRule = '@page { size: ' + PAGE_WIDTH_MM + 'mm ' + heightMm + 'mm; margin: 0; }';
+                var style = document.getElementById('receipt-print-page');
+                if (!style) {
+                    style = document.createElement('style');
+                    style.id = 'receipt-print-page';
+                    document.head.appendChild(style);
+                }
+                style.textContent = pageRule + ' @media print { ' + pageRule + ' html, body { margin: 0 !important; padding-top: 0 !important; } }';
+
+                document.documentElement.style.width = PAGE_WIDTH_MM + 'mm';
+                document.documentElement.style.maxWidth = PAGE_WIDTH_MM + 'mm';
+                document.documentElement.style.margin = '0';
+                document.documentElement.style.padding = '0';
+                document.body.style.width = PAGE_WIDTH_MM + 'mm';
+                document.body.style.maxWidth = PAGE_WIDTH_MM + 'mm';
+                document.body.style.margin = '0';
+                document.body.style.paddingTop = '0';
+            }
+
+            window.addEventListener('load', applyFixedPageSize);
+            window.addEventListener('beforeprint', applyFixedPageSize);
+            if (window.matchMedia) {
+                window.matchMedia('print').addEventListener('change', function (event) {
+                    if (event.matches) {
+                        applyFixedPageSize();
+                    }
+                });
+            }
+        })();
+    </script>
 </head>
 
 <body>
@@ -200,7 +265,7 @@
 
     <div th:if="${#lists.isEmpty(printData.lines)}" class="empty-items">Không có sản phẩm.</div>
 
-    <div th:each="line : ${printData.lines}">
+    <div th:each="line : ${printData.lines}" class="item-block">
         <div class="item-name" th:text="${line.productName}">Thymolin H/3vix10vien</div>
         <div class="item-note"
              th:if="${line.note != null && !line.note.isBlank()}"
