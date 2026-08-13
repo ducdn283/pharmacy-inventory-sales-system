@@ -106,12 +106,16 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
      *
      * <p>No dedicated flag exists on {@code Stockadjustmentdetail}/{@code Batch} for "unknown
      * origin", so this relies on the one structural signal {@code StockadjustmentService
-     * .createSurplusBatch} leaves behind: the batch code is prefixed {@code "KK-"} <strong>only</strong>
+     * .createSurplusBatch} leaves behind: the batch code is prefixed {@code "RS-"} <strong>only</strong>
      * when a new batch was created for unknown-origin surplus (a known-origin surplus line reuses the
      * counted batch as-is, never creating one), and {@code purchaseDetailID} is
      * always {@code null} on it (no real purchase behind it). Verified 2026-08 that no other flow in
-     * the codebase produces a {@code "KK-"}-prefixed batch code ({@code PurchaseinvoiceService} uses
+     * the codebase produces such a prefix ({@code PurchaseinvoiceService} uses
      * {@code "BATCH-"}, {@code ReturnService.cloneReturnBatch} uses {@code "RT-"}).</p>
+     *
+     * <p><strong>Nhận cả {@code "KK-"}</strong> — tiền tố cũ trước 13/08/2026 (kiểm kê), đổi thành
+     * {@code "RS-"} (rà soát) cho khớp cách gọi hiện tại. Lô cũ vẫn phải được tính vào thu nhập chịu
+     * thuế, bỏ đi là số thuế của kỳ cũ tự nhiên hụt.</p>
      */
     @Query("""
            select coalesce(sum(d.lineCost), 0)
@@ -122,7 +126,7 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
              and d.stockAdjustmentID.status = :status
              and d.stockAdjustmentID.date >= :from
              and d.stockAdjustmentID.date < :to
-             and b.batchCode like 'KK-%'
+             and (b.batchCode like 'RS-%' or b.batchCode like 'KK-%')
              and b.purchaseDetailID is null
            """)
     BigDecimal sumUnknownOriginIncreaseCostInPeriod(@Param("status") String status,

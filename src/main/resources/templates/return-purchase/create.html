@@ -144,12 +144,6 @@
                         </div>
 
                         <div class="p-4">
-                            <div class="form-text mb-3">
-                                Phiếu trả tính tiền hoàn và cấn trừ vào công nợ đang nợ nhà cung cấp, KHÔNG thu
-                                tiền mặt. Việc nhận lại phần tiền còn lại từ nhà cung cấp thực hiện ở phiếu thu
-                                bên Kế toán.
-                            </div>
-
                             <div class="mb-3">
                                 <label class="form-label">Lý do trả hàng <span class="text-danger">*</span></label>
                                 <textarea class="form-control" name="reason" rows="2" required
@@ -171,13 +165,6 @@
                                            data-invalid-message="Tỷ lệ NCC hoàn phải là số nguyên từ 1 đến 100"
                                            th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
                                     <span class="input-group-text">%</span>
-                                </div>
-                                <div class="form-text">
-                                    Mặc định theo thiết lập tài chính
-                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 0, 'COMMA')}">80</span>%),
-                                    chỉ nhận số nguyên.
-                                    Phần NCC không hoàn là khoản lỗ — chỉ được tính vào chi phí hợp lý nếu có
-                                    biên bản trả hàng / xác nhận mức hoàn của NCC (đính kèm ở ghi chú).
                                 </div>
                             </div>
 

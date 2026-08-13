@@ -59,6 +59,19 @@ public class ShiftreportService {
     private static final String INCOME_STATUS_DRAFT = "Nháp";
     private static final String INCOME_STATUS_REJECTED = "Từ chối";
 
+    /**
+     * Số ngày tối đa một ca mở tay được phép lùi. Lưới an toàn cuối cùng: giờ mở ca nay suy từ mốc
+     * đăng nhập và đã bị kẹp về giờ mở cửa hôm nay ({@link #resolveManualStart}) nên bình thường
+     * không bao giờ chạm tới. Xem {@link #createManualShift}.
+     */
+    private static final int MANUAL_SHIFT_MAX_BACKDATE_DAYS = 1;
+
+    /**
+     * Giờ nhà thuốc mở cửa (hoạt động 6h–23h). Ca không thể bắt đầu trước mốc này — xem
+     * {@link #resolveManualStart}.
+     */
+    private static final int PHARMACY_OPENING_HOUR = 6;
+
     /** Giá trị lọc "thâm hụt quỹ": tiền mặt thực đếm ÍT hơn số dự kiến ({@code cashDiscrepancy < 0}). */
     public static final String DISCREPANCY_SHORTAGE = "SHORTAGE";
     /** Giá trị lọc "thừa quỹ": {@code cashDiscrepancy > 0}. */
@@ -134,12 +147,132 @@ public class ShiftreportService {
         Account cashier = accountRepository.findById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
+        Shiftreport shift = newDraftShift(cashier, LocalDateTime.now(VN_ZONE));
+
+        Shiftreport saved = shiftreportRepository.save(shift);
+        // Mã thật = CA- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
+        saved.setShiftReportCode(formatCode(saved.getId()));
+        return saved;
+    }
+
+    /**
+     * Mở ca THỦ CÔNG, cho ngày không phát sinh giao dịch nào.
+     *
+     * <p>Ca vốn được tạo lười (xem {@link #ensureOpenShiftFor}) — hôm nào không bán, không thu, không
+     * chi thì cả ngày không có ca nào, và người trực không có gì để chốt. Nút tạo tay lấp đúng khoảng
+     * đó.</p>
+     *
+     * <p><strong>Giờ mở ca suy từ mốc đăng nhập</strong> ({@link #resolveManualStart}), không cho nhập
+     * tay và cũng không lấy lúc bấm nút: lấy lúc bấm thì ca mở 22h00 — chốt 22h05, dài 5 phút, sai hẳn
+     * ca thật; còn cho gõ tay thì không kiểm chứng được. Giờ CHỐT ngược lại, vẫn lấy đúng lúc bấm chốt
+     * ({@link #closeShift}) vì đó là thời điểm tiền được kiểm đếm thật.</p>
+     *
+     * <p>{@code createdAt} vẫn ghi đúng lúc bấm nút, nên màn chi tiết hiện được cả giờ mở ca lẫn giờ tạo
+     * phiếu để Chủ nhà thuốc nhìn thấy khoảng lệch khi duyệt.</p>
+     */
+    @Transactional
+    public Integer createManualShift(Integer accountId, LocalDateTime sessionStartedAt) {
+        if (accountId == null || !runsRegister(accountId)) {
+            throw new IllegalArgumentException(
+                    "Chỉ chủ nhà thuốc và dược sĩ mới có ca làm việc — kế toán không giữ tiền quầy");
+        }
+        if (sessionStartedAt == null) {
+            throw new IllegalArgumentException(
+                    "Không đọc được thời điểm đăng nhập — vui lòng đăng nhập lại rồi mở ca");
+        }
+
+        LocalDateTime now = LocalDateTime.now(VN_ZONE);
+        LocalDateTime startAt = resolveManualStart(accountId, sessionStartedAt, now);
+
+        // Lưới an toàn cho hai mốc mà resolveManualStart đã kẹp sẵn — giữ lại để nếu sau này BA cho
+        // nhập tay giờ mở ca trở lại thì luật vẫn còn nguyên ở tầng service.
+        if (startAt.isAfter(now)) {
+            throw new IllegalArgumentException("Thời điểm mở ca không được ở tương lai");
+        }
+        LocalDate earliest = now.toLocalDate().minusDays(MANUAL_SHIFT_MAX_BACKDATE_DAYS);
+        if (startAt.toLocalDate().isBefore(earliest)) {
+            throw new IllegalArgumentException("Chỉ mở bù được ca trong vòng "
+                    + MANUAL_SHIFT_MAX_BACKDATE_DAYS + " ngày gần nhất (từ "
+                    + formatLocalDate(earliest) + " trở lại đây)");
+        }
+
+        findStaleDraftShift(accountId).ifPresent(stale -> {
+            throw new IllegalArgumentException("Bạn còn báo cáo ca ngày "
+                    + formatLocalDate(stale.getShiftDate())
+                    + " chưa chốt — vui lòng chốt ca đó trước");
+        });
+        Optional<Shiftreport> existingDraft =
+                shiftreportRepository.findFirstByCashierID_IdAndStatusOrderByStartTimeDesc(accountId, ShiftReportStatus.DRAFT);
+        if (existingDraft.isPresent()) {
+            throw new IllegalArgumentException("Bạn đang có ca "
+                    + existingDraft.get().getShiftReportCode()
+                    + " chưa chốt — mỗi người chỉ mở một ca tại một thời điểm");
+        }
+
+        Account cashier = accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
+
+        Shiftreport shift = newDraftShift(cashier, startAt);
+        Shiftreport saved = shiftreportRepository.save(shift);
+        saved.setShiftReportCode(formatCode(saved.getId()));
+        return saved.getId();
+    }
+
+    /**
+     * Giờ mở ca thật sự dùng cho một ca mở tay = mốc muộn nhất trong ba mốc:
+     * <ol>
+     *   <li><strong>lúc đăng nhập</strong> — mốc thay cho ô nhập giờ;</li>
+     *   <li><strong>{@link #PHARMACY_OPENING_HOUR}h hôm nay</strong> (nhà thuốc hoạt động 6h–23h);</li>
+     *   <li><strong>lúc ca gần nhất của chính người đó kết thúc</strong>.</li>
+     * </ol>
+     *
+     * <p><strong>(2) vừa vá lỗi qua ngày mới, vừa chặn giờ vô lý.</strong> Phiên sống xuyên nửa đêm
+     * (đăng nhập 23h, bấm mở ca lúc 0h10) cho mốc của NGÀY HÔM QUA ⇒ ca vừa mở đã bị coi là "ca tồn đọng
+     * từ ngày trước", {@code PendingShiftInterceptor} khoá sạch thao tác và bắt chốt ngay. Kẹp về giờ mở
+     * cửa hôm nay thì ca luôn thuộc đúng ngày đang làm việc, và cũng không có ca khai bắt đầu từ 2h sáng
+     * chỉ vì ai đó để trình duyệt mở qua đêm.</p>
+     *
+     * <p><strong>(3) chặn hai ca chồng giờ nhau.</strong> Sáng chốt lúc 12h rồi mở ca chiều: mốc đăng
+     * nhập vẫn là 7h00, lấy nguyên là ca chiều nuốt trọn buổi sáng — cùng một quãng thời gian tính vào
+     * hai ca.</p>
+     *
+     * <p>Riêng mốc (2) có thể rơi vào TƯƠNG LAI khi bấm mở ca trước giờ mở cửa; dòng cuối kẹp lại về
+     * {@code now}.</p>
+     */
+    private LocalDateTime resolveManualStart(Integer accountId, LocalDateTime sessionStartedAt, LocalDateTime now) {
+        LocalDateTime startAt = sessionStartedAt;
+
+        LocalDateTime openingToday = now.toLocalDate().atTime(PHARMACY_OPENING_HOUR, 0);
+        if (startAt.isBefore(openingToday)) {
+            startAt = openingToday;
+        }
+
+        Optional<Shiftreport> previous =
+                shiftreportRepository.findFirstByCashierID_IdOrderByStartTimeDesc(accountId);
+        if (previous.isPresent()) {
+            Instant boundary = previous.get().getEndTime() != null
+                    ? previous.get().getEndTime()
+                    : previous.get().getStartTime();
+            if (boundary != null) {
+                // startTime/endTime lưu giờ VN gắn nhãn UTC (xem nowVn()) nên đọc lại bằng UTC.
+                LocalDateTime previousEnd = LocalDateTime.ofInstant(boundary, ZoneOffset.UTC);
+                if (startAt.isBefore(previousEnd)) {
+                    startAt = previousEnd;
+                }
+            }
+        }
+
+        return startAt.isAfter(now) ? now : startAt;
+    }
+
+    /** Ca Nháp rỗng của một người, mở tại {@code startAt} (giờ VN). Dùng chung cho tạo lười và tạo tay. */
+    private Shiftreport newDraftShift(Account cashier, LocalDateTime startAt) {
         Shiftreport shift = new Shiftreport();
         shift.setShiftReportCode(temporaryCode());
         shift.setCashierID(cashier);
-        shift.setShiftDate(LocalDate.now(VN_ZONE));
-        shift.setShiftType(resolveShiftType());
-        shift.setStartTime(nowVn());
+        shift.setShiftDate(startAt.toLocalDate());
+        shift.setShiftType(resolveShiftType(startAt.getHour()));
+        shift.setStartTime(startAt.toInstant(ZoneOffset.UTC));
         shift.setOpeningCash(resolveOpeningCash());
         shift.setTotalInvoices(0);
         shift.setTotalRevenue(BigDecimal.ZERO);
@@ -152,11 +285,7 @@ public class ShiftreportService {
         shift.setTotalBankingOut(BigDecimal.ZERO);
         shift.setStatus(ShiftReportStatus.DRAFT);
         shift.setCreatedAt(nowVn());
-
-        Shiftreport saved = shiftreportRepository.save(shift);
-        // Mã thật = CA- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
-        saved.setShiftReportCode(formatCode(saved.getId()));
-        return saved;
+        return shift;
     }
 
     /** Chỉ Owner và Dược sĩ trực quầy (có két) mới có báo cáo ca; Kế toán không. */
@@ -261,10 +390,10 @@ public class ShiftreportService {
         boolean live = isStatus(shift.getStatus(), ShiftReportStatus.DRAFT);
         TransactionTotals totals = live ? computeTransactionTotals(shift.getId()) : null;
 
-        // Live estimate for the "Đối chiếu tiền mặt" panel while the shift is still open; the value
-        // is recomputed (with any openingCash override) and persisted for real at close time.
+        // Live estimate for the "Đối chiếu tiền mặt" panel while the shift is still open; recomputed
+        // and persisted for real at close time. KHÔNG cộng tiền đầu ca — xem expectedClosingCashOf().
         BigDecimal expectedClosingCash = live
-                ? nz(shift.getOpeningCash()).add(totals.totalCashIn()).subtract(totals.totalCashOut())
+                ? expectedClosingCashOf(totals.totalCashIn(), totals.totalCashOut())
                 : shift.getExpectedClosingCash();
 
         // Chuyển khoản ròng — thuần thông tin để người chốt ca tự soát với thông báo ngân hàng.
@@ -313,6 +442,21 @@ public class ShiftreportService {
                 shortageIncome != null ? shortageIncome.getStatus() : null,
                 cashShortage.signum() > 0 && shortageIncome == null
         );
+    }
+
+    /**
+     * Tiền mặt ca phải giao lại = <strong>thu tiền mặt − chi tiền mặt</strong> trong ca.
+     *
+     * <p><strong>KHÔNG cộng tiền đầu ca.</strong> Khoản đầu ca ({@code Financialsetting.openingCashDefault})
+     * không trừ vào quỹ lúc mở ca và không nộp lại vào quỹ lúc chốt ca — nó không tham gia dòng tiền nào,
+     * trong khi mọi khoản thu/chi thật đều tác động thẳng vào QUỸ. Cộng nó vào đây là mặc định ca nào
+     * cũng lệch đúng bằng khoản đó.</p>
+     *
+     * <p>Kéo theo: ô "tiền mặt cuối ca thực đếm" phải là <em>tiền bán được trong ca</em>, không tính
+     * khoản đầu ca — nhãn ô nhập ở {@code shift-report/detail.html} nói rõ điều này.</p>
+     */
+    private BigDecimal expectedClosingCashOf(BigDecimal totalCashIn, BigDecimal totalCashOut) {
+        return nz(totalCashIn).subtract(nz(totalCashOut));
     }
 
     /** Phần quỹ còn thiếu của một ca: {@code |cashDiscrepancy|} khi âm, ngược lại 0. */
@@ -371,9 +515,8 @@ public class ShiftreportService {
 
         applyTransactionTotals(shift);
 
-        BigDecimal expectedClosingCash = nz(shift.getOpeningCash())
-                .add(nz(shift.getTotalCashIn()))
-                .subtract(nz(shift.getTotalCashOut()));
+        BigDecimal expectedClosingCash =
+                expectedClosingCashOf(shift.getTotalCashIn(), shift.getTotalCashOut());
 
         shift.setExpectedClosingCash(expectedClosingCash);
         shift.setActualClosingCash(actualClosingCash);
@@ -418,39 +561,24 @@ public class ShiftreportService {
      * Nộp tiền mặt của ca vào QUỸ ({@code Financialsetting.cashSafeBalance}) đúng lúc ca được duyệt.
      *
      * <p><strong>Doanh thu và quỹ là hai con số khác nhau.</strong> Bán hàng ghi nhận DOANH THU ngay
-     * lúc lập hóa đơn (số đó đi vào kỳ tính thuế); còn QUỸ chỉ tăng khi người trực ca giao lại tiền
-     * mặt thật lúc kết ca. Bán 1.200.000 mà két thiếu 200.000 thì ca vẫn ghi doanh thu 1.200.000,
-     * quỹ chỉ nhận 1.000.000 — phần thiếu là khoản phải THU LẠI của người trực (phiếu thu riêng,
-     * loại {@code SHIFT_SHORTAGE}), không phải khoản giảm doanh thu.</p>
+     * lúc lập hóa đơn (số đó đi vào kỳ tính thuế); còn QUỸ là tiền thật. Bán 1.200.000 mà két thiếu
+     * 200.000 thì ca vẫn ghi doanh thu 1.200.000 — phần thiếu là khoản phải THU LẠI của người trực
+     * (phiếu thu {@code SHIFT_SHORTAGE}), không phải khoản giảm doanh thu.</p>
      *
-     * <p><strong>Chốt ca nộp đúng phần CHÊNH LỆCH THỰC ĐẾM</strong> ({@code cashDiscrepancy}), không
-     * nộp lại toàn bộ tiền của ca. Lý do: tiền mặt thu trong ca ĐÃ được cộng vào quỹ ngay lúc phát
-     * sinh — {@code InvoiceService.createSaleInvoice} và {@code IncomeService} đều gọi
-     * {@code applyFundDelta(paidByCash, paidByBanking)}. Cộng thêm {@code thực đếm − đầu ca} ở đây
-     * nữa là đếm cùng một tờ tiền hai lần.</p>
+     * <p><strong>Chỉ nộp phần CHÊNH LỆCH THỰC ĐẾM</strong> ({@code cashDiscrepancy}), không nộp lại toàn
+     * bộ tiền của ca: tiền mặt thu trong ca ĐÃ được cộng vào quỹ ngay lúc phát sinh
+     * ({@code InvoiceService.createSaleInvoice} và {@code IncomeService} đều gọi {@code applyFundDelta}).
+     * Cộng thêm {@code thực đếm − đầu ca} ở đây nữa là đếm cùng một tờ tiền hai lần. Cộng chênh lệch thì
+     * số dư quỹ cuối cùng đúng bằng tiền thật đang nằm trong két.</p>
      *
-     * <p>Cộng chênh lệch thì kết quả cuối cùng đúng bằng tiền thật đếm được:</p>
-     * <pre>
-     * quỹ 1.000.000
-     *   + 199.000  (bán hàng — quỹ nhận theo số "đáng lẽ phải có")
-     *   −  99.000  (chốt ca — thực đếm thiếu 99.000 so với dự kiến)
-     *   = 1.100.000  ← đúng số tiền mặt đang thật sự nằm trong két
-     * </pre>
+     * <p>Gọi đúng tại bước chuyển sang {@code Đã duyệt} — trạng thái ĐIỂM CUỐI, chỉ tới được một lần
+     * ({@code approve()} chỉ nhận ca Chờ duyệt, {@code closeShift()} chỉ nhận Nháp/Từ chối) nên không có
+     * đường nào trừ quỹ hai lần. Ca bị từ chối chưa từng trừ nên nộp lại vẫn đúng.</p>
      *
-     * <p>Phần 99.000 thiếu là khoản phải THU LẠI của người trực; khi lập phiếu thu
-     * {@code SHIFT_SHORTAGE} và phiếu đó hoàn thành, {@code IncomeService} cộng nốt vào quỹ →
-     * 1.199.000. Doanh thu của ca thì KHÔNG đổi (vẫn 199.000, số của kỳ tính thuế) — thâm hụt quỹ
-     * không bao giờ là khoản giảm doanh thu.</p>
-     *
-     * <p>Gọi đúng tại bước chuyển sang {@code Đã duyệt} — trạng thái này là ĐIỂM CUỐI (chỉ tới được
-     * một lần: {@code approve()} chỉ nhận ca Chờ duyệt, {@code closeShift()} chỉ nhận Nháp/Từ chối)
-     * nên không có đường nào trừ quỹ hai lần. Ca bị từ chối chưa từng trừ nên nộp lại vẫn đúng.</p>
-     *
-     * <p><strong>⚠️ Phụ thuộc ngầm cần nhớ:</strong> công thức này đúng vì bên bán hàng/phiếu thu tự
-     * cộng quỹ lúc lập. Nếu sau này module đó bỏ {@code applyFundDelta}, chỗ này phải đổi thành
-     * {@code thực đếm − đầu ca}. Ngoài ra tiền mặt CHI ra trong ca ({@code totalCashOut}) hiện chưa
-     * có nơi nào trừ khỏi quỹ — thiếu sót sẵn có của module Phiếu chi, không xử lý ở đây để không
-     * giành việc của họ rồi trừ hai lần khi họ làm.</p>
+     * <p><strong>⚠️ Phụ thuộc ngầm:</strong> công thức này đúng vì bên bán hàng/phiếu thu tự cộng quỹ lúc
+     * lập; nếu module đó bỏ {@code applyFundDelta} thì chỗ này phải đổi thành {@code thực đếm − đầu ca}.
+     * Ngoài ra tiền mặt CHI ra trong ca chưa có nơi nào trừ khỏi quỹ — thiếu sót sẵn có của module Phiếu
+     * chi, không xử lý ở đây để khỏi trừ hai lần khi họ làm.</p>
      */
     private void creditCashSafe(Shiftreport shift) {
         // Chỉ đụng quỹ TIỀN MẶT: chuyển khoản không qua ngăn kéo nên không có gì để đối chiếu lúc
@@ -522,14 +650,16 @@ public class ShiftreportService {
         // Tiền chi trong ca KHÔNG lấy từ phiếu trả: phiếu trả chỉ TÍNH nghĩa vụ phải hoàn (totalRefund),
         // tiền chỉ thật sự rời két khi Kế toán lập phiếu chi. Đã bỏ hẳn refundCash/
         // refundBanking/refundCredit khỏi bảng `return`, nên nguồn duy nhất còn lại là Expense.
-        // Cùng nguyên tắc với phiếu thu ở dưới: bỏ phiếu Nháp/Từ chối/Đã hủy, phiếu Chờ duyệt VẪN tính
-        // vì tiền đã ra khỏi két lúc chi, trước khi Owner review.
+        //
+        // CHỈ tính phiếu ĐÃ HOÀN THÀNH (đã xác nhận thanh toán). Từ bản BA 2026-08, duyệt và chi thật
+        // là hai bước tách rời: phiếu ở "Chờ duyệt"/"Chờ thanh toán" thì tiền VẪN NẰM TRONG KÉT, và
+        // ExpenseService cũng chỉ gắn ca (attachOpenShift) đúng lúc xác nhận thanh toán. Đếm các
+        // trạng thái đó là trừ khống một khoản chưa chi, làm "tiền mặt cuối ca dự kiến" thấp hơn số
+        // đếm được và báo thừa quỹ oan cho người trực.
         List<Expense> expenses = expenseRepository.findAll()
                 .stream()
                 .filter(exp -> exp.getShiftReportID() != null && shiftId.equals(exp.getShiftReportID().getId()))
-                .filter(exp -> !isStatus(exp.getStatus(), ExpenseStatus.DRAFT)
-                        && !isStatus(exp.getStatus(), ExpenseStatus.REJECTED)
-                        && !isStatus(exp.getStatus(), ExpenseStatus.CANCELLED))
+                .filter(exp -> isStatus(exp.getStatus(), ExpenseStatus.COMPLETED))
                 .toList();
 
         BigDecimal totalCashOut = expenses.stream()
@@ -566,9 +696,8 @@ public class ShiftreportService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Tiền nhân viên đền bù thất thoát kho KHÔNG tách thành dòng riêng (BA chốt 28/07): nó là một
-        // phiếu thu như mọi phiếu thu khác, đã được cộng vào totalCashIn/totalBankingIn ở vòng lặp
-        // trên. Ca không cần biết khoản thu đó đến từ chênh lệch kho hay từ đâu — chỉ cần đúng số.
+        // Tiền nhân viên đền bù thất thoát kho KHÔNG tách thành dòng riêng: nó là một phiếu thu như mọi
+        // phiếu thu khác, đã được cộng vào totalCashIn/totalBankingIn ở vòng lặp trên.
         return new TransactionTotals(totalInvoices, totalRevenue, totalCashIn, totalBankingIn,
                 totalReturns, totalReturnAmount, totalCashOut, totalBankingOut, totalDebtCollected);
     }
@@ -601,8 +730,7 @@ public class ShiftreportService {
                 .orElse(BigDecimal.ZERO);
     }
 
-    private String resolveShiftType() {
-        int hour = LocalTime.now(VN_ZONE).getHour();
+    private String resolveShiftType(int hour) {
         if (hour < 12) {
             return "Sáng";
         }
@@ -703,9 +831,9 @@ public class ShiftreportService {
      * Ngay sau khi lưu, mã được ghi lại theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước
      * nằm trong cùng một transaction.
      *
-     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
-     * người phát sinh giao dịch đầu ca cùng lúc nhận cùng một số; cột mã có UNIQUE nên người thứ hai ăn
-     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     * <p>ĐỪNG quay lại cách {@code max(id) + 1} <em>trước khi</em> lưu: đọc rồi mới ghi thì hai người
+     * phát sinh giao dịch đầu ca cùng lúc nhận cùng một số, mà cột mã có UNIQUE nên người thứ hai ăn lỗi
+     * 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
      */
     private String temporaryCode() {
         return "TMP-" + UUID.randomUUID();

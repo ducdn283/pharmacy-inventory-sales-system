@@ -13,7 +13,12 @@ public class ReturnDetailItemResponse {
     private Integer productId;
     private String productName;
 
-    private String lotNumber;
+    /**
+     * TÊN LÔ ({@code batch.batchName}) — không phải {@code batch.lotNumber}. Tên lô là thứ phân biệt
+     * được các lô của cùng một sản phẩm; số lô của lô hàng trả copy y hệt lô gốc nên không phân biệt
+     * được lô nào là hàng khách trả về.
+     */
+    private String batchName;
     private String expirationDateDisplay;
 
     private String unitName;

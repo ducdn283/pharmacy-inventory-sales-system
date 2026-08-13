@@ -23,13 +23,11 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Single service for the <em>customer</em> return feature: listing/searching, detail, creation and
- * the approve/reject workflow. Supplier returns (via {@code purchaseID}) are a later phase.
+ * Customer returns: listing/searching, detail, creation and the approve/reject workflow.
  *
  * <p>Statuses (see {@link ReturnStatus}): Nháp → Chờ duyệt → Nợ / Từ chối. There is no "Duyệt"
  * state — an approved return becomes a payable ("Nợ") because the pharmacy now owes the customer the
- * not-yet-paid refund. A Pharmacist submits to {@code Chờ duyệt}; the Owner approves to {@code Nợ}
- * (and Owner-created slips auto-approve straight to {@code Nợ}).</p>
+ * not-yet-paid refund. Owner-created slips auto-approve straight to {@code Nợ}.</p>
  *
  * <p><strong>Approval changes stock:</strong> each restockable line goes into a brand-new batch cloned
  * from the one it was sold from — returned goods are kept in their own batch for traceability (there is
@@ -40,10 +38,8 @@ import java.util.stream.Collectors;
 public class ReturnService {
 
     /**
-     * "No return window at all" — the meaning the BA gave {@code Financialsetting.returnPolicyMaxDays}
-     * when it is left blank ("int, DEFAULT NULL (không giới hạn nếu để trống)", Logic_Thu_Chi sheet 11,
-     * 2026-07-27). The policy lives entirely in the financial setting, which the Owner edits on the
-     * financial-settings screen — there is no hard-coded fallback here on purpose.
+     * "No return window at all" — the meaning of a blank {@code Financialsetting.returnPolicyMaxDays}.
+     * The policy lives entirely in the financial setting; there is no hard-coded fallback on purpose.
      */
     private static final int RETURN_WINDOW_UNLIMITED = -1;
 
@@ -62,20 +58,18 @@ public class ReturnService {
     /** An invoice still carrying an unpaid balance (mirrors InvoiceService.STATUS_DEBT). */
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     /**
-     * Giá trị CŨ của {@code invoice.status}. Từ 04/08/2026 việc ký không còn rẽ nhánh nghiệp vụ nào ở màn
-     * trả hàng (ký hay chưa thì trả hàng vẫn xuất hóa đơn THAY THẾ), và từ 06/08/2026 nó cũng không còn
-     * nằm trong {@code status} nữa — bảng {@code invoice} có 2 cột riêng {@code signAt}/{@code signBy}.
-     * Hằng số giữ lại CHỈ để đọc dữ liệu cũ: hóa đơn cũ mang chuỗi này vẫn phải trả hàng được
-     * ({@link #isReturnEligibleStatus}) và không bị ghi đè trạng thái ({@link #hasLegacySignedStatus}).
+     * Giá trị CŨ của {@code invoice.status}: việc ký nay nằm ở 2 cột riêng {@code signAt}/{@code signBy}
+     * và không rẽ nhánh nghiệp vụ nào ở màn trả hàng. Hằng số giữ lại CHỈ để đọc dữ liệu cũ — hóa đơn cũ
+     * mang chuỗi này vẫn phải trả hàng được ({@link #isReturnEligibleStatus}) và không bị ghi đè trạng
+     * thái ({@link #hasLegacySignedStatus}).
      */
     private static final String INVOICE_STATUS_SIGNED = "Đã ký";
     private static final String INVOICE_STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String INVOICE_STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
 
     /**
-     * Loại hóa đơn nay CHỈ CÒN 2: "Bán hàng" (normal) và "Thay thế" (replacement) — loại "Điều chỉnh"
-     * đã bị bỏ hẳn ngày 04/08/2026 (Tax_Invoice.xlsx sheet 04). 3 hằng {@code *_LEGACY} và
-     * {@link #INVOICE_TYPE_VAT} giữ lại CHỈ để đọc dữ liệu cũ đã ghi trong DB, không bao giờ ghi mới.
+     * Loại hóa đơn CHỈ CÒN 2: "Bán hàng" (normal) và "Thay thế" (replacement). 3 hằng {@code *_LEGACY}
+     * và {@link #INVOICE_TYPE_VAT} giữ lại CHỈ để đọc dữ liệu cũ, không bao giờ ghi mới.
      */
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
     /** Giá trị cũ: hóa đơn bán hàng của nhà thuốc Nhóm 3+ khi còn phân biệt theo nhóm doanh thu. */
@@ -239,20 +233,21 @@ public class ReturnService {
         // Resolved once, not per invoice — the window is a single setting row, not per-invoice data.
         int windowDays = getReturnWindowDays();
 
-        // Lọc những điều kiện RẺ (chỉ đọc cột của chính hóa đơn) TRƯỚC, rồi mới tính returnCode cho
-        // phần còn lại: returnCode phải đọc các dòng chi tiết, nên tính cho mọi hóa đơn trong bảng là
-        // lãng phí. Tính đúng MỘT lần cho mỗi ứng viên và dùng lại cho cả bước lọc lẫn bước hiển thị.
+        // Lọc những điều kiện RẺ (chỉ đọc cột của chính hóa đơn) TRƯỚC, rồi mới đọc dòng chi tiết cho
+        // phần còn lại — đọc dòng của mọi hóa đơn trong bảng là lãng phí. Đọc đúng MỘT lần cho mỗi ứng
+        // viên rồi dùng lại cho cả trạng thái trả, bộ lọc từ khóa lẫn phần hiển thị.
         return invoiceRepository.findAll().stream()
                 .filter(this::isNormalInvoice)
                 .filter(this::isReturnEligibleStatus)
                 .filter(invoice -> !Boolean.TRUE.equals(invoice.getPrescriptionRequired()))
-                .filter(invoice -> matchesInvoiceKeyword(invoice, normalizedKeyword))
-                .map(invoice -> Map.entry(invoice, invoiceReturnCode(invoice)))
-                .filter(entry -> isReturnable(entry.getKey(), windowDays, entry.getValue()))
-                .sorted(Comparator.comparing(entry -> entry.getKey().getDate(),
+                .map(this::returnableCandidateOf)
+                .filter(candidate -> isReturnable(candidate.invoice(), windowDays, candidate.returnCode()))
+                .filter(candidate -> matchesInvoiceKeyword(candidate, normalizedKeyword))
+                .sorted(Comparator.comparing(candidate -> candidate.invoice().getDate(),
                         Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(entry -> {
-                    Invoice invoice = entry.getKey();
+                .map(candidate -> {
+                    Invoice invoice = candidate.invoice();
+                    String productSummary = productSummaryOf(candidate.lines());
                     return new ReturnableInvoiceResponse(
                             invoice.getId(),
                             // Số hóa đơn (HD00000x) — duy nhất, để phân biệt; KHÔNG dùng invoicePattern.
@@ -264,9 +259,75 @@ public class ReturnService {
                             // Công nợ còn lại của chính hóa đơn — số sẽ bị cấn trừ vào tiền hoàn khi duyệt
                             // phiếu trả (netting). Hiển thị ngay ở bảng chọn để người lập biết trước.
                             nz(invoice.getDebtAmount()),
-                            returnStatusDisplay(entry.getValue()));
+                            returnStatusDisplay(candidate.returnCode()),
+                            productSummary,
+                            searchTextOf(invoice, candidate.lines()));
                 })
                 .toList();
+    }
+
+    /** Một hóa đơn ứng viên kèm dòng chi tiết đã đọc sẵn — xem {@link #listReturnableInvoices}. */
+    private record ReturnableCandidate(Invoice invoice, List<Invoicedetail> lines, String returnCode) {
+    }
+
+    private ReturnableCandidate returnableCandidateOf(Invoice invoice) {
+        List<Invoicedetail> lines = invoiceLinesOf(invoice.getId());
+        return new ReturnableCandidate(invoice, lines, returnCodeOf(lines));
+    }
+
+    /** Các dòng còn trả được của hóa đơn — nguồn của cả phần hiển thị lẫn phần tìm theo sản phẩm. */
+    private List<Invoicedetail> stillReturnableLines(List<Invoicedetail> lines) {
+        return lines.stream()
+                .filter(line -> {
+                    int returned = line.getReturnedQty() != null ? line.getReturnedQty() : 0;
+                    int quantity = line.getQuantity() != null ? line.getQuantity() : 0;
+                    return returned < quantity;
+                })
+                .filter(line -> isReturnableProductType(line.getProductID()))
+                .toList();
+    }
+
+    /**
+     * Tên các mặt hàng còn trả được, hiện thành một dòng phụ dưới số hóa đơn ở bảng chọn: khi người
+     * lập tìm theo tên thuốc, dòng này cho biết ngay vì sao hóa đơn đó khớp.
+     */
+    private String productSummaryOf(List<Invoicedetail> lines) {
+        return stillReturnableLines(lines).stream()
+                .map(line -> line.getProductID() != null ? line.getProductID().getName() : null)
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .collect(Collectors.joining(" · "));
+    }
+
+    /**
+     * Chuỗi để lọc phía màn hình: số hóa đơn + tên khách + tên và MÃ của các mặt hàng còn trả được.
+     *
+     * <p><strong>KHÔNG có số điện thoại.</strong> Bảng chọn không hiển thị cột nào chứa số điện thoại
+     * — hóa đơn khách lẻ còn không có bản ghi khách hàng để mà lưu — nên tìm theo số điện thoại chỉ
+     * làm người dùng gõ vào rồi không hiểu vì sao không ra kết quả.</p>
+     */
+    private String searchTextOf(Invoice invoice, List<Invoicedetail> lines) {
+        StringBuilder text = new StringBuilder();
+        appendSearchPart(text, invoice.getInvoiceNumber());
+        appendSearchPart(text, invoice.getCustomerID() != null ? invoice.getCustomerID().getName() : "Khách lẻ");
+        for (Invoicedetail line : stillReturnableLines(lines)) {
+            Product product = line.getProductID();
+            if (product != null) {
+                appendSearchPart(text, product.getName());
+                appendSearchPart(text, product.getCode());
+            }
+        }
+        return text.toString();
+    }
+
+    private void appendSearchPart(StringBuilder target, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (!target.isEmpty()) {
+            target.append(' ');
+        }
+        target.append(value.trim());
     }
 
     /** The still-returnable lines of one invoice, for the create screen (JSON). */
@@ -327,8 +388,8 @@ public class ReturnService {
         Account creator = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
-        // Tỷ lệ hoàn của PHIẾU NÀY (mục 1.1 đặc tả bổ sung 27/07): mặc định lấy từ thiết lập tài chính,
-        // người lập được chỉnh tay từng phiếu. Áp đồng loạt cho mọi dòng trong phiếu.
+        // Tỷ lệ hoàn của PHIẾU NÀY: mặc định lấy từ thiết lập tài chính, người lập chỉnh tay được từng
+        // phiếu, và áp đồng loạt cho mọi dòng trong phiếu.
         BigDecimal refundRate = resolveRefundRate(request.getRefundRate());
 
         Map<Integer, Invoicedetail> lineById = invoiceLinesOf(invoice.getId()).stream()
@@ -356,10 +417,7 @@ public class ReturnService {
                 throw new IllegalArgumentException("Số lượng trả của \"" + productName(line)
                         + "\" vượt quá số còn có thể trả (" + returnable + ")");
             }
-            // Restockable is hard-coded by item type: only the manufacturer's default
-            // packaging unit (productunit.isDefault) goes back to stock; loose units do not. No manual
-            // checkbox — the client value is ignored. (Medical-device "máy" / prescription invoices
-            // are already blocked from return upstream.)
+            // Hard-coded by item type (the client value is ignored) — see isRestockableUnit.
             boolean restockable = isRestockableUnit(line);
             prepared.put(line.getId(), preparedLineOf(line, qty, restockable, refundRate));
         }
@@ -371,6 +429,11 @@ public class ReturnService {
         BigDecimal totalRefund = prepared.values().stream()
                 .map(PreparedLine::lineRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // KHÔNG chặn theo hạn mức tiền mặt ở đây: phiếu trả chỉ ghi nhận việc khách trả hàng và số
+        // tiền nhà thuốc NỢ lại khách — dược sĩ vẫn phải lập được đầy đủ dù số tiền lớn. Hạn mức nằm
+        // ở bước CHI tiền thật (ExpenseService.assertCashRefundWithinLimit), nơi mới biết phần thực
+        // hoàn sau khi cấn trừ công nợ.
+
         String status = asDraft ? ReturnStatus.DRAFT : (isOwner ? ReturnStatus.DEBT : ReturnStatus.PENDING);
         boolean approvedNow = ReturnStatus.DEBT.equals(status);
 
@@ -489,20 +552,8 @@ public class ReturnService {
     }
 
     /**
-     * Restores stock for an approved return: each restockable line goes into a fresh batch cloned from the
-     * one it was sold from, and the original invoice line's {@code returnedQty} is bumped. Then the original
-     * is fully superseded — a REPLACEMENT invoice ("Thay thế") is emitted carrying its entire remaining data,
-     * <em>including any outstanding debt</em>, which moves onto the replacement while the original is zeroed
-     * (see {@link #createReplacementInvoice}).
-     *
-     * <p><strong>Không còn phân biệt hóa đơn đã ký / chưa ký.</strong> Trước 04/08/2026 hóa đơn ĐÃ KÝ đi
-     * nhánh riêng, phát hành hóa đơn "Điều chỉnh" gồm các dòng ÂM và không đụng vào hóa đơn gốc. Nay bỏ hẳn
-     * loại "Điều chỉnh": mọi thay đổi trên hóa đơn đã lập — dù đã ký hay chưa — đều xuất hóa đơn THAY THẾ
-     * (Tax_Invoice.xlsx sheet 04).</p>
-     *
-     * <p><strong>Bù trừ công nợ (netting)</strong> chạy TRƯỚC khi phát hành hóa đơn nào (xem
-     * {@link #applyDebtOffset}) — chạy sau thì hóa đơn thay thế ôm nguyên số nợ chưa trừ. Chỉ phần dư
-     * ({@code totalRefund − offsetDebtAmount}) mới là tiền thật còn phải trả khách.</p>
+     * Hoàn kho cho phiếu đã duyệt, rồi thay thế hoàn toàn hóa đơn gốc bằng một hóa đơn "Thay thế" mang
+     * phần còn lại — <em>kể cả khoản nợ</em>, nợ của gốc bị xoá về 0 (xem {@link #createReplacementInvoice}).
      *
      * <p><strong>Không đụng quỹ:</strong> phiếu chỉ tính và lưu số tiền; việc chi trả thật là của phiếu chi.</p>
      *
@@ -533,9 +584,7 @@ public class ReturnService {
         // sau khi đã cấn trừ, nếu chạy sau thì nó sẽ ôm nguyên số nợ chưa trừ.
         applyDebtOffset(ret, original);
 
-        // MỌI phiếu trả đều phát hành hóa đơn THAY THẾ, không phân biệt hóa đơn gốc đã ký hay chưa
-        // (Tax_Invoice.xlsx sheet 04, 04/08/2026: "việc đã ký không ảnh hưởng, chỉ cần hóa đơn cũ bị
-        // thay thế hoàn toàn bởi bản mới"). Loại "Điều chỉnh" + cơ chế dòng âm đã bị bỏ hẳn.
+        // MỌI phiếu trả đều phát hành hóa đơn THAY THẾ, không phân biệt hóa đơn gốc đã ký hay chưa.
         createReplacementInvoice(ret, original, details);
 
         // Cột riêng invoice.returnStatus nên ghi được cho CẢ hóa đơn đã ký lẫn chưa ký.
@@ -545,36 +594,25 @@ public class ReturnService {
     }
 
     /**
-     * TH1 — hóa đơn gốc CHƯA KÝ: gốc bị vô hiệu hoàn toàn nên clone TOÀN BỘ phần còn lại sang một hóa
-     * đơn THAY THẾ mới (không phải dòng âm như TH2). Nợ của gốc xoá về 0 và chuyển sang hóa đơn mới;
-     * sai sót về sau phải tham chiếu bản thay thế, không phải bản gốc (chặn bởi
-     * {@link #isSupersededByReturn}).
+     * Hóa đơn gốc bị vô hiệu hoàn toàn nên clone TOÀN BỘ phần còn lại sang một hóa đơn THAY THẾ mới. Nợ
+     * của gốc xoá về 0 và chuyển sang hóa đơn mới; sai sót về sau phải tham chiếu bản thay thế, không
+     * phải bản gốc (chặn bởi {@link #isSupersededByReturn}). Trả hết + hoàn 100% thì không phát hành gì.
      *
-     * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ (ví dụ BA mục
-     * 1.2: mua 500.000, hoàn 400.000 ⇒ thay thế 100.000). Một dòng hàng vừa bị trả một phần sẽ được
-     * tách thành <b>HAI</b> dòng:</p>
-     * <ol>
-     *   <li><b>hàng còn lại</b> — số lượng còn lại, thành tiền = giá trị gốc của đúng số hàng đó;</li>
-     *   <li><b>phần giữ lại</b> — {@code quantity = 0}, thành tiền = phần nhà thuốc không hoàn.</li>
-     * </ol>
+     * <p><b>Khi tỷ lệ hoàn &lt; 100%</b>, hóa đơn thay thế mang đúng phần khách THỰC GIỮ, và một dòng
+     * vừa bị trả một phần được tách thành HAI: <b>hàng còn lại</b> (thành tiền = giá trị gốc của đúng số
+     * hàng đó) và <b>phần giữ lại</b> ({@code quantity = 0}).</p>
      *
-     * <p><b>Bất biến của hóa đơn thay thế (05/08/2026):</b> dòng {@code quantity = 0} ⇔ <b>tiền không kèm
-     * hàng</b>. Khi một dòng đã hết hàng thì mọi đồng còn lại của nó — phần giữ lại của lần trả này CỘNG
-     * phần tiền vốn đã không gắn với hộp nào (dòng bán bị tách theo lô rồi làm tròn về SL 0, hoặc phần giữ
-     * lại của lần trả TRƯỚC) — được gộp vào đúng MỘT dòng ({@link #moneyOnlyLine}). Trước đây phần thứ hai
-     * bị bộ lọc bỏ rơi: tiền biến mất khỏi các dòng nhưng vẫn nằm trong tổng hóa đơn ⇒ tổng ≠ tổng các dòng,
-     * và trên màn chi tiết xuất hiện hai dòng "SL 0 mà vẫn có tiền" không phân biệt được với nhau.</p>
+     * <p><b>Bất biến:</b> dòng {@code quantity = 0} ⇔ <b>tiền không kèm hàng</b>, và mọi khoản như vậy
+     * của cùng một (sản phẩm, đơn vị, lô) gộp vào đúng MỘT dòng ({@link #moneyOnlyLine}) — gồm cả phần
+     * giữ lại của các lần trả TRƯỚC và phần tiền vốn không gắn hộp nào (dòng bán bị tách theo lô rồi làm
+     * tròn về SL 0). Bỏ sót nhóm thứ hai là tổng hóa đơn ≠ tổng các dòng.</p>
      *
-     * <p><b>Vì sao phải tách</b> (sửa 04/08/2026): trước đây một dòng ôm cả hai, thành tiền được tính
-     * bằng {@code thành tiền cũ − số ĐÃ HOÀN}. Phần giữ lại vì thế nằm lẫn trong giá trị số hàng còn
-     * lại, nên <b>lần trả sau lại hoàn tiếp một phần của chính khoản đã giữ</b> — trả 5 hộp làm 2 lần ở
-     * mức 80% thì nhà thuốc chỉ còn giữ 13,6% thay vì 20%, trả từng hộp một thì tụt còn 5,9%. Tách ra
-     * thì căn cứ tính của lần sau là giá trị thật của hàng còn lại, hoàn nhiều lần bằng hoàn một lần.</p>
+     * <p><b>Vì sao phải tách:</b> nếu một dòng ôm cả hai thì phần giữ lại nằm lẫn trong giá trị số hàng
+     * còn lại, nên <b>lần trả sau lại hoàn tiếp một phần của chính khoản đã giữ</b> — trả 5 hộp làm 2 lần
+     * ở mức 80% thì nhà thuốc chỉ còn giữ 13,6% thay vì 20%, trả từng hộp một thì tụt còn 5,9%.</p>
      *
      * <p>Dòng "phần giữ lại" không bao giờ trả tiếp được: {@code loadInvoiceLines} lọc bỏ dòng có số
-     * lượng trả được bằng 0. Tổng hóa đơn vẫn luôn bằng tổng các dòng.</p>
-     *
-     * <p>Chỉ khi trả hết + hoàn 100% mới không phát hành gì.</p>
+     * lượng trả được bằng 0.</p>
      */
     private void createReplacementInvoice(Return ret, Invoice original, List<Returndetail> details) {
         Map<Integer, Returndetail> returnedByLine = details.stream()
@@ -735,9 +773,9 @@ public class ReturnService {
 
     /**
      * Số tiền hoàn được cấn trừ vào công nợ của chính hóa đơn gốc:
-     * {@code offsetDebtAmount = MIN(totalRefund, dư nợ hiện tại)} — đặc tả bổ sung 27/07 mục 1.2 bước 5 và
-     * mục 3.6 bước 1. Trả 0 khi nhà thuốc tắt {@code Financialsetting.autoOffsetDebtOnRefund} (lúc đó tiền
-     * hoàn và công nợ được xử lý tách rời qua phiếu thu/phiếu chi).
+     * {@code offsetDebtAmount = MIN(totalRefund, dư nợ hiện tại)}. Trả 0 khi nhà thuốc tắt
+     * {@code Financialsetting.autoOffsetDebtOnRefund} — lúc đó tiền hoàn và công nợ được xử lý tách rời
+     * qua phiếu thu/phiếu chi.
      */
     private BigDecimal computeDebtOffset(Invoice invoice, BigDecimal totalRefund) {
         if (!isAutoOffsetDebt()) {
@@ -748,19 +786,13 @@ public class ReturnService {
     }
 
     /**
-     * Thực hiện bù trừ khi phiếu được duyệt: chốt lại {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM
-     * DUYỆT (khách có thể đã trả bớt nợ giữa lúc lập phiếu và lúc Owner duyệt) rồi trừ thẳng vào
-     * {@code Invoice.debtAmount} ngay trong cùng transaction — đặc tả bổ sung 27/07 mục 3.4: cập nhật trực
-     * tiếp, không suy ra bằng cách SUM lại; lỗi ở bất kỳ bước nào thì rollback cả cụm.
+     * Bù trừ khi phiếu được duyệt: chốt lại {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM DUYỆT
+     * (khách có thể đã trả bớt nợ giữa lúc lập phiếu và lúc Owner duyệt) rồi trừ thẳng vào
+     * {@code Invoice.debtAmount} trong cùng transaction. Phần còn lại là tiền thật còn phải hoàn khách,
+     * do phiếu chi bên Kế toán chi ra; bằng 0 thì phiếu tất toán ngay (xem {@link #settledStatusOf}).
      *
-     * <p>Phần còn lại ({@code totalRefund − offsetDebtAmount}) là tiền thật còn phải hoàn khách, do phiếu
-     * chi bên Kế toán chi ra; bằng 0 thì phiếu tất toán ngay (xem {@link #settledStatusOf}).</p>
-     *
-     * <p><strong>KHÔNG sinh cặp Income/Expense cho phần cấn trừ.</strong> Đặc tả bổ sung 27/07 mục 3.2
-     * từng đòi thế, nhưng hồ sơ nghiệp vụ v2 (05/08) sheet 05 đã bỏ hẳn:
-     * <em>"KHÔNG BAO GIỜ tạo Income ở chiều khách hàng — cơ chế bù trừ Income+Expense cũ đã bị THAY THẾ
-     * HOÀN TOÀN bởi cơ chế hóa đơn thay thế"</em>. Phần cấn trừ được thể hiện bằng chính hóa đơn thay
-     * thế, chỉ phần tiền thật chi ra mới thành một phiếu chi.</p>
+     * <p><strong>KHÔNG sinh cặp Income/Expense cho phần cấn trừ</strong> — phần cấn trừ đã được thể hiện
+     * bằng chính hóa đơn thay thế, chỉ phần tiền thật chi ra mới thành một phiếu chi.</p>
      */
     private void applyDebtOffset(Return ret, Invoice invoice) {
         BigDecimal offset = computeDebtOffset(invoice, ret.getTotalRefund());
@@ -787,16 +819,11 @@ public class ReturnService {
      * Trạng thái của phiếu vừa được duyệt: {@link ReturnStatus#DEBT} nếu còn phải hoàn tiền,
      * {@link ReturnStatus#COMPLETED} nếu bù trừ công nợ đã nuốt trọn khoản hoàn.
      *
-     * <p>Hồ sơ nghiệp vụ v2 (05/08) sheet 05 chia làm 3 ca — hoàn &gt; nợ, hoàn &lt; nợ, hoàn = nợ —
-     * nhưng vì {@code offsetDebtAmount = MIN(totalRefund, dư nợ)} nên hai ca sau đều quy về
-     * {@code cashRefundDue == 0}. Một điều kiện là đủ, không cần tách ca.</p>
-     *
      * <p><strong>Phải gọi SAU {@link #applyReturnEffect}</strong>, vì {@code offsetDebtAmount} chỉ được
      * chốt theo dư nợ thật bên trong đó. Gọi sớm hơn là đọc phải số ước tính lúc lập phiếu.</p>
      *
-     * <p>Đây là đường THỨ NHẤT đưa phiếu vào {@link ReturnStatus#COMPLETED} — chạy ngay lúc duyệt, khi
-     * bù trừ công nợ nuốt trọn khoản hoàn. Đường thứ hai — phiếu chi hoàn tiền trả xong thì chuyển
-     * tiếp — xem {@link #syncStatusAfterRefundPayment(Integer)}.</p>
+     * <p>Đây là đường THỨ NHẤT đưa phiếu vào {@link ReturnStatus#COMPLETED}; đường thứ hai — phiếu chi
+     * hoàn tiền trả xong thì chuyển tiếp — xem {@link #syncStatusAfterRefundPayment(Integer)}.</p>
      */
     private String settledStatusOf(Return ret) {
         return cashRefundDue(ret).signum() > 0 ? ReturnStatus.DEBT : ReturnStatus.COMPLETED;
@@ -804,8 +831,7 @@ public class ReturnService {
 
     /**
      * Đường THỨ HAI vào {@link ReturnStatus#COMPLETED}: được {@code ExpenseService.confirmPayment()}
-     * gọi ngay khi một phiếu chi {@code RETURN_REFUND_PAYOUT} vừa thực chi thật — nối nốt phần mà
-     * javadoc của {@link ReturnStatus} từng đánh dấu "chưa làm, chờ module Thu/Chi tự nối".
+     * gọi ngay khi một phiếu chi {@code RETURN_REFUND_PAYOUT} vừa thực chi thật.
      *
      * <p>Chỉ chuyển {@link ReturnStatus#DEBT} → {@link ReturnStatus#COMPLETED} khi tổng các phiếu chi
      * ĐÃ THỰC CHI ({@code ExpenseService.disbursedRefundAmount()}) phủ hết {@link #cashRefundDue}.
@@ -866,10 +892,9 @@ public class ReturnService {
      * Hóa đơn F0 — gốc đầu tiên của cả chuỗi thay thế. Đi ngược {@code originalInvoiceID} cho tới hóa đơn
      * không có bản trước nữa.
      *
-     * <p>Trước 04/08/2026 việc này chỉ là đọc cột {@code invoice.rootInvoiceID} (trỏ THẲNG về F0). Cột đó
-     * đã bị bỏ khỏi bảng nên phải lần từng bước. Chuỗi thực tế rất ngắn (mỗi lần trả hàng thêm đúng 1 bậc)
-     * nên chi phí không đáng kể, nhưng vẫn chặn vòng lặp vô hạn bằng {@code MAX_INVOICE_CHAIN_DEPTH}
-     * phòng dữ liệu bẩn trỏ vòng.</p>
+     * <p>Phải lần từng bước vì cột {@code invoice.rootInvoiceID} (trỏ thẳng về F0) đã bị bỏ khỏi bảng.
+     * Chuỗi thực tế rất ngắn (mỗi lần trả hàng thêm đúng 1 bậc), nhưng vẫn chặn vòng lặp vô hạn bằng
+     * {@code MAX_INVOICE_CHAIN_DEPTH} phòng dữ liệu bẩn trỏ vòng.</p>
      */
     private Invoice rootOf(Invoice invoice) {
         Invoice current = invoice;
@@ -891,11 +916,9 @@ public class ReturnService {
      * chứa nổi 2 nghĩa. {@code returnStatus} chỉ là bản CACHE, nguồn đúng vẫn là
      * {@link #invoiceReturnCode} tính động, nên dữ liệu cũ chưa backfill cũng không sai.</p>
      *
-     * <p><b>Việc ký KHÔNG còn nằm trong {@code status}</b> (06/08/2026): bảng {@code invoice} có 2 cột
-     * riêng {@code signAt}/{@code signBy}, {@code InvoiceService.sign()} chỉ ghi 2 cột đó (cùng việc đổi ký
-     * hiệu K → C) và không đụng {@code status}. Nên hóa đơn đã ký vẫn phải được tính lại {@code status}
-     * theo công nợ như mọi hóa đơn khác — chỉ DỮ LIỆU CŨ còn giữ chuỗi "Đã ký" trong {@code status} thì mới
-     * không ghi đè, xem {@link #hasLegacySignedStatus}.</p>
+     * <p><b>Việc ký KHÔNG còn nằm trong {@code status}</b> — nó có 2 cột riêng {@code signAt}/{@code signBy}.
+     * Hóa đơn đã ký vẫn được tính lại {@code status} theo công nợ như mọi hóa đơn khác; chỉ DỮ LIỆU CŨ còn
+     * giữ chuỗi "Đã ký" trong {@code status} mới không bị ghi đè, xem {@link #hasLegacySignedStatus}.</p>
      */
     private void updateInvoiceReturnStatus(Invoice invoice) {
         if (invoice == null) {
@@ -912,29 +935,30 @@ public class ReturnService {
     private Batch cloneReturnBatch(Batch original, int quantity, Return ret) {
         Batch batch = new Batch();
         Integer origBatchId = original != null ? original.getId() : null;
-        // Mã lô hàng trả RT-{id phiếu}-L{id lô gốc}, vd RT-000004-L4:
-        //   • RT      = "Return" (lô hàng khách trả lại);
-        //   • 000004  = id phiếu trả (khớp mã hiển thị TH-000004);
-        //   • L4      = lô gốc mà hàng được bán ra (batchID=4) → truy ngược nguồn gốc ngay trên mã lô.
+        // Mã lô hàng trả RT-{id phiếu trả}-L{id lô gốc}, vd RT-000004-L4 — truy ngược được cả phiếu trả
+        // lẫn lô đã bán ra ngay trên mã lô.
         batch.setBatchCode(truncate("RT-" + String.format("%06d", ret.getId())
                 + "-L" + (origBatchId != null ? origBatchId : 0), 50));
-        batch.setBatchName(truncate("Hàng trả " + (original != null && original.getBatchName() != null
-                ? original.getBatchName() : ""), 50));
+        batch.setBatchName(returnBatchName(original, ret));
         batch.setProductID(original != null ? original.getProductID() : null);
-        // Giữ liên kết về ĐÚNG dòng phiếu nhập mà hàng này ban đầu mua về (BA chốt 05/08/2026). Hàng
-        // khách trả lại vẫn là hàng của nhà cung cấp đó, giá nhập không đổi — nên phải trả về NCC đó
-        // được. Để null thì lô này vô hình với màn trả hàng NCC (bên đó chỉ nhìn lô có phiếu nhập).
-        //
-        // KHÔNG phải "nhập hàng lần hai": không cộng công nợ NCC, không sinh phiếu nhập mới. Chỉ là
-        // cùng một lô hàng gốc, tách ra mang mã riêng để phân biệt hàng đã qua tay khách.
+        // Giữ liên kết về ĐÚNG dòng phiếu nhập đã mua hàng này: khách trả lại thì vẫn phải trả về NCC đó
+        // được, mà để null là lô này vô hình với màn trả hàng NCC (bên đó chỉ nhìn lô có phiếu nhập).
+        // KHÔNG phải "nhập hàng lần hai" — không cộng công nợ NCC, không sinh phiếu nhập mới.
         batch.setPurchaseDetailID(original != null ? original.getPurchaseDetailID() : null);
         batch.setStorageQuantity(quantity);
         batch.setImportUnitID(original != null ? original.getImportUnitID() : null);
-        batch.setImportQtyInUnit(original != null ? original.getImportQtyInUnit() : null);
+        // Số lượng THỰC được trả về, quy sang đơn vị nhập — KHÔNG copy của lô gốc: lô gốc nhập 100 Hộp mà
+        // khách chỉ trả 5 Hộp thì màn Lịch sử tồn kho vẫn hiện "+100 Hộp" (nó lấy thẳng cột này), và
+        // PurchaseinvoiceService.batchWasTouchedSinceImport cũng so sai.
+        batch.setImportQtyInUnit(toImportUnitQuantity(quantity, original));
         batch.setImportPrice(original != null && original.getImportPrice() != null
                 ? original.getImportPrice() : BigDecimal.ZERO);
         batch.setImportPricePerBase(original != null && original.getImportPricePerBase() != null
                 ? original.getImportPricePerBase() : BigDecimal.ZERO);
+        // ⚠️ PHẢI GIỮ nowVn(), ĐỪNG "sửa cho đúng" thành Instant.now(): nowVn() nhét giờ VN vào một
+        // Instant gắn nhãn UTC, và ProductService.formatBatchImportDate() đã bù trừ đúng theo quy ước đó
+        // (nhận diện lô mã "RT-" rồi trừ 7 tiếng). Đổi một đầu là ngày nhập hiện sớm hơn thật 7 tiếng —
+        // phải sửa đồng thời cả hai đầu, trong đợt dọn quy ước nowVn() của cả dự án.
         batch.setImportDate(nowVn());
         batch.setProductionDate(original != null ? original.getProductionDate() : null);
         batch.setExpirationDate(original != null ? original.getExpirationDate() : null);
@@ -963,15 +987,62 @@ public class ReturnService {
     }
 
     /**
+     * Tên lô hàng trả = <strong>{@code <số lô gốc>-TH<id phiếu trả>}</strong>, ví dụ
+     * {@code LOT-002-TH000001}.
+     *
+     * <p>Dựng từ {@code lotNumber} chứ không phải {@code batchName} của lô gốc: {@code batchName} của
+     * lô nhập còn kèm tên sản phẩm ở đầu ("Bifina R Health Aid - LOT-002"), nối thêm vào sẽ vừa dài quá
+     * 50 ký tự vừa lặp tên sản phẩm — trong khi cột này đứng cạnh cột tên sản phẩm rồi.</p>
+     *
+     * <p><strong>Đuôi mã phiếu trả là bắt buộc:</strong> hàng khách trả về đúng là lô {@code LOT-002}
+     * thật nhưng nằm ở một dòng {@code batch} RIÊNG, mà cùng một sản phẩm không được có hai lô trùng
+     * tên. Lấy mã phiếu trả thì vừa duy nhất vừa truy ngược được phiếu nào sinh ra lô.</p>
+     */
+    private String returnBatchName(Batch original, Return ret) {
+        String lot = original != null ? trimToNull(original.getLotNumber()) : null;
+        if (lot == null) {
+            // Lô gốc không ghi số lô — lùi về tên lô gốc để vẫn còn manh mối truy nguồn.
+            lot = original != null ? trimToNull(original.getBatchName()) : null;
+        }
+        String suffix = "TH" + String.format("%06d", ret.getId());
+        return truncate(lot == null ? suffix : lot + "-" + suffix, 50);
+    }
+
+    /**
+     * Quy số lượng ở ĐƠN VỊ CƠ SỞ về đơn vị nhập của lô, cho cột {@code batch.importQtyInUnit}.
+     *
+     * <p>Ví dụ lô nhập theo Hộp (1 Hộp = 20 Cái), khách trả lại 100 Cái ⇒ ghi 5 Hộp. Nhờ vậy màn Lịch
+     * sử tồn kho hiện "+5 Hộp" đúng bằng 100 Cái thật sự vào kho, thay vì "+100 Hộp".</p>
+     *
+     * <p>Không có đơn vị nhập / tỉ lệ quy đổi thì trả nguyên số cơ sở (coi tỉ lệ = 1). Phép chia làm
+     * tròn HALF_UP: hàng chỉ nhập lại kho khi bán bằng đơn vị đóng gói mặc định nên gần như luôn chia
+     * hết; nếu lệch thì chỉ lệch ở con số hiển thị, {@code storageQuantity} vẫn là số cơ sở chính xác.</p>
+     */
+    private Integer toImportUnitQuantity(int baseQuantity, Batch original) {
+        Productunit importUnit = original != null ? original.getImportUnitID() : null;
+        BigDecimal ratio = importUnit != null ? importUnit.getRatio() : null;
+        if (ratio == null || ratio.compareTo(BigDecimal.ZERO) <= 0) {
+            return baseQuantity;
+        }
+        return BigDecimal.valueOf(baseQuantity)
+                .divide(ratio, 0, RoundingMode.HALF_UP)
+                .intValue();
+    }
+
+    /**
      * NONE / PARTIAL / FULL derived from how much of the invoice's lines have been returned —
-     * {@code Σ returnedQty} vs {@code Σ quantity}, đúng công thức mục 2.3 của đặc tả bổ sung.
+     * {@code Σ returnedQty} vs {@code Σ quantity}.
      *
      * <p>Đây là NGUỒN ĐÚNG, tính động mỗi lần đọc; cột {@code invoice.returnStatus} chỉ là bản cache
      * ghi lại kết quả này lúc duyệt phiếu (xem {@link #updateInvoiceReturnStatus}) để báo cáo/lọc cho
      * nhanh. Nhờ vậy hóa đơn cũ chưa backfill cột vẫn được đánh giá đúng.</p>
      */
     private String invoiceReturnCode(Invoice invoice) {
-        List<Invoicedetail> lines = invoiceLinesOf(invoice.getId());
+        return returnCodeOf(invoiceLinesOf(invoice.getId()));
+    }
+
+    /** Bản nhận sẵn dòng chi tiết, cho người gọi đã đọc chúng một lần rồi (xem {@link ReturnableCandidate}). */
+    private String returnCodeOf(List<Invoicedetail> lines) {
         if (lines.isEmpty()) {
             // Hóa đơn không có dòng nào thì không còn gì để trả — coi như đã trả hết để nó bị loại khỏi
             // danh sách chọn (chặn cả hóa đơn "Thay thế" rỗng do bản cũ sinh ra trước khi fix).
@@ -1099,7 +1170,8 @@ public class ReturnService {
         return new ReturnDetailItemResponse(
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
-                batch != null ? batch.getLotNumber() : "",
+                // TÊN lô, không phải SỐ lô — xem javadoc của ReturnDetailItemResponse.batchName.
+                batch != null ? batch.getBatchName() : "",
                 batch != null ? formatLocalDate(batch.getExpirationDate()) : "",
                 unit != null ? unit.getUnitName() : "",
                 detail.getReturnQty(),
@@ -1119,7 +1191,7 @@ public class ReturnService {
                 line.getId(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
-                batch != null ? batch.getLotNumber() : "",
+                batch != null ? batch.getBatchName() : "",
                 batch != null ? formatLocalDate(batch.getExpirationDate()) : "",
                 line.getUnitName(),
                 line.getQuantity(),
@@ -1143,14 +1215,13 @@ public class ReturnService {
     /**
      * Builds a priced return line.
      *
-     * <p><b>Tỷ lệ hoàn</b> (đặc tả bổ sung 27/07 mục 1.2): {@code originalLineValue} là giá trị GỐC 100%
-     * (gross, prorate từ dòng hóa đơn bán), {@code lineRefund = originalLineValue × refundRate}. Chênh lệch
-     * giữa hai số là phần nhà thuốc GIỮ LẠI — vẫn là doanh thu bình thường.</p>
+     * <p><b>Tỷ lệ hoàn:</b> {@code originalLineValue} là giá trị GỐC 100% (prorate từ dòng hóa đơn bán),
+     * {@code lineRefund = originalLineValue × refundRate}. Chênh lệch giữa hai số là phần nhà thuốc GIỮ
+     * LẠI — vẫn là doanh thu bình thường.</p>
      *
-     * <p><b>KHÔNG còn tách net/thuế</b> (04/08/2026): hộ kinh doanh tính GTGT bằng
-     * {@code doanh thu × tỷ lệ %} ở mọi nhóm, không khấu trừ đầu ra/đầu vào ⇒ không có số thuế nào trên
-     * dòng trả để giảm trừ. Doanh thu tính thuế của kỳ nay suy từ tổng các hóa đơn CÒN HIỆU LỰC (hóa đơn
-     * thay thế đã mang giá trị mới), không phải từ phiếu trả (Tax_Invoice.xlsx sheet 02).</p>
+     * <p><b>KHÔNG tách net/thuế:</b> hộ kinh doanh tính GTGT bằng {@code doanh thu × tỷ lệ %} ở mọi nhóm,
+     * không khấu trừ đầu ra/đầu vào ⇒ không có số thuế nào trên dòng trả để giảm trừ. Doanh thu tính thuế
+     * của kỳ suy từ tổng các hóa đơn CÒN HIỆU LỰC, không phải từ phiếu trả.</p>
      */
     private PreparedLine preparedLineOf(Invoicedetail line, int qty, boolean restockable, BigDecimal refundRate) {
         BigDecimal originalLineValue = grossRefundOf(line, qty);
@@ -1239,18 +1310,13 @@ public class ReturnService {
     }
 
     /**
-     * <b>Đã trả hàng ⇒ bản gốc hết hiệu lực</b> (BA chốt 04/08/2026). Trả một phần cũng vậy: phần hàng
-     * khách còn giữ đã được chuyển sang hóa đơn THAY THẾ, nên muốn trả tiếp phải trả trên bản thay thế
-     * đó, không phải bản gốc.
+     * <b>Đã trả hàng ⇒ bản gốc hết hiệu lực.</b> Trả một phần cũng vậy: phần hàng khách còn giữ đã được
+     * chuyển sang hóa đơn THAY THẾ, nên muốn trả tiếp phải trả trên bản thay thế đó.
      *
-     * <p>Vì thế chỉ cần đọc {@code returnCode != NONE} là đủ — <b>không</b> phải đi tìm xem có hóa đơn
-     * "Thay thế" nào trỏ ngược về hóa đơn này không. Hai cách cho cùng kết quả (hóa đơn thay thế chỉ
-     * được phát hành CÙNG LÚC với việc cộng {@code returnedQty} trên hóa đơn gốc), nhưng cách cũ phải
-     * quét toàn bảng {@code invoice} cho MỖI hóa đơn được kiểm, còn {@code returnCode} thì gọi nào cũng
-     * đã tính sẵn rồi.</p>
-     *
-     * <p>Ca trả HẾT + hoàn 100% không phát hành hóa đơn thay thế nào — cách cũ sẽ trả {@code false},
-     * nhưng {@code returnCode} = FULL nên vẫn bị chặn đúng.</p>
+     * <p>Đọc {@code returnCode} là đủ, không phải đi tìm hóa đơn "Thay thế" nào trỏ ngược về hóa đơn này:
+     * hai cách cho cùng kết quả (hóa đơn thay thế chỉ phát hành CÙNG LÚC với việc cộng {@code returnedQty}
+     * trên hóa đơn gốc) nhưng cách kia phải quét toàn bảng {@code invoice} cho MỖI hóa đơn được kiểm. Ca
+     * trả HẾT + hoàn 100% không phát hành hóa đơn thay thế nào, {@code returnCode} = FULL vẫn chặn đúng.</p>
      */
     private boolean isSupersededByReturn(String returnCode) {
         return !INVOICE_RETURN_NONE.equals(returnCode);
@@ -1280,11 +1346,33 @@ public class ReturnService {
         if (isInClosedTaxPeriod(invoice)) {
             return false;
         }
+        if (hasInvoiceDiscount(invoice)) {
+            return false;
+        }
         // KHÔNG chặn hóa đơn còn nợ: khách còn nợ vẫn được trả hàng, tiền hoàn cấn trừ thẳng vào khoản nợ
         // đó (netting — xem applyDebtOffset). Đặc tả bổ sung 27/07 mục 3, và PISMS_Xu_ly_Cong_no sheet
         // "Công nợ Khách hàng" ca 3/4/5: "phần mềm KHÔNG cần bắt người dùng thanh toán xong rồi mới xử lý
         // trả hàng". Gate cũ (bắt trả hết nợ) đã được gỡ ngày 28/07 theo đúng tài liệu này.
         return withinReturnWindow(effectiveSaleDate(invoice), windowDays);
+    }
+
+    /**
+     * Hóa đơn có chiết khấu cấp hóa đơn thì KHÔNG cho trả hàng.
+     *
+     * <p><b>Vì sao chặn:</b> tiền hoàn được tính từ {@code invoicedetail.subtotal} — giá niêm yết, chưa
+     * trừ chiết khấu — trong khi khách chỉ thật sự trả {@code total = subtotal − discount}. Trả một phần
+     * là hoàn thừa đúng bằng phần chiết khấu của số hàng đó, và hóa đơn thay thế còn giữ nguyên trọn
+     * khoản chiết khấu trên số hàng còn lại ⇒ khách hưởng chiết khấu hai lần.</p>
+     *
+     * <p>Ví dụ đo được: hóa đơn 5 hộp, subtotal 500.000 − chiết khấu 50.000 = khách trả 450.000. Trả 2/5
+     * hộp ở mức hoàn 100% ⇒ hệ thống hoàn 200.000 trong khi đúng ra chỉ 180.000.</p>
+     *
+     * <p>Chặn ở đây là biện pháp tạm cho tới khi tiền hoàn được nhân theo hệ số
+     * {@code total / subtotal}; xem ghi chú cùng chủ đề ở {@link #createReplacementInvoice}.</p>
+     */
+    private boolean hasInvoiceDiscount(Invoice invoice) {
+        return invoice != null
+                && nz(invoice.getDiscount()).compareTo(BigDecimal.ZERO) > 0;
     }
 
     private void assertReturnable(Invoice invoice) {
@@ -1313,6 +1401,11 @@ public class ReturnService {
                     + ") nên không trả hàng được. Doanh thu của kỳ đó đã kê khai — "
                     + "vui lòng xử lý bằng chứng từ điều chỉnh của kế toán.");
         }
+        if (hasInvoiceDiscount(invoice)) {
+            throw new IllegalArgumentException("Hóa đơn này có chiết khấu nên không trả hàng được — "
+                    + "tiền hoàn tính theo giá niêm yết sẽ nhiều hơn số khách đã trả. "
+                    + "Vui lòng liên hệ chủ nhà thuốc để xử lý riêng.");
+        }
         int windowDays = getReturnWindowDays();
         if (!withinReturnWindow(effectiveSaleDate(invoice), windowDays)) {
             throw new IllegalArgumentException("Quá thời hạn trả hàng (chỉ trong "
@@ -1324,15 +1417,13 @@ public class ReturnService {
      * Hóa đơn nằm trong kỳ thuế ĐÃ CHỐT thì không cho trả hàng nữa.
      *
      * <p><b>Vì sao chặn:</b> trả hàng phát hành hóa đơn THAY THẾ mang ngày HÔM NAY, đồng thời làm bản gốc
-     * hết hiệu lực ({@code InvoiceRepository.findValidInPeriod} loại hóa đơn đã có con "Thay thế"). Nếu bản
-     * gốc thuộc quý đã chốt thì con số của quý đó đã kê khai và đóng băng trong {@code Taxperiodsnapshot},
-     * trong khi bản thay thế lại được tính là doanh thu MỚI của quý hiện tại ⇒ <b>cùng một lô hàng bị khai
-     * doanh thu hai lần</b>. Ví dụ thật: bán 1.585.000 ở Q3 (đã chốt), khách trả 2/5 hộp ở Q4 ⇒ Q3 vẫn khai
-     * 1.585.000 còn Q4 khai thêm 1.077.800, trong khi doanh thu thật của cả chuỗi chỉ là 1.077.800.</p>
+     * hết hiệu lực. Nếu bản gốc thuộc quý đã chốt thì con số của quý đó đã kê khai và đóng băng trong
+     * {@code Taxperiodsnapshot}, trong khi bản thay thế lại tính là doanh thu MỚI của quý hiện tại ⇒
+     * <b>cùng một lô hàng bị khai doanh thu hai lần</b>.</p>
      *
      * <p><b>Mốc đo là snapshot THẬT, không phải {@code nextPeriodToClose()}</b>: khi chưa chốt kỳ nào,
-     * {@code TaxperiodsnapshotService.nextPeriodToClose()} trả về quý HIỆN TẠI, nên đo theo nó sẽ coi mọi
-     * hóa đơn của các quý trước là "đã chốt" và khóa sạch — trong khi thực tế chưa kỳ nào được chốt cả.</p>
+     * hàm đó trả về quý HIỆN TẠI, nên đo theo nó sẽ coi mọi hóa đơn của các quý trước là "đã chốt" và
+     * khóa sạch màn trả hàng.</p>
      */
     private boolean isInClosedTaxPeriod(Invoice invoice) {
         LocalDate closedThrough = lastClosedPeriodEnd();
@@ -1363,16 +1454,13 @@ public class ReturnService {
     }
 
     /**
-     * Tỷ lệ hoàn MẶC ĐỊNH toàn hệ thống, từ {@code Financialsetting.returnProductOnInvoiceValueRate}
-     * (đặc tả bổ sung 27/07 mục 1.1). Chưa cấu hình (NULL) hoặc ≤ 0 ⇒ hoàn 100%: không có chính sách giữ
-     * lại thì không được tự ý giữ tiền của khách. Giá trị &gt; 100 bị kẹp về 100.
+     * Tỷ lệ hoàn MẶC ĐỊNH toàn hệ thống, từ {@code Financialsetting.returnProductOnInvoiceValueRate}.
+     * Chưa cấu hình (NULL) hoặc ≤ 0 ⇒ hoàn 100%: không có chính sách giữ lại thì không được tự ý giữ tiền
+     * của khách. Giá trị &gt; 100 bị kẹp về 100.
      *
-     * <p>Trả về SỐ NGUYÊN phần trăm (user chốt 11/08/2026 — xem {@link #resolveRefundRate}). Cột thiết
-     * lập là {@code decimal(5,2)} nên vẫn có thể chứa số lẻ của dữ liệu cũ; số lẻ đó được làm tròn về
-     * số nguyên gần nhất chứ không đẩy ra màn tạo, để ô "% hoàn" không bao giờ hiện giá trị mà chính
-     * nó từ chối lúc gửi.</p>
-     *
-     * <p>Public để màn tạo điền sẵn ô "% hoàn" đúng theo thiết lập tài chính.</p>
+     * <p>Trả về SỐ NGUYÊN phần trăm (xem {@link #resolveRefundRate}). Cột thiết lập là {@code decimal(5,2)}
+     * nên vẫn có thể chứa số lẻ của dữ liệu cũ; số lẻ đó được làm tròn chứ không đẩy ra màn tạo, để ô
+     * "% hoàn" không bao giờ hiện giá trị mà chính nó từ chối lúc gửi.</p>
      */
     @Transactional(readOnly = true)
     public BigDecimal getDefaultRefundRate() {
@@ -1383,10 +1471,6 @@ public class ReturnService {
                 .orElse(FULL_REFUND_RATE)
                 .setScale(0, RoundingMode.HALF_UP);
     }
-
-    // isTaxExempt() đã bỏ 04/08/2026: màn trả hàng không còn hiển thị phần thuế nào nên không cần biết
-    // nhà thuốc thuộc nhóm doanh thu nào. Thuế GTGT nay tính ở cấp KỲ (doanh thu × tỷ lệ %), không ở
-    // cấp phiếu — xem TaxperiodsnapshotService.
 
     /**
      * Có tự động cấn trừ tiền hoàn vào công nợ hóa đơn hay không —
@@ -1402,12 +1486,11 @@ public class ReturnService {
     /**
      * Tỷ lệ hoàn thực áp cho phiếu đang lập: người dùng nhập gì thì dùng nấy (0 &lt; rate ≤ 100), bỏ trống
      * thì lấy mặc định của hệ thống. Tỷ lệ nằm ở HEADER phiếu nên áp đồng loạt mọi dòng — muốn mỗi sản
-     * phẩm một tỷ lệ khác nhau thì phải lập nhiều phiếu (giới hạn đã ghi rõ ở mục 1.4 của đặc tả).
+     * phẩm một tỷ lệ khác nhau thì phải lập nhiều phiếu.
      *
-     * <p><b>Chỉ nhận SỐ NGUYÊN phần trăm (user chốt 11/08/2026).</b> Đây là con số hai bên thỏa thuận
-     * miệng tại quầy ("hoàn 80%"), không phải kết quả tính toán — phần lẻ phần trăm không có ý nghĩa
-     * nghiệp vụ nào mà chỉ đẻ ra số tiền lẻ khó đối chiếu. Chặn ở đây chứ không làm tròn giúp: làm tròn
-     * là âm thầm đổi số tiền hoàn của khách so với con số người lập đã gõ.</p>
+     * <p><b>Chỉ nhận SỐ NGUYÊN phần trăm.</b> Đây là con số hai bên thỏa thuận miệng tại quầy ("hoàn
+     * 80%"), không phải kết quả tính toán — phần lẻ chỉ đẻ ra số tiền lẻ khó đối chiếu. Chặn chứ không
+     * làm tròn giúp: làm tròn là âm thầm đổi số tiền hoàn so với con số người lập đã gõ.</p>
      */
     private BigDecimal resolveRefundRate(BigDecimal requested) {
         if (requested == null) {
@@ -1476,14 +1559,15 @@ public class ReturnService {
         });
     }
 
-    private boolean matchesInvoiceKeyword(Invoice invoice, String normalizedKeyword) {
+    /**
+     * Cùng luật với bộ lọc phía màn hình (xem {@link #searchTextOf}): số hóa đơn, tên khách, tên/mã
+     * sản phẩm còn trả được — KHÔNG có số điện thoại.
+     */
+    private boolean matchesInvoiceKeyword(ReturnableCandidate candidate, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
         }
-        Customer customer = invoice.getCustomerID();
-        return containsNormalized(invoice.getInvoiceNumber(), normalizedKeyword)
-                || containsNormalized(customer != null ? customer.getName() : null, normalizedKeyword)
-                || containsNormalized(customer != null ? customer.getPhoneNumber() : null, normalizedKeyword);
+        return containsNormalized(searchTextOf(candidate.invoice(), candidate.lines()), normalizedKeyword);
     }
 
     private boolean matchesDate(Return ret, LocalDate from, LocalDate to) {
