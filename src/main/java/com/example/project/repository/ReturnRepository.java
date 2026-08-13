@@ -36,6 +36,13 @@ public interface ReturnRepository extends JpaRepository<Return, Integer> {
     List<Return> findByInvoiceID_IdOrderByReturnDateDesc(Integer invoiceId);
 
     /**
+     * Supplier returns for a purchase invoice, newest first — đối xứng với
+     * {@link #findByInvoiceID_IdOrderByReturnDateDesc}. Dùng để dò phiếu trùng khi người dùng bấm
+     * Tạo lần thứ hai (xem {@code ReturnPurchaseService#findRecentDuplicate}).
+     */
+    List<Return> findByPurchaseID_IdOrderByReturnDateDesc(Integer purchaseId);
+
+    /**
      * Return slips — customer and supplier alike — whose {@code returnDate} falls in the half-open
      * interval {@code [from, to)}. Used by the tax period, where the docx is explicit that the
      * period a refund is deducted from is <em>derived from {@code returnDate}</em>: "trừ vào kỳ

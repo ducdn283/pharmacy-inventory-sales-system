@@ -153,6 +153,7 @@
         </div>
 
         <div th:replace="~{fragments/toast :: flash}"></div>
+        <div th:replace="~{fragments/confirm :: confirm}"></div>
 
         <form id="returnForm" th:action="${basePath + '/create'}" method="post" data-validate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -337,7 +338,12 @@
                                 còn lại cho khách thực hiện ở phiếu chi bên Kế toán.
                             </div>
 
-                            <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
+                            <!-- data-confirm được JS ghi lại mỗi lần recalc() (fragment đọc thuộc tính
+                                 tại lúc bấm) để hộp xác nhận chiếu đúng các con số HỆ THỐNG tự tính —
+                                 xem updateConfirmMessage(). Nút "Lưu nháp" cố ý KHÔNG hỏi: nháp không
+                                 đụng tồn kho, công nợ lẫn hóa đơn. -->
+                            <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit"
+                                    id="btnCreateApprove" data-confirm="Gửi phiếu trả hàng này?">
                                 <i class="ti ti-send me-1"></i>
                                 <span th:text="${#strings.startsWith(basePath, '/owner')} ? 'Tạo &amp; duyệt' : 'Gửi duyệt'">Gửi duyệt</span>
                             </button>
@@ -440,6 +446,10 @@
         const lineBody = document.getElementById('lineBody');
         const emptyRow = document.getElementById('emptyRow');
         const summaryItems = document.getElementById('summaryItems');
+        const btnCreateApprove = document.getElementById('btnCreateApprove');
+        // Owner tạo là DUYỆT LUÔN (hoàn kho + phát hành hóa đơn thay thế ngay); Dược sĩ chỉ gửi
+        // chờ duyệt. Hai ca có hệ quả khác hẳn nhau nên câu xác nhận cũng phải khác.
+        const isOwnerPath = /*[[${#strings.startsWith(basePath, '/owner')}]]*/ true;
         const summaryRefund = document.getElementById('summaryRefund');
         const summaryOriginal = document.getElementById('summaryOriginal');
         const summaryRetained = document.getElementById('summaryRetained');
@@ -646,11 +656,47 @@
             summaryRetained.textContent = formatMoney(retained);
 
             // Bù trừ = MIN(tiền hoàn, công nợ hóa đơn); server chốt lại theo dư nợ lúc duyệt.
-            if (autoOffsetDebt && summaryOffset) {
-                const offset = Math.min(Math.round(totalRefund), Math.round(pickedDebt));
-                summaryOffset.textContent = formatMoney(offset);
-                summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offset);
+            let offsetForConfirm = 0;
+            if (autoOffsetDebt) {
+                offsetForConfirm = Math.min(Math.round(totalRefund), Math.round(pickedDebt));
+                if (summaryOffset) {
+                    summaryOffset.textContent = formatMoney(offsetForConfirm);
+                    summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offsetForConfirm);
+                }
             }
+            updateConfirmMessage(itemCount, totalOriginal, totalRefund, offsetForConfirm);
+        }
+
+        /**
+         * Viết lại câu xác nhận của nút một-bước theo số liệu đang có trên màn.
+         *
+         * Chỉ liệt kê những con số NGƯỜI LẬP KHÔNG TỰ GÕ mà hệ thống suy ra (tiền hoàn sau tỷ lệ,
+         * phần nhà thuốc giữ lại, phần cấn trừ công nợ, phần còn phải hoàn) — đó mới là thứ đáng
+         * chiếu lại trước khi hoàn kho và phát hành hóa đơn thay thế.
+         */
+        function updateConfirmMessage(itemCount, totalOriginal, totalRefund, offset) {
+            if (!btnCreateApprove) {
+                return;
+            }
+            const refund = Math.round(totalRefund);
+            const original = Math.round(totalOriginal);
+            const retained = original - refund;
+
+            const lines = [isOwnerPath ? 'Tạo và duyệt phiếu trả hàng?' : 'Gửi duyệt phiếu trả hàng?', ''];
+            lines.push('• Số mặt hàng: ' + itemCount);
+            lines.push('• Giá trị hàng trả: ' + formatMoney(original));
+            lines.push('• Tiền hoàn khách: ' + formatMoney(refund));
+            if (retained > 0) {
+                lines.push('• Nhà thuốc giữ lại: ' + formatMoney(retained));
+            }
+            if (autoOffsetDebt && offset > 0) {
+                lines.push('• Cấn trừ công nợ hóa đơn: ' + formatMoney(offset));
+                lines.push('• Còn phải hoàn khách: ' + formatMoney(refund - offset));
+            }
+            lines.push('', isOwnerPath
+                ? 'Tồn kho sẽ được nhập lại và hóa đơn thay thế phát hành ngay khi tạo.'
+                : 'Phiếu chuyển sang Chờ duyệt; tồn kho và hóa đơn chưa thay đổi.');
+            btnCreateApprove.setAttribute('data-confirm', lines.join('\n'));
         }
 
         if (refundRateInput) {
