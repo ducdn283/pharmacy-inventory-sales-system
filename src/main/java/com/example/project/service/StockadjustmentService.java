@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
  * Single service for the Stock Adjustment feature (formerly "stock out"): listing/searching,
  * detail, creation, and the approve/reject workflow that actually moves stock.
  *
- * <p><b>7 loại phiếu</b> (Pharmacy Database Description, bảng {@code stockadjustment}, 04/08/2026):
+ * <p><b>7 loại phiếu:</b>
  * {@code DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT} (thủ công, giảm kho),
  * {@code COUNT} (từ phiếu rà soát kho {@code StockReview.type = COUNT}, chứa CẢ dòng tăng lẫn giảm) và
  * {@code DATE_ADJUSTMENT} (từ {@code StockReview.type = DATE}, sửa hạn dùng, KHÔNG đụng tồn kho).
@@ -44,10 +44,9 @@ public class StockadjustmentService {
     private static final String DIRECTION_NONE = "NONE";
 
     /**
-     * Điều chỉnh theo rà soát kho — GỘP tăng và giảm vào MỘT loại (04/08/2026). Trước đây tách
-     * {@code COUNT_INCREASE}/{@code COUNT_DECREASE} thành 2 phiếu riêng; nay một phiếu chứa cả dòng
-     * {@code IN} lẫn {@code OUT}, chiều nằm ở từng dòng chi tiết. Một lần đếm kho là MỘT sự kiện —
-     * tách đôi làm mất liên hệ giữa phần thừa và phần thiếu của cùng lần đếm đó.
+     * Điều chỉnh theo rà soát kho — GỘP tăng và giảm vào MỘT loại: một phiếu chứa cả dòng {@code IN} lẫn
+     * {@code OUT}, chiều nằm ở từng dòng chi tiết. Một lần đếm kho là MỘT sự kiện; tách đôi làm mất liên
+     * hệ giữa phần thừa và phần thiếu của cùng lần đếm đó.
      */
     private static final String TYPE_COUNT = "COUNT";
     /** Sửa hạn dùng ghi sai lúc nhập — từ phiếu rà soát kho loại {@code DATE}. KHÔNG làm đổi tồn kho. */
@@ -55,7 +54,7 @@ public class StockadjustmentService {
     private static final String TYPE_DESTROY = "DESTROY";
     private static final String TYPE_DESTROY_EMPLOYEE_FAULT = "DESTROY_EMPLOYEE_FAULT";
 
-    /** Giá trị CŨ trong DB (trước 04/08/2026) — chỉ để ĐỌC dữ liệu cũ, không bao giờ ghi mới. */
+    /** Giá trị CŨ trong DB — chỉ để ĐỌC dữ liệu cũ, không bao giờ ghi mới. */
     private static final String TYPE_COUNT_INCREASE_LEGACY = "COUNT_INCREASE";
     private static final String TYPE_COUNT_DECREASE_LEGACY = "COUNT_DECREASE";
 
@@ -68,12 +67,11 @@ public class StockadjustmentService {
      * Loại phiếu mà giá trị hàng mất được phép đòi nhân viên đền bù — nguồn của phiếu thu
      * "Thu tiền nhân viên đền bù". Không được tính chi phí hợp lý khi có người bồi thường.
      *
-     * <p><b>Phiếu điều chỉnh theo rà soát kho ({@code COUNT}) KHÔNG nằm ở đây (user chốt 06/08/2026).</b>
-     * Kiểm đếm chỉ cho biết tồn thực tế thiếu bao nhiêu, <em>không</em> cho biết thiếu vì đâu và do ai —
-     * mất trộm, bán quên ghi, nhập sai sổ đều ra cùng một con số. Gợi ý lập phiếu thu đền bù trên phiếu
-     * kiểm đếm là mặc định quy trách nhiệm cho nhân viên trong khi không có căn cứ nào. Muốn đòi đền bù
-     * thì phải lập phiếu {@code DESTROY_EMPLOYEE_FAULT} — loại đó bản thân nó đã khẳng định có lỗi của
-     * nhân viên và có biên bản xác định kèm theo.</p>
+     * <p><b>Phiếu điều chỉnh theo rà soát kho ({@code COUNT}) KHÔNG nằm ở đây.</b> Kiểm đếm chỉ cho biết
+     * tồn thiếu bao nhiêu, <em>không</em> cho biết thiếu vì đâu và do ai — mất trộm, bán quên ghi, nhập
+     * sai sổ đều ra cùng một con số, nên đòi đền bù ở đó là quy trách nhiệm cho nhân viên mà không có căn
+     * cứ. Muốn đòi đền bù thì phải lập phiếu {@code DESTROY_EMPLOYEE_FAULT}, loại đó tự nó đã khẳng định
+     * có lỗi nhân viên và có biên bản kèm theo.</p>
      */
     private static final Set<String> EMPLOYEE_LIABLE_TYPES = Set.of(TYPE_DESTROY_EMPLOYEE_FAULT);
 
@@ -108,10 +106,9 @@ public class StockadjustmentService {
      * Loại phiếu cần snapshot GIÁ BÁN tại thời điểm ghi nhận ({@code refSellPrice}) — hàng rời kho mà
      * không qua hóa đơn bán, nên giá bán là căn cứ duy nhất để định giá về sau.
      *
-     * <p><b>04/08/2026 — bỏ hẳn phần thuế:</b> trước đây 3 loại này còn tính GTGT đầu ra
-     * ({@code vatRate/preTaxAmount/vatAmount}) theo giá bán. Hộ kinh doanh nay tính GTGT bằng
-     * {@code doanh thu × tỷ lệ %} cho MỌI nhóm, không có khấu trừ đầu ra/đầu vào ⇒ 3 cột đó đã bị bỏ
-     * khỏi bảng {@code stockadjustmentdetail}. Chỉ còn {@code refSellPrice}.</p>
+     * <p>Không còn phần thuế đi kèm: hộ kinh doanh tính GTGT bằng {@code doanh thu × tỷ lệ %} cho MỌI
+     * nhóm, không khấu trừ đầu ra/đầu vào ⇒ {@code vatRate/preTaxAmount/vatAmount} đã bị bỏ khỏi bảng
+     * {@code stockadjustmentdetail}, chỉ còn {@code refSellPrice}.</p>
      */
     private static final Set<String> REF_SELL_PRICE_TYPES = Set.of("INTERNAL_USE", "GIFT", "SAMPLE");
 
@@ -230,7 +227,7 @@ public class StockadjustmentService {
 
     public Map<String, String> adjustmentTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
-        labels.put(TYPE_DESTROY, "Hủy hàng (nguyên nhân khách quan)");
+        labels.put(TYPE_DESTROY, "Hủy hàng");
         labels.put(TYPE_DESTROY_EMPLOYEE_FAULT, "Hủy hàng (lỗi nhân viên)");
         labels.put("INTERNAL_USE", "Sử dụng nội bộ");
         labels.put("SAMPLE", "Hàng mẫu");
@@ -469,8 +466,7 @@ public class StockadjustmentService {
     }
 
     /**
-     * Phiếu {@code Hoàn thành} này có được phép đảo ngược không — luật do BA chốt 05/08/2026, thay cho
-     * luật cũ *"chỉ hủy được khi chưa ai động vào lô"* (đặc tả 28/07) vốn áp chung cho mọi loại phiếu.
+     * Phiếu {@code Hoàn thành} này có được phép đảo ngược không.
      *
      * <p><strong>Tiêu chí là HÀNG CÒN TỒN TẠI VẬT LÝ hay không</strong>, không phải chiều tăng/giảm:
      * <ul>
@@ -546,11 +542,9 @@ public class StockadjustmentService {
      * duy nhất làm đổi tồn: hóa đơn bán và phiếu điều chỉnh khác (chỉ tính phiếu đang
      * {@code Hoàn thành} — phiếu đã hủy có tác động ròng 0).
      *
-     * <p>Từ 05/08/2026 luật này <strong>chỉ còn áp cho phiếu rà soát toàn dòng TĂNG</strong>
-     * (xem {@link #assertReversible}), vì chỉ chiều đó mới trừ kho khi đảo ngược. Trước đó nó áp cho
-     * mọi loại phiếu, khiến phiếu biếu tặng / dùng nội bộ lập nhầm cũng không sửa được.</p>
-     *
-     * <p>"Lô hết hạn không đảo ngược được" chỉ là hệ quả của luật này, không phải luật riêng.
+     * <p>Luật này <strong>chỉ áp cho phiếu rà soát toàn dòng TĂNG</strong> (xem {@link #assertReversible}),
+     * vì chỉ chiều đó mới trừ kho khi đảo ngược; áp cho mọi loại phiếu thì phiếu biếu tặng / dùng nội bộ
+     * lập nhầm cũng không sửa được. "Lô hết hạn không đảo ngược được" chỉ là hệ quả, không phải luật riêng.</p>
      */
     private void assertBatchesUntouchedSince(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
         if (adjustment.getDate() == null) {
@@ -813,10 +807,7 @@ public class StockadjustmentService {
      *
      * <p>{@code asDraft} → {@link StockAdjustmentStatus#DRAFT}, ngược lại → {@code COMPLETED} và tồn
      * kho cập nhật ngay. Không có nhánh "chờ duyệt": chỉ Owner tạo được phiếu này nên không có ai để
-     * duyệt chéo. Trả về id phiếu để controller redirect.</p>
-     *
-     * <p><strong>Không ghi lại người thao tác</strong> .
-     * Mốc duy nhất còn lại là {@code date} (lúc lập phiếu).</p>
+     * duyệt chéo. Bảng không có cột người thao tác — mốc duy nhất là {@code date} (lúc lập phiếu).</p>
      */
     @Transactional
     public Integer createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
@@ -948,7 +939,7 @@ public class StockadjustmentService {
      * SUY RA từ {@code StockReview.type}, người lập không chọn được:
      * <ul>
      *   <li>{@code type = COUNT} → <b>MỘT</b> phiếu {@link #TYPE_COUNT} chứa cả dòng thừa ({@code IN})
-     *       lẫn dòng thiếu ({@code OUT}). Trước 04/08/2026 chỗ này tách thành 2 phiếu riêng.</li>
+     *       lẫn dòng thiếu ({@code OUT}).</li>
      *   <li>{@code type = DATE} → phiếu {@link #TYPE_DATE_ADJUSTMENT}, sửa hạn dùng, không đụng tồn.</li>
      *   <li>{@code type = CONDITION} → KHÔNG tự sinh phiếu: kiểm tình trạng chỉ ghi nhận hàng hỏng, còn
      *       hủy hay không là quyết định riêng ⇒ người lập tự chọn loại hủy và gắn phiếu này vào.</li>
@@ -1601,9 +1592,8 @@ public class StockadjustmentService {
         if (type == null) {
             return "Không rõ";
         }
-        // Đọc từ đúng bảng nhãn của bộ lọc — MỘT nguồn sự thật. Trước đây đây là một switch riêng và
-        // nó đã lệch thật: thiếu hẳn COUNT lẫn DATE_ADJUSTMENT nên hai loại đó hiện MÃ THÔ ra màn
-        // danh sách và màn chi tiết, trong khi dropdown lọc ngay cạnh vẫn hiện đúng tiếng Việt.
+        // Đọc từ đúng bảng nhãn của bộ lọc — MỘT nguồn sự thật, đừng viết lại thành switch riêng: bản
+        // switch cũ từng thiếu COUNT và DATE_ADJUSTMENT nên hai loại đó hiện mã thô ra màn hình.
         return adjustmentTypeLabels().getOrDefault(type, type);
     }
 
