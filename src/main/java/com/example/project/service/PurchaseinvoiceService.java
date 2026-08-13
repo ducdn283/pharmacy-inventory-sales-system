@@ -305,6 +305,21 @@ public class PurchaseinvoiceService {
         );
     }
 
+    /**
+     * Only the account stored in {@code purchaseinvoice.employeeID} may cancel the invoice,
+     * regardless of whether that account is currently Owner or Accountant. Used to render the
+     * action; {@link #cancelPurchaseInvoice} enforces the rule again before changing any data.
+     */
+    @Transactional(readOnly = true)
+    public boolean canCancel(Integer purchaseId, Integer currentAccountId) {
+        Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+        return isCreator(invoice, currentAccountId)
+                && !PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus())
+                && !PurchaseInvoiceStatus.DRAFT.equals(invoice.getStatus())
+                && !PurchaseInvoiceStatus.PENDING_APPROVAL.equals(invoice.getStatus());
+    }
+
     @Transactional(readOnly = true)
     public PurchaseInvoicePrintPageResponse getPrintPage(Integer purchaseId) {
         Purchaseinvoice invoice = purchaseinvoiceRepository.findByIdWithRelations(purchaseId)
@@ -799,9 +814,13 @@ public class PurchaseinvoiceService {
      * những giao dịch khác và việc đảo ngược không còn an toàn.
      */
     @Transactional
-    public void cancelPurchaseInvoice(Integer purchaseId, String reason) {
+    public void cancelPurchaseInvoice(Integer purchaseId, String reason, Integer currentAccountId) {
         Purchaseinvoice invoice = purchaseinvoiceRepository.findById(purchaseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
+
+        if (!isCreator(invoice, currentAccountId)) {
+            throw new IllegalArgumentException("Chỉ tài khoản đã tạo phiếu nhập này mới có thể hủy phiếu");
+        }
 
         if (PurchaseInvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
             throw new IllegalArgumentException("Phiếu nhập đã bị hủy trước đó");
@@ -856,6 +875,12 @@ public class PurchaseinvoiceService {
         invoice.setNote(appendNote(invoice.getNote(), "Đã hủy" + (trimToNull(reason) != null ? ": " + reason.trim() : "")));
 
         savePurchaseInvoiceGuardingConcurrentEdit(invoice);
+    }
+
+    private boolean isCreator(Purchaseinvoice invoice, Integer accountId) {
+        return accountId != null
+                && invoice.getEmployeeID() != null
+                && accountId.equals(invoice.getEmployeeID().getId());
     }
 
     /** True if a batch's current stock no longer matches what was originally imported for it. */
