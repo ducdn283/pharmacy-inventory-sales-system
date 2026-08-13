@@ -3,7 +3,7 @@
 <body>
 <!--
   Reusable flash-message toasts. Renders a floating, auto-dismissing Bootstrap toast (top-right) from
-  the ${successMessage} / ${errorMessage} model attributes. Bootstrap JS is already bundled in main.js,
+  the ${successMessage} / ${warningMessage} / ${errorMessage} model attributes. Bootstrap JS is already bundled in main.js,
   so no extra library is needed. Include once per page:
       <div th:replace="~{fragments/toast :: flash}"></div>
 -->
@@ -16,6 +16,19 @@
                 <div class="toast-body d-flex align-items-center">
                     <i class="ti ti-circle-check fs-5 me-2"></i>
                     <span th:text="${successMessage}">Thành công</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                        data-bs-dismiss="toast" aria-label="Đóng"></button>
+            </div>
+        </div>
+
+        <div th:if="${warningMessage}"
+             class="toast align-items-center border-0 pm-toast pm-toast-warning"
+             role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="8000">
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="ti ti-alert-triangle fs-5 me-2"></i>
+                    <span th:text="${warningMessage}">Cảnh báo</span>
                 </div>
                 <button type="button" class="btn-close btn-close-white me-2 m-auto"
                         data-bs-dismiss="toast" aria-label="Đóng"></button>
@@ -58,6 +71,12 @@
 
         .pm-toast-error {
             background: #dc2626;
+        }
+
+        /* Cảnh báo: thao tác KHÔNG hỏng, nhưng cũng không làm điều người dùng tưởng (vd bấm Tạo
+           lần hai cho phiếu đã lưu) — phải khác cả xanh "thành công" lẫn đỏ "lỗi". */
+        .pm-toast-warning {
+            background: #b45309;
         }
     </style>
 

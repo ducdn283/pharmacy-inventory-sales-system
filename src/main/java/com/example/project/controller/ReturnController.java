@@ -4,6 +4,7 @@ import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.ReturnCreateRequest;
 import com.example.project.dto.response.ReturnInvoiceLineResponse;
 import com.example.project.dto.response.ReturnListItemResponse;
+import com.example.project.dto.response.SlipCreateOutcome;
 import com.example.project.service.ReturnService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
@@ -112,8 +113,15 @@ public class ReturnController {
         boolean isOwner = currentUserContext.isOwner();
         boolean asDraft = "draft".equals(action);
         try {
-            Integer returnId = returnService.createReturn(
+            SlipCreateOutcome outcome = returnService.createReturn(
                     form, currentUserContext.getCurrentAccountId(), isOwner, asDraft);
+
+            // Phiếu trùng: lần bấm này KHÔNG tạo gì thêm, nên không được báo "thành công" — đưa
+            // người dùng tới đúng phiếu đã lưu kèm cảnh báo. Xem SlipCreateOutcome.
+            if (outcome.duplicate()) {
+                redirectAttributes.addFlashAttribute("warningMessage", outcome.message());
+                return "redirect:" + basePath + "/" + outcome.id();
+            }
 
             String message;
             if (asDraft) {
@@ -124,7 +132,7 @@ public class ReturnController {
                 message = "Đã gửi phiếu trả hàng, đang chờ duyệt";
             }
             redirectAttributes.addFlashAttribute("successMessage", message);
-            return "redirect:" + basePath + "/" + returnId;
+            return "redirect:" + basePath + "/" + outcome.id();
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);

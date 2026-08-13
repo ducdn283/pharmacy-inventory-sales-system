@@ -49,6 +49,13 @@ public class ReturnService {
      */
     private static final BigDecimal FULL_REFUND_RATE = new BigDecimal("100.00");
 
+    /**
+     * Khoảng thời gian coi hai phiếu trùng khít nội dung là MỘT lần bấm Tạo bị lặp — xem
+     * {@link #findRecentDuplicate}. Đặt ngắn có chủ đích: lần gửi lại vì mất mạng luôn diễn ra
+     * trong vòng vài giây tới vài chục giây, còn để rộng quá thì chặn nhầm một phiếu thật.
+     */
+    private static final Duration DUPLICATE_WINDOW = Duration.ofMinutes(2);
+
     // Invoice.date is stored as VN wall-clock LocalDateTime (see InvoiceService) — the adjustment
     // invoice's own date must use the same convention, not a real UTC Instant.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -367,13 +374,16 @@ public class ReturnService {
      * Pharmacist submits to Chờ duyệt. When the slip lands in Nợ, stock is restored and the invoice's
      * return status is updated (see {@link #applyReturnEffect}).</p>
      *
-     * @return the id of the created slip, for the redirect.
+     * <p>Trước khi ghi, phiếu được đối chiếu với các phiếu vừa lập để không tạo bản sao khi người
+     * dùng bấm Tạo lần thứ hai — xem {@link #findRecentDuplicate}.</p>
+     *
+     * @return id phiếu để chuyển hướng, kèm cờ cho biết đó là phiếu vừa tạo hay phiếu đã có.
      */
     @Transactional
-    public Integer createReturn(ReturnCreateRequest request,
-                                Integer currentAccountId,
-                                boolean isOwner,
-                                boolean asDraft) {
+    public SlipCreateOutcome createReturn(ReturnCreateRequest request,
+                                          Integer currentAccountId,
+                                          boolean isOwner,
+                                          boolean asDraft) {
         if (request.getInvoiceId() == null) {
             throw new IllegalArgumentException("Vui lòng chọn hóa đơn cần trả");
         }
@@ -437,6 +447,19 @@ public class ReturnService {
         String status = asDraft ? ReturnStatus.DRAFT : (isOwner ? ReturnStatus.DEBT : ReturnStatus.PENDING);
         boolean approvedNow = ReturnStatus.DEBT.equals(status);
 
+        String reason = request.getReason().trim();
+        Map<Integer, Integer> qtyByInvoiceLine = prepared.values().stream()
+                .collect(Collectors.toMap(line -> line.invoiceLine().getId(), PreparedLine::qty));
+        Optional<Return> duplicate = findRecentDuplicate(invoice.getId(), currentAccountId, status,
+                refundRate, totalRefund, reason, qtyByInvoiceLine);
+        if (duplicate.isPresent()) {
+            Return existing = duplicate.get();
+            return SlipCreateOutcome.duplicate(existing.getId(), "Phiếu trả hàng "
+                    + existing.getReturnCode() + " với đúng nội dung này đã được lập lúc "
+                    + formatInstant(existing.getReturnDate())
+                    + ". Hệ thống KHÔNG tạo thêm phiếu mới — đây là phiếu đã lưu.");
+        }
+
         Return ret = new Return();
         ret.setReturnCode(temporaryCode());
         ret.setInvoiceID(invoice);
@@ -452,7 +475,7 @@ public class ReturnService {
         // Số dự kiến cấn trừ vào công nợ hóa đơn gốc. Chốt lại theo dư nợ tại thời điểm DUYỆT
         // (xem applyDebtOffset) — phiếu nháp chỉ giữ số ước tính để màn chi tiết có gì hiển thị.
         ret.setOffsetDebtAmount(computeDebtOffset(invoice, totalRefund));
-        ret.setReason(request.getReason().trim());
+        ret.setReason(reason);
         ret.setNote(trimToNull(request.getNote()));
         ret.setStatus(status);
         if (approvedNow) {
@@ -495,7 +518,67 @@ public class ReturnService {
                     .returnPending(savedReturn);
         }
 
-        return savedReturn.getId();
+        return SlipCreateOutcome.created(savedReturn.getId());
+    }
+
+    /**
+     * Tìm phiếu trả vừa lập có nội dung TRÙNG KHÍT với phiếu sắp tạo — dấu hiệu của một cú bấm Tạo
+     * lặp lại chứ không phải một phiếu mới.
+     *
+     * <p>Cố ý so khớp toàn bộ nội dung (hóa đơn gốc, người lập, trạng thái đích, tỷ lệ hoàn, tổng
+     * tiền, lý do, và từng dòng hàng với đúng số lượng) chứ KHÔNG chỉ so "cùng hóa đơn": khách trả
+     * thêm một mặt hàng khác ngay sau đó là việc hợp lệ, chặn nhầm là dược sĩ không lập được phiếu.
+     * Trùng khít tới từng dòng thì gần như chắc chắn là lần gửi lại của cùng một biểu mẫu.</p>
+     *
+     * <p>Cửa sổ {@link #DUPLICATE_WINDOW} đo trên {@code returnDate}, phải lấy mốc bằng
+     * {@link #nowVn()} — cột đó lưu giờ VN gắn nhãn UTC (xem javadoc của {@code nowVn}), so với
+     * {@code Instant.now()} là lệch 7 tiếng và cửa sổ thành vô nghĩa.</p>
+     */
+    private Optional<Return> findRecentDuplicate(Integer invoiceId,
+                                                 Integer creatorId,
+                                                 String status,
+                                                 BigDecimal refundRate,
+                                                 BigDecimal totalRefund,
+                                                 String reason,
+                                                 Map<Integer, Integer> qtyByInvoiceLine) {
+        Instant since = nowVn().minus(DUPLICATE_WINDOW);
+        for (Return candidate : returnRepository.findByInvoiceID_IdOrderByReturnDateDesc(invoiceId)) {
+            if (candidate.getReturnDate() == null || candidate.getReturnDate().isBefore(since)) {
+                // Danh sách đã sắp giảm dần theo ngày nên gặp phiếu ngoài cửa sổ là dừng được.
+                break;
+            }
+            if (candidate.getReturnedBy() == null
+                    || !Objects.equals(candidate.getReturnedBy().getId(), creatorId)
+                    || !status.equals(candidate.getStatus())
+                    || !sameAmount(candidate.getAppliedRefundRate(), refundRate)
+                    || !sameAmount(candidate.getTotalRefund(), totalRefund)
+                    || !reason.equals(candidate.getReason())) {
+                continue;
+            }
+            if (qtyByInvoiceLine.equals(returnedQtyByInvoiceLine(candidate.getId()))) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Các dòng của một phiếu trả, dạng {@code invoiceDetailId -> returnQty}, để so khớp nội dung. */
+    private Map<Integer, Integer> returnedQtyByInvoiceLine(Integer returnId) {
+        Map<Integer, Integer> qtyByLine = new LinkedHashMap<>();
+        for (Returndetail detail : returndetailRepository.findByReturnIdWithRelations(returnId)) {
+            if (detail.getInvoiceDetailID() != null) {
+                qtyByLine.put(detail.getInvoiceDetailID().getId(), detail.getReturnQty());
+            }
+        }
+        return qtyByLine;
+    }
+
+    /** So hai số tiền theo GIÁ TRỊ, không theo scale — {@code 80} và {@code 80.00} phải là một. */
+    private boolean sameAmount(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
     }
 
     // ------------------------------------------------------------------ submit / approve / reject

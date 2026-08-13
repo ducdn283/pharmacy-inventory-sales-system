@@ -5,6 +5,7 @@ import com.example.project.dto.request.StockAdjustmentCreateRequest;
 import com.example.project.dto.response.StockAdjustmentReviewLineResponse;
 import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
 import com.example.project.dto.response.StockAdjustmentListItemResponse;
+import com.example.project.dto.response.SlipCreateOutcome;
 import com.example.project.service.StockadjustmentService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
@@ -117,12 +118,19 @@ public class StockadjustmentController {
         String basePath = resolveBasePath(request);
         boolean asDraft = "draft".equals(action);
         try {
-            Integer adjustmentId = stockadjustmentService.createAdjustment(form, asDraft);
+            SlipCreateOutcome outcome = stockadjustmentService.createAdjustment(form, asDraft);
+
+            // Phiếu trùng: lần bấm này KHÔNG tạo gì thêm, nên không được báo "thành công" — đưa
+            // người dùng tới đúng phiếu đã lưu kèm cảnh báo. Xem SlipCreateOutcome.
+            if (outcome.duplicate()) {
+                redirectAttributes.addFlashAttribute("warningMessage", outcome.message());
+                return "redirect:" + basePath + "/" + outcome.id();
+            }
 
             redirectAttributes.addFlashAttribute("successMessage", asDraft
                     ? "Đã lưu nháp phiếu điều chỉnh kho"
                     : "Đã tạo và thực hiện phiếu điều chỉnh kho (tồn kho đã cập nhật)");
-            return "redirect:" + basePath + "/" + adjustmentId;
+            return "redirect:" + basePath + "/" + outcome.id();
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
