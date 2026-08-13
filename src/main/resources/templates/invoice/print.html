@@ -395,8 +395,16 @@
                     <td class="text-right" th:text="${line.quantity}">1</td>
                     <td class="text-right"
                         th:text="${#numbers.formatDecimal(line.unitSellPrice, 1, 'COMMA', 0, 'POINT')}">10.000</td>
-                    <td class="text-right"
-                        th:text="${#numbers.formatDecimal(line.lineSubtotal, 1, 'COMMA', 0, 'POINT')}">10.000</td>
+                    <td class="text-right">
+                        <div th:text="${#numbers.formatDecimal(line.lineSubtotal, 1, 'COMMA', 0, 'POINT')}">10.000</div>
+                        <div th:if="${line.retainedMoneyLine}"
+                             style="font-size: 11px; font-weight: normal; margin-top: 2px;">
+                            Nhà thuốc giữ lại
+                        </div>
+                        <div th:if="${line.retainedPercentDisplay != null and !line.retainedPercentDisplay.isBlank()}"
+                             style="font-size: 11px; font-weight: normal; margin-top: 2px;"
+                             th:text="${line.retainedPercentDisplay}">20%</div>
+                    </td>
                 </tr>
 
                 <tr th:if="${#lists.isEmpty(printData.lines)}">
