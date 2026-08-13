@@ -31,9 +31,9 @@ public interface PositionRepository extends JpaRepository<Position, Integer> {
     @Query("""
             SELECT p FROM Position p
             JOIN p.productID prod
-            WHERE (:keyword = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(prod.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(prod.code) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            WHERE (:keyword = '' OR LOWER(p.name) LIKE LOWER(CONCAT(:keyword, '%'))
+                   OR LOWER(prod.name) LIKE LOWER(CONCAT(:keyword, '%'))
+                   OR LOWER(prod.code) LIKE LOWER(CONCAT(:keyword, '%')))
             """)
 
     //page là interface dùng để phân trang: pageable là cách phân trang, keywword là từ khóa tìm kiếm

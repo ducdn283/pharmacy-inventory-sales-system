@@ -341,9 +341,14 @@ public class IncomeService {
 
     @Transactional(readOnly = true)
     public IncomeDetailResponse getDetail(Integer incomeId) {
+        return getDetail(incomeId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public IncomeDetailResponse getDetail(Integer incomeId, Integer currentAccountId) {
         Income income = incomeRepository.findByIdWithRelations(incomeId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu thu"));
-        return toDetail(income);
+        return toDetail(income, currentAccountId);
     }
 
     /** Tiền NCC còn phải hoàn trên phiếu trả hàng, sau các phiếu thu đã hoàn thành. */
@@ -437,8 +442,14 @@ public class IncomeService {
      */
     @Transactional
     public void cancel(Integer incomeId, String reason) {
+        cancel(incomeId, reason, null);
+    }
+
+    @Transactional
+    public void cancel(Integer incomeId, String reason, Integer currentAccountId) {
         Income income = incomeRepository.findByIdWithRelations(incomeId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu thu"));
+        ensureApplicantAccess(income, currentAccountId);
 
         if (isStatus(income.getStatus(), STATUS_CANCELLED)) {
             throw new IllegalArgumentException("Phiếu thu này đã bị hủy trước đó");
@@ -538,7 +549,7 @@ public class IncomeService {
                 statusCssClass(statusName));
     }
 
-    private IncomeDetailResponse toDetail(Income income) {
+    private IncomeDetailResponse toDetail(Income income, Integer currentAccountId) {
         String typeCode = resolveIncomeType(income);
         String statusName = income.getStatus() != null ? displayStatus(income.getStatus()) : "Không rõ";
 
@@ -577,6 +588,7 @@ public class IncomeService {
             shiftReportOfAccountId = income.getShiftReportOfAccountID().getId();
         }
 
+        String cancelBlockedReason = cancelBlockedReason(income, currentAccountId);
         return new IncomeDetailResponse(
                 income.getId(),
                 income.getIncomeCode(),
@@ -600,8 +612,37 @@ public class IncomeService {
                 stockAdjustmentId,
                 shiftReportOfAccountId,
                 income.getNote(),
-                !isStatus(income.getStatus(), STATUS_CANCELLED)
-                        && !DebtOffsetService.isDebtOffsetIncome(income));
+                cancelBlockedReason == null,
+                cancelBlockedReason);
+    }
+
+    /**
+     * Vì sao phiếu này không hủy được — dùng cho màn hình, để ẩn nút Hủy kèm lời giải thích thay vì
+     * để người dùng bấm rồi mới ăn lỗi. {@code null} nghĩa là hủy được.
+     */
+    private String cancelBlockedReason(Income income, Integer currentAccountId) {
+        if (isStatus(income.getStatus(), STATUS_CANCELLED)) {
+            return null;
+        }
+        if (DebtOffsetService.isDebtOffsetIncome(income)) {
+            return "Phiếu thu bù trừ công nợ không thể hủy.";
+        }
+        if (!belongsToApplicant(income, currentAccountId)) {
+            return "Chỉ người lập phiếu mới có thể hủy.";
+        }
+        return null;
+    }
+
+    private boolean belongsToApplicant(Income income, Integer applicantAccountId) {
+        return applicantAccountId != null
+                && income.getApplicantID() != null
+                && applicantAccountId.equals(income.getApplicantID().getId());
+    }
+
+    private void ensureApplicantAccess(Income income, Integer requiredApplicantAccountId) {
+        if (!belongsToApplicant(income, requiredApplicantAccountId)) {
+            throw new IllegalArgumentException("Chỉ người lập phiếu mới có thể hủy phiếu thu này");
+        }
     }
 
     private String displayReason(Income income) {

@@ -18,7 +18,8 @@ public class ReturnInvoiceLineResponse {
     private Integer productId;
     private String productName;
 
-    private String lotNumber;
+    /** TEN lo (batch.batchName), khong phai SO lo - dong bo voi man chi tiet phieu tra. */
+    private String batchName;
     private String expirationDateDisplay;
 
     private String unitName;

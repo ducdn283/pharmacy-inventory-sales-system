@@ -5,52 +5,52 @@
     <meta charset="UTF-8"/>
     <title>Cập nhật vị trí | PharmaManager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/images/apple-touch-icon.png" th:href="@{/assets/images/apple-touch-icon.png}">
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/images/favicon-32x32.png" th:href="@{/assets/images/favicon-32x32.png}">
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/images/favicon-16x16.png" th:href="@{/assets/images/favicon-16x16.png}">
     <link rel="manifest" href="./assets/site.webmanifest" th:href="@{/assets/site.webmanifest}">
-
     <script type="module" crossorigin src="./assets/js/main.js" th:src="@{/assets/js/main.js}"></script>
     <link rel="stylesheet" crossorigin href="./assets/css/main.css" th:href="@{/assets/css/main.css}">
 
     <style>
-        .owner-page-content {
-            padding-top: 96px !important;
-            padding-bottom: 48px;
+        :root {
+            --pm-green: #059669;
+            --pm-green-dark: #047857;
+            --pm-border: #e5e7eb;
+            --pm-muted: #6b7280;
         }
-
-        @media (max-width: 991.98px) {
-            .owner-page-content {
-                padding-top: 84px !important;
-            }
-        }
-
-        .owner-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 14px;
-            background: #fff;
+        body { background: #f6f7f9; }
+        .owner-page-content { padding-top: 96px !important; padding-bottom: 48px; }
+        @media (max-width: 991.98px) { .owner-page-content { padding-top: 84px !important; } }
+        .owner-card, .action-panel {
+            border: 1px solid var(--pm-border); border-radius: 14px; background: #fff;
             box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
         }
-
+        .meta-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+            background: #f3f4f6; color: #374151;
+        }
+        .form-section-title {
+            font-size: 15px; font-weight: 700; color: #111827;
+            margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6;
+        }
+        .form-label { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 6px; }
+        .form-control, .form-select {
+            border-radius: 10px; min-height: 42px; border-color: var(--pm-border); font-size: 13px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #6ee7b7; box-shadow: 0 0 0 3px rgba(5, 150, 105, .1);
+        }
+        .action-panel { background: #f9fafb; padding: 20px; }
+        @media (min-width: 992px) { .action-panel { position: sticky; top: 104px; } }
+        .action-note { font-size: 13px; color: var(--pm-muted); line-height: 1.5; margin-bottom: 18px; }
         .btn-owner-primary {
-            background: #059669;
-            border-color: #059669;
-            color: #fff;
-            border-radius: 10px;
+            background: var(--pm-green); border-color: var(--pm-green); color: #fff;
+            border-radius: 10px; min-height: 42px; font-size: 13px; font-weight: 600;
         }
-
-        .btn-owner-primary:hover {
-            background: #047857;
-            border-color: #047857;
-            color: #fff;
-        }
-
-        .form-control,
-        .form-select {
-            border-radius: 10px;
-            min-height: 42px;
-        }
+        .btn-owner-primary:hover { background: var(--pm-green-dark); border-color: var(--pm-green-dark); color: #fff; }
+        .btn-back { border-radius: 10px; min-height: 40px; font-size: 13px; font-weight: 600; }
     </style>
 </head>
 
@@ -61,77 +61,61 @@
 <main id="content" class="content owner-page-content">
     <div class="container-fluid">
 
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
             <div>
-                <h1 class="fs-4 mb-1">Cập nhật vị trí</h1>
-                <p class="text-secondary mb-0">
-                    Mã vị trí:
-                    <span class="fw-semibold" th:text="|VT-${#numbers.formatInteger(position.id, 5)}|">VT-000001</span>
-                </p>
+                <h1 class="fs-4 mb-2">Cập nhật vị trí</h1>
+                <span class="meta-badge">
+                    <i class="ti ti-hash"></i>
+                    <span th:text="|VT-${#numbers.formatInteger(position.id, 5)}|">VT-000001</span>
+                </span>
             </div>
-
-            <a th:href="${basePath}" class="btn btn-outline-secondary">
-                Quay lại danh sách
+            <a th:href="${basePath}" class="btn btn-outline-secondary btn-back">
+                <i class="ti ti-arrow-left me-1"></i>Quay lại danh sách
             </a>
         </div>
 
-        <div class="owner-card p-4">
-            <form th:action="${basePath + '/update-position/' + position.id}"
-                  th:object="${positionForm}"
-                  method="post"
-                  novalidate>
-                <div class="row g-4">
-                    <div class="col-12 col-lg-8">
-                        <h2 class="fs-6 mb-3">Thông tin vị trí</h2>
+        <form th:action="${basePath + '/update-position/' + position.id}"
+              th:object="${positionForm}" method="post" novalidate>
+            <div class="row g-4">
+                <div class="col-12 col-lg-8">
+                    <div class="owner-card p-4 p-md-5">
+                        <h2 class="form-section-title">Thông tin vị trí</h2>
 
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label for="productId" class="form-label">Sản phẩm <span class="text-danger">*</span></label>
-                            <select id="productId"
-                                    class="form-select"
-                                    th:field="*{productId}">
+                            <select id="productId" class="form-select" th:field="*{productId}">
                                 <option value="">-- Chọn sản phẩm --</option>
                                 <option th:each="product : ${products}"
                                         th:value="${product.productID}"
-                                        th:text="|${product.code} - ${product.name}|">
-                                    SP001 - Paracetamol 500mg
-                                </option>
+                                        th:text="|${product.code} - ${product.name}|">SP001 - Paracetamol</option>
                             </select>
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('productId')}" th:errors="*{productId}"></div>
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-0">
                             <label for="positionName" class="form-label">Tên vị trí <span class="text-danger">*</span></label>
-                            <input id="positionName"
-                                   type="text"
-                                   class="form-control"
-                                   th:field="*{name}"
+                            <input id="positionName" type="text" class="form-control" th:field="*{name}"
                                    placeholder="VD: Kệ A1, Tủ B2">
                             <div class="form-text">Ví dụ: Kệ A1, Tủ thuốc kê đơn, Ngăn C3</div>
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="col-12 col-lg-4">
-                        <h2 class="fs-6 mb-3">Thao tác</h2>
-
-                        <p class="text-secondary small mb-4">
-                            Kiểm tra kỹ thông tin trước khi cập nhật vị trí.
-                        </p>
-
+                <div class="col-12 col-lg-4">
+                    <div class="action-panel">
+                        <h2 class="form-section-title mb-3">Thao tác</h2>
+                        <p class="action-note">Kiểm tra kỹ thông tin trước khi cập nhật vị trí.</p>
                         <button type="submit" class="btn btn-owner-primary w-100 mb-2">
-                            Cập nhật vị trí
+                            <i class="ti ti-device-floppy me-1"></i>Cập nhật vị trí
                         </button>
-
-                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
-                            Hủy
-                        </a>
+                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100 btn-back">Hủy</a>
                     </div>
                 </div>
-            </form>
-        </div>
+            </div>
+        </form>
 
     </div>
 </main>
-
 </body>
 </html>

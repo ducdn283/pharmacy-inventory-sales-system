@@ -14,8 +14,8 @@ public interface TypeRepository extends JpaRepository<Type, Integer> {
     //hiện danh sách loại (có tìm kiếm theo tên hoặc nhóm)
     @Query("""
             SELECT t FROM Type t
-            WHERE (:keyword = '' OR LOWER(t.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(t.sortType) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            WHERE (:keyword = '' OR LOWER(t.name) LIKE LOWER(CONCAT(:keyword, '%'))
+                   OR LOWER(t.sortType) LIKE LOWER(CONCAT(:keyword, '%')))
               AND (:sortType = '' OR LOWER(t.sortType) = LOWER(:sortType))
             """)
     Page<Type> findFiltered(@Param("keyword") String keyword,

@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProducerRepository extends JpaRepository<Producer, Integer> {
 
-    Page<Producer> findByNameContainingIgnoreCase(String name, Pageable pageable);
+    Page<Producer> findByNameStartingWithIgnoreCase(String name, Pageable pageable);
 }

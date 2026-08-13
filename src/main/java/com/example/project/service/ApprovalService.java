@@ -47,9 +47,8 @@ public class ApprovalService {
     private static final String TYPE_SHIFT_REPORT = "Báo cáo ca";
     private static final String TYPE_EXPENSE = "Phiếu chi";
     /**
-     * Phiếu nhập hàng — thêm 04/08/2026. Chủ nhà thuốc có thể nhập sai số lượng/giá mà không ai soát
-     * lại, nên phiếu nhập phải qua một bước duyệt độc lập trước khi hàng thật sự vào kho
-     * ({@code PurchaseinvoiceService.approvePurchaseInvoice} là nơi DUY NHẤT cộng tồn).
+     * Phiếu nhập hàng — phải qua một bước duyệt độc lập trước khi hàng thật sự vào kho, vì
+     * {@code PurchaseinvoiceService.approvePurchaseInvoice} là nơi DUY NHẤT cộng tồn.
      */
     private static final String TYPE_PURCHASE_INVOICE = "Phiếu nhập";
 

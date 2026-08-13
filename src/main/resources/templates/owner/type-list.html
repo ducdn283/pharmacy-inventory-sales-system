@@ -65,6 +65,10 @@
       background: var(--sup-green-bg);
       color: var(--sup-green);
     }
+    .kpi-card.kpi-blue .kpi-icon { background: #eff6ff; color: #2563eb; }
+    .kpi-card.kpi-blue .kpi-sub { color: #2563eb; }
+    .kpi-card.kpi-purple .kpi-icon { background: #f5f3ff; color: #7c3aed; }
+    .kpi-card.kpi-purple .kpi-sub { color: #7c3aed; }
 
     .main-card {
       background: #fff;
@@ -81,8 +85,24 @@
       flex-wrap: wrap;
       margin-bottom: 20px;
     }
-    .filter-input,
+    .filter-input {
+      flex: 1 1 260px;
+      height: 40px;
+      border: 1px solid var(--sup-border);
+      border-radius: 10px;
+      padding: 0 14px;
+      font-size: 13px;
+      color: #374151;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .filter-input:focus,
+    .filter-select:focus {
+      border-color: #6ee7b7;
+      box-shadow: 0 0 0 3px rgba(5,150,105,.1);
+    }
     .filter-select {
+      flex: 0 1 180px;
       height: 40px;
       border: 1px solid var(--sup-border);
       border-radius: 10px;
@@ -92,18 +112,6 @@
       outline: none;
       transition: border-color .15s;
       background: #fff;
-    }
-    .filter-input {
-      flex: 1 1 260px;
-    }
-    .filter-select {
-      flex: 0 1 220px;
-      min-width: 180px;
-    }
-    .filter-input:focus,
-    .filter-select:focus {
-      border-color: #6ee7b7;
-      box-shadow: 0 0 0 3px rgba(5,150,105,.1);
     }
     .btn-search {
       height: 40px;
@@ -127,42 +135,6 @@
     }
     .btn-search.reset:hover { background: #f9fafb; color: #111827; }
 
-    .type-table-wrap {
-      overflow-x: auto;
-    }
-
-    .sup-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    .sup-table th {
-      padding: 10px 16px;
-      text-align: left;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--sup-muted);
-      background: #f9fafb;
-      border-bottom: 1px solid var(--sup-border);
-      white-space: nowrap;
-    }
-    .sup-table td {
-      padding: 13px 16px;
-      font-size: 13px;
-      color: #374151;
-      border-bottom: 1px solid #f3f4f6;
-      vertical-align: middle;
-    }
-    .sup-table tr:last-child td { border-bottom: none; }
-    .sup-table tr:hover td { background: #fafafa; }
-    .sup-code {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--sup-muted);
-      letter-spacing: .04em;
-    }
-    .sup-name { font-weight: 600; color: #111827; }
-
     .btn-create {
       height: 40px;
       padding: 0 20px;
@@ -180,75 +152,68 @@
     }
     .btn-create:hover { background: var(--sup-green-dark); color: #fff; }
 
-    .type-group {
+    .sup-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    .sup-table th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sup-muted);
+      background: #f9fafb;
+      border-bottom: 1px solid var(--sup-border);
+      white-space: nowrap;
+    }
+    .sup-table td {
+      padding: 13px 14px;
+      font-size: 13px;
+      color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .sup-table tr:last-child td { border-bottom: none; }
+    .sup-table tr:hover td { background: #fafafa; }
+
+    .sup-code {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sup-muted);
+      letter-spacing: .04em;
+    }
+    .sup-name { font-weight: 600; color: #111827; }
+
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 10px;
+      padding: 5px 10px;
       border-radius: 999px;
       font-size: 12px;
       font-weight: 600;
+      white-space: nowrap;
       background: var(--sup-green-bg);
-      color: var(--sup-green-dark);
-      text-transform: capitalize;
-      white-space: nowrap;
-    }
-
-    .vat-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 58px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      background: #eff6ff;
-      color: #1d4ed8;
-    }
-    .vat-badge.vat-zero { background: #f3f4f6; color: #6b7280; }
-    .vat-badge.vat-low { background: var(--sup-green-bg); color: var(--sup-green-dark); }
-    .vat-badge.vat-mid { background: #fef3c7; color: #b45309; }
-
-    .col-action { width: 14%; text-align: center; }
-    .col-vat { width: 14%; text-align: center; }
-    .col-code { width: 12%; }
-    .col-group { width: 18%; }
-    .col-name {
-      width: 42%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .sup-table th.col-vat,
-    .sup-table th.col-action,
-    .sup-table td.col-vat,
-    .sup-table td.col-action {
-      text-align: center;
-    }
-
-    .btn-edit {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      height: 32px;
-      padding: 0 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
       color: var(--sup-green);
-      background: var(--sup-green-bg);
-      border: 1px solid transparent;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: background .15s, color .15s, border-color .15s;
+      text-transform: capitalize;
     }
-    .btn-edit:hover {
-      color: #fff;
-      background: var(--sup-green);
-      border-color: var(--sup-green);
+    .status-badge.vat-zero { background: #f3f4f6; color: var(--sup-muted); }
+    .status-badge.vat-low { background: var(--sup-green-bg); color: var(--sup-green); }
+    .status-badge.vat-mid { background: #fef3c7; color: #b45309; }
+
+    .update-link {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #a7f3d0;
+      border-radius: 8px;
+      background: #ecfdf5;
+      color: var(--sup-green);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-size: 16px;
+    }
+    .update-link:hover {
+      background: #d1fae5;
+      border-color: #6ee7b7;
+      color: var(--sup-green-dark);
     }
 
     .pagination .page-link { color: var(--sup-green); border-color: var(--sup-border); font-size: 13px; }
@@ -259,8 +224,7 @@
 
     @media (max-width: 767px) {
       .filter-row { flex-direction: column; align-items: stretch; }
-      .filter-input,
-      .filter-select { width: 100%; }
+      .filter-input { width: 100%; }
     }
   </style>
 </head>
@@ -288,7 +252,7 @@
         </div>
       </div>
       <div class="col-12 col-md-4">
-        <div class="kpi-card">
+        <div class="kpi-card kpi-blue">
           <span class="kpi-icon"><i class="ti ti-folders"></i></span>
           <div class="kpi-label">Nhóm mặt hàng</div>
           <div class="kpi-number" th:text="${#lists.size(typeGroups)}">0</div>
@@ -296,7 +260,7 @@
         </div>
       </div>
       <div class="col-12 col-md-4">
-        <div class="kpi-card">
+        <div class="kpi-card kpi-purple">
           <span class="kpi-icon"><i class="ti ti-filter"></i></span>
           <div class="kpi-label">Kết quả lọc</div>
           <div class="kpi-number" th:text="${totalItems}">0</div>
@@ -317,72 +281,50 @@
         <input type="hidden" name="page" value="0">
         <input type="hidden" name="size" th:value="${pageSize}">
         <div class="filter-row">
-          <input type="text"
-                 class="filter-input"
-                 name="search"
-                 th:value="${search}"
-                 placeholder="Tìm theo tên loại hàng hoặc nhóm mặt hàng">
+          <input type="text" class="filter-input" name="search" th:value="${search}"
+                 placeholder="Tìm theo mã LH, tên hoặc nhóm (bắt đầu bằng)">
           <select class="filter-select" name="sortType" aria-label="Lọc nhóm mặt hàng">
             <option value="">Tất cả nhóm</option>
-            <option th:each="group : ${typeGroups}"
-                    th:value="${group}"
+            <option th:each="group : ${typeGroups}" th:value="${group}"
                     th:text="${#strings.capitalize(group)}"
-                    th:selected="${filterSortType == group}">
-              Thuốc
-            </option>
+                    th:selected="${filterSortType == group}">Thuốc</option>
           </select>
-          <button type="submit" class="btn-search primary">
-            <i class="ti ti-search"></i>Tìm kiếm
-          </button>
-          <a th:href="${basePath}" class="btn-search reset">
-            <i class="ti ti-refresh"></i>Đặt lại
-          </a>
+          <button type="submit" class="btn-search primary"><i class="ti ti-search"></i>Tìm kiếm</button>
+          <a th:href="${basePath}" class="btn-search reset"><i class="ti ti-refresh"></i>Đặt lại</a>
         </div>
       </form>
 
-      <div class="type-table-wrap">
+      <div style="overflow-x:auto;">
         <table class="sup-table">
-          <colgroup>
-            <col class="col-code">
-            <col class="col-group">
-            <col class="col-name">
-            <col class="col-vat">
-            <col class="col-action">
-          </colgroup>
           <thead>
             <tr>
-              <th class="col-code">Mã loại</th>
-              <th class="col-group">Nhóm mặt hàng</th>
-              <th class="col-name">Tên loại hàng</th>
-              <th class="col-vat">VAT mặc định</th>
-              <th class="col-action">Thao tác</th>
+              <th>Mã loại</th>
+              <th>Nhóm</th>
+              <th>Tên loại hàng</th>
+              <th>VAT mặc định</th>
+              <th style="text-align:center;">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             <tr th:each="type : ${types}">
               <td class="sup-code" th:text="|LH-${#numbers.formatInteger(type.id, 5)}|">LH-000001</td>
+              <td><span class="status-badge" th:text="${#strings.capitalize(type.sortType)}">Thuốc</span></td>
+              <td class="sup-name" th:text="${type.name}">Thuốc kê đơn</td>
               <td>
-                <span class="type-group" th:text="${#strings.capitalize(type.sortType)}">Thuốc</span>
-              </td>
-              <td class="sup-name col-name" th:text="${type.name}">Thuốc kê đơn</td>
-              <td class="col-vat">
-                <span class="vat-badge"
+                <span class="status-badge"
                       th:classappend="${(type.defaultVATRate != null and type.defaultVATRate.doubleValue() == 0) ? ' vat-zero' : ((type.defaultVATRate != null and type.defaultVATRate.doubleValue() <= 5) ? ' vat-low' : ' vat-mid')}"
                       th:text="|${#numbers.formatDecimal(type.defaultVATRate, 1, 2)}%|">5,00%</span>
               </td>
-              <td class="col-action">
-                <a th:if="${currentRole == 'OWNER'}" class="btn-edit"
-                   th:href="${basePath + '/update-type/' + type.id}">
-                  <i class="ti ti-edit" style="font-size:14px;"></i>Sửa
+              <td style="text-align:center;">
+                <a th:if="${currentRole == 'OWNER'}" class="update-link"
+                   th:href="${basePath + '/update-type/' + type.id}" title="Sửa loại hàng">
+                  <i class="ti ti-edit"></i>
                 </a>
                 <span th:unless="${currentRole == 'OWNER'}" class="text-secondary">—</span>
               </td>
             </tr>
-
             <tr th:if="${#lists.isEmpty(types)}" class="empty-row">
-              <td colspan="5" style="text-align:center;">
-                Không tìm thấy loại hàng nào.
-              </td>
+              <td colspan="5" style="text-align:center;">Không tìm thấy loại hàng nào.</td>
             </tr>
           </tbody>
         </table>
@@ -391,31 +333,23 @@
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
            th:if="${totalItems > 0}">
         <div class="text-secondary" style="font-size:13px;">
-          Hiển thị
-          <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + types.size()}">5</span>
+          Hiển thị <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + types.size()}">5</span>
           trong tổng số <span th:text="${totalItems}" class="fw-semibold">0</span> loại hàng
         </div>
         <nav th:if="${totalPages > 1}">
           <ul class="pagination mb-0">
             <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
-              <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, sortType=${filterSortType}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
+              <a class="page-link" th:href="@{${basePath}(search=${search}, sortType=${filterSortType}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
             </li>
-            <li class="page-item"
-                th:each="p : ${#numbers.sequence(0, totalPages - 1)}"
-                th:classappend="${p == currentPage} ? ' active'">
-              <a class="page-link"
-                 th:text="${p + 1}"
-                 th:href="@{${basePath}(search=${search}, sortType=${filterSortType}, page=${p}, size=${pageSize})}">1</a>
+            <li class="page-item" th:each="p : ${#numbers.sequence(0, totalPages - 1)}" th:classappend="${p == currentPage} ? ' active'">
+              <a class="page-link" th:text="${p + 1}" th:href="@{${basePath}(search=${search}, sortType=${filterSortType}, page=${p}, size=${pageSize})}">1</a>
             </li>
             <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
-              <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, sortType=${filterSortType}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
+              <a class="page-link" th:href="@{${basePath}(search=${search}, sortType=${filterSortType}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
             </li>
           </ul>
         </nav>
       </div>
-
     </div>
 
   </div>

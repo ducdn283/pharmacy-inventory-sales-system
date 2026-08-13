@@ -214,7 +214,7 @@
                             <tr>
                                 <th>Mã hàng</th>
                                 <th>Tên hàng hóa</th>
-                                <th>Lô</th>
+                                <th>Tên lô</th>
                                 <th>Hạn dùng</th>
                                 <th>Đơn vị</th>
                                 <th>SL trả</th>
@@ -234,7 +234,7 @@
                                 <td th:text="${item.productName}">Paracetamol 500mg</td>
                                 <td>
                                     <span class="badge bg-secondary-subtle text-secondary"
-                                          th:text="${item.lotNumber}">LOT-0526</span>
+                                          th:text="${item.batchName}">LOT-0526</span>
                                 </td>
                                 <td th:text="${item.expirationDateDisplay}">12/05/2028</td>
                                 <td th:text="${item.unitName}">Hộp</td>

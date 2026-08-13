@@ -11,12 +11,22 @@
   <style>
     :root {
       --debt-green: #059669;
+      --debt-green-dark: #047857;
+      --debt-green-bg: #ecfdf5;
+      --debt-green-border: #a7f3d0;
       --debt-red: #dc2626;
+      --debt-red-bg: #fef2f2;
+      --debt-red-border: #fecaca;
       --debt-border: #e5e7eb;
       --debt-bg: #f6f7f9;
       --debt-muted: #6b7280;
       --debt-purple: #7c3aed;
       --debt-purple-bg: #f5f3ff;
+      --debt-purple-border: #ddd6fe;
+      --col-check: 42px;
+      --col-date: 104px;
+      --col-balance: 116px;
+      --col-input: 128px;
     }
 
     body { background: var(--debt-bg); }
@@ -26,15 +36,15 @@
       border: 1px solid var(--debt-border);
       border-radius: 14px;
       box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
-      padding: 24px;
-      margin-bottom: 20px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
     }
 
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 20px;
+      gap: 12px;
+      margin-bottom: 16px;
     }
     @media (max-width: 991px) {
       .summary-grid { grid-template-columns: repeat(2, 1fr); }
@@ -42,65 +52,236 @@
     @media (max-width: 575px) {
       .summary-grid { grid-template-columns: 1fr; }
     }
+
     .summary-item {
-      padding: 14px 16px;
-      background: #f9fafb;
-      border: 1px solid #f3f4f6;
+      position: relative;
+      padding: 14px 14px 14px 18px;
+      background: #fff;
+      border: 1px solid var(--debt-border);
       border-radius: 12px;
+      overflow: hidden;
     }
+    .summary-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      border-radius: 12px 0 0 12px;
+      background: #d1d5db;
+    }
+    .summary-item.summary-receivable::before { background: var(--debt-green); }
+    .summary-item.summary-payable::before { background: var(--debt-red); }
+    .summary-item.summary-max::before { background: var(--debt-purple); }
+    .summary-item.summary-method::before { background: #6366f1; }
+
     .summary-item .label {
-      font-size: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
       color: var(--debt-muted);
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
     .summary-item .value {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
       color: #111827;
       font-variant-numeric: tabular-nums;
+      line-height: 1.2;
     }
     .summary-item .value.receivable { color: var(--debt-green); }
     .summary-item .value.payable { color: var(--debt-red); }
     .summary-item .value.max { color: var(--debt-purple); }
+    .summary-item .value.method {
+      font-size: 13px;
+      font-weight: 600;
+      color: #4338ca;
+    }
 
-    .section-title {
+    .offset-hint {
+      font-size: 13px;
+      color: var(--debt-muted);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .offset-workspace {
+      background: #fff;
+      border: 1px solid var(--debt-border);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .offset-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      align-items: stretch;
+    }
+    @media (max-width: 1199px) {
+      .offset-columns { grid-template-columns: 1fr; }
+    }
+
+    .offset-panel {
+      padding: 18px 20px 16px;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .offset-panel.receivable-panel {
+      background: linear-gradient(180deg, #f0fdf4 0, #fff 72px);
+      border-right: 1px solid #f3f4f6;
+    }
+    .offset-panel.payable-panel {
+      background: linear-gradient(180deg, #fef2f2 0, #fff 72px);
+    }
+    @media (max-width: 1199px) {
+      .offset-panel.receivable-panel {
+        border-right: none;
+        border-bottom: 1px solid #f3f4f6;
+      }
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      min-height: 48px;
+    }
+    .panel-head-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .receivable-panel .panel-head-icon {
+      background: var(--debt-green-bg);
+      color: var(--debt-green);
+      border: 1px solid var(--debt-green-border);
+    }
+    .payable-panel .panel-head-icon {
+      background: var(--debt-red-bg);
+      color: var(--debt-red);
+      border: 1px solid var(--debt-red-border);
+    }
+    .panel-head-title {
       font-size: 14px;
       font-weight: 700;
       color: #111827;
-      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+    .panel-head-sub {
+      font-size: 12px;
+      color: var(--debt-muted);
+      margin-top: 2px;
     }
 
-    .sup-table { width: 100%; border-collapse: collapse; min-width: 640px; }
-    .sup-table th {
-      padding: 10px 14px;
+    .offset-table-wrap {
+      flex: 1;
+      border: 1px solid var(--debt-border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .offset-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .offset-table col.col-check { width: var(--col-check); }
+    .offset-table col.col-date { width: var(--col-date); }
+    .offset-table col.col-balance { width: var(--col-balance); }
+    .offset-table col.col-input { width: var(--col-input); }
+
+    .offset-table th {
+      padding: 10px 8px;
       text-align: left;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .03em;
       color: var(--debt-muted);
       background: #f9fafb;
       border-bottom: 1px solid var(--debt-border);
       white-space: nowrap;
     }
-    .sup-table td {
-      padding: 12px 14px;
+    .offset-table td {
+      padding: 11px 8px;
       font-size: 13px;
       color: #374151;
       border-bottom: 1px solid #f3f4f6;
       vertical-align: middle;
     }
-    .sup-table tr:last-child td { border-bottom: none; }
-    .sup-table th.col-amount,
-    .sup-table td.col-amount { text-align: right; }
-    .sup-code { font-weight: 600; color: #111827; }
-    .detail-sub { font-size: 12px; color: var(--debt-muted); margin-top: 2px; }
+    .offset-table tbody tr:last-child td { border-bottom: none; }
+    .offset-table tbody tr:hover td { background: #fafafa; }
+    .offset-table tbody tr.is-selected td {
+      background: #f5f3ff;
+    }
+    .offset-table tbody tr.is-selected:hover td {
+      background: #ede9fe;
+    }
+
+    .offset-table th.col-amount,
+    .offset-table td.col-amount {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .offset-table td.col-check {
+      text-align: center;
+      padding-left: 6px;
+      padding-right: 2px;
+    }
+    .offset-table td.col-date {
+      font-size: 11px;
+      color: #4b5563;
+      line-height: 1.35;
+    }
+    .offset-table td.col-code { overflow: hidden; }
+
+    .sup-code {
+      font-weight: 600;
+      color: #111827;
+      font-size: 13px;
+      word-break: break-word;
+    }
+    .detail-sub {
+      font-size: 11px;
+      color: var(--debt-muted);
+      margin-top: 3px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .balance-amount {
+      font-weight: 600;
+      color: #111827;
+      white-space: nowrap;
+    }
+    .receivable-panel .balance-amount { color: var(--debt-green-dark); }
+    .payable-panel .balance-amount { color: var(--debt-red); }
+
     .amount-input {
-      width: 130px;
-      height: 36px;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      height: 34px;
       border: 1px solid var(--debt-border);
       border-radius: 8px;
-      padding: 0 10px;
-      font-size: 13px;
-      text-align: right;
+      padding: 0 8px;
+      font-size: 12px;
+      text-align: left;
+      font-variant-numeric: tabular-nums;
+      background: #fff;
+      transition: border-color .15s, box-shadow .15s;
     }
     .amount-input:focus {
       outline: none;
@@ -108,33 +289,71 @@
       box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
     }
     .amount-input:disabled {
-      background: #f3f4f6;
+      background: #f9fafb;
       color: #9ca3af;
+      border-color: #eef0f3;
     }
 
-    .totals-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px 24px;
+    .offset-footer {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto;
+      gap: 12px 16px;
       align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
+      padding: 14px 20px;
       background: var(--debt-purple-bg);
-      border: 1px solid #ddd6fe;
-      border-radius: 12px;
-      margin-top: 16px;
+      border-top: 1px solid var(--debt-purple-border);
     }
-    .totals-bar .total-item {
+    @media (max-width: 991px) {
+      .offset-footer {
+        grid-template-columns: 1fr 1fr;
+      }
+      .offset-footer .footer-status { grid-column: 1 / -1; }
+      .offset-footer .footer-action { grid-column: 1 / -1; justify-self: stretch; }
+      .offset-footer .footer-action .btn-auto { width: 100%; justify-content: center; }
+    }
+
+    .footer-total {
       font-size: 13px;
       color: #4c1d95;
     }
-    .totals-bar .total-item strong {
+    .footer-total strong {
+      display: block;
+      font-size: 16px;
+      font-weight: 700;
       font-variant-numeric: tabular-nums;
+      color: #5b21b6;
+      margin-top: 2px;
     }
-    .totals-bar .mismatch {
-      color: var(--debt-red);
+    .footer-total.payable-side { text-align: right; }
+
+    .footer-status {
+      justify-self: center;
+      text-align: center;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
       font-weight: 600;
+      background: #fff;
+      border: 1px solid var(--debt-purple-border);
+      color: #5b21b6;
     }
+    .status-pill.is-balanced {
+      background: var(--debt-green-bg);
+      border-color: var(--debt-green-border);
+      color: var(--debt-green-dark);
+    }
+    .status-pill.is-mismatch {
+      background: var(--debt-red-bg);
+      border-color: var(--debt-red-border);
+      color: var(--debt-red);
+    }
+
+    .footer-action { justify-self: end; }
 
     .btn-back, .btn-submit, .btn-auto {
       height: 40px;
@@ -148,6 +367,7 @@
       text-decoration: none;
       border: none;
       cursor: pointer;
+      white-space: nowrap;
     }
     .btn-back {
       border: 1px solid var(--debt-border);
@@ -171,6 +391,16 @@
       cursor: not-allowed;
     }
 
+    .form-footer-card {
+      padding: 20px 24px;
+    }
+    .form-footer-card .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 10px;
+    }
+
     .note-input {
       width: 100%;
       min-height: 72px;
@@ -179,6 +409,11 @@
       padding: 10px 12px;
       font-size: 13px;
       resize: vertical;
+    }
+    .note-input:focus {
+      outline: none;
+      border-color: #a78bfa;
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
     }
 
     .alert-banner {
@@ -217,30 +452,30 @@
 
     <div class="main-card">
       <div class="summary-grid">
-        <div class="summary-item">
+        <div class="summary-item summary-receivable">
           <div class="label">Tổng cho nợ</div>
           <div class="value receivable"
                th:text="${#numbers.formatDecimal(page.totalReceivable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
         </div>
-        <div class="summary-item">
+        <div class="summary-item summary-payable">
           <div class="label">Tổng nợ</div>
           <div class="value payable"
                th:text="${#numbers.formatDecimal(page.totalPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
         </div>
-        <div class="summary-item">
+        <div class="summary-item summary-max">
           <div class="label">Có thể bù trừ tối đa</div>
           <div class="value max"
                th:text="${#numbers.formatDecimal(page.maxOffset, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</div>
         </div>
-        <div class="summary-item">
+        <div class="summary-item summary-method">
           <div class="label">Phương thức</div>
-          <div class="value" style="font-size:14px;">Cấn trừ (paidByCredit)</div>
+          <div class="value method">Cấn trừ (paidByCredit)</div>
         </div>
       </div>
 
-      <p class="text-secondary mb-0" style="font-size:13px;">
-        Chọn các chứng từ cho nợ và nợ cần bù trừ. Tổng hai bên phải bằng nhau. Hệ thống tạo phiếu thu/chi với
-        <strong>paidByCredit</strong>, không phát sinh tiền mặt/chuyển khoản.
+      <p class="offset-hint">
+        Chọn chứng từ hai bên và nhập số bù trừ. Tổng cho nợ và tổng nợ phải bằng nhau.
+        Hệ thống tạo phiếu thu/chi bằng <strong>paidByCredit</strong>, không phát sinh tiền mặt/chuyển khoản.
       </p>
     </div>
 
@@ -248,100 +483,144 @@
       <input type="hidden" name="partyType" th:value="${form.partyType}">
       <input type="hidden" name="entityId" th:value="${form.entityId}">
 
-      <div class="main-card">
-        <div class="section-title">Khoản cho nợ (phiếu thu bù trừ)</div>
-        <div class="table-responsive">
-          <table class="sup-table" id="receivableTable">
-            <thead>
-              <tr>
-                <th style="width:44px;"></th>
-                <th th:text="${page.partyType == 'CUSTOMER' ? 'Mã hóa đơn' : 'Mã phiếu trả'}">Mã</th>
-                <th>Ngày</th>
-                <th class="col-amount">Còn cho nợ</th>
-                <th class="col-amount" style="width:150px;">Bù trừ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr th:each="line, stat : ${page.receivableLines}">
-                <td>
-                  <input type="checkbox" class="form-check-input line-check receivable-check"
-                         th:data-index="${stat.index}">
-                </td>
-                <td>
-                  <div class="sup-code" th:text="${line.code}">HD-001</div>
-                  <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}"></div>
-                  <input type="hidden"
-                         th:name="${'receivableLines[' + stat.index + '].documentId'}"
-                         th:value="${line.id}">
-                </td>
-                <td th:text="${line.dateDisplay}">01/07/2026</td>
-                <td class="col-amount"
-                    th:text="${#numbers.formatDecimal(line.receivableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}"
-                    th:attr="data-remaining=${line.receivableAmount}">0đ</td>
-                <td class="col-amount">
-                  <input type="text" inputmode="numeric" data-money class="amount-input receivable-amount"
-                         th:name="${'receivableLines[' + stat.index + '].amount'}"
-                         th:attr="data-remaining=${line.receivableAmount}, data-index=${stat.index}"
-                         disabled>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="offset-workspace">
+        <div class="offset-columns">
+          <div class="offset-panel receivable-panel">
+            <div class="panel-head">
+              <span class="panel-head-icon"><i class="ti ti-arrow-down-left"></i></span>
+              <div>
+                <div class="panel-head-title">Khoản cho nợ</div>
+                <div class="panel-head-sub">Phiếu thu bù trừ</div>
+              </div>
+            </div>
+            <div class="offset-table-wrap">
+              <table class="offset-table" id="receivableTable">
+              <colgroup>
+                <col class="col-check">
+                <col class="col-code">
+                <col class="col-date">
+                <col class="col-balance">
+                <col class="col-input">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="col-check"></th>
+                  <th class="col-code">Chứng từ</th>
+                  <th class="col-date">Ngày</th>
+                  <th class="col-amount col-balance">Còn lại</th>
+                  <th class="col-amount col-input">Bù trừ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr th:each="line, stat : ${page.receivableLines}">
+                  <td class="col-check">
+                    <input type="checkbox" class="form-check-input line-check receivable-check"
+                           th:data-index="${stat.index}">
+                  </td>
+                  <td class="col-code">
+                    <div class="sup-code" th:text="${line.code}">HD-001</div>
+                    <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}"></div>
+                    <input type="hidden"
+                           th:name="${'receivableLines[' + stat.index + '].documentId'}"
+                           th:value="${line.id}">
+                  </td>
+                  <td class="col-date" th:text="${line.dateDisplay}">01/07/2026</td>
+                  <td class="col-amount col-balance">
+                    <span class="balance-amount"
+                          th:text="${#numbers.formatDecimal(line.receivableAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}"
+                          th:attr="data-remaining=${line.receivableAmount}">0đ</span>
+                  </td>
+                  <td class="col-amount col-input">
+                    <input type="text" inputmode="numeric" data-money class="amount-input receivable-amount"
+                           th:name="${'receivableLines[' + stat.index + '].amount'}"
+                           th:attr="data-remaining=${line.receivableAmount}, data-index=${stat.index}"
+                           disabled>
+                  </td>
+                </tr>
+              </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="offset-panel payable-panel">
+            <div class="panel-head">
+              <span class="panel-head-icon"><i class="ti ti-arrow-up-right"></i></span>
+              <div>
+                <div class="panel-head-title">Khoản nợ</div>
+                <div class="panel-head-sub">Phiếu chi bù trừ</div>
+              </div>
+            </div>
+            <div class="offset-table-wrap">
+              <table class="offset-table" id="payableTable">
+              <colgroup>
+                <col class="col-check">
+                <col class="col-code">
+                <col class="col-date">
+                <col class="col-balance">
+                <col class="col-input">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="col-check"></th>
+                  <th class="col-code">Chứng từ</th>
+                  <th class="col-date">Ngày</th>
+                  <th class="col-amount col-balance">Còn lại</th>
+                  <th class="col-amount col-input">Bù trừ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr th:each="line, stat : ${page.payableLines}">
+                  <td class="col-check">
+                    <input type="checkbox" class="form-check-input line-check payable-check"
+                           th:data-index="${stat.index}">
+                  </td>
+                  <td class="col-code">
+                    <div class="sup-code" th:text="${line.code}">TH-001</div>
+                    <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}"></div>
+                    <input type="hidden"
+                           th:name="${'payableLines[' + stat.index + '].documentId'}"
+                           th:value="${line.id}">
+                  </td>
+                  <td class="col-date" th:text="${line.dateDisplay}">01/07/2026</td>
+                  <td class="col-amount col-balance">
+                    <span class="balance-amount"
+                          th:text="${#numbers.formatDecimal(line.remainingCreatable, 0, 'POINT', 0, 'COMMA') + 'đ'}"
+                          th:attr="data-remaining=${line.remainingCreatable}">0đ</span>
+                  </td>
+                  <td class="col-amount col-input">
+                    <input type="text" inputmode="numeric" data-money class="amount-input payable-amount"
+                           th:name="${'payableLines[' + stat.index + '].amount'}"
+                           th:attr="data-remaining=${line.remainingCreatable}, data-index=${stat.index}"
+                           disabled>
+                  </td>
+                </tr>
+              </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="offset-footer">
+          <div class="footer-total receivable-side">
+            Tổng bù trừ cho nợ
+            <strong id="receivableTotal">0đ</strong>
+          </div>
+          <div class="footer-status">
+            <span class="status-pill" id="balanceHint"></span>
+          </div>
+          <div class="footer-total payable-side">
+            Tổng bù trừ nợ
+            <strong id="payableTotal">0đ</strong>
+          </div>
+          <div class="footer-action">
+            <button type="button" class="btn-auto" id="autoFillBtn">
+              <i class="ti ti-arrows-exchange"></i>Tự phân bổ tối đa
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="main-card">
-        <div class="section-title">Khoản nợ (phiếu chi bù trừ)</div>
-        <div class="table-responsive">
-          <table class="sup-table" id="payableTable">
-            <thead>
-              <tr>
-                <th style="width:44px;"></th>
-                <th th:text="${page.partyType == 'CUSTOMER' ? 'Mã phiếu trả' : 'Mã phiếu nhập'}">Mã</th>
-                <th>Ngày</th>
-                <th class="col-amount">Có thể bù trừ</th>
-                <th class="col-amount" style="width:150px;">Bù trừ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr th:each="line, stat : ${page.payableLines}">
-                <td>
-                  <input type="checkbox" class="form-check-input line-check payable-check"
-                         th:data-index="${stat.index}">
-                </td>
-                <td>
-                  <div class="sup-code" th:text="${line.code}">TH-001</div>
-                  <div class="detail-sub" th:if="${line.detail != null}" th:text="${line.detail}"></div>
-                  <input type="hidden"
-                         th:name="${'payableLines[' + stat.index + '].documentId'}"
-                         th:value="${line.id}">
-                </td>
-                <td th:text="${line.dateDisplay}">01/07/2026</td>
-                <td class="col-amount"
-                    th:text="${#numbers.formatDecimal(line.remainingCreatable, 0, 'POINT', 0, 'COMMA') + 'đ'}"
-                    th:attr="data-remaining=${line.remainingCreatable}">0đ</td>
-                <td class="col-amount">
-                  <input type="text" inputmode="numeric" data-money class="amount-input payable-amount"
-                         th:name="${'payableLines[' + stat.index + '].amount'}"
-                         th:attr="data-remaining=${line.remainingCreatable}, data-index=${stat.index}"
-                         disabled>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="totals-bar">
-          <div class="total-item">Tổng bù trừ cho nợ: <strong id="receivableTotal">0đ</strong></div>
-          <div class="total-item">Tổng bù trừ nợ: <strong id="payableTotal">0đ</strong></div>
-          <div class="total-item" id="balanceHint"></div>
-          <button type="button" class="btn-auto" id="autoFillBtn">
-            <i class="ti ti-arrows-exchange"></i>Tự phân bổ tối đa
-          </button>
-        </div>
-      </div>
-
-      <div class="main-card">
+      <div class="main-card form-footer-card">
         <label class="section-title d-block" for="note">Ghi chú (tuỳ chọn)</label>
         <textarea class="note-input" id="note" name="note" maxlength="500"
                   placeholder="Ghi chú thêm cho phiếu thu/chi bù trừ"></textarea>
@@ -380,11 +659,43 @@
       if (!input) return;
       input.value = value > 0 ? String(capVnd(value)) : '';
       input.dispatchEvent(new Event('input', { bubbles: true }));
+      revealAmountInput(input);
     }
 
     function inputAmount(input) {
       return window.pmMoneyValue ? window.pmMoneyValue(input) : parseNum(input.value);
     }
+
+    function remainingLimit(input) {
+      return capVnd(input && input.dataset ? input.dataset.remaining : 0);
+    }
+
+    function isLineActive(input) {
+      if (!input || input.disabled) return false;
+      const row = input.closest('tr');
+      const check = row && row.querySelector('.line-check');
+      return !!(check && check.checked);
+    }
+
+    function clampAmountInput(input) {
+      if (!isLineActive(input)) return false;
+      const limit = remainingLimit(input);
+      const amount = inputAmount(input);
+      if (amount > limit) {
+        input.value = limit > 0 ? String(limit) : '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      }
+      return false;
+    }
+
+    function enforceAmountLimit(input) {
+      clampAmountInput(input);
+      revealAmountInput(input);
+      updateTotals();
+    }
+
+    let syncingAmountLimit = false;
 
     function sumChecked(inputs, checkClass) {
       let total = 0;
@@ -396,6 +707,13 @@
         }
       });
       return total;
+    }
+
+    function syncRowSelection() {
+      document.querySelectorAll('.offset-table tbody tr').forEach(function (row) {
+        const check = row.querySelector('.line-check');
+        row.classList.toggle('is-selected', !!(check && check.checked));
+      });
     }
 
     function updateTotals() {
@@ -411,18 +729,28 @@
       const submitBtn = document.getElementById('submitBtn');
       const balanced = receivableTotal > 0 && receivableTotal === payableTotal;
 
+      syncRowSelection();
+
       if (receivableTotal === 0 && payableTotal === 0) {
-        hint.textContent = '';
-        hint.className = 'total-item';
+        hint.textContent = 'Chọn chứng từ để bù trừ';
+        hint.className = 'status-pill';
       } else if (balanced) {
-        hint.textContent = '✓ Hai bên đã cân bằng';
-        hint.className = 'total-item';
+        hint.textContent = 'Hai bên đã cân bằng';
+        hint.className = 'status-pill is-balanced';
       } else {
-        hint.textContent = '⚠ Tổng hai bên phải bằng nhau';
-        hint.className = 'total-item mismatch';
+        hint.textContent = 'Tổng hai bên phải bằng nhau';
+        hint.className = 'status-pill is-mismatch';
       }
 
       submitBtn.disabled = !balanced;
+    }
+
+    /** Cuộn về đầu để luôn thấy các chữ số bên trái khi số dài hơn chiều rộng ô. */
+    function revealAmountInput(input) {
+      if (!input) return;
+      requestAnimationFrame(function () {
+        input.scrollLeft = 0;
+      });
     }
 
     function bindLine(checkSelector, amountSelector) {
@@ -443,7 +771,18 @@
       });
 
       document.querySelectorAll(amountSelector).forEach(function (input) {
-        input.addEventListener('input', updateTotals);
+        input.addEventListener('input', function () {
+          if (syncingAmountLimit) return;
+          requestAnimationFrame(function () {
+            if (syncingAmountLimit) return;
+            syncingAmountLimit = true;
+            enforceAmountLimit(input);
+            syncingAmountLimit = false;
+          });
+        });
+        input.addEventListener('focus', function () {
+          revealAmountInput(input);
+        });
       });
     }
 
@@ -485,6 +824,11 @@
     bindLine('.receivable-check', '.receivable-amount');
     bindLine('.payable-check', '.payable-amount');
     document.getElementById('autoFillBtn').addEventListener('click', autoFill);
+    document.getElementById('offsetForm').addEventListener('submit', function (event) {
+      document.querySelectorAll('.receivable-amount, .payable-amount').forEach(function (input) {
+        clampAmountInput(input);
+      });
+    });
     updateTotals();
   })();
 </script>

@@ -133,9 +133,52 @@
                     Theo dõi các ca làm việc — báo cáo được tự động tạo ngay khi có giao dịch bán hàng/trả hàng đầu tiên trong ca
                 </p>
             </div>
+
+            <!-- Kế toán không trực quầy nên không có ca (service cũng chặn lại lần nữa). -->
+            <button th:if="${currentRole == 'OWNER' or currentRole == 'PHARMACIST'}"
+                    type="button" class="btn btn-shift-primary" id="btnToggleManualShift">
+                <i class="ti ti-plus me-1"></i>
+                Mở ca thủ công
+            </button>
         </div>
 
         <div th:replace="~{fragments/toast :: flash}"></div>
+
+        <!-- Ngày không phát sinh giao dịch nào thì không có ca nào được tạo tự động — không có gì để
+             chốt. Mở tay ở đây. GIỜ MỞ CA lấy từ mốc ĐĂNG NHẬP (BA chốt 12/08/2026), không cho gõ
+             tay: bấm nút lúc 22h mà lấy giờ bấm thì ra ca dài 5 phút, còn cho gõ thì không kiểm chứng
+             được. Giờ chốt vẫn là lúc bấm chốt. -->
+        <div class="shift-card p-4 mb-4"
+             id="manualShiftPanel"
+             style="display:none;"
+             th:if="${currentRole == 'OWNER' or currentRole == 'PHARMACIST'}">
+            <form method="post" th:action="@{${basePath} + '/create'}">
+                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <div class="fw-semibold mb-1">Mở ca cho hôm nay</div>
+                        <div class="text-secondary small">
+                            Giờ mở ca lấy theo <strong>thời điểm bạn đăng nhập</strong> — không cần nhập tay.
+                            Giờ kết thúc được ghi khi bạn bấm chốt ca.
+                            Nếu bạn đã có ca khác trong ngày, ca mới tính từ lúc ca trước kết thúc;
+                            sớm nhất là 06:00 (giờ nhà thuốc mở cửa).
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-shift-primary px-4"
+                                data-confirm="Mở ca làm việc cho hôm nay?">
+                            <i class="ti ti-clock-play me-1"></i>
+                            Mở ca
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary px-4" id="btnCancelManualShift">
+                            Hủy
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
 
         <div class="row g-3 mb-4">
             <div class="col-12 col-md-6 col-xl-3">
@@ -375,6 +418,28 @@
 
     </div>
 </main>
+
+<div th:replace="~{fragments/confirm :: confirm}"></div>
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
+
+<script>
+    (function () {
+        const toggleBtn = document.getElementById('btnToggleManualShift');
+        const panel = document.getElementById('manualShiftPanel');
+        const cancelBtn = document.getElementById('btnCancelManualShift');
+        if (!toggleBtn || !panel) return;
+
+        toggleBtn.addEventListener('click', function () {
+            panel.style.display = panel.style.display === 'none' ? '' : 'none';
+        });
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function () {
+                panel.style.display = 'none';
+            });
+        }
+    })();
+</script>
 
 </body>
 </html>

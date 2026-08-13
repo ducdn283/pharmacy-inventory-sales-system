@@ -40,4 +40,6 @@ public class IncomeDetailResponse {
     private String note;
     /** {@code false} for phiếu thu bù trừ công nợ ({@link com.example.project.service.DebtOffsetService}). */
     private boolean cancellable;
+    /** {@code null} when {@link #cancellable} is {@code true}. */
+    private String cancelBlockedReason;
 }

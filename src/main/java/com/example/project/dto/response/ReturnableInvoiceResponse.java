@@ -28,4 +28,16 @@ public class ReturnableInvoiceResponse {
 
     /** Current return status of the invoice (NONE / PARTIAL) — FULL invoices are excluded from the list. */
     private String returnStatusDisplay;
+
+    /**
+     * Tên các mặt hàng còn trả được, hiện thành dòng phụ dưới số hóa đơn: người lập gõ tên thuốc thì
+     * nhìn ra ngay vì sao hóa đơn này khớp.
+     */
+    private String productSummary;
+
+    /**
+     * Chuỗi cho ô tìm kiếm của modal: số hóa đơn + tên khách + tên/mã sản phẩm.
+     * KHÔNG chứa số điện thoại — xem {@code ReturnService.searchTextOf}.
+     */
+    private String searchText;
 }
