@@ -573,7 +573,7 @@ public class InvoiceService {
     /** One batch's contribution to a single line's FEFO deduction. */
     private record BatchAllocation(Batch batch, int baseQtyTaken) {}
 
-    /** Deducts {@code baseQty} from a chosen batch or FEFO across batches. */
+    /** Deducts {@code baseQty} from a chosen batch or FEFO across batches (FIFO by importDate within same expiry). */
     private List<BatchAllocation> deductStock(Product product, int baseQty, int sellQuantity,
                                                 BigDecimal ratio, String unitName, Integer batchId) {
         if (batchId != null) {
