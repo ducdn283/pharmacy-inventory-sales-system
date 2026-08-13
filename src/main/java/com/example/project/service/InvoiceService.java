@@ -70,7 +70,9 @@ public class InvoiceService {
     private static final String INVOICE_TYPE_VAT_LEGACY = "Hóa đơn GTGT";
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
     private static final String INVOICE_TYPE_ADJUSTMENT_LEGACY = "adjustment";
+    private static final String INVOICE_TYPE_REPLACEMENT = "Thay thế";
     private static final String INVOICE_TYPE_RETURN = "return";
+    private static final BigDecimal FULL_REFUND_RATE = new BigDecimal("100");
 
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_BANKING = "BANKING";
@@ -573,7 +575,7 @@ public class InvoiceService {
     /** One batch's contribution to a single line's FEFO deduction. */
     private record BatchAllocation(Batch batch, int baseQtyTaken) {}
 
-    /** Deducts {@code baseQty} from a chosen batch or FEFO across batches. */
+    /** Deducts {@code baseQty} from a chosen batch or FEFO across batches (FIFO by importDate within same expiry). */
     private List<BatchAllocation> deductStock(Product product, int baseQty, int sellQuantity,
                                                 BigDecimal ratio, String unitName, Integer batchId) {
         if (batchId != null) {
@@ -871,8 +873,9 @@ public class InvoiceService {
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         Customer customer = invoice.getCustomerID();
 
+        String retainedPercentDisplay = formatRetainedPercentDisplay(invoice);
         List<InvoicePrintLineResponse> printLines = lines.stream()
-                .map(this::toPrintLine)
+                .map(line -> toPrintLine(invoice, line, retainedPercentDisplay))
                 .toList();
 
         String buyerCompanyName;
@@ -931,8 +934,12 @@ public class InvoiceService {
                 printLines);
     }
 
-    private InvoicePrintLineResponse toPrintLine(Invoicedetail line) {
+    private InvoicePrintLineResponse toPrintLine(Invoice invoice, Invoicedetail line,
+                                                 String retainedPercentDisplay) {
         Product product = line.getProductID();
+        boolean retainedMoneyLine = isReplacementInvoice(invoice)
+                && line.getQuantity() != null
+                && line.getQuantity() == 0;
         return new InvoicePrintLineResponse(
                 product != null ? product.getCode() : "",
                 product != null ? product.getName() : "Không rõ",
@@ -940,7 +947,29 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                trimToNull(line.getNote()));
+                trimToNull(line.getNote()),
+                retainedMoneyLine,
+                retainedMoneyLine ? retainedPercentDisplay : null);
+    }
+
+    private boolean isReplacementInvoice(Invoice invoice) {
+        return invoice != null && INVOICE_TYPE_REPLACEMENT.equals(invoice.getInvoiceType());
+    }
+
+    /**
+     * Tỷ lệ % nhà thuốc giữ lại trên phiếu trả (= 100% − {@code Return.appliedRefundRate}), dùng trên
+     * phiếu in hóa đơn thay thế.
+     */
+    private String formatRetainedPercentDisplay(Invoice invoice) {
+        if (!isReplacementInvoice(invoice) || invoice.getReturnID() == null) {
+            return null;
+        }
+        BigDecimal refundRate = invoice.getReturnID().getAppliedRefundRate();
+        if (refundRate == null || refundRate.compareTo(FULL_REFUND_RATE) >= 0) {
+            return null;
+        }
+        BigDecimal retainedRate = FULL_REFUND_RATE.subtract(refundRate).max(BigDecimal.ZERO);
+        return retainedRate.stripTrailingZeros().toPlainString().replace('.', ',') + "%";
     }
 
     private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines) {
