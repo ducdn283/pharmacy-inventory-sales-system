@@ -40,7 +40,7 @@ public class TaxPeriodComputationResponse {
      */
     private boolean percentageMethod;
 
-    /** Revenue of the period: sales that are "còn hiệu lực" plus hoa hồng NCC and hàng biếu tặng. */
+    /** Revenue of the period: sales that are "còn hiệu lực" plus hàng biếu tặng. */
     private BigDecimal periodRevenue;
 
     /**

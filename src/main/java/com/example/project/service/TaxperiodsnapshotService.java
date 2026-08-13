@@ -407,22 +407,18 @@ public class TaxperiodsnapshotService {
     /**
      * Doanh thu tính thuế GTGT: sales that are <strong>"còn hiệu lực"</strong> (see {@link
      * InvoiceRepository#findValidInPeriod} — a superseded original and its refund are no longer both
-     * summed and then netted, which used to double-count), plus two things an invoice total never
-     * captures — hoa hồng nhà cung cấp thu được trong kỳ, and the VAT-inclusive value of goods given
-     * away rather than sold (biếu tặng/dùng nội bộ/hàng mẫu). Never negative.
+     * summed and then netted, which used to double-count), plus the VAT-inclusive value of goods
+     * given away rather than sold (biếu tặng/dùng nội bộ/hàng mẫu). Never negative.
      *
      * <p>Takes the already-loaded invoice list so {@link #computePeriod} does not have to fetch it
      * twice.</p>
      */
     private BigDecimal revenueOf(List<Invoice> validInvoices, TaxPeriod period) {
         BigDecimal invoiceRevenue = sum(validInvoices, Invoice::getTotal);
-        BigDecimal supplierCommission = safe(incomeRepository.sumByTypeInPeriod(
-                IncomeTypeOptionResponse.labelOf(IncomeTypeOptionResponse.SUPPLIER_COMMISSION),
-                INCOME_COMPLETED_STATUSES, instantStart(period), instantEndExclusive(period)));
         BigDecimal givenAwayGrossValue = safe(stockadjustmentdetailRepository.sumGrossValueInPeriod(
                 GIVEN_AWAY_ADJUSTMENT_TYPES, StockAdjustmentStatus.COMPLETED,
                 instantStart(period), instantEndExclusive(period)));
-        return invoiceRevenue.add(supplierCommission).add(givenAwayGrossValue).max(BigDecimal.ZERO);
+        return invoiceRevenue.add(givenAwayGrossValue).max(BigDecimal.ZERO);
     }
 
     /**

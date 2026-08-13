@@ -15,8 +15,6 @@ public class IncomeTypeOptionResponse {
     public static final String EMPLOYEE = "EMPLOYEE";
     public static final String SHIFT_SHORTAGE = "SHIFT_SHORTAGE";
     public static final String CUSTOMER = "CUSTOMER";
-    public static final String TAX_REFUND = "TAX_REFUND";
-    public static final String SUPPLIER_COMMISSION = "SUPPLIER_COMMISSION";
     public static final String OTHER = "OTHER";
 
     private String code;
@@ -28,16 +26,13 @@ public class IncomeTypeOptionResponse {
                 new IncomeTypeOptionResponse(EMPLOYEE, "Thu tiền nhân viên làm hỏng hàng"),
                 new IncomeTypeOptionResponse(SHIFT_SHORTAGE, "Thu tiền nhân viên làm thiếu tiền khi kết ca"),
                 new IncomeTypeOptionResponse(CUSTOMER, "Thu nợ khách hàng"),
-                new IncomeTypeOptionResponse(TAX_REFUND, "Thu hoàn thuế"),
-                new IncomeTypeOptionResponse(SUPPLIER_COMMISSION, "Thu hoa hồng NCC"),
                 new IncomeTypeOptionResponse(OTHER, "Khác")
         );
     }
 
     /** Manual amount entry only — no linked party or reference document. */
     public static boolean isSimpleManualType(String storedOrCode) {
-        String code = codeOf(storedOrCode);
-        return OTHER.equals(code) || TAX_REFUND.equals(code) || SUPPLIER_COMMISSION.equals(code);
+        return OTHER.equals(codeOf(storedOrCode));
     }
 
     public static boolean isValid(String type) {

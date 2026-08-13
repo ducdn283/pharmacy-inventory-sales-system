@@ -46,7 +46,7 @@ public interface IncomeRepository extends JpaRepository<Income, Integer> {
 
     /**
      * Sum of {@code Income.amount} for one income type in {@code [from, to)} — feeds tax-period
-     * revenue (SUPPLIER_COMMISSION, mục C) and taxable-income-only revenue (EMPLOYEE, mục D). Only
+     * taxable-income-only revenue (EMPLOYEE, mục D). Only
      * completed income counts as real money received; {@code incomeType}/{@code status} are matched
      * as stored — {@code Income} persists the Vietnamese label, not the code, so callers pass
      * {@code IncomeTypeOptionResponse.labelOf(...)}. {@code statuses} takes more than one value so a
