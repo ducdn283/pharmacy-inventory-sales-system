@@ -34,8 +34,7 @@ public class NotificationService {
      *
      * sẽ không bị lỗi constructor.
      */
-    private NotificationRealtimeService
-            notificationRealtimeService;
+    private NotificationRealtimeService notificationRealtimeService;
 
     public NotificationService(
             NotificationRepository notificationRepository
@@ -46,8 +45,7 @@ public class NotificationService {
 
     @Autowired
     public void setNotificationRealtimeService(
-            NotificationRealtimeService
-                    notificationRealtimeService
+            NotificationRealtimeService notificationRealtimeService
     ) {
         this.notificationRealtimeService =
                 notificationRealtimeService;
@@ -90,7 +88,9 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public long unreadCount(Integer accountId) {
+    public long unreadCount(
+            Integer accountId
+    ) {
         validateAccountId(accountId);
 
         return notificationRepository
@@ -180,6 +180,7 @@ public class NotificationService {
                 notification.getIsRead()
         )) {
             notification.setIsRead(true);
+
             notification.setReadAt(
                     LocalDateTime.now()
             );
@@ -193,13 +194,70 @@ public class NotificationService {
             );
         }
 
-        notificationRepository.save(notification);
+        notificationRepository.save(
+                notification
+        );
 
         notifyAfterCommit(accountId);
     }
 
+    /**
+     * Mở thông báo thuộc đúng tài khoản và tự động đánh dấu đã đọc.
+     *
+     * Dữ liệu sau khi cập nhật được trả về để giao diện thay đổi
+     * phần chi tiết mà không phải tải lại toàn bộ trang.
+     */
     @Transactional
-    public void markAllAsRead(Integer accountId) {
+    public NotificationResponse openAndMarkAsRead(
+            Integer accountId,
+            Integer notificationId
+    ) {
+        validateAccountId(accountId);
+
+        Notification notification =
+                notificationRepository
+                        .findByIdAndAccountId(
+                                notificationId,
+                                accountId
+                        )
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Không tìm thấy thông báo"
+                                )
+                        );
+
+        if (!Boolean.TRUE.equals(
+                notification.getIsRead()
+        )) {
+            notification.setIsRead(true);
+
+            notification.setReadAt(
+                    LocalDateTime.now()
+            );
+        }
+
+        if (NotificationStatus.UNREAD.equals(
+                notification.getStatus()
+        )) {
+            notification.setStatus(
+                    NotificationStatus.READ
+            );
+        }
+
+        Notification saved =
+                notificationRepository.save(
+                        notification
+                );
+
+        notifyAfterCommit(accountId);
+
+        return NotificationResponse.from(saved);
+    }
+
+    @Transactional
+    public void markAllAsRead(
+            Integer accountId
+    ) {
         validateAccountId(accountId);
 
         LocalDateTime now =
@@ -268,7 +326,9 @@ public class NotificationService {
 
         notification.setIsActive(false);
 
-        notificationRepository.save(notification);
+        notificationRepository.save(
+                notification
+        );
 
         notifyAfterCommit(accountId);
     }
@@ -385,6 +445,7 @@ public class NotificationService {
         );
 
         notification.setIsActive(true);
+
         notification.setCreatedAt(
                 Instant.now()
         );
@@ -398,7 +459,9 @@ public class NotificationService {
          * Sự kiện SSE chỉ được gửi sau khi transaction
          * tạo notification commit thành công.
          */
-        notifyAfterCommit(receiver.getId());
+        notifyAfterCommit(
+                receiver.getId()
+        );
 
         return saved;
     }

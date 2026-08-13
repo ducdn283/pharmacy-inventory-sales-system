@@ -9,7 +9,7 @@
           content="width=device-width, initial-scale=1">
 
     <title>
-        Tổng quan kế toán | PharmaManager
+        Tổng quan kinh doanh và tài chính | PharmaManager
     </title>
 
     <script type="module"
@@ -32,9 +32,9 @@
         }
 
         .dashboard-card {
-            background: #ffffff;
             border: 1px solid #e9edf2;
             border-radius: 14px;
+            background: #ffffff;
             box-shadow: 0 1px 2px rgba(16, 24, 40, .035);
         }
 
@@ -466,15 +466,14 @@
             <div class="welcome-title">
                 Xin chào,
 
-                <span th:text="${dashboard.greetingName ?: 'Kế toán'}">
-                    Kế toán
+                <span th:text="${dashboard.greetingName ?: dashboardRoleLabel}">
+                    Người dùng
                 </span>
             </div>
 
             <div class="welcome-subtitle mt-1"
                  th:text="${dashboard.subtitle}">
-
-                Đối chiếu và kiểm duyệt tài chính hôm nay
+                Tổng quan kinh doanh và tài chính hôm nay
             </div>
 
             <div class="quick-actions">
@@ -484,7 +483,6 @@
                    class="quick-action"
                    th:classappend="${action.primary} ? ' primary' : ''"
                    th:text="${action.label}">
-
                     Hành động
                 </a>
             </div>
@@ -492,7 +490,7 @@
 
         <div class="row g-3 mb-3">
 
-            <div class="col-12 col-sm-6 col-xl-2"
+            <div class="col-12 col-sm-6 col-xl-3"
                  th:each="metric : ${dashboard.metrics}">
 
                 <a class="metric-link"
@@ -539,20 +537,18 @@
                         <div>
                             <h2 class="section-title"
                                 th:text="${dashboard.overviewChart.title}">
-
-                                Tổng quan thu - chi - công nợ
+                                Tổng quan kinh doanh và tài chính
                             </h2>
 
                             <div class="period-description"
                                  th:text="${dashboard.periodDescription}">
-
                                 Tuần hiện tại
                             </div>
                         </div>
 
                         <form class="overview-filter"
                               method="get"
-                              th:action="@{/accountant/dashboard}">
+                              th:action="@{${dashboardPath}}">
 
                             <select name="period"
                                     aria-label="Kiểu thời gian">
@@ -605,7 +601,7 @@
                 <section class="dashboard-card section-card h-100">
 
                     <h2 class="section-title">
-                        Cảnh báo kế toán
+                        Cảnh báo cần xử lý
                     </h2>
 
                     <div class="alert-list">
@@ -618,10 +614,10 @@
                             <span class="alert-icon">
 
                                 <i th:class="${alert.tone == 'danger'
-                                           ? 'ti ti-alert-triangle'
-                                           : (alert.tone == 'success'
-                                           ? 'ti ti-circle-check'
-                                           : 'ti ti-alert-circle')}">
+                                        ? 'ti ti-alert-triangle'
+                                        : (alert.tone == 'success'
+                                        ? 'ti ti-circle-check'
+                                        : 'ti ti-alert-circle')}">
                                 </i>
                             </span>
 
@@ -653,7 +649,6 @@
                         <th>Số tiền</th>
                         <th>Phương thức</th>
                         <th>Trạng thái</th>
-
                         <th class="text-end">
                             Thao tác
                         </th>
@@ -693,10 +688,9 @@
                         <td>
                             <span class="soft-badge"
                                   th:classappend="${' badge-'
-                                                  + activity.tone
-                                                  + '-soft'}"
+                                          + activity.tone
+                                          + '-soft'}"
                                   th:text="${activity.status}">
-
                                 Hoàn thành
                             </span>
                         </td>
@@ -718,8 +712,7 @@
 
                         <td colspan="8"
                             class="text-center text-secondary py-4">
-
-                            Chưa có hoạt động kế toán gần đây.
+                            Chưa có hoạt động tài chính gần đây.
                         </td>
                     </tr>
 
@@ -729,17 +722,28 @@
         </section>
     </div>
 </main>
-
 <script th:inline="javascript">
 
     const overviewChart =
         /*[[${dashboard.overviewChart}]]*/
         null;
 
+    /*
+     * Thứ tự màu tương ứng:
+     * 1. Doanh thu
+     * 2. Giá vốn
+     * 3. Lợi nhuận gộp
+     * 4. Thu
+     * 5. Chi
+     * 6. Công nợ phát sinh
+     */
     const chartColors = [
         '#10b981',
+        '#f59e0b',
+        '#2563eb',
+        '#14b8a6',
         '#ef4444',
-        '#2da8ff'
+        '#8b5cf6'
     ];
 
     function escapeHtml(value) {
@@ -752,8 +756,11 @@
     }
 
     function formatMoneyShort(value) {
-        const number = Number(value || 0);
-        const absolute = Math.abs(number);
+        const number =
+            Number(value || 0);
+
+        const absolute =
+            Math.abs(number);
 
         if (absolute >= 1_000_000_000) {
             return (
@@ -763,7 +770,7 @@
                 {
                     maximumFractionDigits: 1
                 }
-            ) + 'B';
+            ) + ' tỷ';
         }
 
         if (absolute >= 1_000_000) {
@@ -774,7 +781,7 @@
                 {
                     maximumFractionDigits: 1
                 }
-            ) + 'M';
+            ) + ' triệu';
         }
 
         if (absolute >= 1_000) {
@@ -785,31 +792,46 @@
                 {
                     maximumFractionDigits: 1
                 }
-            ) + 'K';
+            ) + ' nghìn';
         }
 
-        return number.toLocaleString('vi-VN');
+        return number.toLocaleString(
+            'vi-VN'
+        );
     }
 
     function normalizeChart(rawChart) {
         return {
-            labels: Array.isArray(rawChart?.labels)
-                ? rawChart.labels
-                : [],
-
-            series: Array.isArray(rawChart?.series)
-                ? rawChart.series.map(
-                    series => ({
-                        name: series?.name || '',
-
-                        data: Array.isArray(series?.data)
-                            ? series.data.map(
-                                value => Number(value || 0)
-                            )
-                            : []
-                    })
+            labels:
+                Array.isArray(
+                    rawChart?.labels
                 )
-                : []
+                    ? rawChart.labels
+                    : [],
+
+            series:
+                Array.isArray(
+                    rawChart?.series
+                )
+                    ? rawChart.series.map(
+                        series => ({
+                            name:
+                                series?.name || '',
+
+                            data:
+                                Array.isArray(
+                                    series?.data
+                                )
+                                    ? series.data.map(
+                                        value =>
+                                            Number(
+                                                value || 0
+                                            )
+                                    )
+                                    : []
+                        })
+                    )
+                    : []
         };
     }
 
@@ -837,13 +859,23 @@
             );
 
         const chart =
-            normalizeChart(overviewChart);
+            normalizeChart(
+                overviewChart
+            );
 
-        if (
-            !container
+        if (!container
             || chart.labels.length === 0
-            || chart.series.length === 0
-        ) {
+            || chart.series.length === 0) {
+
+            if (container) {
+                container.innerHTML =
+                    '<div class="text-center '
+                    + 'text-secondary py-5">'
+                    + 'Chưa có dữ liệu trong '
+                    + 'khoảng thời gian đã chọn.'
+                    + '</div>';
+            }
+
             return;
         }
 
@@ -866,9 +898,25 @@
                 series => series.data
             );
 
+        /*
+         * Lợi nhuận có thể âm nên cần tính cả
+         * giá trị nhỏ nhất và lớn nhất của biểu đồ.
+         */
+        const rawMin =
+            Math.min(
+                ...allValues,
+                0
+            );
+
         const rawMax =
             Math.max(
                 ...allValues,
+                1
+            );
+
+        const range =
+            Math.max(
+                rawMax - rawMin,
                 1
             );
 
@@ -876,19 +924,40 @@
             Math.pow(
                 10,
                 Math.floor(
-                    Math.log10(rawMax)
+                    Math.log10(range)
                 )
             );
 
-        const maxValue =
+        const roundedRange =
             Math.ceil(
-                rawMax / magnitude
+                range / magnitude
             ) * magnitude;
+
+        const minValue =
+            rawMin < 0
+                ? Math.floor(
+                rawMin / magnitude
+            ) * magnitude
+                : 0;
+
+        const maxValue =
+            Math.max(
+                rawMax,
+                minValue + roundedRange
+            );
+
+        const displayRange =
+            Math.max(
+                maxValue - minValue,
+                1
+            );
 
         const stepX =
             chart.labels.length > 1
                 ? plotWidth
-                / (chart.labels.length - 1)
+                / (
+                    chart.labels.length - 1
+                )
                 : 0;
 
         let svg =
@@ -899,6 +968,9 @@
             + height
             + '" preserveAspectRatio="none">';
 
+        /*
+         * Vẽ 5 đường ngang và nhãn giá trị.
+         */
         for (
             let row = 0;
             row <= 4;
@@ -906,11 +978,15 @@
         ) {
             const y =
                 top
-                + (plotHeight / 4) * row;
+                + (
+                    plotHeight / 4
+                ) * row;
 
             const value =
                 maxValue
-                - (maxValue / 4) * row;
+                - (
+                    displayRange / 4
+                ) * row;
 
             svg +=
                 '<line class="chart-grid" '
@@ -919,7 +995,9 @@
                 + '" y1="'
                 + y
                 + '" x2="'
-                + (width - right)
+                + (
+                    width - right
+                )
                 + '" y2="'
                 + y
                 + '"></line>';
@@ -927,9 +1005,13 @@
             svg +=
                 '<text class="chart-axis-label" '
                 + 'x="'
-                + (left - 8)
+                + (
+                    left - 8
+                )
                 + '" y="'
-                + (y + 3)
+                + (
+                    y + 3
+                )
                 + '" text-anchor="end">'
                 + escapeHtml(
                     formatMoneyShort(value)
@@ -937,6 +1019,10 @@
                 + '</text>';
         }
 
+        /*
+         * Nếu tháng có nhiều ngày, giảm bớt
+         * số nhãn trên trục ngang.
+         */
         const labelInterval =
             chart.labels.length > 16
                 ? Math.ceil(
@@ -948,20 +1034,24 @@
             (label, index) => {
                 if (
                     index % labelInterval !== 0
-                    && index !== chart.labels.length - 1
+                    && index
+                    !== chart.labels.length - 1
                 ) {
                     return;
                 }
 
                 const x =
-                    left + stepX * index;
+                    left
+                    + stepX * index;
 
                 svg +=
                     '<text class="chart-axis-label" '
                     + 'x="'
                     + x
                     + '" y="'
-                    + (height - 10)
+                    + (
+                        height - 10
+                    )
                     + '" text-anchor="middle">'
                     + escapeHtml(label)
                     + '</text>';
@@ -969,7 +1059,10 @@
         );
 
         chart.series.forEach(
-            (series, seriesIndex) => {
+            (
+                series,
+                seriesIndex
+            ) => {
                 const color =
                     chartColors[
                     seriesIndex
@@ -978,7 +1071,10 @@
 
                 const points =
                     chart.labels.map(
-                        (label, index) => {
+                        (
+                            label,
+                            index
+                        ) => {
                             const value =
                                 Number(
                                     series.data[index]
@@ -994,9 +1090,13 @@
                                     top
                                     + plotHeight
                                     - (
-                                        value
-                                        / maxValue
-                                    ) * plotHeight,
+                                        (
+                                            value
+                                            - minValue
+                                        )
+                                        / displayRange
+                                    )
+                                    * plotHeight,
 
                                 value,
                                 label
@@ -1006,7 +1106,10 @@
 
                 const path =
                     points.map(
-                        (point, index) =>
+                        (
+                            point,
+                            index
+                        ) =>
                             (
                                 index === 0
                                     ? 'M '
