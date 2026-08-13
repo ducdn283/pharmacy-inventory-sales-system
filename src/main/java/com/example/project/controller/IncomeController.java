@@ -121,7 +121,8 @@ public class IncomeController {
 
     @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}", ACCOUNTANT_BASE + "/{incomeId}"})
     public String detail(@PathVariable Integer incomeId, HttpServletRequest request, Model model) {
-        IncomeDetailResponse detail = incomeService.getDetail(incomeId);
+        IncomeDetailResponse detail = incomeService.getDetail(
+                incomeId, currentUserContext.getCurrentAccountId());
         String basePath = resolveBasePath(request);
 
         model.addAttribute("detail", detail);
@@ -278,7 +279,7 @@ public class IncomeController {
                          RedirectAttributes redirectAttributes) {
         String basePath = resolveBasePath(request);
         try {
-            incomeService.cancel(incomeId, reason);
+            incomeService.cancel(incomeId, reason, currentUserContext.getCurrentAccountId());
             redirectAttributes.addFlashAttribute("successMessage", "Đã hủy phiếu thu");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
