@@ -21,21 +21,54 @@ public class RoleDashboardController {
             CurrentUserContext currentUserContext
     ) {
         this.dashboardService = dashboardService;
-        this.accountantDashboardService =
-                accountantDashboardService;
+        this.accountantDashboardService = accountantDashboardService;
         this.currentUserContext = currentUserContext;
     }
 
+    /**
+     * Dashboard của Owner sử dụng chung dữ liệu tài chính và giao diện
+     * với dashboard của Accountant.
+     *
+     * Mặc định hiển thị dữ liệu từng ngày trong tuần hiện tại.
+     */
     @GetMapping("/owner/dashboard")
     public String ownerDashboard(
+            @RequestParam(
+                    name = "period",
+                    defaultValue = "week"
+            )
+            String period,
+
+            @RequestParam(
+                    name = "date",
+                    required = false
+            )
+            String date,
+
             Model model
     ) {
         model.addAttribute(
                 "dashboard",
-                dashboardService.ownerDashboard(
-                        currentUserContext
-                                .getCurrentAccountName()
+                accountantDashboardService.getDashboard(
+                        currentUserContext.getCurrentAccountName(),
+                        period,
+                        date,
+                        "/owner"
                 )
+        );
+
+        /*
+         * Dùng để form bộ lọc gửi lại đúng dashboard của Owner,
+         * không chuyển nhầm sang đường dẫn của Accountant.
+         */
+        model.addAttribute(
+                "dashboardPath",
+                "/owner/dashboard"
+        );
+
+        model.addAttribute(
+                "dashboardRoleLabel",
+                "Chủ nhà thuốc"
         );
 
         model.addAttribute(
@@ -43,9 +76,15 @@ public class RoleDashboardController {
                 "Tổng quan"
         );
 
-        return "dashboard/role-dashboard";
+        return "dashboard/accountant-dashboard";
     }
 
+    /**
+     * Dashboard của Accountant.
+     *
+     * Dùng chung nội dung tài chính với Owner nhưng các liên kết thao tác
+     * vẫn sử dụng đường dẫn /accountant tương ứng.
+     */
     @GetMapping("/accountant/dashboard")
     public String accountantDashboard(
             @RequestParam(
@@ -65,11 +104,21 @@ public class RoleDashboardController {
         model.addAttribute(
                 "dashboard",
                 accountantDashboardService.getDashboard(
-                        currentUserContext
-                                .getCurrentAccountName(),
+                        currentUserContext.getCurrentAccountName(),
                         period,
-                        date
+                        date,
+                        "/accountant"
                 )
+        );
+
+        model.addAttribute(
+                "dashboardPath",
+                "/accountant/dashboard"
+        );
+
+        model.addAttribute(
+                "dashboardRoleLabel",
+                "Kế toán"
         );
 
         model.addAttribute(
@@ -80,6 +129,10 @@ public class RoleDashboardController {
         return "dashboard/accountant-dashboard";
     }
 
+    /**
+     * Dashboard của Pharmacist vẫn giữ nguyên nghiệp vụ cũ,
+     * không sử dụng dashboard tài chính của Owner và Accountant.
+     */
     @GetMapping("/pharmacist/dashboard")
     public String pharmacistDashboard(
             Model model
@@ -87,10 +140,8 @@ public class RoleDashboardController {
         model.addAttribute(
                 "dashboard",
                 dashboardService.pharmacistDashboard(
-                        currentUserContext
-                                .getCurrentAccountId(),
-                        currentUserContext
-                                .getCurrentAccountName()
+                        currentUserContext.getCurrentAccountId(),
+                        currentUserContext.getCurrentAccountName()
                 )
         );
 
