@@ -47,7 +47,8 @@ public class ProductPageController {
     })
     public String listProducts(@RequestParam(name = "keyword", required = false) String keyword,
                                @RequestParam(name = "typeId", required = false) Integer typeId,
-                               @RequestParam(name = "stockStatus", required = false) String stockStatus,
+                               @RequestParam(name = "status", required = false) String status,
+                               @RequestParam(name = "sortOrder", required = false) String sortOrder,
                                @RequestParam(name = "nearExpiryOnly", defaultValue = "false") boolean nearExpiryOnly,
                                @RequestParam(name = "page", defaultValue = "0") int page,
                                @RequestParam(name = "size", defaultValue = "10") int size,
@@ -60,8 +61,16 @@ public class ProductPageController {
             size = 10;
         }
 
+        String basePath = resolveBasePath(request);
+        boolean canFilterBusinessStatus = "/owner/products".equals(basePath);
+        String stockStatus = ProductService.STOCK_STATUS_IN.equals(status)
+                || ProductService.STOCK_STATUS_OUT.equals(status) ? status : null;
+        String businessStatus = ProductService.BUSINESS_STATUS_ACTIVE.equals(status)
+                || ProductService.BUSINESS_STATUS_INACTIVE.equals(status) ? status : null;
+
         Page<ProductRowResponse> productPage = productService.searchProducts(keyword, null, null,
-                null, null, typeId, stockStatus, nearExpiryOnly, PageRequest.of(page, size));
+                null, null, typeId, stockStatus, nearExpiryOnly, businessStatus, sortOrder,
+                PageRequest.of(page, size));
 
         model.addAttribute("productPage", productPage);
         model.addAttribute("products", productPage.getContent());
@@ -71,7 +80,12 @@ public class ProductPageController {
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("filterTypeId", typeId);
-        model.addAttribute("filterStockStatus", stockStatus);
+        // One combined status dropdown. A non-Owner-crafted INACTIVE query is not reflected here,
+        // and ProductService independently keeps inactive rows hidden as the authoritative gate.
+        model.addAttribute("filterStatus", canFilterBusinessStatus
+                || businessStatus == null ? status : null);
+        model.addAttribute("canFilterBusinessStatus", canFilterBusinessStatus);
+        model.addAttribute("sortOrder", sortOrder);
         model.addAttribute("nearExpiryOnly", nearExpiryOnly);
 
         model.addAttribute("currentPage", productPage.getNumber());
@@ -79,7 +93,6 @@ public class ProductPageController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", productPage.getTotalElements());
 
-        String basePath = resolveBasePath(request);
         model.addAttribute("basePath", basePath);
         model.addAttribute("restockProducts", "/owner/products".equals(basePath)
                 ? procurementplanService.listRestockNeededProducts()

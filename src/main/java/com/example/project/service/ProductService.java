@@ -60,6 +60,14 @@ public class ProductService {
     public static final String STOCK_STATUS_LOW = "LOW";
     public static final String STOCK_STATUS_OUT = "OUT";
 
+    public static final String BUSINESS_STATUS_ACTIVE = "ACTIVE";
+    public static final String BUSINESS_STATUS_INACTIVE = "INACTIVE";
+
+    public static final String SORT_NAME_ASC = "NAME_ASC";
+    public static final String SORT_NAME_DESC = "NAME_DESC";
+    public static final String SORT_STOCK_ASC = "STOCK_ASC";
+    public static final String SORT_STOCK_DESC = "STOCK_DESC";
+
     private static final String LABEL_IN = "Còn hàng";
     private static final String LABEL_LOW = "Sắp hết";
     private static final String LABEL_OUT = "Hết hàng";
@@ -177,11 +185,41 @@ public class ProductService {
                                                    String stockStatus,
                                                    boolean nearExpiryOnly,
                                                    Pageable pageable) {
+        return searchProducts(keyword, codeQuery, nameQuery, barcodeQuery, producerQuery, typeId,
+                stockStatus, nearExpiryOnly, null, null, pageable);
+    }
+
+    /**
+     * Full Product List query including business-status and display sorting. Business status is an
+     * Owner-only field: even if another role crafts {@code ?businessStatus=...} manually, the
+     * filter is ignored here based on the authenticated role. Sorting is applied after filtering
+     * and before pagination so it is stable across the complete result set.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProductRowResponse> searchProducts(String keyword,
+                                                   String codeQuery,
+                                                   String nameQuery,
+                                                   String barcodeQuery,
+                                                   String producerQuery,
+                                                   Integer typeId,
+                                                   String stockStatus,
+                                                   boolean nearExpiryOnly,
+                                                   String businessStatus,
+                                                   String sortOrder,
+                                                   Pageable pageable) {
         final String normalizedKeyword = normalize(keyword);
         final String normalizedCode = normalize(codeQuery);
         final String normalizedName = normalize(nameQuery);
         final String normalizedBarcode = normalize(barcodeQuery);
         final String normalizedProducer = normalize(producerQuery);
+        // Inactive products are hidden from the Product screen by default. The sole exception is
+        // an Owner explicitly choosing the INACTIVE filter; hand-crafted parameters from any other
+        // role still resolve to ACTIVE here.
+        final String requestedBusinessStatus = validBusinessStatus(businessStatus);
+        final String effectiveBusinessStatus = RoleConstants.OWNER.equals(currentUserContext.getCurrentRole())
+                && BUSINESS_STATUS_INACTIVE.equals(requestedBusinessStatus)
+                ? BUSINESS_STATUS_INACTIVE
+                : BUSINESS_STATUS_ACTIVE;
 
         Map<Integer, Long> stockByProduct = loadStockByProduct();
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
@@ -195,10 +233,16 @@ public class ProductService {
                 .filter(product -> matchesBarcode(product, normalizedBarcode))
                 .filter(product -> matchesProducer(product, normalizedProducer))
                 .filter(product -> typeMatches(product, typeId))
+                .filter(product -> businessStatusMatches(product, effectiveBusinessStatus))
                 .filter(product -> nearExpiryProductIds == null || nearExpiryProductIds.contains(product.getProductID()))
                 .map(product -> toRow(product, stockByProduct, mainUnitByProduct, ingredientByProduct))
                 .filter(row -> stockStatusMatches(row, stockStatus))
-                .toList();
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        Comparator<ProductRowResponse> comparator = productSortComparator(sortOrder);
+        if (comparator != null) {
+            filtered.sort(comparator);
+        }
 
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), filtered.size());
@@ -220,6 +264,9 @@ public class ProductService {
         long out = 0;
 
         for (Product product : productRepository.findAll()) {
+            if (!Boolean.TRUE.equals(product.getStatus())) {
+                continue;
+            }
             total++;
             long stock = stockByProduct.getOrDefault(product.getProductID(), 0L);
             switch (stockStatusCode(product, stock)) {
@@ -1270,6 +1317,50 @@ public class ProductService {
             default -> null;
         };
         return label != null && label.equals(row.getStockStatusLabel());
+    }
+
+    private String validBusinessStatus(String businessStatus) {
+        return BUSINESS_STATUS_ACTIVE.equals(businessStatus) || BUSINESS_STATUS_INACTIVE.equals(businessStatus)
+                ? businessStatus
+                : null;
+    }
+
+    private boolean businessStatusMatches(Product product, String businessStatus) {
+        if (businessStatus == null) {
+            return true;
+        }
+        boolean active = Boolean.TRUE.equals(product.getStatus());
+        return BUSINESS_STATUS_ACTIVE.equals(businessStatus) ? active : !active;
+    }
+
+    private Comparator<ProductRowResponse> productSortComparator(String sortOrder) {
+        if (sortOrder == null || sortOrder.isBlank()) {
+            return null;
+        }
+
+        Collator vietnamese = Collator.getInstance(Locale.forLanguageTag("vi-VN"));
+        vietnamese.setStrength(Collator.PRIMARY);
+        Comparator<ProductRowResponse> byName = (left, right) -> {
+            String leftName = left.getName() == null ? "" : left.getName();
+            String rightName = right.getName() == null ? "" : right.getName();
+            int compared = vietnamese.compare(leftName, rightName);
+            if (compared != 0) {
+                return compared;
+            }
+            return Comparator.nullsLast(Integer::compareTo)
+                    .compare(left.getProductId(), right.getProductId());
+        };
+
+        return switch (sortOrder) {
+            case SORT_NAME_ASC -> byName;
+            case SORT_NAME_DESC -> byName.reversed();
+            case SORT_STOCK_ASC -> Comparator.comparingLong(ProductRowResponse::getStock)
+                    .thenComparing(byName);
+            case SORT_STOCK_DESC -> Comparator.comparingLong(ProductRowResponse::getStock)
+                    .reversed()
+                    .thenComparing(byName);
+            default -> null;
+        };
     }
 
     private boolean containsNormalized(String value, String normalizedKeyword) {
