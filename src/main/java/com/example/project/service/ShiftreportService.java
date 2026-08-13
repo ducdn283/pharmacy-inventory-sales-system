@@ -67,8 +67,8 @@ public class ShiftreportService {
     private static final int MANUAL_SHIFT_MAX_BACKDATE_DAYS = 1;
 
     /**
-     * Giờ nhà thuốc mở cửa (chủ nhà thuốc chốt 12/08/2026: hoạt động 6h–23h). Ca không thể bắt đầu
-     * trước mốc này — xem {@link #resolveManualStart}.
+     * Giờ nhà thuốc mở cửa (hoạt động 6h–23h). Ca không thể bắt đầu trước mốc này — xem
+     * {@link #resolveManualStart}.
      */
     private static final int PHARMACY_OPENING_HOUR = 6;
 
@@ -162,21 +162,13 @@ public class ShiftreportService {
      * chi thì cả ngày không có ca nào, và người trực không có gì để chốt. Nút tạo tay lấp đúng khoảng
      * đó.</p>
      *
-     * <p><strong>Giờ mở ca do người dùng nhập</strong>, không lấy lúc bấm nút: người trực thường chỉ
-     * nhớ ra phải tạo ca vào cuối ngày, lấy lúc bấm thì ca 22h00 mở — 22h05 chốt, dài 5 phút, sai hẳn
-     * ca thật. Giờ CHỐT thì ngược lại, vẫn lấy đúng lúc bấm chốt ({@link #closeShift}) vì đó là thời
-     * điểm tiền được kiểm đếm thật.</p>
+     * <p><strong>Giờ mở ca suy từ mốc đăng nhập</strong> ({@link #resolveManualStart}), không cho nhập
+     * tay và cũng không lấy lúc bấm nút: lấy lúc bấm thì ca mở 22h00 — chốt 22h05, dài 5 phút, sai hẳn
+     * ca thật; còn cho gõ tay thì không kiểm chứng được. Giờ CHỐT ngược lại, vẫn lấy đúng lúc bấm chốt
+     * ({@link #closeShift}) vì đó là thời điểm tiền được kiểm đếm thật.</p>
      *
-     * <p><strong>Cho phép lùi ngày</strong> (tối đa {@link #MANUAL_SHIFT_MAX_BACKDATE_DAYS} ngày) để
-     * ghi bù đúng ngày vắng khách mà hôm đó không ai mở ca. Ca lùi ngày lập tức là "ca tồn đọng từ
-     * ngày trước" nên {@code PendingShiftInterceptor} sẽ giữ người dùng ở màn ca cho tới khi chốt —
-     * đó chính là quy trình mong muốn: tạo xong thì chốt luôn, không đi làm việc khác.</p>
-     *
-     * <p><strong>Không chống được việc khai giờ sớm hơn thực tế</strong> (bấm lúc 7h40 mà khai 7h00):
-     * hệ thống không có cách nào biết giờ thật. Ba mốc chặn được là (1) không ở tương lai, (2) không
-     * đè lên ca trước của chính người đó, (3) không lùi quá số ngày cho phép. Ngoài ra
-     * {@code createdAt} vẫn ghi đúng lúc bấm nút, nên màn chi tiết hiện được cả "giờ mở ca đã khai"
-     * lẫn "giờ tạo phiếu" để Chủ nhà thuốc nhìn thấy khoảng lệch khi duyệt.</p>
+     * <p>{@code createdAt} vẫn ghi đúng lúc bấm nút, nên màn chi tiết hiện được cả giờ mở ca lẫn giờ tạo
+     * phiếu để Chủ nhà thuốc nhìn thấy khoảng lệch khi duyệt.</p>
      */
     @Transactional
     public Integer createManualShift(Integer accountId, LocalDateTime sessionStartedAt) {
@@ -229,24 +221,23 @@ public class ShiftreportService {
     /**
      * Giờ mở ca thật sự dùng cho một ca mở tay = mốc muộn nhất trong ba mốc:
      * <ol>
-     *   <li><strong>lúc đăng nhập</strong> — mốc BA chốt (12/08/2026), thay cho ô nhập giờ;</li>
+     *   <li><strong>lúc đăng nhập</strong> — mốc thay cho ô nhập giờ;</li>
      *   <li><strong>{@link #PHARMACY_OPENING_HOUR}h hôm nay</strong> (nhà thuốc hoạt động 6h–23h);</li>
      *   <li><strong>lúc ca gần nhất của chính người đó kết thúc</strong>.</li>
      * </ol>
      *
-     * <p><strong>(2) vừa vá lỗi qua ngày mới, vừa chặn giờ vô lý.</strong> Phiên đăng nhập sống xuyên
-     * nửa đêm (đăng nhập 23h, bấm mở ca lúc 0h10) sẽ cho mốc của NGÀY HÔM QUA: ca đó lập tức bị coi là
-     * "ca tồn đọng từ ngày trước", {@code PendingShiftInterceptor} khoá sạch mọi thao tác và bắt chốt —
-     * người dùng vừa bấm mở ca cho hôm nay lại bị đá vào một ca của hôm qua. Kẹp về giờ mở cửa hôm nay
-     * thì ca luôn thuộc đúng ngày đang làm việc, và cũng không bao giờ có ca khai bắt đầu từ 2h sáng
-     * (giờ nhà thuốc đóng cửa) chỉ vì ai đó để trình duyệt mở qua đêm.</p>
+     * <p><strong>(2) vừa vá lỗi qua ngày mới, vừa chặn giờ vô lý.</strong> Phiên sống xuyên nửa đêm
+     * (đăng nhập 23h, bấm mở ca lúc 0h10) cho mốc của NGÀY HÔM QUA ⇒ ca vừa mở đã bị coi là "ca tồn đọng
+     * từ ngày trước", {@code PendingShiftInterceptor} khoá sạch thao tác và bắt chốt ngay. Kẹp về giờ mở
+     * cửa hôm nay thì ca luôn thuộc đúng ngày đang làm việc, và cũng không có ca khai bắt đầu từ 2h sáng
+     * chỉ vì ai đó để trình duyệt mở qua đêm.</p>
      *
-     * <p><strong>(3) chặn hai ca chồng giờ nhau.</strong> Sáng chốt ca lúc 12h rồi mở ca chiều: mốc
-     * đăng nhập vẫn là 7h00, lấy nguyên sẽ ra ca chiều bắt đầu từ 7h00 — trùng nguyên buổi sáng, cùng
-     * một quãng thời gian bị tính vào hai ca. Kẹp về đúng lúc ca trước kết thúc.</p>
+     * <p><strong>(3) chặn hai ca chồng giờ nhau.</strong> Sáng chốt lúc 12h rồi mở ca chiều: mốc đăng
+     * nhập vẫn là 7h00, lấy nguyên là ca chiều nuốt trọn buổi sáng — cùng một quãng thời gian tính vào
+     * hai ca.</p>
      *
-     * <p>Riêng mốc (2) có thể rơi vào TƯƠNG LAI khi ai đó mở ca trước giờ mở cửa (bấm lúc 5h sáng);
-     * dòng cuối kẹp lại về {@code now} nên kết quả không bao giờ vượt hiện tại.</p>
+     * <p>Riêng mốc (2) có thể rơi vào TƯƠNG LAI khi bấm mở ca trước giờ mở cửa; dòng cuối kẹp lại về
+     * {@code now}.</p>
      */
     private LocalDateTime resolveManualStart(Integer accountId, LocalDateTime sessionStartedAt, LocalDateTime now) {
         LocalDateTime startAt = sessionStartedAt;
@@ -456,11 +447,10 @@ public class ShiftreportService {
     /**
      * Tiền mặt ca phải giao lại = <strong>thu tiền mặt − chi tiền mặt</strong> trong ca.
      *
-     * <p><strong>KHÔNG cộng tiền đầu ca</strong> (chốt với chủ nhà thuốc 12/08/2026). Khoản đầu ca là
-     * số cố định lấy từ {@code Financialsetting.openingCashDefault}, không hề trừ vào quỹ khi mở ca và
-     * không nộp lại vào quỹ khi chốt ca — nó không tham gia bất kỳ dòng tiền nào. Mọi khoản thu/chi
-     * thật (bán hàng, phiếu thu, phiếu chi, kể cả tiền hoàn cho khách) đều tác động thẳng vào QUỸ, nên
-     * cộng thêm tiền đầu ca vào đây là mặc định ca nào cũng lệch đúng bằng khoản đó.</p>
+     * <p><strong>KHÔNG cộng tiền đầu ca.</strong> Khoản đầu ca ({@code Financialsetting.openingCashDefault})
+     * không trừ vào quỹ lúc mở ca và không nộp lại vào quỹ lúc chốt ca — nó không tham gia dòng tiền nào,
+     * trong khi mọi khoản thu/chi thật đều tác động thẳng vào QUỸ. Cộng nó vào đây là mặc định ca nào
+     * cũng lệch đúng bằng khoản đó.</p>
      *
      * <p>Kéo theo: ô "tiền mặt cuối ca thực đếm" phải là <em>tiền bán được trong ca</em>, không tính
      * khoản đầu ca — nhãn ô nhập ở {@code shift-report/detail.html} nói rõ điều này.</p>
@@ -571,39 +561,24 @@ public class ShiftreportService {
      * Nộp tiền mặt của ca vào QUỸ ({@code Financialsetting.cashSafeBalance}) đúng lúc ca được duyệt.
      *
      * <p><strong>Doanh thu và quỹ là hai con số khác nhau.</strong> Bán hàng ghi nhận DOANH THU ngay
-     * lúc lập hóa đơn (số đó đi vào kỳ tính thuế); còn QUỸ chỉ tăng khi người trực ca giao lại tiền
-     * mặt thật lúc kết ca. Bán 1.200.000 mà két thiếu 200.000 thì ca vẫn ghi doanh thu 1.200.000,
-     * quỹ chỉ nhận 1.000.000 — phần thiếu là khoản phải THU LẠI của người trực (phiếu thu riêng,
-     * loại {@code SHIFT_SHORTAGE}), không phải khoản giảm doanh thu.</p>
+     * lúc lập hóa đơn (số đó đi vào kỳ tính thuế); còn QUỸ là tiền thật. Bán 1.200.000 mà két thiếu
+     * 200.000 thì ca vẫn ghi doanh thu 1.200.000 — phần thiếu là khoản phải THU LẠI của người trực
+     * (phiếu thu {@code SHIFT_SHORTAGE}), không phải khoản giảm doanh thu.</p>
      *
-     * <p><strong>Chốt ca nộp đúng phần CHÊNH LỆCH THỰC ĐẾM</strong> ({@code cashDiscrepancy}), không
-     * nộp lại toàn bộ tiền của ca. Lý do: tiền mặt thu trong ca ĐÃ được cộng vào quỹ ngay lúc phát
-     * sinh — {@code InvoiceService.createSaleInvoice} và {@code IncomeService} đều gọi
-     * {@code applyFundDelta(paidByCash, paidByBanking)}. Cộng thêm {@code thực đếm − đầu ca} ở đây
-     * nữa là đếm cùng một tờ tiền hai lần.</p>
+     * <p><strong>Chỉ nộp phần CHÊNH LỆCH THỰC ĐẾM</strong> ({@code cashDiscrepancy}), không nộp lại toàn
+     * bộ tiền của ca: tiền mặt thu trong ca ĐÃ được cộng vào quỹ ngay lúc phát sinh
+     * ({@code InvoiceService.createSaleInvoice} và {@code IncomeService} đều gọi {@code applyFundDelta}).
+     * Cộng thêm {@code thực đếm − đầu ca} ở đây nữa là đếm cùng một tờ tiền hai lần. Cộng chênh lệch thì
+     * số dư quỹ cuối cùng đúng bằng tiền thật đang nằm trong két.</p>
      *
-     * <p>Cộng chênh lệch thì kết quả cuối cùng đúng bằng tiền thật đếm được:</p>
-     * <pre>
-     * quỹ 1.000.000
-     *   + 199.000  (bán hàng — quỹ nhận theo số "đáng lẽ phải có")
-     *   −  99.000  (chốt ca — thực đếm thiếu 99.000 so với dự kiến)
-     *   = 1.100.000  ← đúng số tiền mặt đang thật sự nằm trong két
-     * </pre>
+     * <p>Gọi đúng tại bước chuyển sang {@code Đã duyệt} — trạng thái ĐIỂM CUỐI, chỉ tới được một lần
+     * ({@code approve()} chỉ nhận ca Chờ duyệt, {@code closeShift()} chỉ nhận Nháp/Từ chối) nên không có
+     * đường nào trừ quỹ hai lần. Ca bị từ chối chưa từng trừ nên nộp lại vẫn đúng.</p>
      *
-     * <p>Phần 99.000 thiếu là khoản phải THU LẠI của người trực; khi lập phiếu thu
-     * {@code SHIFT_SHORTAGE} và phiếu đó hoàn thành, {@code IncomeService} cộng nốt vào quỹ →
-     * 1.199.000. Doanh thu của ca thì KHÔNG đổi (vẫn 199.000, số của kỳ tính thuế) — thâm hụt quỹ
-     * không bao giờ là khoản giảm doanh thu.</p>
-     *
-     * <p>Gọi đúng tại bước chuyển sang {@code Đã duyệt} — trạng thái này là ĐIỂM CUỐI (chỉ tới được
-     * một lần: {@code approve()} chỉ nhận ca Chờ duyệt, {@code closeShift()} chỉ nhận Nháp/Từ chối)
-     * nên không có đường nào trừ quỹ hai lần. Ca bị từ chối chưa từng trừ nên nộp lại vẫn đúng.</p>
-     *
-     * <p><strong>⚠️ Phụ thuộc ngầm cần nhớ:</strong> công thức này đúng vì bên bán hàng/phiếu thu tự
-     * cộng quỹ lúc lập. Nếu sau này module đó bỏ {@code applyFundDelta}, chỗ này phải đổi thành
-     * {@code thực đếm − đầu ca}. Ngoài ra tiền mặt CHI ra trong ca ({@code totalCashOut}) hiện chưa
-     * có nơi nào trừ khỏi quỹ — thiếu sót sẵn có của module Phiếu chi, không xử lý ở đây để không
-     * giành việc của họ rồi trừ hai lần khi họ làm.</p>
+     * <p><strong>⚠️ Phụ thuộc ngầm:</strong> công thức này đúng vì bên bán hàng/phiếu thu tự cộng quỹ lúc
+     * lập; nếu module đó bỏ {@code applyFundDelta} thì chỗ này phải đổi thành {@code thực đếm − đầu ca}.
+     * Ngoài ra tiền mặt CHI ra trong ca chưa có nơi nào trừ khỏi quỹ — thiếu sót sẵn có của module Phiếu
+     * chi, không xử lý ở đây để khỏi trừ hai lần khi họ làm.</p>
      */
     private void creditCashSafe(Shiftreport shift) {
         // Chỉ đụng quỹ TIỀN MẶT: chuyển khoản không qua ngăn kéo nên không có gì để đối chiếu lúc
@@ -721,9 +696,8 @@ public class ShiftreportService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Tiền nhân viên đền bù thất thoát kho KHÔNG tách thành dòng riêng (BA chốt 28/07): nó là một
-        // phiếu thu như mọi phiếu thu khác, đã được cộng vào totalCashIn/totalBankingIn ở vòng lặp
-        // trên. Ca không cần biết khoản thu đó đến từ chênh lệch kho hay từ đâu — chỉ cần đúng số.
+        // Tiền nhân viên đền bù thất thoát kho KHÔNG tách thành dòng riêng: nó là một phiếu thu như mọi
+        // phiếu thu khác, đã được cộng vào totalCashIn/totalBankingIn ở vòng lặp trên.
         return new TransactionTotals(totalInvoices, totalRevenue, totalCashIn, totalBankingIn,
                 totalReturns, totalReturnAmount, totalCashOut, totalBankingOut, totalDebtCollected);
     }
@@ -857,9 +831,9 @@ public class ShiftreportService {
      * Ngay sau khi lưu, mã được ghi lại theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước
      * nằm trong cùng một transaction.
      *
-     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
-     * người phát sinh giao dịch đầu ca cùng lúc nhận cùng một số; cột mã có UNIQUE nên người thứ hai ăn
-     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     * <p>ĐỪNG quay lại cách {@code max(id) + 1} <em>trước khi</em> lưu: đọc rồi mới ghi thì hai người
+     * phát sinh giao dịch đầu ca cùng lúc nhận cùng một số, mà cột mã có UNIQUE nên người thứ hai ăn lỗi
+     * 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
      */
     private String temporaryCode() {
         return "TMP-" + UUID.randomUUID();

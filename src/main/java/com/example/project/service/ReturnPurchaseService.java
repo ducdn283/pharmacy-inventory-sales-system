@@ -111,15 +111,13 @@ public class ReturnPurchaseService {
                 inventoryAlertEventService;
     }
 
-    // revenueGroup() / isDeductionGroup() / isTaxExempt() đã bỏ 04/08/2026: hộ kinh doanh KHÔNG khấu trừ
-    // GTGT đầu vào ở bất kỳ nhóm nào, nên trả hàng NCC không có khoản thuế nào để đảo — nhóm doanh thu
-    // không còn ảnh hưởng gì tới màn này.
+    // Không có hàm nào đọc nhóm doanh thu ở màn này: hộ kinh doanh KHÔNG khấu trừ GTGT đầu vào ở bất kỳ
+    // nhóm nào, nên trả hàng NCC không có khoản thuế nào để đảo.
 
     /**
      * Tỷ lệ hoàn MẶC ĐỊNH, từ {@code Financialsetting.returnProductOnInvoiceValueRate}. Ở chiều NCC đây là
-     * tỷ lệ NCC CHẤP NHẬN hoàn (đặc tả bổ sung 27/07 mục 1.3 bước 2) — phần NCC không hoàn
-     * ({@code originalLineValue − lineRefund}) là khoản LỖ, được tính động vào chi phí hợp lý TNCN của kỳ
-     * đó nếu có chứng từ, KHÔNG sinh Expense riêng.
+     * tỷ lệ NCC CHẤP NHẬN hoàn — phần NCC không hoàn ({@code originalLineValue − lineRefund}) là khoản LỖ,
+     * được tính động vào chi phí hợp lý TNCN của kỳ đó nếu có chứng từ, KHÔNG sinh Expense riêng.
      */
     @Transactional(readOnly = true)
     public BigDecimal getDefaultRefundRate() {
@@ -245,7 +243,7 @@ public class ReturnPurchaseService {
             }
             List<Purchasedetail> lines = linesByPurchase.getOrDefault(purchase.getId(), List.of());
             int returnedBase = returnedBaseQty(lines, returnedByDetail);
-            // Đã trả đủ SỐ ĐÃ NHẬP thì mới hết trả được — không phải "hết tồn kho" (BA 05/08/2026).
+            // Đã trả đủ SỐ ĐÃ NHẬP thì mới hết trả được — không phải "hết tồn kho".
             if (isFullyReturned(returnedBase, importedBaseQty(lines, ratioByDetail))) {
                 continue;
             }
@@ -456,12 +454,10 @@ public class ReturnPurchaseService {
             detail.setLineRefund(chunk.lineRefund());
             // originalLineValue = giá trị nhập GỐC 100% của phần trả; lineRefund = số NCC thực hoàn.
             // Chênh lệch giữa 2 cột = khoản LỖ khi NCC không hoàn đủ — tính động vào chi phí hợp lý TNCN
-            // của kỳ (đặc tả bổ sung 27/07 mục 1.3 + 4.5), KHÔNG tạo Expense riêng.
+            // của kỳ, KHÔNG tạo Expense riêng.
             detail.setOriginalLineValue(chunk.grossRefund());
-            // KHÔNG còn tách net/VAT trên dòng trả: 3 cột vatRate/preTaxAmount/vatAmount đã bị bỏ khỏi
-            // `returndetail`. Hộ kinh doanh (mọi nhóm) tính GTGT bằng doanh thu × tỷ lệ %, không khấu trừ
-            // đầu vào ⇒ trả hàng NCC không có khoản thuế nào để đảo ngược. `importPricePerBase` vẫn là
-            // giá GỘP nên lineRefund đã là số tiền NCC thực hoàn, không phải cộng thêm thuế.
+            // KHÔNG tách net/VAT trên dòng trả (3 cột đó đã bị bỏ khỏi `returndetail`).
+            // `importPricePerBase` là giá GỘP nên lineRefund đã là số NCC thực hoàn, không cộng thêm thuế.
             detail.setRestockable(false);
             returndetailRepository.save(detail);
         }
@@ -506,11 +502,9 @@ public class ReturnPurchaseService {
      * on that same purchase (see {@link #applyDebtOffset}), then the purchase invoice's
      * {@code returnStatus} / {@code returnQty} are recomputed.
      *
-     * <p>TODO(finance): mục 3.3 của đặc tả bổ sung còn yêu cầu sinh cặp chứng từ đối ứng cho phần bù trừ
-     * (Income {@code SUPPLIER} + Expense trỏ {@code purchaseID}, cả hai {@code paidByCredit =
-     * offsetDebtAmount}). Chưa làm ở đây vì 2 bảng đó thuộc module Thu/Chi của thành viên khác — công nợ
-     * đã trừ đúng, chỉ thiếu 2 chứng từ. Phần NCC hoàn bằng TIỀN THẬT ({@code totalRefund −
-     * offsetDebtAmount}) vẫn do màn phiếu thu ghi nhận.</p>
+     * <p>TODO(finance): chưa sinh cặp chứng từ đối ứng cho phần bù trừ (Income {@code SUPPLIER} + Expense
+     * trỏ {@code purchaseID}) vì 2 bảng đó thuộc module Thu/Chi — công nợ đã trừ đúng, chỉ thiếu chứng từ.
+     * Phần NCC hoàn bằng TIỀN THẬT vẫn do màn phiếu thu ghi nhận.</p>
      */
     private void applyReturnEffect(Return ret) {
         for (Returndetail detail : returndetailRepository.findByReturnIdWithRelations(ret.getId())) {
@@ -557,8 +551,7 @@ public class ReturnPurchaseService {
 
     /**
      * Số tiền NCC hoàn được cấn trừ vào công nợ nhà thuốc đang nợ chính phiếu nhập đó:
-     * {@code MIN(totalRefund, totalAmount − paid)} — đặc tả bổ sung 27/07 mục 1.3 bước 5 + mục 3.3.
-     * Trả 0 khi {@code Financialsetting.autoOffsetDebtOnRefund} tắt.
+     * {@code MIN(totalRefund, totalAmount − paid)}. Trả 0 khi {@code autoOffsetDebtOnRefund} tắt.
      */
     private BigDecimal computeDebtOffset(Purchaseinvoice purchase, BigDecimal totalRefund) {
         if (!isAutoOffsetDebt()) {
@@ -571,14 +564,12 @@ public class ReturnPurchaseService {
     /**
      * Thực hiện bù trừ khi duyệt phiếu: chốt {@code offsetDebtAmount} theo dư nợ TẠI THỜI ĐIỂM DUYỆT rồi
      * ghi tăng {@code PurchaseInvoice.paid} và đồng bộ {@code status} qua
-     * {@link DebtService#recordPurchaseDebtOffset} — nợ NCC giảm ngay trong cùng transaction (mục 3.3
-     * bước 1, mục 3.4 "cập nhật trực tiếp").
+     * {@link DebtService#recordPurchaseDebtOffset}, ngay trong cùng transaction.
      *
-     * <p><strong> {@code offsetDebtAmount} nay là SỐ ĐÃ BÙ TRỪ (cố định)</strong>
-     * (số dư động do {@code IncomeService.applySupplierOffsetDebtPayment} trừ dần). Phần
-     * NCC còn phải hoàn bằng tiền thật nay là {@code totalRefund − offsetDebtAmount} ⇒
-     * {@code IncomeService.collectibleOffsetDebt} phải đổi theo, nếu không màn thu tiền NCC hiểu sai
-     * số còn thu được.</p>
+     * <p><strong>⚠️ {@code offsetDebtAmount} là SỐ ĐÃ BÙ TRỪ (cố định)</strong>, không phải số dư động.
+     * Phần NCC còn phải hoàn bằng tiền thật là {@code totalRefund − offsetDebtAmount} ⇒
+     * {@code IncomeService.collectibleOffsetDebt} phải đọc theo công thức đó, nếu không màn thu tiền NCC
+     * hiểu sai số còn thu được.</p>
      */
     private void applyDebtOffset(Return ret, Purchaseinvoice purchase) {
         BigDecimal offset = computeDebtOffset(purchase, ret.getTotalRefund());
@@ -593,16 +584,12 @@ public class ReturnPurchaseService {
     /**
      * Chốt lại {@code returnStatus} / {@code returnQty} của phiếu nhập sau mỗi lần duyệt phiếu trả NCC.
      *
-     * <p><b>"Trả toàn bộ" đo theo SỐ LƯỢNG ĐÃ NHẬP, không phải theo tồn kho còn lại</b> (BA chốt
-     * 05/08/2026). Ví dụ của BA: nhập 10, bán 2, trả NCC 8 ⇒ vẫn là <i>trả một phần</i> (mới trả 8/10);
-     * về sau khách trả lại 2 hộp, lập thêm phiếu trả 2 hộp đó cho NCC thì mới thành <i>trả toàn bộ</i>.</p>
-     *
-     * <p>Cách cũ đánh FULL khi "hết sạch tồn của phiếu nhập" nên khóa nhầm: bán hết phần còn lại là phiếu
-     * nhập bị coi như đã trả xong, tới lúc khách trả hàng (lô {@code RT-} trỏ về đúng dòng nhập gốc, có tồn
-     * thật) thì phiếu nhập đã bị loại khỏi danh sách chọn ⇒ không mang trả NCC được nữa. Đo theo số đã nhập
-     * thì trạng thái chỉ phụ thuộc lượng THỰC SỰ đã trả về NCC, hàng bán ra hay khách trả lại không làm
-     * đổi trạng thái — chỉ làm thay đổi phần còn có thể trả (tồn thật), do
-     * {@link #listReturnablePurchases} và {@link #loadPurchaseLines} lọc theo tồn.</p>
+     * <p><b>"Trả toàn bộ" đo theo SỐ LƯỢNG ĐÃ NHẬP, không phải theo tồn kho còn lại.</b> Nhập 10, bán 2,
+     * trả NCC 8 ⇒ vẫn là <i>trả một phần</i> (8/10); về sau khách trả lại 2 hộp rồi mang trả nốt cho NCC
+     * mới thành <i>trả toàn bộ</i>. Đo theo tồn kho thì bán hết phần còn lại là phiếu nhập bị coi như đã
+     * trả xong, tới lúc khách trả hàng (lô {@code RT-} trỏ về đúng dòng nhập gốc, có tồn thật) thì phiếu
+     * nhập đã bị loại khỏi danh sách chọn ⇒ không mang trả NCC được nữa. Phần "còn có thể trả" mới là chỗ
+     * đo theo tồn, do {@link #listReturnablePurchases} và {@link #loadPurchaseLines} lọc.</p>
      */
     private void recomputeReturnPurchaseStatus(Purchaseinvoice purchase) {
         if (purchase == null) {
@@ -841,8 +828,7 @@ public class ReturnPurchaseService {
         if (isFullyReturned(purchase)) {
             throw new IllegalArgumentException("Phiếu nhập này đã được trả toàn bộ");
         }
-        // KHÔNG chặn phiếu nhập còn nợ NCC: giá trị hàng trả được cấn trừ vào chính khoản nợ đó
-        // (PISMS_Xu_ly_Cong_no sheet "Công nợ Nhà cung cấp" ca 3/4 + đặc tả bổ sung 27/07 mục 3.3).
+        // KHÔNG chặn phiếu nhập còn nợ NCC: giá trị hàng trả được cấn trừ vào chính khoản nợ đó.
     }
 
     /** Số nhà thuốc CÒN NỢ nhà cung cấp trên phiếu nhập = totalAmount − paid (sàn 0). */
@@ -989,9 +975,9 @@ public class ReturnPurchaseService {
      * điểm INSERT — lúc đó chưa biết id nên chưa dựng được mã thật. Ngay sau khi lưu, mã được ghi lại
      * theo id do DB cấp. Không bao giờ commit ra ngoài: cả hai bước nằm trong cùng một transaction.
      *
-     * <p>Trước đây mã sinh bằng {@code max(id) + 1} <em>trước khi</em> lưu — đọc rồi mới ghi, nên hai
-     * người tạo phiếu cùng lúc nhận cùng một số; cột {@code returnCode} có UNIQUE nên người thứ hai ăn
-     * lỗi 500 thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
+     * <p>ĐỪNG quay lại cách {@code max(id) + 1} <em>trước khi</em> lưu: đọc rồi mới ghi thì hai người tạo
+     * phiếu cùng lúc nhận cùng một số, mà cột {@code returnCode} có UNIQUE nên người thứ hai ăn lỗi 500
+     * thay vì được cấp mã kế tiếp. AUTO_INCREMENT của DB thì không bao giờ cấp trùng.</p>
      */
     private String temporaryCode() {
         return "TMP-" + UUID.randomUUID();
@@ -1073,8 +1059,8 @@ public class ReturnPurchaseService {
      * <p>"Giá nhập" bên phiếu nhập là
      * GIÁ CUỐI ĐÃ GỒM THUẾ (gross) → {@code batch.importPricePerBase} lưu gross/đơn vị cơ sở → {@code
      * unitImportPrice} là GROSS. Vì vậy tiền hoàn NCC = gross = ĐÚNG số nhà thuốc đã trả (không cộng thêm
-     * VAT lên trên). Từ 04/08/2026 KHÔNG còn tách net/VAT: hộ kinh doanh không khấu trừ GTGT đầu vào nên
-     * không có gì để ghi sổ đảo ngược.</p>
+     * VAT lên trên). KHÔNG tách net/VAT: hộ kinh doanh không khấu trừ GTGT đầu vào nên không có gì để ghi
+     * sổ đảo ngược.</p>
      */
     private record Chunk(Purchasedetail line, Batch batch, int qty, BigDecimal unitImportPrice,
                          BigDecimal refundRate) {

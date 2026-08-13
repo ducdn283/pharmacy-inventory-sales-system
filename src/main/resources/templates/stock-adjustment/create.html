@@ -210,7 +210,6 @@
                                 <input type="text" class="form-control auto-field"
                                        th:value="${nextCode}" value="PDC-000001"
                                        readonly tabindex="-1">
-                                <div class="form-text">Mã dự kiến — chỉ được cấp khi bấm tạo hoặc lưu nháp.</div>
                             </div>
 
                             <div class="col-12 col-md-4">
@@ -250,17 +249,10 @@
                                 <div th:if="${#lists.isEmpty(approvedStockReviews)}" class="form-text text-warning">
                                     <i class="ti ti-alert-triangle me-1"></i>Chưa có phiếu rà soát kho đã duyệt nào khả dụng.
                                 </div>
-                                <div class="form-text">
-                                    <i class="ti ti-info-circle me-1"></i>Chỉ hiện phiếu <strong>đã duyệt</strong> và
-                                    <strong>còn dòng cần xử lý</strong>. Loại phiếu điều chỉnh sinh ra do
-                                    <strong>loại phiếu rà soát kho</strong> quyết định: kiểm đếm số lượng → điều chỉnh tồn
-                                    kho; kiểm tra hạn dùng → điều chỉnh hạn dùng.
-                                </div>
                             </div>
 
-                            <!-- Hủy hàng CÓ THỂ dựa trên một phiếu rà soát tình trạng: bắt buộc khi hủy vì hỏng
-                                 hóc (phải có biên bản), không cần khi hủy vì hết hạn (hạn nằm sẵn trên lô). Hệ
-                                 thống không đoán được lý do nên để tùy chọn, người lập tự gắn. -->
+                            <!-- Hủy hàng CÓ THỂ dựa trên một phiếu rà soát tình trạng, nhưng không bắt buộc:
+                                 hệ thống không đoán được lý do hủy nên để người lập tự gắn. -->
                             <div class="col-12 col-md-6" id="conditionPickerField" style="display: none;">
                                 <label class="form-label">Phiếu rà soát tình trạng</label>
                                 <div class="input-group">
@@ -270,15 +262,12 @@
                                             onclick="openConditionModal()">
                                         <i class="ti ti-clipboard-search me-1"></i>Chọn
                                     </button>
+                                    <!-- Chỉ hiện khi đã chọn phiếu — xem syncConditionClearButton(). -->
                                     <button type="button" class="btn btn-outline-secondary"
+                                            id="clearConditionBtn" style="display: none;"
                                             onclick="clearConditionReview()">
-                                        <i class="ti ti-x"></i>
+                                        <i class="ti ti-x me-1"></i>Bỏ chọn
                                     </button>
-                                </div>
-                                <div class="form-text">
-                                    <i class="ti ti-info-circle me-1"></i>Hủy vì <strong>hỏng hóc</strong> thì nên gắn
-                                    phiếu rà soát tình trạng làm căn cứ. Hủy vì <strong>hết hạn</strong> thì để trống —
-                                    hạn dùng đã có sẵn trên lô.
                                 </div>
                             </div>
 
@@ -391,11 +380,6 @@
                                     <span id="reviewPreviewTitle">Dòng điều chỉnh từ phiếu rà soát kho</span>
                                     <span class="badge bg-success-subtle text-success ms-2" id="reviewLineCountBadge">0</span>
                                 </div>
-                                <p class="text-secondary small mb-0 mt-1" id="reviewPreviewHint">
-                                    Cột <strong>Nguồn gốc hàng thừa</strong> là lựa chọn của người lập: tick khi
-                                    <strong>không xác định được</strong> hàng thừa từ đâu ra, hệ thống sẽ lập một
-                                    <strong>lô mới</strong> (không gắn hóa đơn mua, giá vốn ước tính) thay vì cộng vào lô đang đếm.
-                                </p>
                             </div>
 
                             <div class="table-responsive">
@@ -459,12 +443,6 @@
                         </div>
                     </div>
 
-                    <!-- Nội dung do applyExpiryHint() ghi lại theo loại phiếu đang chọn. -->
-                    <div class="alert alert-warning" id="expiryHint">
-                        <i class="ti ti-alert-triangle me-1"></i>
-                        Đối chiếu số lô và hạn dùng với lô đã chọn trước khi tạo phiếu.
-                    </div>
-
                     <div class="destroy-card p-4">
                         <!-- Owner-only: lập xong là thực hiện luôn, không còn bước gửi duyệt. -->
                         <button type="submit" name="action" value="submit"
@@ -500,13 +478,6 @@
                 </div>
 
                 <div class="p-4">
-                    <div class="alert alert-light border small d-flex align-items-start mb-3" role="alert">
-                        <i class="ti ti-info-circle me-2 mt-1"></i>
-                        <span id="reviewModalHint">Danh sách chỉ gồm phiếu rà soát kho <strong>đã duyệt</strong> và
-                        <strong>còn dòng cần xử lý</strong>. Phiếu khớp hoàn toàn không cần điều chỉnh nên
-                        sẽ không hiện ở đây.</span>
-                    </div>
-
                     <input type="text" class="form-control mb-3" id="reviewModalSearch"
                            placeholder="Tìm theo mã phiếu, ngày, ghi chú" oninput="filterReviewModalRows()">
 
@@ -847,6 +818,18 @@
         if (display) {
             display.value = '';
         }
+        syncConditionClearButton();
+    }
+
+    /**
+     * Nút "Bỏ chọn" chỉ có việc để làm khi đã gắn một phiếu rà soát tình trạng — phiếu này là TÙY CHỌN
+     * nên phải gỡ ra được, nhưng lúc chưa chọn gì thì nút chỉ làm rối ô nhập.
+     */
+    function syncConditionClearButton() {
+        const button = document.getElementById('clearConditionBtn');
+        const display = document.getElementById('chosenConditionDisplay');
+        if (!button || !display) return;
+        button.style.display = display.value ? '' : 'none';
     }
 
     function onTypeChanged() {
@@ -871,6 +854,8 @@
         document.getElementById('conditionPickerField').style.display = destroyType ? '' : 'none';
         if (!destroyType) {
             clearConditionReview();
+        } else {
+            syncConditionClearButton();
         }
         applyReasonRequirement(isCount);
 
@@ -892,11 +877,9 @@
     function applyReasonRequirement(isCount) {
         const input = document.getElementById('reasonInput');
         const mark = document.getElementById('reasonRequiredMark');
-        const hint = document.getElementById('reasonHint');
         if (!input) return;
         input.required = !isCount;
         if (mark) mark.style.display = isCount ? 'none' : '';
-        if (hint) hint.style.display = isCount ? '' : 'none';
         input.placeholder = isCount
             ? 'Có thể để trống để hệ thống tự điền theo phiếu rà soát kho'
             : 'VD: Hết hạn sử dụng, dùng nội bộ, hàng mẫu…';
@@ -948,40 +931,6 @@
             notify('Có ' + blocked + ' lô đã hết hạn trong danh sách — loại phiếu này không dùng được hàng hết hạn. '
                 + 'Hãy bỏ các dòng đó hoặc chuyển sang phiếu Hủy hàng.');
         }
-        applyExpiryHint();
-    }
-
-    /** Câu nhắc đổi theo loại phiếu: hủy hàng thì đối chiếu lô, còn dùng/tặng thì cấm hàng hết hạn. */
-    function applyExpiryHint() {
-        const box = document.getElementById('expiryHint');
-        if (!box) return;
-        const type = document.getElementById('adjustmentTypeSelect').value;
-        if (type === 'DESTROY_EMPLOYEE_FAULT') {
-            // Loại này khác DESTROY ở chỗ xử lý thuế: giá trị hàng hủy KHÔNG được tính chi phí hợp lý,
-            // và nhân viên có thể phải đền bù (theo giá bán) qua một phiếu thu riêng.
-            box.className = 'alert alert-danger';
-            box.innerHTML = '<i class="ti ti-user-exclamation me-1"></i>'
-                + '<strong>Hủy hàng do lỗi nhân viên.</strong> Giá trị hàng hủy <strong>không</strong> được tính vào '
-                + 'chi phí hợp lý và phải cộng vào doanh thu chịu thuế. Cần <strong>Biên bản xác định lỗi nhân viên</strong> '
-                + 'kèm Biên bản tiêu hủy. Nếu nhân viên đền bù thì lập <strong>phiếu thu</strong> theo '
-                + '<strong>giá bán</strong> hàng mất — không phải giá vốn.';
-        } else if (type === 'DESTROY') {
-            box.className = 'alert alert-warning';
-            box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
-                + 'Đối chiếu <strong>số lô và hạn dùng in trên vỏ hộp</strong> với lô đã chọn trước khi tiêu hủy — '
-                + 'thao tác này không hoàn tác được bằng cách nào khác ngoài hủy phiếu. '
-                + 'Hủy do nguyên nhân khách quan cần Biên bản kiểm kê, QĐ Hội đồng tiêu hủy, Biên bản tiêu hủy '
-                + 'và báo cơ quan thuế trong 10 ngày.';
-        } else if (blocksExpiredGoods()) {
-            box.className = 'alert alert-danger';
-            box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
-                + '<strong>Không được dùng nội bộ / làm mẫu / biếu tặng hàng đã hết hạn.</strong> '
-                + 'Lô quá hạn chỉ được lập phiếu Hủy hàng. Lô cận hạn (dưới 90 ngày) vẫn dùng được nhưng nên cân nhắc.';
-        } else {
-            box.className = 'alert alert-warning';
-            box.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>'
-                + 'Đối chiếu số lô và hạn dùng với lô đã chọn trước khi tạo phiếu.';
-        }
     }
 
     // ------------------------------------------------ stock-review picker modal
@@ -996,19 +945,12 @@
     function openReviewModal() {
         modalReviewTypes = ['COUNT', 'DATE'];
         document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu rà soát kho đã duyệt';
-        document.getElementById('reviewModalHint').innerHTML =
-            'Danh sách chỉ gồm phiếu <strong>đã duyệt</strong> và <strong>còn dòng cần xử lý</strong>. '
-            + 'Chọn phiếu <strong>kiểm đếm số lượng</strong> để điều chỉnh tồn kho, hoặc phiếu '
-            + '<strong>kiểm tra hạn dùng</strong> để sửa hạn dùng ghi sai.';
         showReviewModal();
     }
 
     function openConditionModal() {
         modalReviewTypes = ['CONDITION'];
         document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu rà soát tình trạng';
-        document.getElementById('reviewModalHint').innerHTML =
-            'Chỉ hiện phiếu <strong>rà soát tình trạng</strong> đã duyệt. Đây là căn cứ khi hủy hàng vì '
-            + '<strong>hỏng hóc</strong>; hủy vì hết hạn thì không cần gắn phiếu nào.';
         showReviewModal();
     }
 
@@ -1047,6 +989,7 @@
         // không gọi loadReviewLines (endpoint đó chỉ nhận phiếu loại COUNT).
         if (button.getAttribute('data-review-type') === 'CONDITION') {
             document.getElementById('chosenConditionDisplay').value = reviewCode;
+            syncConditionClearButton();
         } else {
             document.getElementById('chosenCountDisplay').value = reviewCode;
             loadReviewLines();
@@ -1100,12 +1043,6 @@
         document.getElementById('reviewPreviewHeadDate').style.display = dateMode ? '' : 'none';
         document.getElementById('reviewPreviewTitle').textContent = dateMode
             ? 'Lô cần sửa hạn dùng' : 'Dòng điều chỉnh từ phiếu rà soát kho';
-        document.getElementById('reviewPreviewHint').innerHTML = dateMode
-            ? 'Phiếu này <strong>không làm đổi tồn kho</strong> — chỉ ghi đè hạn dùng của lô bằng hạn '
-              + 'thực tế đọc được lúc kiểm. Hạn cũ vẫn được lưu lại để đảo ngược nếu phải hủy phiếu.'
-            : 'Cột <strong>Nguồn gốc hàng thừa</strong> là lựa chọn của người lập: tick khi '
-              + '<strong>không xác định được</strong> hàng thừa từ đâu ra, hệ thống sẽ lập một '
-              + '<strong>lô mới</strong> (không gắn hóa đơn mua, giá vốn ước tính) thay vì cộng vào lô đang đếm.';
 
         if (!reviewLines.length) {
             body.innerHTML = '<tr id="reviewEmptyRow"><td colspan="10" class="text-center text-secondary py-4">'
@@ -1258,6 +1195,7 @@
             // hàng) — điền vào đúng ô, không thì người dùng nạp lại nháp và tưởng mất lựa chọn.
             if (btn && btn.getAttribute('data-review-type') === 'CONDITION') {
                 document.getElementById('chosenConditionDisplay').value = code;
+                syncConditionClearButton();
             } else {
                 document.getElementById('chosenCountDisplay').value = code;
             }
