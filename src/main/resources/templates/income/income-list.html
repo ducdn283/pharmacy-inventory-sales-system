@@ -65,11 +65,6 @@
       background: var(--sup-green-bg);
       color: var(--sup-green);
     }
-    .kpi-card.kpi-pending .kpi-icon {
-      background: #fef3c7;
-      color: #d97706;
-    }
-    .kpi-card.kpi-pending .kpi-sub { color: #d97706; }
     .kpi-card.kpi-approved .kpi-icon {
       background: #dbeafe;
       color: #2563eb;
@@ -204,6 +199,7 @@
     .status-badge.status-completed { background: #e8f7f1; color: #059669; }
     .status-badge.status-pending { background: #fef3c7; color: #d97706; }
     .status-badge.status-rejected { background: #fee2e2; color: #dc2626; }
+    .status-badge.status-cancelled { background: #fee2e2; color: #dc2626; }
     .status-badge.status-draft { background: #f3f4f6; color: #4b5563; }
     .status-badge.status-default { background: #f3f4f6; color: #6b7280; }
 
@@ -240,7 +236,7 @@
     </div>
 
     <div class="row g-3 mb-4">
-      <div class="col-12 col-md-6 col-xl-3">
+      <div class="col-12 col-md-6 col-xl-4">
         <div class="kpi-card">
           <span class="kpi-icon"><i class="ti ti-cash-banknote"></i></span>
           <div class="kpi-label">Tổng phiếu thu</div>
@@ -248,7 +244,7 @@
           <div class="kpi-sub">Tất cả khoản thu</div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
+      <div class="col-12 col-md-6 col-xl-4">
         <div class="kpi-card">
           <span class="kpi-icon"><i class="ti ti-calendar-stats"></i></span>
           <div class="kpi-label">Phiếu thu hôm nay</div>
@@ -259,18 +255,7 @@
           </div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <div class="kpi-card kpi-pending">
-          <span class="kpi-icon"><i class="ti ti-clock"></i></span>
-          <div class="kpi-label">Chờ duyệt</div>
-          <div class="kpi-number" th:text="${pendingIncomes}">0</div>
-          <div class="kpi-sub"
-               th:text="'Tổng: ' + ${#numbers.formatDecimal(pendingAmount, 0, 'POINT', 0, 'COMMA')} + 'đ'">
-            Tổng: 0đ
-          </div>
-        </div>
-      </div>
-      <div class="col-12 col-md-6 col-xl-3">
+      <div class="col-12 col-md-6 col-xl-4">
         <div class="kpi-card kpi-approved">
           <span class="kpi-icon"><i class="ti ti-circle-check"></i></span>
           <div class="kpi-label">Hoàn thành</div>
@@ -299,7 +284,7 @@
                  class="filter-input"
                  name="search"
                  th:value="${search}"
-                 placeholder="Tìm theo mã phiếu hoặc nội dung thu">
+                 placeholder="Tìm theo mã phiếu">
           <input type="date"
                  class="filter-input filter-date"
                  name="fromDate"

@@ -139,6 +139,7 @@
 <body>
 <div th:replace="~{fragments/topbar :: topbar}"></div>
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
+<div th:replace="~{fragments/confirm :: confirm}"></div>
 
 <main id="content" class="content expense-page-content">
     <div class="container-fluid">
@@ -215,12 +216,23 @@
                                 <div class="form-text"
                                      th:if="${customerReturns != null and customerReturns.isEmpty()}">
                                     <i class="ti ti-alert-circle me-1"></i>
-                                    Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                    <span th:if="${pharmacistRefundLimit != null}">
+                                        Không có phiếu trả hàng nào dược sĩ được phép hoàn tiền
+                                        (giá trị phải dưới
+                                        <span th:text="${#numbers.formatDecimal(pharmacistRefundLimit, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>).
+                                    </span>
+                                    <span th:unless="${pharmacistRefundLimit != null}">
+                                        Hiện không có phiếu trả hàng nào của khách đang chờ hoàn tiền.
+                                    </span>
                                 </div>
                                 <div class="form-text" th:unless="${customerReturns != null and customerReturns.isEmpty()}">
                                     <i class="ti ti-info-circle me-1"></i>
                                     Chỉ liệt kê phiếu trả hàng đã duyệt, còn phát sinh tiền hoàn và chưa có phiếu chi.
                                     Số tiền được lấy từ phiếu trả, không sửa được.
+                                    <span th:if="${pharmacistRefundLimit != null}">
+                                        Dược sĩ chỉ được tạo phiếu dưới
+                                        <span th:text="${#numbers.formatDecimal(pharmacistRefundLimit, 0, 'POINT', 0, 'COMMA') + 'đ'}">500.000đ</span>.
+                                    </span>
                                 </div>
                             </div>
 
@@ -231,7 +243,7 @@
                             <div class="col-12" id="purchaseLinkFields" style="display: none;">
                                 <label class="form-label">Thanh toán cho phiếu nhập</label>
                                 <select class="form-select" th:field="*{purchaseId}" id="purchaseIdInput">
-                                    <option value="">-- Không gắn phiếu nhập cụ thể --</option>
+                                    <option value="">-- Chọn phiếu nhập cần thanh toán --</option>
                                     <option th:each="item : ${purchaseInvoices}"
                                             th:value="${item.id}"
                                             th:text="${item.code + ' · ' + item.dateDisplay + ' · còn '
@@ -265,7 +277,11 @@
                                 <div class="form-text" id="amountLockedHint" style="display: none;">
                                     <i class="ti ti-info-circle me-1"></i>
                                     <span id="amountLockedText"></span>
-                                    Đã điền sẵn phần còn thiếu — sửa nhỏ lại nếu lần này chỉ trả một phần.
+                                    <span id="amountLockedSuffix"></span>
+                                </div>
+                                <div class="split-payment-error" id="fundError" role="alert">
+                                    <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                                    <span id="fundErrorText"></span>
                                 </div>
                             </div>
 
@@ -295,9 +311,11 @@
 
                         <hr>
 
-                        <!-- Tiền mặt chỉ dành cho Chủ nhà thuốc: kế toán chi qua chuyển khoản, không
-                             giữ quỹ nên cũng không có báo cáo ca để đối soát. Với kế toán nhóm này chỉ
-                             còn đúng một lựa chọn — vẫn hiện để họ thấy vì sao, thay vì biến mất. -->
+                        <!-- Tiền mặt: Chủ nhà thuốc + Dược sĩ (đều có ca, đều mở quỹ tiền mặt).
+                             Chuyển khoản: Chủ nhà thuốc + Kế toán (Kế toán không giữ quỹ tiền mặt;
+                             Dược sĩ ca chỉ mở bằng tiền mặt, không có gì để đối soát chuyển khoản).
+                             Vai trò chỉ còn đúng một lựa chọn vẫn thấy hình thức đó, kèm dòng giải
+                             thích vì sao — không biến mất không lý do. -->
                         <div class="mb-3">
                             <label class="form-label d-block mb-2">Hình thức thanh toán</label>
                             <div class="d-flex flex-wrap gap-3">
@@ -306,19 +324,23 @@
                                            id="payCash" value="cash" checked>
                                     <label class="form-check-label" for="payCash">Tiền mặt</label>
                                 </div>
-                                <div class="form-check">
+                                <div class="form-check" th:if="${canPayBanking}">
                                     <input class="form-check-input" type="radio" name="payMethod"
                                            id="payBanking" value="banking" th:checked="${!canPayCash}">
                                     <label class="form-check-label" for="payBanking">Chuyển khoản</label>
                                 </div>
-                                <div class="form-check" th:if="${canPayCash}">
+                                <div class="form-check" th:if="${canPayCash and canPayBanking}">
                                     <input class="form-check-input" type="radio" name="payMethod"
                                            id="payBoth" value="both">
                                     <label class="form-check-label" for="payBoth">Tiền mặt + Chuyển khoản</label>
                                 </div>
                             </div>
                             <div class="form-text" th:unless="${canPayCash}">
-                                Kế toán chỉ chi qua chuyển khoản; phần tiền mặt phải do chủ nhà thuốc chi.
+                                Kế toán chỉ chi qua chuyển khoản; phần tiền mặt phải do chủ nhà thuốc hoặc dược sĩ chi.
+                            </div>
+                            <div class="form-text" th:unless="${canPayBanking}">
+                                Dược sĩ chỉ chi bằng tiền mặt (ca chỉ mở với quỹ tiền mặt); phần chuyển khoản
+                                phải do chủ nhà thuốc hoặc kế toán chi.
                             </div>
                         </div>
 
@@ -339,7 +361,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-3" id="bankingBox">
+                        <div class="mb-3" id="bankingBox" th:if="${canPayBanking}">
                             <label class="form-label" id="bankingLabel">Chuyển khoản</label>
                             <div class="money-input-wrap">
                                 <input type="text" inputmode="numeric" data-money class="form-control"
@@ -390,8 +412,11 @@
                     </div>
 
                     <div class="expense-card p-4">
-                        <!-- Owner: submit auto-approves the slip. -->
-                        <button th:if="${#strings.startsWith(basePath, '/owner')}"
+                        <!-- Owner: submit always auto-approves. Dược sĩ: chỉ được tạo phiếu hoàn tiền
+                             trả hàng dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT (500.000đ, cùng
+                             ngưỡng PHARMACIST_REFUND_LIMIT), nên phiếu của họ cũng luôn tự động duyệt
+                             (BA 2026-08-13) — không còn qua Chờ duyệt như trước. -->
+                        <button th:if="${#strings.startsWith(basePath, '/owner') or #strings.startsWith(basePath, '/pharmacist')}"
                                 type="submit" name="action" value="submit"
                                 class="btn btn-expense-primary w-100 mb-3"
                                 data-confirm="Tạo và duyệt phiếu chi này?">
@@ -400,7 +425,7 @@
                         </button>
 
                         <!-- Accountant: submit sends the slip to the Owner for approval. -->
-                        <button th:unless="${#strings.startsWith(basePath, '/owner')}"
+                        <button th:unless="${#strings.startsWith(basePath, '/owner') or #strings.startsWith(basePath, '/pharmacist')}"
                                 type="submit" name="action" value="submit"
                                 class="btn btn-expense-primary w-100 mb-3"
                                 data-confirm="Gửi phiếu chi này cho chủ nhà thuốc duyệt?">
@@ -428,6 +453,11 @@
     // Từ ExpenseType.PURCHASE_LINKABLE — không hardcode ở đây để JS không lệch khỏi Java.
     const PURCHASE_LINKABLE_TYPES = /*[[${purchaseLinkableTypes}]]*/ [];
     const TYPE_RETURN_REFUND = 'RETURN_REFUND_PAYOUT';
+    // Số dư quỹ hiện tại — chỉ để cảnh báo trước khi tạo phiếu nếu quỹ - số tiền chi sẽ âm, xem
+    // fundShortageWarning() bên dưới. Tiền chỉ thực sự rời quỹ ở bước "Xác nhận đã thanh toán"
+    // (ExpenseService.confirmPayment), nên đây là cảnh báo sớm, không phải chặn cứng.
+    const CASH_SAFE_BALANCE = /*[[${cashSafeBalance}]]*/ null;
+    const BANK_ACCOUNT_BALANCE = /*[[${bankAccountBalance}]]*/ null;
 
     // Script nằm sau form nên các phần tử đã tồn tại; cashInput là null với kế toán (không được chi tiền mặt).
     const cashInput = document.getElementById('cashInput');
@@ -480,8 +510,11 @@
             cashBox.style.display = showCash ? '' : 'none';
             document.getElementById('cashLabel').textContent = split ? 'Tiền mặt' : 'Số tiền đã chi';
         }
-        document.getElementById('bankingBox').style.display = showBanking ? '' : 'none';
-        document.getElementById('bankingLabel').textContent = split ? 'Chuyển khoản' : 'Số tiền đã chi';
+        const bankingBox = document.getElementById('bankingBox');
+        if (bankingBox) {
+            bankingBox.style.display = showBanking ? '' : 'none';
+            document.getElementById('bankingLabel').textContent = split ? 'Chuyển khoản' : 'Số tiền đã chi';
+        }
 
         if (!showCash) {
             setMoney(cashInput, 0);
@@ -552,6 +585,7 @@
         document.getElementById('paidDisplay').textContent = money(paid);
 
         showPaymentError(paymentErrorFor(total, paid, split));
+        applyFundCheck();
     }
 
     function paymentErrorFor(total, paid, split) {
@@ -573,6 +607,58 @@
         const box = document.getElementById('paymentError');
         document.getElementById('paymentErrorText').textContent = message;
         box.classList.toggle('is-visible', !!message);
+    }
+
+    /**
+     * Quỹ hiện tại trừ đi số tiền phiếu này định chi, cho từng hình thức đang thực sự dùng — âm thì
+     * trả về câu cảnh báo, không âm hoặc chưa thiết lập quỹ (null) thì trả về chuỗi rỗng. Quỹ trong
+     * hệ thống dùng để theo dõi dòng tiền thực tế — để nó âm là một trạng thái sai, nên đây là chặn
+     * thật (khoá nút Tạo &amp; duyệt/Gửi duyệt), không phải chỉ nhắc nhở.
+     */
+    function fundShortageWarning() {
+        const cash = pmMoneyValue(cashInput);
+        const banking = pmMoneyValue(bankingInput);
+        const warnings = [];
+
+        if (cash > 0 && CASH_SAFE_BALANCE != null) {
+            const remaining = CASH_SAFE_BALANCE - cash;
+            if (remaining < 0) {
+                warnings.push('Quỹ tiền mặt hiện có ' + money(CASH_SAFE_BALANCE) + ', không đủ để chi '
+                    + money(cash) + ' (thiếu ' + money(-remaining) + ').');
+            }
+        }
+
+        if (banking > 0 && BANK_ACCOUNT_BALANCE != null) {
+            const remaining = BANK_ACCOUNT_BALANCE - banking;
+            if (remaining < 0) {
+                warnings.push('Quỹ ngân hàng hiện có ' + money(BANK_ACCOUNT_BALANCE) + ', không đủ để chi '
+                    + money(banking) + ' (thiếu ' + money(-remaining) + ').');
+            }
+        }
+
+        return warnings.join(' ');
+    }
+
+    function showFundError(message) {
+        const box = document.getElementById('fundError');
+        document.getElementById('fundErrorText').textContent = message;
+        box.classList.toggle('is-visible', !!message);
+    }
+
+    /**
+     * "Lưu nháp" không bị khoá — chưa phải quyết định chi, sửa lại sau vẫn được. Chỉ "Tạo &amp;
+     * duyệt"/"Gửi duyệt" (nút submit action=submit) bị khoá khi quỹ không đủ.
+     */
+    function setCreateButtonsDisabled(disabled) {
+        document.querySelectorAll('#expenseForm button[name="action"][value="submit"]').forEach(function (btn) {
+            btn.disabled = disabled;
+        });
+    }
+
+    function applyFundCheck() {
+        const warning = fundShortageWarning();
+        showFundError(warning);
+        setCreateButtonsDisabled(!!warning);
     }
 
     function currentType() {
@@ -598,8 +684,10 @@
 
     function syncRefundAmount() {
         const returnId = document.getElementById('returnIdInput').value;
-        // Khoá ô tiền ngay khi chọn loại hoàn tiền — server cũng ghi đè, đây chỉ là phản ánh cho người dùng thấy.
+        // Ô tiền đã khoá (readonly) từ applyAmountLock — đây chỉ điền lại giá trị đúng của phiếu trả
+        // vừa chọn. Server cũng luôn lấy nguyên số này, không tin số client gửi lên.
         setAmount(returnId ? RETURN_REFUND_AMOUNTS[returnId] : '');
+        applyAmountLock();
     }
 
     /**
@@ -614,9 +702,12 @@
     }
 
     /**
-     * Chọn chứng từ thì ô tiền được điền sẵn phần còn thiếu, nhưng KHÔNG khoá — trả một phần là
-     * chuyện bình thường và đó chính là lý do có nhiều phiếu chi cho cùng một phiếu nhập. Chỉ hiện
-     * mức trần để người lập biết gõ tối đa bao nhiêu; server cũng chặn đúng con số này.
+     * Hoàn tiền trả hàng: ô tiền KHOÁ hẳn, luôn bằng đúng phần còn phải hoàn của phiếu trả — server
+     * cũng bỏ qua số gõ vào, không có chuyện hoàn một phần (xem
+     * {@code ExpenseService.resolveAmount}). Phiếu nhập thì vẫn chỉ điền sẵn phần còn thiếu, KHÔNG
+     * khoá — trả một phần là chuyện bình thường và đó chính là lý do có nhiều phiếu chi cho cùng một
+     * phiếu nhập. Chỉ hiện mức trần để người lập biết gõ tối đa bao nhiêu; server cũng chặn đúng con
+     * số này.
      */
     function applyAmountLock() {
         const refundPayout = isRefundPayout();
@@ -626,24 +717,39 @@
             ? (returnId ? RETURN_REFUND_AMOUNTS[returnId] : null)
             : (purchaseId ? PURCHASE_PAYABLE_AMOUNTS[purchaseId] : null);
 
+        const amountInput = document.getElementById('amountInput');
+        amountInput.readOnly = refundPayout;
+
         document.getElementById('amountLockedHint').style.display = max == null ? 'none' : '';
         document.getElementById('amountLockedText').textContent = refundPayout
-            ? 'Phiếu trả hàng này còn phải hoàn tối đa ' + money(max) + '.'
+            ? 'Phiếu trả hàng này còn phải hoàn ' + money(max) + '.'
             : 'Phiếu nhập này còn phải trả tối đa ' + money(max) + '.';
+        document.getElementById('amountLockedSuffix').textContent = refundPayout
+            ? 'Lấy nguyên từ phiếu trả hàng, không sửa được.'
+            : 'Đã điền sẵn phần còn thiếu — sửa nhỏ lại nếu lần này chỉ trả một phần.';
     }
 
     function toggleReferenceFields() {
         const refundPayout = isRefundPayout();
         const purchaseLink = supportsPurchaseLink();
+
+        const returnInput = document.getElementById('returnIdInput');
+        const purchaseInput = document.getElementById('purchaseIdInput');
+
         document.getElementById('returnRefundFields').style.display = refundPayout ? '' : 'none';
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
 
+        returnInput.required = refundPayout;
+        // Not required, unlike the refund picker above: paying a supplier without pointing at
+        // one specific invoice is legitimate (see the comment on #purchaseLinkFields).
+        purchaseInput.required = false;
+
         // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
         if (!refundPayout) {
-            document.getElementById('returnIdInput').value = '';
+            returnInput.value = '';
         }
         if (!purchaseLink) {
-            document.getElementById('purchaseIdInput').value = '';
+            purchaseInput.value = '';
         }
 
         if (refundPayout) {
@@ -657,7 +763,9 @@
         document.querySelectorAll('input[name="payMethod"]').forEach(function (radio) {
             radio.addEventListener('change', applyPayMethod);
         });
-        document.getElementById('amountInput').addEventListener('input', syncPayment);
+        document.getElementById('amountInput').addEventListener('input', function () {
+            syncPayment();
+        });
         // Gõ (hoặc bấm mũi tên) vào ô chia tiền là người dùng tự quyết -> JS thôi gợi ý. Phân biệt với
         // lần setMoney() của chính syncPayment nhờ cờ `syncing`: lúc đó handler này cũng chạy, nhưng
         // là do code phát ra chứ không phải người gõ.
@@ -705,6 +813,11 @@
                 reject('Vui lòng chọn phiếu trả hàng của khách cần hoàn tiền.');
                 return;
             }
+
+            if (supportsPurchaseLink() && !document.getElementById('purchaseIdInput').value) {
+                reject('Vui lòng chọn phiếu nhập cần thanh toán.');
+                return;
+            }
             // pmMoneyValue ignores the thousand separators — Number("500.000") would read 500.
             const amount = pmMoneyValue(document.getElementById('amountInput'));
             if (amount <= 0) {
@@ -727,6 +840,19 @@
                 if (payable != null && amount > payable) {
                     reject('Số tiền chi vượt quá số còn phải trả cho phiếu nhập này ('
                         + payable.toLocaleString('vi-VN') + 'đ).');
+                    return;
+                }
+            }
+
+            // "Lưu nháp" chưa phải quyết định chi, không bị chặn ở đây — chỉ Tạo & duyệt/Gửi duyệt
+            // mới cần quỹ đủ. Nút đã bị khoá (disabled) bởi applyFundCheck() khi quỹ không đủ, đây là
+            // lớp chặn thứ hai phòng khi form vẫn submit được bằng cách khác (VD nhấn Enter).
+            const submitAction = event.submitter ? event.submitter.value : 'submit';
+            if (submitAction !== 'draft') {
+                const warning = fundShortageWarning();
+                if (warning) {
+                    reject(warning);
+                    return;
                 }
             }
         });

@@ -144,12 +144,6 @@
                         </div>
 
                         <div class="p-4">
-                            <div class="form-text mb-3">
-                                Phiếu trả tính tiền hoàn và cấn trừ vào công nợ đang nợ nhà cung cấp, KHÔNG thu
-                                tiền mặt. Việc nhận lại phần tiền còn lại từ nhà cung cấp thực hiện ở phiếu thu
-                                bên Kế toán.
-                            </div>
-
                             <div class="mb-3">
                                 <label class="form-label">Lý do trả hàng <span class="text-danger">*</span></label>
                                 <textarea class="form-control" name="reason" rows="2" required
@@ -165,16 +159,12 @@
                             <div class="mb-3">
                                 <label class="form-label">Tỷ lệ NCC chấp nhận hoàn <span class="text-danger">*</span></label>
                                 <div class="input-group input-group-sm">
+                                    <!-- Số nguyên phần trăm — xem ghi chú cùng ô ở return/create.html. -->
                                     <input type="number" class="form-control" id="refundRate" name="refundRate"
-                                           min="0.01" max="100" step="0.01"
+                                           min="1" max="100" step="1" inputmode="numeric"
+                                           data-invalid-message="Tỷ lệ NCC hoàn phải là số nguyên từ 1 đến 100"
                                            th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
                                     <span class="input-group-text">%</span>
-                                </div>
-                                <div class="form-text">
-                                    Mặc định theo thiết lập tài chính
-                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 2, 'COMMA')}">80</span>%).
-                                    Phần NCC không hoàn là khoản lỗ — chỉ được tính vào chi phí hợp lý nếu có
-                                    biên bản trả hàng / xác nhận mức hoàn của NCC (đính kèm ở ghi chú).
                                 </div>
                             </div>
 
@@ -211,21 +201,9 @@
                                     <strong id="summaryPayout">0đ</strong>
                                 </div>
                             </div>
-                            <!-- Giá nhập là giá GỘP → tách net/thuế từ trong tiền hoàn. Thuế đầu vào chỉ có
-                                 với Nhóm 3/4; Nhóm 2 chưa từng khấu trừ nên không có gì để đảo. -->
-                            <th:block th:if="${deductionGroup}">
-                                <div class="summary-line">
-                                    <span class="text-secondary">Giá trị chưa thuế</span>
-                                    <span id="summaryPreTax">0đ</span>
-                                </div>
-                                <div class="summary-line">
-                                    <span class="text-secondary">Thuế GTGT đầu vào giảm trừ</span>
-                                    <strong id="summaryVat">0đ</strong>
-                                </div>
-                            </th:block>
-                            <div class="form-text mb-3" th:unless="${deductionGroup}">
-                                Hộ kinh doanh đang ở Nhóm 2 — chưa khấu trừ thuế GTGT đầu vào nên phiếu trả
-                                NCC không phát sinh điều chỉnh thuế.
+                            <div class="form-text mb-3">
+                                Hộ kinh doanh không khấu trừ thuế GTGT đầu vào ở bất kỳ nhóm doanh thu nào, nên
+                                phiếu trả NCC không phát sinh điều chỉnh thuế.
                             </div>
 
                             <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
@@ -317,9 +295,6 @@
         const lineBody = document.getElementById('lineBody');
         const summaryItems = document.getElementById('summaryItems');
         const summaryRefund = document.getElementById('summaryRefund');
-        // Chỉ tồn tại khi Nhóm 3/4 (xem th:if deductionGroup) — recalc phải null-safe.
-        const summaryPreTax = document.getElementById('summaryPreTax');
-        const summaryVat = document.getElementById('summaryVat');
         const summaryOriginal = document.getElementById('summaryOriginal');
         const summaryLoss = document.getElementById('summaryLoss');
         const lossRow = document.getElementById('lossRow');
@@ -423,7 +398,6 @@
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
                                 '" value="' + qty + '" data-price="' + line.refundUnitPrice +
-                                '" data-vat-rate="' + (line.vatRate == null ? 0 : line.vatRate) +
                                 '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
@@ -475,7 +449,6 @@
             const rate = currentRate();
             let totalOriginal = 0;
             let totalRefund = 0;
-            let totalVat = 0;
             let itemCount = 0;
             lineBody.querySelectorAll('.qty-input').forEach(inp => {
                 let qty = parseInt(inp.value, 10) || 0;
@@ -492,11 +465,6 @@
                 if (qty > 0) itemCount++;
                 totalOriginal += originalValue;
                 totalRefund += lineRefund;
-                // Giá nhập đã gồm thuế → thuế đầu vào nằm TRONG số NCC thực hoàn, không cộng thêm.
-                const vatRate = parseFloat(inp.getAttribute('data-vat-rate')) || 0;
-                if (vatRate > 0) {
-                    totalVat += lineRefund - (lineRefund / (1 + vatRate / 100));
-                }
             });
             summaryItems.textContent = itemCount;
             summaryOriginal.textContent = formatMoney(totalOriginal);
@@ -512,11 +480,6 @@
                 summaryOffset.textContent = formatMoney(offset);
                 summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offset);
             }
-
-            // Làm tròn thuế trước rồi lấy net = tổng − thuế để 2 dòng luôn cộng đúng bằng tổng.
-            const vatRounded = Math.round(totalVat);
-            if (summaryPreTax) summaryPreTax.textContent = formatMoney(Math.round(totalRefund) - vatRounded);
-            if (summaryVat) summaryVat.textContent = formatMoney(vatRounded);
         }
 
         if (refundRateInput) {
@@ -547,5 +510,6 @@
 <!-- "Lý do trả hàng" bắt buộc (ReturnPurchaseService cũng chặn) — báo ngay dưới ô thay vì để người
      dùng bấm Tạo, chờ nạp lại cả trang mới thấy thông báo ở đầu trang. -->
 <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

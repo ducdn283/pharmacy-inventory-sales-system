@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 @Controller
 public class FinancialSettingPageController {
     private static final String VIEW = "owner/financial-setting";
@@ -23,15 +27,19 @@ public class FinancialSettingPageController {
         this.financialsettingService = financialsettingService;
     }
 
-    @GetMapping({"/owner/financial-setting", "/accountant/financial-setting"})
+    @GetMapping({"/owner/financial-setting", "/accountant/financial-setting", "/pharmacist/financial-setting"})
     public String view(HttpServletRequest request, Model model) {
         boolean editable = request.getRequestURI().startsWith("/owner/");
 
+        FinancialsettingResponse settings = financialsettingService.getSettings();
         if (!model.containsAttribute("financialSettingForm")) {
-            model.addAttribute("financialSettingForm", toForm(financialsettingService.getSettings()));
+            model.addAttribute("financialSettingForm", toForm(settings));
         }
         model.addAttribute("editable", editable);
-        model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+        model.addAttribute("setupConfirmed", financialsettingService.isSetupConfirmed());
+        model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
+        model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
+        model.addAttribute("balanceUpdatedAtDisplay", formatBalanceUpdatedAt(settings.getBalanceUpdatedAt()));
         model.addAttribute("pageTitle", "Thiết lập tài chính");
         return VIEW;
     }
@@ -43,12 +51,21 @@ public class FinancialSettingPageController {
                         RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             model.addAttribute("editable", true);
-            model.addAttribute("revenueGroupLocked", financialsettingService.isRevenueGroupLocked());
+            model.addAttribute("setupConfirmed", financialsettingService.isSetupConfirmed());
+            model.addAttribute("cashSafeBalanceLocked", financialsettingService.isCashSafeBalanceLocked());
+            model.addAttribute("bankAccountBalanceLocked", financialsettingService.isBankAccountBalanceLocked());
+            model.addAttribute("balanceUpdatedAtDisplay",
+                    formatBalanceUpdatedAt(financialsettingService.getSettings().getBalanceUpdatedAt()));
             model.addAttribute("pageTitle", "Thiết lập tài chính");
             return VIEW;
         }
 
-        financialsettingService.saveSettings(form);
+        try {
+            financialsettingService.saveSettings(form);
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:/owner/financial-setting";
+        }
         redirectAttributes.addFlashAttribute("successMessage", "Cập nhật thiết lập tài chính thành công");
         return "redirect:/owner/financial-setting";
     }
@@ -57,21 +74,32 @@ public class FinancialSettingPageController {
         FinancialSettingUpdateRequest form = new FinancialSettingUpdateRequest();
         form.setTaxCalculationMethod(response.getTaxCalculationMethod());
         form.setRevenueGroup(response.getRevenueGroup());
-        form.setAnnualRevenueThreshold1(response.getAnnualRevenueThreshold1());
-        form.setAnnualRevenueThreshold2(response.getAnnualRevenueThreshold2());
-        form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate());
+        // Dữ liệu cũ dùng DECIMAL(5,2); đưa về số nguyên khi mở form để không hiện "50.00".
+        form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate() == null
+                ? null
+                : response.getReturnProductOnInvoiceValueRate().setScale(0, RoundingMode.HALF_UP));
         form.setAutoGenerateVATInvoice(response.getAutoGenerateVATInvoice());
         form.setVatInvoiceSeries(response.getVatInvoiceSeries());
         form.setOpeningCashDefault(response.getOpeningCashDefault());
         form.setTaxCode(response.getTaxCode());
         form.setLocationCode(response.getLocationCode());
         form.setLocationName(response.getLocationName());
+        form.setAddress(response.getAddress());
         form.setPhoneNumber(response.getPhoneNumber());
         form.setEmail(response.getEmail());
         form.setBankAccountNumber(response.getBankAccountNumber());
         form.setBankName(response.getBankName());
         form.setAutoOffsetDebtOnRefund(response.getAutoOffsetDebtOnRefund());
         form.setReturnPolicyMaxDays(response.getReturnPolicyMaxDays());
+        form.setCashSafeBalance(response.getCashSafeBalance());
+        form.setBankAccountBalance(response.getBankAccountBalance());
         return form;
+    }
+
+    private String formatBalanceUpdatedAt(LocalDateTime balanceUpdatedAt) {
+        if (balanceUpdatedAt == null) {
+            return "Chưa cập nhật";
+        }
+        return balanceUpdatedAt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 }

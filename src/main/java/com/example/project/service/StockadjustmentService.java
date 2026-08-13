@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.StockAdjustmentStatus;
+import com.example.project.constant.StockReviewType;
 import com.example.project.dto.request.StockAdjustmentCreateRequest;
 import com.example.project.dto.request.StockAdjustmentItemRequest;
 import com.example.project.dto.response.*;
@@ -25,51 +26,95 @@ import java.util.stream.Collectors;
  * Single service for the Stock Adjustment feature (formerly "stock out"): listing/searching,
  * detail, creation, and the approve/reject workflow that actually moves stock.
  *
- * <p>Adjustment types (7, theo {@code Dac_ta_Income_StockAdjustment.xlsx} sheet 02):
- * {@code DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT} (outbound) plus
- * {@code COUNT_INCREASE / COUNT_DECREASE} which originate from a Stock Count.
- * There is no {@code INTERNAL_TRANSFER} — the system is single-store.</p>
+ * <p><b>7 loại phiếu:</b>
+ * {@code DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT} (thủ công, giảm kho),
+ * {@code COUNT} (từ phiếu rà soát kho {@code StockReview.type = COUNT}, chứa CẢ dòng tăng lẫn giảm) và
+ * {@code DATE_ADJUSTMENT} (từ {@code StockReview.type = DATE}, sửa hạn dùng, KHÔNG đụng tồn kho).
+ * Không có {@code INTERNAL_TRANSFER} — hệ thống một cửa hàng.</p>
  */
 @Service
 public class StockadjustmentService {
 
     private static final String DIRECTION_IN = "IN";
     private static final String DIRECTION_OUT = "OUT";
+    /**
+     * Dòng KHÔNG làm đổi tồn kho — chỉ dùng cho {@link #TYPE_DATE_ADJUSTMENT}. Cột {@code direction}
+     * là {@code NOT NULL} nên phải có một giá trị; ghi {@code NONE} để không ai đọc nhầm thành tăng/giảm.
+     */
+    private static final String DIRECTION_NONE = "NONE";
 
-    private static final String TYPE_COUNT_INCREASE = "COUNT_INCREASE";
-    private static final String TYPE_COUNT_DECREASE = "COUNT_DECREASE";
+    /**
+     * Điều chỉnh theo rà soát kho — GỘP tăng và giảm vào MỘT loại: một phiếu chứa cả dòng {@code IN} lẫn
+     * {@code OUT}, chiều nằm ở từng dòng chi tiết. Một lần đếm kho là MỘT sự kiện; tách đôi làm mất liên
+     * hệ giữa phần thừa và phần thiếu của cùng lần đếm đó.
+     */
+    private static final String TYPE_COUNT = "COUNT";
+    /** Sửa hạn dùng ghi sai lúc nhập — từ phiếu rà soát kho loại {@code DATE}. KHÔNG làm đổi tồn kho. */
+    private static final String TYPE_DATE_ADJUSTMENT = "DATE_ADJUSTMENT";
     private static final String TYPE_DESTROY = "DESTROY";
     private static final String TYPE_DESTROY_EMPLOYEE_FAULT = "DESTROY_EMPLOYEE_FAULT";
 
-    /**
-     * Hai loại phiếu mà giá trị hàng mất được phép đòi nhân viên đền bù — nguồn của phiếu thu
-     * "Thu tiền nhân viên đền bù" (sheet 03).
-     * Cả hai đều KHÔNG được tính chi phí hợp lý khi có người bồi thường.
-     */
-    private static final Set<String> EMPLOYEE_LIABLE_TYPES =
-            Set.of(TYPE_DESTROY_EMPLOYEE_FAULT, TYPE_COUNT_DECREASE);
+    /** Giá trị CŨ trong DB — chỉ để ĐỌC dữ liệu cũ, không bao giờ ghi mới. */
+    private static final String TYPE_COUNT_INCREASE_LEGACY = "COUNT_INCREASE";
+    private static final String TYPE_COUNT_DECREASE_LEGACY = "COUNT_DECREASE";
+
+    /** Ba loại phiếu rà soát kho ({@code StockReview.type}) — nguồn của 2 loại phiếu điều chỉnh tự sinh. */
+    private static final String REVIEW_TYPE_COUNT = StockReviewType.COUNT;
+    private static final String REVIEW_TYPE_DATE = StockReviewType.DATE;
+    private static final String REVIEW_TYPE_CONDITION = StockReviewType.CONDITION;
 
     /**
-     * Stock-count status strings we read/write. The Stock Count screen (another teammate) owns the
+     * Loại phiếu mà giá trị hàng mất được phép đòi nhân viên đền bù — nguồn của phiếu thu
+     * "Thu tiền nhân viên đền bù". Không được tính chi phí hợp lý khi có người bồi thường.
+     *
+     * <p><b>Phiếu điều chỉnh theo rà soát kho ({@code COUNT}) KHÔNG nằm ở đây.</b> Kiểm đếm chỉ cho biết
+     * tồn thiếu bao nhiêu, <em>không</em> cho biết thiếu vì đâu và do ai — mất trộm, bán quên ghi, nhập
+     * sai sổ đều ra cùng một con số, nên đòi đền bù ở đó là quy trách nhiệm cho nhân viên mà không có căn
+     * cứ. Muốn đòi đền bù thì phải lập phiếu {@code DESTROY_EMPLOYEE_FAULT}, loại đó tự nó đã khẳng định
+     * có lỗi nhân viên và có biên bản kèm theo.</p>
+     */
+    private static final Set<String> EMPLOYEE_LIABLE_TYPES = Set.of(TYPE_DESTROY_EMPLOYEE_FAULT);
+
+    /**
+     * Stock-review status strings we read/write. The Stock Review screen (another teammate) owns the
      * canonical spelling; we mirror only the two we need and match them accent-insensitively, so a
      * spelling difference is a one-line fix here.
      */
-    private static final String COUNT_STATUS_APPROVED = "Đã duyệt";
-    private static final String COUNT_STATUS_ADJUSTED = "Đã điều chỉnh";
+    private static final String REVIEW_STATUS_APPROVED = "Đã duyệt";
+    private static final String REVIEW_STATUS_ADJUSTED = "Đã điều chỉnh";
 
-    /** Adjustment types a user may pick when creating a slip by hand (COUNT_* comes from stock count). */
+    /**
+     * Loại phiếu người dùng tự chọn khi lập tay. {@code COUNT} và {@code DATE_ADJUSTMENT} KHÔNG nằm ở
+     * đây — hai loại đó luôn suy ra từ {@code StockReview.type} của phiếu rà soát kho được chọn, không cho
+     * gõ tay (số liệu phải là số đã đếm/đã kiểm, không phải số người lập tự nhập).
+     */
     private static final List<String> CREATABLE_TYPES =
             List.of(TYPE_DESTROY, TYPE_DESTROY_EMPLOYEE_FAULT, "INTERNAL_USE", "SAMPLE", "GIFT");
 
     /**
-     * Chỉ 3/7 loại phải tính GTGT đầu ra theo giá bán. Hai loại hủy hàng và COUNT_* để 4 field thuế
-     * null; riêng hủy hàng còn giữ nguyên GTGT đầu vào đã khấu trừ lúc mua (sheet 03).
+     * Loại phiếu hủy hàng — được phép (không bắt buộc) tham chiếu một phiếu rà soát kho
+     * {@code StockReview.type = CONDITION}.
+     *
+     * <p>Bắt buộc tham chiếu khi hủy vì <b>hỏng hóc</b> (phải có biên bản xác định tình trạng); hủy vì
+     * <b>hết hạn</b> thì KHÔNG cần — hạn dùng đã nằm sẵn trên lô, không cần ai đi kiểm để xác nhận.
+     * Hệ thống không đoán được lý do nên để người lập tự gắn; xem {@link #assertReviewTypeMatches}.</p>
      */
-    private static final Set<String> VAT_OUTPUT_TYPES = Set.of("INTERNAL_USE", "GIFT", "SAMPLE");
+    private static final Set<String> CONDITION_REVIEW_TYPES =
+            Set.of(TYPE_DESTROY, TYPE_DESTROY_EMPLOYEE_FAULT);
+
+    /**
+     * Loại phiếu cần snapshot GIÁ BÁN tại thời điểm ghi nhận ({@code refSellPrice}) — hàng rời kho mà
+     * không qua hóa đơn bán, nên giá bán là căn cứ duy nhất để định giá về sau.
+     *
+     * <p>Không còn phần thuế đi kèm: hộ kinh doanh tính GTGT bằng {@code doanh thu × tỷ lệ %} cho MỌI
+     * nhóm, không khấu trừ đầu ra/đầu vào ⇒ {@code vatRate/preTaxAmount/vatAmount} đã bị bỏ khỏi bảng
+     * {@code stockadjustmentdetail}, chỉ còn {@code refSellPrice}.</p>
+     */
+    private static final Set<String> REF_SELL_PRICE_TYPES = Set.of("INTERNAL_USE", "GIFT", "SAMPLE");
 
     /**
      * Loại phiếu đưa hàng tới tay người dùng thật ⇒ cấm hàng quá hạn. Cố tình TÁCH KHỎI
-     * {@link #VAT_OUTPUT_TYPES} dù trùng danh sách: một cái là luật thuế, một cái là an toàn dược,
+     * {@link #REF_SELL_PRICE_TYPES} dù trùng danh sách: một cái là định giá, một cái là an toàn dược,
      * sau này đổi cái này không được kéo theo cái kia.
      */
     private static final Set<String> NO_EXPIRED_GOODS_TYPES = Set.of("INTERNAL_USE", "GIFT", "SAMPLE");
@@ -83,8 +128,8 @@ public class StockadjustmentService {
     private final ProductunitRepository productunitRepository;
     // Stock Count is owned by another module — we consume it read-only via these bare repositories
     // (findAll / findById / save) and never add query methods to their files.
-    private final StockcountRepository stockcountRepository;
-    private final StockcountdetailRepository stockcountdetailRepository;
+    private final StockreviewRepository stockreviewRepository;
+    private final StockreviewdetailRepository stockreviewdetailRepository;
     // Income (module Thu/Chi của teammate) và Invoicedetail (module Bán hàng) — chỉ ĐỌC.
     private final IncomeRepository incomeRepository;
     private final InvoicedetailRepository invoicedetailRepository;
@@ -93,16 +138,16 @@ public class StockadjustmentService {
                                   StockadjustmentdetailRepository stockadjustmentdetailRepository,
                                   BatchRepository batchRepository,
                                   ProductunitRepository productunitRepository,
-                                  StockcountRepository stockcountRepository,
-                                  StockcountdetailRepository stockcountdetailRepository,
+                                  StockreviewRepository stockreviewRepository,
+                                  StockreviewdetailRepository stockreviewdetailRepository,
                                   IncomeRepository incomeRepository,
                                   InvoicedetailRepository invoicedetailRepository) {
         this.stockadjustmentRepository = stockadjustmentRepository;
         this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
         this.batchRepository = batchRepository;
         this.productunitRepository = productunitRepository;
-        this.stockcountRepository = stockcountRepository;
-        this.stockcountdetailRepository = stockcountdetailRepository;
+        this.stockreviewRepository = stockreviewRepository;
+        this.stockreviewdetailRepository = stockreviewdetailRepository;
         this.incomeRepository = incomeRepository;
         this.invoicedetailRepository = invoicedetailRepository;
     }
@@ -187,9 +232,24 @@ public class StockadjustmentService {
         labels.put("INTERNAL_USE", "Sử dụng nội bộ");
         labels.put("SAMPLE", "Hàng mẫu");
         labels.put("GIFT", "Quà tặng");
-        labels.put("COUNT_INCREASE", "Tăng theo kiểm kê");
-        labels.put("COUNT_DECREASE", "Giảm theo kiểm kê");
+        labels.put(TYPE_COUNT, "Điều chỉnh theo rà soát kho");
+        labels.put(TYPE_DATE_ADJUSTMENT, "Điều chỉnh hạn dùng");
+        // Dữ liệu cũ (trước khi gộp COUNT) vẫn phải hiện đúng tên thay vì mã thô.
+        labels.put(TYPE_COUNT_INCREASE_LEGACY, "Tăng theo rà soát kho");
+        labels.put(TYPE_COUNT_DECREASE_LEGACY, "Giảm theo rà soát kho");
         return labels;
+    }
+
+    /** {@code true} nếu phiếu là điều chỉnh theo rà soát, kể cả 2 giá trị cũ trước khi gộp. */
+    private boolean isCountType(String adjustmentType) {
+        return TYPE_COUNT.equals(adjustmentType)
+                || TYPE_COUNT_INCREASE_LEGACY.equals(adjustmentType)
+                || TYPE_COUNT_DECREASE_LEGACY.equals(adjustmentType);
+    }
+
+    /** Dòng có được tính vào giá trị đền bù của nhân viên hay không — chỉ dòng làm GIẢM kho. */
+    private boolean isReimbursableLine(Stockadjustmentdetail detail) {
+        return !DIRECTION_IN.equals(detail.getDirection()) && !DIRECTION_NONE.equals(detail.getDirection());
     }
 
     // ------------------------------------------------------------------ detail
@@ -202,7 +262,10 @@ public class StockadjustmentService {
         List<Stockadjustmentdetail> details =
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId);
 
-        boolean employeeLiable = EMPLOYEE_LIABLE_TYPES.contains(adjustment.getAdjustmentType());
+        // Đúng loại phiếu THÌ CHƯA ĐỦ: phiếu không có dòng nào làm giảm kho thì không có gì thất thoát
+        // để đòi đền bù — hiện khối "Đền bù thất thoát 0đ" chỉ làm người xem tưởng có người phải trả tiền.
+        boolean employeeLiable = EMPLOYEE_LIABLE_TYPES.contains(adjustment.getAdjustmentType())
+                && details.stream().anyMatch(this::isReimbursableLine);
 
         List<StockAdjustmentDetailItemResponse> itemResponses = details.stream()
                 .map(detail -> toDetailItem(detail, employeeLiable))
@@ -218,12 +281,6 @@ public class StockadjustmentService {
 
         BigDecimal estimatedValue = details.stream()
                 .map(Stockadjustmentdetail::getLineCost)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Tổng thuế GTGT đầu ra của phiếu (chỉ INTERNAL_USE/GIFT/SAMPLE có; loại khác vatAmount null → 0).
-        BigDecimal totalOutputVat = details.stream()
-                .map(Stockadjustmentdetail::getVatAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -256,12 +313,17 @@ public class StockadjustmentService {
                 estimatedValue,
                 costImpactDisplay(adjustment),
                 itemResponses,
-                VAT_OUTPUT_TYPES.contains(adjustment.getAdjustmentType()),
-                totalOutputVat,
+                TYPE_DATE_ADJUSTMENT.equals(adjustment.getAdjustmentType()),
+                adjustment.getStockReviewID() != null
+                        ? adjustment.getStockReviewID().getStockCountCode() : null,
+                adjustment.getStockReviewID() != null
+                        ? reviewTypeLabel(reviewTypeOf(adjustment.getStockReviewID())) : null,
                 employeeLiable,
                 totalReimbursementValue,
                 linkedIncome != null ? linkedIncome.getId() : null,
-                linkedIncome != null ? linkedIncome.getIncomeCode() : null
+                linkedIncome != null ? linkedIncome.getIncomeCode() : null,
+                cancelBlockedReason(adjustment, statusName, details) == null,
+                cancelBlockedReason(adjustment, statusName, details)
         );
     }
 
@@ -286,8 +348,15 @@ public class StockadjustmentService {
      * Commits the slip's stock movement to each batch: {@code IN} adds the quantity, {@code OUT}
      * subtracts it (blocking negative stock). Called only when a slip reaches
      * {@link StockAdjustmentStatus#COMPLETED} — the single point at which stock actually changes.
+     *
+     * <p>{@link #TYPE_DATE_ADJUSTMENT} đi nhánh riêng: nó sửa {@code batch.expirationDate} chứ KHÔNG
+     * đụng {@code storageQuantity}.</p>
      */
     private void applyStockEffect(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
+        if (TYPE_DATE_ADJUSTMENT.equals(adjustment.getAdjustmentType())) {
+            applyExpiryEffect(details, false);
+            return;
+        }
         for (Stockadjustmentdetail detail : details) {
             Batch batch = detail.getBatchID();
             if (batch == null) {
@@ -305,6 +374,35 @@ public class StockadjustmentService {
                 }
                 batch.setStorageQuantity(current - qty);
             }
+            saveBatchGuardingConcurrentEdit(batch);
+        }
+    }
+
+    /**
+     * Áp (hoặc đảo lại) việc sửa hạn dùng của phiếu {@link #TYPE_DATE_ADJUSTMENT}: ghi
+     * {@code batch.expirationDate} = {@code newExpirationDate} khi thực hiện, = {@code oldExpirationDate}
+     * khi hủy phiếu.
+     *
+     * <p>Khi ĐẢO, chỉ trả hạn về giá trị cũ nếu lô vẫn đang mang đúng hạn mà phiếu này đã ghi — nếu một
+     * phiếu khác đã sửa tiếp thì ghi đè sẽ xóa mất thay đổi mới hơn. Ca đó bị {@code
+     * assertBatchesUntouchedSince} chặn từ trước, đây là lớp phòng thủ thứ hai.</p>
+     */
+    private void applyExpiryEffect(List<Stockadjustmentdetail> details, boolean reverse) {
+        for (Stockadjustmentdetail detail : details) {
+            Batch batch = detail.getBatchID();
+            if (batch == null) {
+                continue;
+            }
+            LocalDate target = reverse ? detail.getOldExpirationDate() : detail.getNewExpirationDate();
+            if (target == null) {
+                continue;
+            }
+            if (reverse && !Objects.equals(batch.getExpirationDate(), detail.getNewExpirationDate())) {
+                throw new IllegalArgumentException("Không thể hủy phiếu: hạn dùng của lô " + displayBatch(batch)
+                        + " đã được thay đổi sau khi phiếu này được thực hiện."
+                        + " Hãy lập một phiếu điều chỉnh hạn dùng mới thay vì hủy phiếu cũ.");
+            }
+            batch.setExpirationDate(target);
             saveBatchGuardingConcurrentEdit(batch);
         }
     }
@@ -347,10 +445,17 @@ public class StockadjustmentService {
         if (isStatus(statusName, StockAdjustmentStatus.COMPLETED)) {
             List<Stockadjustmentdetail> details =
                     stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId);
-            assertBatchesUntouchedSince(adjustment, details);
-            reverseStockEffect(details);
-            // Trả phiếu kiểm kê về "Đã duyệt" để có thể lập lại phiếu điều chỉnh khác cho nó.
-            revertStockCountAdjusted(adjustment.getStockCountID());
+            if (TYPE_DATE_ADJUSTMENT.equals(adjustment.getAdjustmentType())) {
+                // Phiếu sửa hạn dùng không đụng tồn kho ⇒ đảo lại hạn, không đảo số lượng. Cũng không
+                // chạy assertBatchesUntouchedSince: luật đó đo tồn kho, còn ở đây thứ bị đổi là hạn dùng
+                // (applyExpiryEffect tự kiểm hạn hiện tại có còn đúng của phiếu này không).
+                applyExpiryEffect(details, true);
+            } else {
+                assertReversible(adjustment, details);
+                reverseStockEffect(details);
+            }
+            // Trả phiếu rà soát kho về "Đã duyệt" để có thể lập lại phiếu điều chỉnh khác cho nó.
+            revertStockReviewAdjusted(adjustment.getStockReviewID());
         }
 
         adjustment.setStatus(StockAdjustmentStatus.CANCELLED);
@@ -361,11 +466,85 @@ public class StockadjustmentService {
     }
 
     /**
-     * Luật đảo ngược DUY NHẤT (sheet 05): chỉ hủy được phiếu {@code Hoàn thành} khi mọi lô của nó vẫn
-     * y hệt như ngay sau khi phiếu được áp dụng. Kiểm 2 nguồn duy nhất làm đổi tồn: hóa đơn bán và
-     * phiếu điều chỉnh khác (chỉ tính phiếu đang {@code Hoàn thành} — phiếu đã hủy có tác động ròng 0).
+     * Phiếu {@code Hoàn thành} này có được phép đảo ngược không.
      *
-     * <p>"Lô hết hạn không đảo ngược được" chỉ là hệ quả của luật này, không phải luật riêng.
+     * <p><strong>Tiêu chí là HÀNG CÒN TỒN TẠI VẬT LÝ hay không</strong>, không phải chiều tăng/giảm:
+     * <ul>
+     *   <li>{@code INTERNAL_USE} / {@code SAMPLE} / {@code GIFT} — hàng chỉ đổi mục đích sử dụng, vẫn
+     *       lấy lại được ⇒ <strong>hủy thoải mái</strong>, không kiểm gì.</li>
+     *   <li>{@code DESTROY} / {@code DESTROY_EMPLOYEE_FAULT} — hàng đã tiêu hủy, không còn trên đời
+     *       ⇒ <strong>KHÔNG BAO GIỜ hủy được</strong>. Cho hủy là ghi lại vào sổ số hàng không tồn tại
+     *       (kho ảo), sau này bán ra mới phát hiện thiếu.</li>
+     *   <li>{@code COUNT} — xét theo DÒNG: dòng <em>giảm</em> là hàng đã thất thoát, cùng bản chất với
+     *       tiêu hủy ⇒ chặn; dòng <em>tăng</em> thì đảo lại là TRỪ kho nên giữ luật cũ
+     *       ({@link #assertBatchesUntouchedSince}).</li>
+     * </ul>
+     *
+     * <p>Một phiếu {@code COUNT} có thể chứa cả hai loại dòng, mà hủy là thao tác <em>nguyên phiếu</em>
+     * (không hủy được nửa phiếu) ⇒ chỉ cần có MỘT dòng giảm là cả phiếu không hủy được.</p>
+     *
+     * <p>{@code DATE_ADJUSTMENT} không đi qua đây — nó không đụng tồn kho, xem {@link #cancel}.</p>
+     */
+    private void assertReversible(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
+        String blocked = typeBlocksReversal(adjustment.getAdjustmentType(), details);
+        if (blocked != null) {
+            throw new IllegalArgumentException(blocked);
+        }
+        if (isCountType(adjustment.getAdjustmentType())) {
+            // Phiếu rà soát toàn dòng TĂNG: đảo ngược sẽ TRỪ kho nên vẫn phải giữ luật cũ.
+            assertBatchesUntouchedSince(adjustment, details);
+        }
+        // INTERNAL_USE / SAMPLE / GIFT: không kiểm gì thêm — hàng vẫn còn, đảo ngược chỉ cộng lại tồn.
+    }
+
+    /** Câu từ chối theo LOẠI phiếu, hoặc {@code null} nếu loại này đảo ngược được. */
+    private String typeBlocksReversal(String type, List<Stockadjustmentdetail> details) {
+        if (TYPE_DESTROY.equals(type) || TYPE_DESTROY_EMPLOYEE_FAULT.equals(type)) {
+            return "Không thể hủy phiếu " + formatAdjustmentType(type)
+                    + ": hàng đã được tiêu hủy nên không thể nhập trở lại kho. "
+                    + "Nếu cần ghi tăng tồn kho, hãy lập một phiếu điều chỉnh mới theo phiếu rà soát kho.";
+        }
+        if (isCountType(type)) {
+            boolean hasDecreaseLine = details.stream().anyMatch(
+                    detail -> !DIRECTION_IN.equals(detail.getDirection())
+                            && !DIRECTION_NONE.equals(detail.getDirection()));
+            if (hasDecreaseLine) {
+                return "Không thể hủy phiếu " + formatAdjustmentType(type)
+                        + ": phiếu có dòng ghi GIẢM tồn kho (hàng đã thất thoát) nên không nhập lại được. "
+                        + "Hãy lập một phiếu điều chỉnh mới nếu số liệu cần sửa.";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Vì sao phiếu này không hủy được — dùng cho MÀN HÌNH, để ẩn nút Hủy kèm lời giải thích thay vì
+     * để người dùng bấm rồi mới ăn lỗi. {@code null} nghĩa là hủy được.
+     *
+     * <p>Chỉ soi phần phụ thuộc LOẠI phiếu. Phiếu rà soát toàn dòng tăng vẫn có thể bị
+     * {@link #assertBatchesUntouchedSince} chặn lúc bấm — điều kiện đó phụ thuộc dữ liệu thay đổi
+     * theo thời gian, đoán trước trên màn hình thì vừa tốn truy vấn vừa dễ lệch với lúc thao tác.</p>
+     */
+    private String cancelBlockedReason(Stockadjustment adjustment, String statusName,
+                                       List<Stockadjustmentdetail> details) {
+        if (!isStatus(statusName, StockAdjustmentStatus.COMPLETED)) {
+            // Phiếu Nháp hủy được vô điều kiện (chưa đụng tồn kho nên không có gì để đảo).
+            return null;
+        }
+        if (TYPE_DATE_ADJUSTMENT.equals(adjustment.getAdjustmentType())) {
+            return null;
+        }
+        return typeBlocksReversal(adjustment.getAdjustmentType(), details);
+    }
+
+    /**
+     * Chỉ hủy được khi mọi lô của phiếu vẫn y hệt như ngay sau khi phiếu được áp dụng. Kiểm 2 nguồn
+     * duy nhất làm đổi tồn: hóa đơn bán và phiếu điều chỉnh khác (chỉ tính phiếu đang
+     * {@code Hoàn thành} — phiếu đã hủy có tác động ròng 0).
+     *
+     * <p>Luật này <strong>chỉ áp cho phiếu rà soát toàn dòng TĂNG</strong> (xem {@link #assertReversible}),
+     * vì chỉ chiều đó mới trừ kho khi đảo ngược; áp cho mọi loại phiếu thì phiếu biếu tặng / dùng nội bộ
+     * lập nhầm cũng không sửa được. "Lô hết hạn không đảo ngược được" chỉ là hệ quả, không phải luật riêng.</p>
      */
     private void assertBatchesUntouchedSince(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
         if (adjustment.getDate() == null) {
@@ -460,62 +639,122 @@ public class StockadjustmentService {
     // ------------------------------------------------------------------ stock count source (read-only)
 
     /**
-     * Approved ("Đã duyệt") stock counts that can drive an adjustment: those with at least one
-     * adjustable line and not already consumed by a non-rejected adjustment slip. Read-only —
-     * consumes the Stock Count module through its bare repositories.
+     * Phiếu rà soát kho "Đã duyệt" còn dùng được để lập phiếu điều chỉnh: còn ít nhất một dòng đáng điều
+     * chỉnh và chưa bị phiếu điều chỉnh nào (khác "đã hủy") dùng mất. Read-only — consumes the Stock
+     * Review module through its bare repositories.
+     *
+     * <p>Trả về CẢ 3 loại; "đáng điều chỉnh" được đo theo đúng loại: {@code COUNT} đếm dòng lệch số
+     * lượng, {@code DATE} đếm lô lệch hạn dùng, {@code CONDITION} đếm lô có ghi nhận tình trạng. Màn
+     * hình tự lọc theo loại phiếu đang lập — xem {@link #listApprovedStockReviews(String)}.</p>
      */
     @Transactional(readOnly = true)
-    public List<StockAdjustmentCountOptionResponse> listApprovedStockCounts() {
+    public List<StockAdjustmentReviewOptionResponse> listApprovedStockReviews() {
         Set<Integer> consumedCountIds = stockadjustmentRepository.findAllWithRelations().stream()
-                .filter(adj -> adj.getStockCountID() != null && adj.getStockCountID().getId() != null)
+                .filter(adj -> adj.getStockReviewID() != null && adj.getStockReviewID().getId() != null)
                 .filter(adj -> !isStatus(getStatusName(adj), StockAdjustmentStatus.CANCELLED))
-                .map(adj -> adj.getStockCountID().getId())
+                .map(adj -> adj.getStockReviewID().getId())
                 .collect(Collectors.toSet());
 
-        Map<Integer, List<Stockcountdetail>> detailsByCount = stockcountdetailRepository.findAll().stream()
-                .filter(detail -> detail.getStockCountID() != null && detail.getStockCountID().getId() != null)
-                .collect(Collectors.groupingBy(detail -> detail.getStockCountID().getId()));
+        Map<Integer, List<Stockreviewdetail>> detailsByCount = stockreviewdetailRepository.findAll().stream()
+                .filter(detail -> detail.getStockReviewID() != null && detail.getStockReviewID().getId() != null)
+                .collect(Collectors.groupingBy(detail -> detail.getStockReviewID().getId()));
 
-        return stockcountRepository.findAll().stream()
-                .filter(count -> isStatus(count.getStatus(), COUNT_STATUS_APPROVED))
+        return stockreviewRepository.findAll().stream()
+                .filter(count -> isStatus(count.getStatus(), REVIEW_STATUS_APPROVED))
                 .filter(count -> !consumedCountIds.contains(count.getId()))
-                .map(count -> new StockAdjustmentCountOptionResponse(
-                        count.getId(),
-                        count.getStockCountCode(),
-                        formatInstant(count.getCountDate()),
-                        (int) detailsByCount.getOrDefault(count.getId(), List.of()).stream()
-                                .filter(this::isAdjustableCountDetail)
-                                .count(),
-                        count.getNote()))
+                .map(count -> {
+                    String reviewType = reviewTypeOf(count);
+                    List<Stockreviewdetail> details = detailsByCount.getOrDefault(count.getId(), List.of());
+                    return new StockAdjustmentReviewOptionResponse(
+                            count.getId(),
+                            count.getStockCountCode(),
+                            reviewType,
+                            reviewTypeLabel(reviewType),
+                            formatInstant(count.getReviewDate()),
+                            (int) details.stream().filter(d -> isAdjustableDetail(d, reviewType)).count(),
+                            count.getNote());
+                })
                 .filter(option -> option.getDiscrepancyLineCount() > 0)
-                .sorted(Comparator.comparing(StockAdjustmentCountOptionResponse::getStockCountId,
+                .sorted(Comparator.comparing(StockAdjustmentReviewOptionResponse::getStockReviewId,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
-    /**
-     * The prospective adjustment lines for one approved stock count: one per detail whose actual
-     * quantity differs from the system quantity (and has a batch). Surplus → COUNT_INCREASE/IN,
-     * shortage → COUNT_DECREASE/OUT. Read-only preview; the create flow rebuilds these server-side.
-     */
+    /** Chỉ những phiếu rà soát kho thuộc {@code reviewType} — dùng cho từng ngữ cảnh của màn tạo. */
     @Transactional(readOnly = true)
-    public List<StockAdjustmentCountLineResponse> loadStockCountLines(Integer stockCountId) {
-        Stockcount count = stockcountRepository.findById(stockCountId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
-        if (!isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
-            throw new IllegalArgumentException("Chỉ chọn được phiếu kiểm kê đã duyệt");
-        }
-
-        return stockcountdetailRepository.findAll().stream()
-                .filter(detail -> detail.getStockCountID() != null
-                        && stockCountId.equals(detail.getStockCountID().getId()))
-                .filter(this::isAdjustableCountDetail)
-                .map(this::toCountLine)
+    public List<StockAdjustmentReviewOptionResponse> listApprovedStockReviews(String reviewType) {
+        return listApprovedStockReviews().stream()
+                .filter(option -> option.getReviewType().equals(reviewType))
                 .toList();
     }
 
+    /** "Đáng điều chỉnh" đo theo đúng loại phiếu rà soát kho. */
+    private boolean isAdjustableDetail(Stockreviewdetail detail, String reviewType) {
+        return switch (reviewType) {
+            case REVIEW_TYPE_DATE -> isAdjustableDateDetail(detail);
+            case REVIEW_TYPE_CONDITION -> detail.getConditionStatus() != null
+                    && !detail.getConditionStatus().isBlank();
+            default -> isAdjustableCountDetail(detail);
+        };
+    }
+
+    /**
+     * The prospective adjustment lines for one approved stock count: one per detail whose actual
+     * quantity differs from the system quantity (and has a batch). Thừa → {@code IN}, thiếu →
+     * {@code OUT}; cả hai đều thuộc cùng MỘT phiếu loại {@link #TYPE_COUNT}. Read-only preview;
+     * the create flow rebuilds these server-side.
+     */
+    @Transactional(readOnly = true)
+    public List<StockAdjustmentReviewLineResponse> loadStockReviewLines(Integer stockReviewId) {
+        Stockreview count = stockreviewRepository.findById(stockReviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu rà soát kho"));
+        if (!isStatus(count.getStatus(), REVIEW_STATUS_APPROVED)) {
+            throw new IllegalArgumentException("Chỉ chọn được phiếu rà soát kho đã duyệt");
+        }
+        String reviewType = reviewTypeOf(count);
+        if (REVIEW_TYPE_CONDITION.equals(reviewType)) {
+            throw new IllegalArgumentException("Phiếu rà soát tình trạng không sinh dòng điều chỉnh nào");
+        }
+        boolean dateSource = REVIEW_TYPE_DATE.equals(reviewType);
+
+        return stockreviewdetailRepository.findAll().stream()
+                .filter(detail -> detail.getStockReviewID() != null
+                        && stockReviewId.equals(detail.getStockReviewID().getId()))
+                .filter(detail -> isAdjustableDetail(detail, reviewType))
+                .map(detail -> dateSource ? toDateLine(detail) : toCountLine(detail))
+                .toList();
+    }
+
+    /** Dòng xem trước của phiếu sửa hạn dùng: không đụng tồn, chỉ nêu hạn cũ → hạn mới. */
+    private StockAdjustmentReviewLineResponse toDateLine(Stockreviewdetail detail) {
+        Batch batch = detail.getBatchID();
+        Product product = batch.getProductID() != null ? batch.getProductID() : detail.getProductID();
+        Productunit unit = resolveCandidateUnit(batch, product);
+
+        int affectedQty = batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0;
+        BigDecimal unitCost = resolveUnitCost(batch);
+
+        return new StockAdjustmentReviewLineResponse(
+                batch.getId(),
+                product != null ? product.getProductID() : null,
+                product != null ? product.getName() : "Không rõ",
+                batch.getLotNumber(),
+                batch.getExpirationDate(),
+                formatLocalDate(batch.getExpirationDate()),
+                unit != null ? unit.getUnitName() : "Đơn vị",
+                affectedQty,
+                affectedQty,
+                0,
+                TYPE_DATE_ADJUSTMENT,
+                DIRECTION_NONE,
+                unitCost,
+                unitCost.multiply(BigDecimal.valueOf(affectedQty)),
+                formatLocalDate(batch.getExpirationDate()),
+                formatLocalDate(detail.getActualExpirationDate()));
+    }
+
     /** A detail is adjustable when it has a batch and a non-zero, non-null discrepancy. */
-    private boolean isAdjustableCountDetail(Stockcountdetail detail) {
+    private boolean isAdjustableCountDetail(Stockreviewdetail detail) {
         if (detail.getBatchID() == null || detail.getBatchID().getId() == null) {
             return false;
         }
@@ -524,7 +763,7 @@ public class StockadjustmentService {
         return systemQty != null && actualQty != null && !systemQty.equals(actualQty);
     }
 
-    private StockAdjustmentCountLineResponse toCountLine(Stockcountdetail detail) {
+    private StockAdjustmentReviewLineResponse toCountLine(Stockreviewdetail detail) {
         Batch batch = detail.getBatchID();
         Product product = batch.getProductID() != null ? batch.getProductID() : detail.getProductID();
         Productunit unit = resolveCandidateUnit(batch, product);
@@ -536,7 +775,7 @@ public class StockadjustmentService {
         BigDecimal unitCost = resolveUnitCost(batch);
         BigDecimal lineCost = unitCost.multiply(BigDecimal.valueOf(quantity));
 
-        return new StockAdjustmentCountLineResponse(
+        return new StockAdjustmentReviewLineResponse(
                 batch.getId(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
@@ -547,31 +786,33 @@ public class StockadjustmentService {
                 detail.getSystemQty(),
                 detail.getActualQty(),
                 quantity,
-                surplus ? TYPE_COUNT_INCREASE : TYPE_COUNT_DECREASE,
+                // Loại phiếu nay là COUNT cho CẢ hai chiều; thừa/thiếu phân biệt bằng direction của dòng.
+                TYPE_COUNT,
                 surplus ? DIRECTION_IN : DIRECTION_OUT,
                 unitCost,
-                lineCost);
+                lineCost,
+                null,
+                null);
     }
 
     /**
      * Creates an adjustment slip. Two sources:
      * <ul>
-     *   <li><b>MANUAL</b> — one slip of a {@link #CREATABLE_TYPES} type from the batches the user picked;</li>
-     *   <li><b>STOCK_COUNT</b> — up to two slips ({@code COUNT_INCREASE} for surplus lines,
-     *       {@code COUNT_DECREASE} for shortage lines) rebuilt server-side from an approved stock count.</li>
+     *   <li><b>MANUAL</b> — one slip of a {@link #CREATABLE_TYPES} type from the batches the user picked.
+     *       Phiếu hủy hàng có thể gắn kèm một phiếu rà soát tình trạng ({@code StockReview.type =
+     *       CONDITION}) làm căn cứ — bắt buộc khi hủy vì hỏng hóc, không cần khi hủy vì hết hạn.</li>
+     *   <li><b>STOCK_REVIEW</b> — MỘT phiếu dựng lại từ phiếu rà soát kho đã duyệt, loại suy ra từ
+     *       {@code StockReview.type} ({@code COUNT} hoặc {@code DATE_ADJUSTMENT}).</li>
      * </ul>
      *
      * <p>{@code asDraft} → {@link StockAdjustmentStatus#DRAFT}, ngược lại → {@code COMPLETED} và tồn
      * kho cập nhật ngay. Không có nhánh "chờ duyệt": chỉ Owner tạo được phiếu này nên không có ai để
-     * duyệt chéo. Trả về id phiếu (đầu tiên) để controller redirect.</p>
-     *
-     * <p><strong>Không ghi lại người thao tác</strong> .
-     * Mốc duy nhất còn lại là {@code date} (lúc lập phiếu).</p>
+     * duyệt chéo. Bảng không có cột người thao tác — mốc duy nhất là {@code date} (lúc lập phiếu).</p>
      */
     @Transactional
     public Integer createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
-        if (isStockCountSource(request)) {
-            return createFromStockCount(request, asDraft);
+        if (isStockReviewSource(request)) {
+            return createFromStockReview(request, asDraft);
         }
 
         validateRequest(request);
@@ -610,7 +851,7 @@ public class StockadjustmentService {
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(request.getReason().trim());
-        adjustment.setExpenseID(null);
+        adjustment.setStockReviewID(resolveConditionReview(request.getStockReviewId(), adjustmentType));
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
@@ -637,8 +878,8 @@ public class StockadjustmentService {
             detail.setUnitCostPrice(unitCost);
             detail.setLineCost(lineCost);
             detail.setNote(trimToNull(item.getReason()));
-            // Thuế GTGT đầu ra theo GIÁ BÁN — chỉ INTERNAL_USE/GIFT/SAMPLE; loại khác để null.
-            applyOutputVat(detail, adjustmentType, unit, item.getQuantity(), product, item.getVatRate());
+            // Snapshot giá bán — chỉ INTERNAL_USE/GIFT/SAMPLE; loại khác để null.
+            applyReferenceSellPrice(detail, adjustmentType, unit);
 
             savedDetails.add(stockadjustmentdetailRepository.save(detail));
         }
@@ -650,74 +891,195 @@ public class StockadjustmentService {
         return savedAdjustment.getId();
     }
 
-    private boolean isStockCountSource(StockAdjustmentCreateRequest request) {
-        return "STOCK_COUNT".equalsIgnoreCase(request.getSourceMode());
+    private boolean isStockReviewSource(StockAdjustmentCreateRequest request) {
+        return "STOCK_REVIEW".equalsIgnoreCase(request.getSourceMode());
     }
 
     /**
-     * STOCK_COUNT source: rebuild the COUNT lines from the chosen approved stock count and materialise
-     * them into up to two slips — one all-{@code COUNT_INCREASE}, one all-{@code COUNT_DECREASE} — each
-     * linked to the count. Client-posted lines are ignored (quantities are trusted only from the count).
-     * Khi phiếu được lập thẳng ở trạng thái {@code Hoàn thành}, phiếu kiểm kê được lật sang
-     * {@code Đã điều chỉnh} ngay tại đây.
+     * Phiếu rà soát tình trạng gắn kèm một phiếu HỦY HÀNG lập tay — TÙY CHỌN, trả {@code null} khi
+     * người lập không chọn (hủy vì hết hạn thì hạn nằm sẵn trên lô, không cần biên bản kiểm tra).
+     *
+     * <p>Chỉ 2 loại hủy hàng được gắn: gắn phiếu rà soát tình trạng vào phiếu quà tặng / hàng mẫu /
+     * dùng nội bộ là vô nghĩa (hàng còn tốt mới đem tặng). Và phiếu được gắn phải đúng loại
+     * {@code CONDITION} + đã duyệt — nếu không thì căn cứ hủy hàng lại là một lần đếm số lượng.</p>
      */
-    private Integer createFromStockCount(StockAdjustmentCreateRequest request, boolean asDraft) {
-        if (request.getStockCountId() == null) {
-            throw new IllegalArgumentException("Vui lòng chọn phiếu kiểm kê");
+    private Stockreview resolveConditionReview(Integer reviewId, String adjustmentType) {
+        if (reviewId == null) {
+            return null;
+        }
+        if (!CONDITION_REVIEW_TYPES.contains(adjustmentType)) {
+            throw new IllegalArgumentException(
+                    "Chỉ phiếu Hủy hàng mới gắn được phiếu rà soát tình trạng");
+        }
+        Stockreview review = stockreviewRepository.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu rà soát tình trạng"));
+        assertReviewTypeMatches(review, REVIEW_TYPE_CONDITION);
+        if (!isStatus(review.getStatus(), REVIEW_STATUS_APPROVED)) {
+            throw new IllegalArgumentException("Phiếu rà soát tình trạng chưa được duyệt");
+        }
+        return review;
+    }
+
+    /** Phiếu rà soát kho được chọn phải đúng loại yêu cầu — sai loại là sai căn cứ nghiệp vụ. */
+    private void assertReviewTypeMatches(Stockreview review, String expectedType) {
+        if (!expectedType.equals(reviewTypeOf(review))) {
+            throw new IllegalArgumentException("Phiếu rà soát kho " + (review.getStockCountCode() != null
+                    ? review.getStockCountCode() : "") + " không phải loại "
+                    + reviewTypeLabel(expectedType));
+        }
+    }
+
+    /** Nhãn tiếng Việt của {@code StockReview.type} — dùng trong câu thông báo và trên màn hình. */
+    public String reviewTypeLabel(String reviewType) {
+        return StockReviewType.label(reviewType);
+    }
+
+    /**
+     * Nguồn STOCK_REVIEW: dựng lại các dòng từ phiếu rà soát kho đã duyệt được chọn. Loại phiếu điều chỉnh
+     * SUY RA từ {@code StockReview.type}, người lập không chọn được:
+     * <ul>
+     *   <li>{@code type = COUNT} → <b>MỘT</b> phiếu {@link #TYPE_COUNT} chứa cả dòng thừa ({@code IN})
+     *       lẫn dòng thiếu ({@code OUT}).</li>
+     *   <li>{@code type = DATE} → phiếu {@link #TYPE_DATE_ADJUSTMENT}, sửa hạn dùng, không đụng tồn.</li>
+     *   <li>{@code type = CONDITION} → KHÔNG tự sinh phiếu: kiểm tình trạng chỉ ghi nhận hàng hỏng, còn
+     *       hủy hay không là quyết định riêng ⇒ người lập tự chọn loại hủy và gắn phiếu này vào.</li>
+     * </ul>
+     *
+     * <p>Dòng do client gửi lên bị BỎ QUA — số lượng chỉ tin từ phiếu rà soát kho. Khi phiếu được lập thẳng
+     * ở trạng thái {@code Hoàn thành}, phiếu rà soát kho được lật sang {@code Đã điều chỉnh} ngay tại đây.</p>
+     */
+    private Integer createFromStockReview(StockAdjustmentCreateRequest request, boolean asDraft) {
+        if (request.getStockReviewId() == null) {
+            throw new IllegalArgumentException("Vui lòng chọn phiếu rà soát kho");
         }
 
-        Stockcount count = stockcountRepository.findById(request.getStockCountId())
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu kiểm kê"));
-        if (!isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
-            throw new IllegalArgumentException("Phiếu kiểm kê không ở trạng thái Đã duyệt");
+        Stockreview count = stockreviewRepository.findById(request.getStockReviewId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu rà soát kho"));
+        if (!isStatus(count.getStatus(), REVIEW_STATUS_APPROVED)) {
+            throw new IllegalArgumentException("Phiếu rà soát kho không ở trạng thái Đã duyệt");
         }
 
-        // Reason is optional for a count-sourced slip: auto-fill it from the count when left blank.
+        String reviewType = reviewTypeOf(count);
+        if (REVIEW_TYPE_CONDITION.equals(reviewType)) {
+            throw new IllegalArgumentException("Phiếu rà soát tình trạng không tự sinh phiếu điều chỉnh — "
+                    + "hãy chọn loại Hủy hàng rồi gắn phiếu kiểm tra này vào.");
+        }
+        boolean dateSource = REVIEW_TYPE_DATE.equals(reviewType);
+        String adjustmentType = dateSource ? TYPE_DATE_ADJUSTMENT : TYPE_COUNT;
+
+        // Reason is optional for a review-sourced slip: auto-fill it from the review when left blank.
+        String reviewCode = count.getStockCountCode() != null ? count.getStockCountCode() : "";
         String reason = (request.getReason() != null && !request.getReason().isBlank())
                 ? request.getReason().trim()
-                : "Điều chỉnh tồn kho theo chênh lệch kiểm kê "
-                    + (count.getStockCountCode() != null ? count.getStockCountCode() : "");
+                : (dateSource
+                        ? "Điều chỉnh hạn dùng theo phiếu kiểm tra hạn dùng " + reviewCode
+                        : "Điều chỉnh tồn kho theo chênh lệch rà soát kho " + reviewCode);
 
         boolean alreadyConsumed = stockadjustmentRepository.findAllWithRelations().stream()
-                .anyMatch(adj -> adj.getStockCountID() != null
-                        && request.getStockCountId().equals(adj.getStockCountID().getId())
+                .anyMatch(adj -> adj.getStockReviewID() != null
+                        && request.getStockReviewId().equals(adj.getStockReviewID().getId())
                         && !isStatus(getStatusName(adj), StockAdjustmentStatus.CANCELLED));
         if (alreadyConsumed) {
-            throw new IllegalArgumentException("Phiếu kiểm kê này đã có phiếu điều chỉnh");
+            throw new IllegalArgumentException("Phiếu rà soát kho này đã có phiếu điều chỉnh");
         }
 
-        List<StockAdjustmentCountLineResponse> lines = loadStockCountLines(request.getStockCountId());
+        if (dateSource) {
+            return persistDateSlip(count, asDraft ? StockAdjustmentStatus.DRAFT : StockAdjustmentStatus.COMPLETED,
+                    reason, request);
+        }
+
+        List<StockAdjustmentReviewLineResponse> lines = loadStockReviewLines(request.getStockReviewId());
         if (lines.isEmpty()) {
-            throw new IllegalArgumentException("Phiếu kiểm kê không có dòng chênh lệch để điều chỉnh");
+            throw new IllegalArgumentException("Phiếu rà soát kho không có dòng chênh lệch để điều chỉnh");
         }
-
-        List<StockAdjustmentCountLineResponse> increaseLines = lines.stream()
-                .filter(line -> TYPE_COUNT_INCREASE.equals(line.getAdjustmentType()))
-                .toList();
-        List<StockAdjustmentCountLineResponse> decreaseLines = lines.stream()
-                .filter(line -> TYPE_COUNT_DECREASE.equals(line.getAdjustmentType()))
-                .toList();
 
         String status = asDraft ? StockAdjustmentStatus.DRAFT : StockAdjustmentStatus.COMPLETED;
+        return persistCountSlip(adjustmentType, lines, count, status, reason, request);
+    }
 
-        Integer firstId = null;
-        if (!increaseLines.isEmpty()) {
-            firstId = persistCountSlip(TYPE_COUNT_INCREASE, increaseLines, count, status, reason, request);
+    /** {@code StockReview.type} chuẩn hóa về chữ hoa; mặc định {@code COUNT} cho dữ liệu cũ chưa có type. */
+    private String reviewTypeOf(Stockreview review) {
+        return StockReviewType.normalize(review == null ? null : review.getType());
+    }
+
+    /**
+     * Phiếu {@link #TYPE_DATE_ADJUSTMENT}: sửa hạn dùng của các lô mà phiếu kiểm tra ghi nhận hạn thực tế
+     * KHÁC hạn đang lưu trên hệ thống (thường do nhập sai lúc nhận hàng).
+     *
+     * <p><b>Không đụng tồn kho.</b> Mỗi dòng lưu {@code oldExpirationDate}/{@code newExpirationDate} để
+     * truy vết được đã sửa từ đâu sang đâu — đây cũng là căn cứ đảo ngược khi hủy phiếu.
+     * {@code quantity} ghi tồn hiện có của lô để biết bao nhiêu hàng chịu ảnh hưởng, chiều là
+     * {@link #DIRECTION_NONE}.</p>
+     */
+    private Integer persistDateSlip(Stockreview review, String status, String reason,
+                                    StockAdjustmentCreateRequest request) {
+        List<Stockreviewdetail> dateLines = stockreviewdetailRepository.findAll().stream()
+                .filter(detail -> detail.getStockReviewID() != null
+                        && review.getId().equals(detail.getStockReviewID().getId()))
+                .filter(this::isAdjustableDateDetail)
+                .toList();
+        if (dateLines.isEmpty()) {
+            throw new IllegalArgumentException("Phiếu kiểm tra hạn dùng không có lô nào lệch hạn để điều chỉnh");
         }
-        if (!decreaseLines.isEmpty()) {
-            Integer id = persistCountSlip(TYPE_COUNT_DECREASE, decreaseLines, count, status, reason, request);
-            firstId = firstId != null ? firstId : id;
+
+        Stockadjustment adjustment = new Stockadjustment();
+        adjustment.setStockAdjustmentCode(temporaryCode());
+        adjustment.setAdjustmentType(TYPE_DATE_ADJUSTMENT);
+        adjustment.setDate(Instant.now());
+        adjustment.setReason(reason);
+        adjustment.setStockReviewID(review);
+        adjustment.setStatus(status);
+        adjustment.setNote(trimToNull(request.getNote()));
+
+        Stockadjustment savedAdjustment = assignCode(stockadjustmentRepository.save(adjustment));
+
+        List<Stockadjustmentdetail> savedDetails = new ArrayList<>();
+        for (Stockreviewdetail line : dateLines) {
+            Batch batch = line.getBatchID();
+            Product product = batch.getProductID() != null ? batch.getProductID() : line.getProductID();
+            Productunit unit = resolveUnit(batch, product);
+
+            int affectedQty = batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0;
+            BigDecimal unitCost = resolveUnitCost(batch);
+
+            Stockadjustmentdetail detail = new Stockadjustmentdetail();
+            detail.setStockAdjustmentID(savedAdjustment);
+            detail.setProductID(product);
+            detail.setProductUnitID(unit);
+            detail.setBatchID(batch);
+            detail.setDirection(DIRECTION_NONE);
+            detail.setQuantity(affectedQty);
+            detail.setBaseQtyDeducted(0);
+            detail.setUnitCostPrice(unitCost);
+            detail.setLineCost(unitCost.multiply(BigDecimal.valueOf(affectedQty)));
+            // Hạn CŨ chụp từ chính lô (nguồn đúng lúc áp phiếu), không lấy recordedExpirationDate của
+            // phiếu kiểm tra: giữa lúc kiểm và lúc lập phiếu có thể đã có phiếu khác sửa hạn lô này.
+            detail.setOldExpirationDate(batch.getExpirationDate());
+            detail.setNewExpirationDate(line.getActualExpirationDate());
+            detail.setNote("Sửa hạn dùng theo phiếu kiểm tra "
+                    + (review.getStockCountCode() != null ? review.getStockCountCode() : ""));
+
+            savedDetails.add(stockadjustmentdetailRepository.save(detail));
         }
 
         if (StockAdjustmentStatus.COMPLETED.equals(status)) {
-            markStockCountAdjusted(count);
+            applyStockEffect(savedAdjustment, savedDetails);
         }
-        return firstId;
+        return savedAdjustment.getId();
+    }
+
+    /** Dòng kiểm tra hạn dùng đáng điều chỉnh: có lô, có hạn thực tế, và hạn đó KHÁC hạn đang lưu. */
+    private boolean isAdjustableDateDetail(Stockreviewdetail detail) {
+        if (detail.getBatchID() == null || detail.getBatchID().getId() == null) {
+            return false;
+        }
+        LocalDate actual = detail.getActualExpirationDate();
+        return actual != null && !actual.equals(detail.getBatchID().getExpirationDate());
     }
 
     private Integer persistCountSlip(String adjustmentType,
-                                     List<StockAdjustmentCountLineResponse> lines,
-                                     Stockcount count,
+                                     List<StockAdjustmentReviewLineResponse> lines,
+                                     Stockreview count,
                                      String status,
                                      String reason,
                                      StockAdjustmentCreateRequest request) {
@@ -728,8 +1090,7 @@ public class StockadjustmentService {
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
         adjustment.setReason(reason);
-        adjustment.setStockCountID(count);
-        adjustment.setExpenseID(null);
+        adjustment.setStockReviewID(count);
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
@@ -740,14 +1101,16 @@ public class StockadjustmentService {
                 ? Set.of()
                 : new HashSet<>(request.getUnknownOriginBatchIds());
 
-        for (StockAdjustmentCountLineResponse line : lines) {
+        for (StockAdjustmentReviewLineResponse line : lines) {
             Batch sourceBatch = batchRepository.findById(line.getBatchId())
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lô hàng của phiếu kiểm kê"));
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lô hàng của phiếu rà soát kho"));
             Product product = sourceBatch.getProductID();
             Productunit unit = resolveUnit(sourceBatch, product);
 
             // Hàng thừa không rõ nguồn gốc → lô MỚI, không có hóa đơn mua thật (sheet 06 mục 1b).
-            boolean createNewBatch = TYPE_COUNT_INCREASE.equals(adjustmentType)
+            // Chỉ áp cho dòng THỪA: một phiếu COUNT nay chứa cả 2 chiều nên phải xét theo DÒNG,
+            // không xét theo loại phiếu như hồi còn tách COUNT_INCREASE riêng.
+            boolean createNewBatch = DIRECTION_IN.equals(line.getDirection())
                     && unknownOrigin.contains(line.getBatchId());
             Batch batch = createNewBatch
                     ? createSurplusBatch(sourceBatch, savedAdjustment, count)
@@ -789,14 +1152,23 @@ public class StockadjustmentService {
      * <p>Số lô / hạn dùng chép từ lô được đếm: hai thông tin này ảnh hưởng FEFO lẫn an toàn dược nên
      * không được để trống. Tồn khởi tạo = 0 vì tồn chỉ cộng vào lúc phiếu {@code Hoàn thành}.</p>
      */
-    private Batch createSurplusBatch(Batch sourceBatch, Stockadjustment adjustment, Stockcount count) {
+    private Batch createSurplusBatch(Batch sourceBatch, Stockadjustment adjustment, Stockreview count) {
         BigDecimal estimatedCost = estimateImportPricePerBase(sourceBatch);
 
         Batch batch = new Batch();
-        // KK-{id phiếu điều chỉnh}-L{id lô được đếm} — nhìn mã là truy ngược được cả phiếu lẫn lô gốc.
-        batch.setBatchCode(truncate("KK-" + String.format("%06d", adjustment.getId())
+        // RS-{id phiếu điều chỉnh}-L{id lô được đếm} — nhìn mã là truy ngược được cả phiếu lẫn lô gốc.
+        // RS = Rà Soát (kho). Trước 13/08/2026 là "KK-" (kiểm kê), đổi cho khớp cách gọi hiện tại.
+        //
+        // ⚠️ TIỀN TỐ NÀY LÀ DỮ LIỆU NGHIỆP VỤ, KHÔNG PHẢI CHUỖI TRANG TRÍ. Hai truy vấn JPQL đang so
+        // khớp nó bằng chuỗi cứng (JPQL không tham chiếu được hằng Java), đổi ở đây mà quên sửa chúng
+        // là hỏng âm thầm:
+        //   • StockadjustmentdetailRepository.sumUnknownOriginIncreaseCostInPeriod — lọc 'RS-%' để
+        //     tính phần thu nhập chịu thuế của hàng thừa không rõ nguồn gốc ⇒ quên là số THUẾ về 0;
+        //   • BatchRepository.findRecentImportsByProduct — loại 'RS-%' khỏi lịch sử nhập kho ⇒ quên
+        //     là một lần rà soát hiện thành hai dòng.
+        batch.setBatchCode(truncate("RS-" + String.format("%06d", adjustment.getId())
                 + "-L" + (sourceBatch.getId() != null ? sourceBatch.getId() : 0), 50));
-        batch.setBatchName(truncate("Hàng thừa kiểm kê "
+        batch.setBatchName(truncate("Hàng thừa rà soát kho "
                 + (sourceBatch.getBatchName() != null ? sourceBatch.getBatchName() : ""), 50));
         batch.setProductID(sourceBatch.getProductID());
         batch.setPurchaseDetailID(null);
@@ -810,7 +1182,7 @@ public class StockadjustmentService {
         batch.setExpirationDate(sourceBatch.getExpirationDate());
         batch.setLotNumber(sourceBatch.getLotNumber());
         batch.setStatus(true);
-        batch.setNote("Hàng thừa không rõ nguồn gốc theo phiếu kiểm kê "
+        batch.setNote("Hàng thừa không rõ nguồn gốc theo phiếu rà soát kho "
                 + (count != null && count.getStockCountCode() != null ? count.getStockCountCode() : "")
                 + " — giá vốn ước tính, không có hóa đơn mua.");
         return batchRepository.save(batch);
@@ -846,24 +1218,24 @@ public class StockadjustmentService {
     }
 
     /** Flips a linked count {@code Đã duyệt → Đã điều chỉnh}. No-op if it is not currently approved. */
-    private void markStockCountAdjusted(Stockcount count) {
+    private void markStockReviewAdjusted(Stockreview count) {
         if (count == null) {
             return;
         }
-        if (isStatus(count.getStatus(), COUNT_STATUS_APPROVED)) {
-            count.setStatus(COUNT_STATUS_ADJUSTED);
-            stockcountRepository.save(count);
+        if (isStatus(count.getStatus(), REVIEW_STATUS_APPROVED)) {
+            count.setStatus(REVIEW_STATUS_ADJUSTED);
+            stockreviewRepository.save(count);
         }
     }
 
-    /** Đảo lại {@link #markStockCountAdjusted}: {@code Đã điều chỉnh → Đã duyệt} khi hủy phiếu. */
-    private void revertStockCountAdjusted(Stockcount count) {
+    /** Đảo lại {@link #markStockReviewAdjusted}: {@code Đã điều chỉnh → Đã duyệt} khi hủy phiếu. */
+    private void revertStockReviewAdjusted(Stockreview count) {
         if (count == null) {
             return;
         }
-        if (isStatus(count.getStatus(), COUNT_STATUS_ADJUSTED)) {
-            count.setStatus(COUNT_STATUS_APPROVED);
-            stockcountRepository.save(count);
+        if (isStatus(count.getStatus(), REVIEW_STATUS_ADJUSTED)) {
+            count.setStatus(REVIEW_STATUS_APPROVED);
+            stockreviewRepository.save(count);
         }
     }
 
@@ -884,7 +1256,7 @@ public class StockadjustmentService {
         adjustment.setStatus(StockAdjustmentStatus.COMPLETED);
         applyStockEffect(adjustment,
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId));
-        markStockCountAdjusted(adjustment.getStockCountID());
+        markStockReviewAdjusted(adjustment.getStockReviewID());
         // TODO(finance): auto-create an Expense (and link expenseID) for DESTROY with lineCost total > 0.
         //   Deferred — the Expense entity/vocabulary is owned by the finance module.
 
@@ -904,8 +1276,8 @@ public class StockadjustmentService {
 
     /**
      * Validate cho phiếu THỦ CÔNG (DESTROY/INTERNAL_USE/SAMPLE/GIFT). Lý do là BẮT BUỘC ở đây —
-     * chỉ nguồn "theo phiếu kiểm kê" ({@code createFromStockCount}) mới được để trống và tự điền theo
-     * mã phiếu kiểm kê.
+     * chỉ nguồn "theo phiếu rà soát kho" ({@code createFromStockReview}) mới được để trống và tự điền theo
+     * mã phiếu rà soát kho.
      */
     private void validateRequest(StockAdjustmentCreateRequest request) {
         if (request.getReason() == null || request.getReason().isBlank()) {
@@ -982,10 +1354,10 @@ public class StockadjustmentService {
 
         // Đền bù tính theo GIÁ BÁN hiện hành của đơn vị đã xuất, KHÔNG phải giá vốn (sheet 01).
         // Đọc live từ productunit vì phiếu điều chỉnh không snapshot giá bán cho 2 loại thất thoát —
-        // 4 cột refSellPrice/vatRate/preTaxAmount/vatAmount chỉ dành cho INTERNAL_USE/GIFT/SAMPLE.
+        // refSellPrice chỉ được ghi cho INTERNAL_USE/GIFT/SAMPLE nên 2 loại thất thoát không có sẵn.
         BigDecimal reimbursementUnitPrice = null;
         BigDecimal reimbursementValue = null;
-        if (employeeLiable) {
+        if (employeeLiable && isReimbursableLine(detail)) {
             reimbursementUnitPrice = unit != null && unit.getSellPrice() != null
                     ? unit.getSellPrice()
                     : BigDecimal.ZERO;
@@ -1010,9 +1382,8 @@ public class StockadjustmentService {
                 detail.getLineCost(),
                 detail.getNote(),
                 detail.getRefSellPrice(),
-                detail.getVatRate(),
-                detail.getPreTaxAmount(),
-                detail.getVatAmount(),
+                formatLocalDate(detail.getOldExpirationDate()),
+                formatLocalDate(detail.getNewExpirationDate()),
                 reimbursementUnitPrice,
                 reimbursementValue
         );
@@ -1035,60 +1406,22 @@ public class StockadjustmentService {
                 unit != null ? unit.getId() : null,
                 unit != null ? unit.getUnitName() : "Đơn vị",
                 resolveUnitCost(batch),
-                unit != null && unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO,
-                resolveVatRateSnapshot(product)
+                unit != null && unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO
         );
     }
 
     /**
-     * Điền thuế GTGT đầu ra cho dòng điều chỉnh — CHỈ áp dụng INTERNAL_USE/GIFT/SAMPLE, tính theo
-     * GIÁ BÁN (không phải giá vốn). Người lập tự nhập {@code vatRate} (0 nếu KM đã đăng ký); mặc định
-     * = thuế suất thường của sản phẩm. Loại DESTROY/COUNT_* để 4 field null (không phát sinh GTGT đầu ra).
-     * refSellPrice = giá bán/đơn vị (đã gồm VAT); tách net/thuế nhất quán với InvoiceDetail.
+     * Snapshot GIÁ BÁN niêm yết của đơn vị đã xuất vào {@code refSellPrice} — chỉ INTERNAL_USE/GIFT/SAMPLE
+     * (xem {@link #REF_SELL_PRICE_TYPES}); loại khác để null.
+     *
+     * <p>Phải là SNAPSHOT chứ không đọc live từ {@code Productunit.sellPrice}: hàng đã rời kho rồi thì
+     * giá niêm yết đổi về sau không được làm đổi giá trị đã ghi nhận của phiếu.</p>
      */
-    private void applyOutputVat(Stockadjustmentdetail detail, String adjustmentType,
-                                Productunit unit, int quantity, Product product, BigDecimal requestedVatRate) {
-        if (!VAT_OUTPUT_TYPES.contains(adjustmentType)) {
+    private void applyReferenceSellPrice(Stockadjustmentdetail detail, String adjustmentType, Productunit unit) {
+        if (!REF_SELL_PRICE_TYPES.contains(adjustmentType)) {
             return;
         }
-        BigDecimal sellPrice = unit != null && unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO;
-        BigDecimal vatRate = requestedVatRate != null ? requestedVatRate : resolveVatRateSnapshot(product);
-        if (vatRate.compareTo(BigDecimal.ZERO) < 0) {
-            vatRate = BigDecimal.ZERO;
-        }
-        BigDecimal grossValue = sellPrice.multiply(BigDecimal.valueOf(quantity));
-        BigDecimal preTax;
-        BigDecimal vat;
-        if (vatRate.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal divisor = BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
-            preTax = grossValue.divide(divisor, 2, RoundingMode.HALF_UP);
-            vat = grossValue.subtract(preTax);
-        } else {
-            preTax = grossValue;
-            vat = BigDecimal.ZERO;
-        }
-        detail.setRefSellPrice(sellPrice);
-        detail.setVatRate(vatRate);
-        detail.setPreTaxAmount(preTax);
-        detail.setVatAmount(vat);
-    }
-
-    /**
-     * Thuế suất GTGT thường của sản phẩm (mirror {@code InvoiceService}): {@code Product.vatRateOverride}
-     * nếu có, ngược lại {@code Type.defaultVATRate}, mặc định 0.
-     */
-    private BigDecimal resolveVatRateSnapshot(Product product) {
-        if (product == null) {
-            return BigDecimal.ZERO;
-        }
-        if (product.getVatRateOverride() != null) {
-            return product.getVatRateOverride();
-        }
-        Type type = product.getTypeID();
-        if (type != null && type.getDefaultVATRate() != null) {
-            return type.getDefaultVATRate();
-        }
-        return BigDecimal.ZERO;
+        detail.setRefSellPrice(unit != null && unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO);
     }
 
     // ------------------------------------------------------------------ unit / cost resolution
@@ -1250,10 +1583,8 @@ public class StockadjustmentService {
         return trimToNull(existing) == null ? addition.trim() : existing.trim() + " | " + addition.trim();
     }
 
+    /** Trạng thái ghi nhận chi phí hợp lý — liên kết Expense chưa triển khai (TODO ở {@link #complete}). */
     private String costImpactDisplay(Stockadjustment adjustment) {
-        if (adjustment.getExpenseID() != null) {
-            return "Có ghi nhận chi phí";
-        }
         return "Chưa ghi nhận chi phí";
     }
 
@@ -1261,16 +1592,9 @@ public class StockadjustmentService {
         if (type == null) {
             return "Không rõ";
         }
-        return switch (type) {
-            case TYPE_DESTROY -> "Hủy hàng (nguyên nhân khách quan)";
-            case TYPE_DESTROY_EMPLOYEE_FAULT -> "Hủy hàng (lỗi nhân viên)";
-            case "INTERNAL_USE" -> "Sử dụng nội bộ";
-            case "SAMPLE" -> "Hàng mẫu";
-            case "GIFT" -> "Quà tặng";
-            case "COUNT_INCREASE" -> "Tăng theo kiểm kê";
-            case "COUNT_DECREASE" -> "Giảm theo kiểm kê";
-            default -> type;
-        };
+        // Đọc từ đúng bảng nhãn của bộ lọc — MỘT nguồn sự thật, đừng viết lại thành switch riêng: bản
+        // switch cũ từng thiếu COUNT và DATE_ADJUSTMENT nên hai loại đó hiện mã thô ra màn hình.
+        return adjustmentTypeLabels().getOrDefault(type, type);
     }
 
     /** Lô đã quá hạn dùng tính tới hôm nay. Không có HSD (nullable) thì coi như chưa quá hạn. */
@@ -1315,7 +1639,7 @@ public class StockadjustmentService {
 
     /**
      * Mã <em>dự kiến</em> cho màn tạo, CHỈ ĐỂ XEM — không giữ chỗ mã nào. Có thể lệch với mã thật nếu
-     * có phiếu khác lưu chen vào lúc đang soạn, hoặc khi nguồn kiểm kê sinh 2 phiếu (hiện mã phiếu đầu).
+     * có phiếu khác lưu chen vào lúc đang soạn, hoặc khi nguồn rà soát sinh 2 phiếu (hiện mã phiếu đầu).
      */
     @Transactional(readOnly = true)
     public String previewNextCode() {

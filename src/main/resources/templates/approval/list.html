@@ -215,7 +215,8 @@
             <div>
                 <h1 class="fs-4 mb-1">Danh sách phê duyệt</h1>
                 <p class="text-secondary mb-0">
-                    Phiếu đang chờ duyệt và các phiếu vừa xử lý gần đây (trả hàng, điều chỉnh kho, kiểm kê, báo cáo ca)
+                    Phiếu đang chờ duyệt và các phiếu vừa xử lý gần đây
+                    (trả hàng, phiếu nhập, rà soát kho, báo cáo ca, phiếu chi)
                 </p>
             </div>
         </div>
@@ -257,10 +258,29 @@
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
-                            <!-- Chỉ còn Kiểm kê: phiếu điều chỉnh kho bỏ bước duyệt từ 27/07/2026. -->
-                            <div class="text-secondary small mb-2">Kiểm kê</div>
-                            <div class="fs-3 fw-bold" th:text="${stats.stockCountCount}">0</div>
-                            <div class="text-secondary small">Phiếu kho chờ duyệt</div>
+                            <!-- Bước soát lại phiếu nhập (04/08/2026): chủ nhà thuốc có thể nhập sai số
+                                 lượng/giá mà không ai kiểm, mà duyệt phiếu nhập là lúc hàng vào kho thật. -->
+                            <div class="text-secondary small mb-2">Phiếu nhập</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.purchaseInvoiceCount}">0</div>
+                            <div class="text-secondary small">Phiếu nhập chờ duyệt</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="ti ti-truck-delivery"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl">
+                <div class="stock-card stat-card p-4">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <!-- Phiếu điều chỉnh kho KHÔNG nằm ở đây (bỏ bước duyệt từ 27/07/2026).
+                                 Gộp cả 3 loại phiếu rà soát kho: đếm số lượng / hạn dùng / tình trạng —
+                                 loại cụ thể hiện ở cột Tóm tắt của từng dòng. -->
+                            <div class="text-secondary small mb-2">Rà soát kho</div>
+                            <div class="fs-3 fw-bold" th:text="${stats.stockReviewCount}">0</div>
+                            <div class="text-secondary small">Phiếu rà soát chờ duyệt</div>
                         </div>
                         <div class="stat-icon">
                             <i class="ti ti-adjustments"></i>
@@ -496,5 +516,6 @@
     })();
 </script>
 
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

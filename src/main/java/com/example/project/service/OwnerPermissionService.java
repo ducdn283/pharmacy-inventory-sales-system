@@ -29,10 +29,13 @@ import java.util.Map;
  * <p>Rules, validated here rather than by a DB constraint:</p>
  * <ul>
  *   <li>An account holds at most one role (one {@code AccountPermission} row).</li>
- *   <li>Assignable roles are exactly {@code PHARMACIST}, {@code ACCOUNTANT}, {@code OWNER}, plus
- *       blank/"Không quyền" to clear the assignment.</li>
- *   <li>The system must always keep at least one Owner: an account that currently holds the
- *       {@code OWNER} role cannot be changed away from it while it is the last one.</li>
+ *   <li>Assignable roles are exactly {@code PHARMACIST} and {@code ACCOUNTANT}, plus blank/"Không
+ *       quyền" to clear the assignment. {@code OWNER} can never be assigned from this screen — the
+ *       system has exactly one Owner, always (mirrors {@code OwnerUserService}'s refusal to create a
+ *       second Owner account).</li>
+ *   <li>The sole Owner's own row is read-only here (never editable/removable) — enforced by the
+ *       existing "last Owner" guard below, which now always applies since a second Owner can never
+ *       be created in the first place.</li>
  * </ul>
  * Friendly Vietnamese messages are thrown as {@link IllegalArgumentException} for the controller
  * to surface as flash messages.
@@ -47,6 +50,8 @@ public class OwnerPermissionService {
     private static final String MSG_ACCOUNT_NOT_FOUND = "Không tìm thấy tài khoản đã chọn";
     private static final String MSG_LAST_OWNER =
             "Không thể thay đổi vì đây là Chủ nhà thuốc duy nhất trong hệ thống";
+    private static final String MSG_CANNOT_ASSIGN_OWNER =
+            "Không thể gán vai trò Chủ nhà thuốc — hệ thống chỉ có một Chủ nhà thuốc duy nhất";
 
     private final AccountpermissionRepository accountpermissionRepository;
     private final AccountRepository accountRepository;
@@ -132,11 +137,12 @@ public class OwnerPermissionService {
      * <ul>
      *   <li>A blank/empty {@code role} clears the assignment: the existing
      *       {@code AccountPermission} row (if any) is deleted, meaning "Không quyền".</li>
-     *   <li>Only {@code PHARMACIST}, {@code ACCOUNTANT} and {@code OWNER} can be assigned; anything
-     *       else is rejected.</li>
-     *   <li>If the account currently holds an owner-like role and is the last one in the system,
-     *       changing it away from Owner is rejected — the system must always keep at least one
-     *       Owner.</li>
+     *   <li>{@code OWNER} is rejected outright — never assignable from here, see class javadoc.</li>
+     *   <li>Only {@code PHARMACIST}/{@code ACCOUNTANT} can otherwise be assigned; anything else is
+     *       rejected.</li>
+     *   <li>If the account currently holds the Owner role, no change to it is ever allowed (it's
+     *       the system's sole Owner, by construction) — surfaced via the pre-existing "last Owner"
+     *       message so the wording stays familiar.</li>
      *   <li>Otherwise the role is created (with a manual id — the PK is not guaranteed
      *       auto-increment on every environment) or updated in place.</li>
      * </ul>
@@ -151,17 +157,19 @@ public class OwnerPermissionService {
 
         String normalized = canonicalRole(role);
         boolean clearing = normalized == null || normalized.isBlank();
+        if (!clearing && RoleConstants.OWNER.equals(normalized)) {
+            throw new IllegalArgumentException(MSG_CANNOT_ASSIGN_OWNER);
+        }
         if (!clearing && !RoleConstants.isPermissionTableRole(normalized)) {
             throw new IllegalArgumentException(MSG_INVALID_ROLE);
         }
 
         Accountpermission existing = findAssignment(accountId);
         boolean wasOwnerLike = existing != null && isOwnerLikeRole(existing.getRole());
-        boolean staysOwner = !clearing && RoleConstants.OWNER.equals(normalized);
 
-        // Never let a save take the last remaining Owner away from Owner.
-        if (wasOwnerLike && !staysOwner
-                && accountpermissionRepository.findOwnerAssignments().size() <= 1) {
+        // The sole Owner's row can never be changed from here — OWNER is never a valid target
+        // above, so any existing Owner assignment is, by definition, always "the last one".
+        if (wasOwnerLike) {
             throw new IllegalArgumentException(MSG_LAST_OWNER);
         }
 

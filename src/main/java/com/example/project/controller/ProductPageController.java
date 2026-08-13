@@ -7,6 +7,7 @@ import com.example.project.dto.response.ProductRowResponse;
 import com.example.project.entity.Type;
 import com.example.project.service.ProductService;
 import com.example.project.service.ProductValidationException;
+import com.example.project.service.ProcurementplanService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,9 +32,12 @@ import java.util.Optional;
 public class ProductPageController {
 
     private final ProductService productService;
+    private final ProcurementplanService procurementplanService;
 
-    public ProductPageController(ProductService productService) {
+    public ProductPageController(ProductService productService,
+                                 ProcurementplanService procurementplanService) {
         this.productService = productService;
+        this.procurementplanService = procurementplanService;
     }
 
     @GetMapping({
@@ -43,8 +47,8 @@ public class ProductPageController {
     })
     public String listProducts(@RequestParam(name = "keyword", required = false) String keyword,
                                @RequestParam(name = "typeId", required = false) Integer typeId,
-                               @RequestParam(name = "producerId", required = false) Integer producerId,
                                @RequestParam(name = "stockStatus", required = false) String stockStatus,
+                               @RequestParam(name = "nearExpiryOnly", defaultValue = "false") boolean nearExpiryOnly,
                                @RequestParam(name = "page", defaultValue = "0") int page,
                                @RequestParam(name = "size", defaultValue = "10") int size,
                                HttpServletRequest request,
@@ -56,27 +60,30 @@ public class ProductPageController {
             size = 10;
         }
 
-        Page<ProductRowResponse> productPage =
-                productService.searchProducts(keyword, typeId, producerId, stockStatus, PageRequest.of(page, size));
+        Page<ProductRowResponse> productPage = productService.searchProducts(keyword, null, null,
+                null, null, typeId, stockStatus, nearExpiryOnly, PageRequest.of(page, size));
 
         model.addAttribute("productPage", productPage);
         model.addAttribute("products", productPage.getContent());
         model.addAttribute("stats", productService.getStats());
 
         model.addAttribute("types", productService.listTypes());
-        model.addAttribute("producers", productService.listProducers());
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("filterTypeId", typeId);
-        model.addAttribute("filterProducerId", producerId);
         model.addAttribute("filterStockStatus", stockStatus);
+        model.addAttribute("nearExpiryOnly", nearExpiryOnly);
 
         model.addAttribute("currentPage", productPage.getNumber());
         model.addAttribute("totalPages", productPage.getTotalPages());
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", productPage.getTotalElements());
 
-        model.addAttribute("basePath", resolveBasePath(request));
+        String basePath = resolveBasePath(request);
+        model.addAttribute("basePath", basePath);
+        model.addAttribute("restockProducts", "/owner/products".equals(basePath)
+                ? procurementplanService.listRestockNeededProducts()
+                : List.of());
 
         return "product/list";
     }

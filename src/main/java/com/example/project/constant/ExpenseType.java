@@ -1,5 +1,6 @@
 package com.example.project.constant;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,14 +19,25 @@ public final class ExpenseType {
     /** Tiền hàng trả nhà cung cấp — loại duy nhất gắn được phiếu nhập. Xem {@link #PURCHASE_LINKABLE}. */
     public static final String GOODS_PAYMENT = "GOODS_PAYMENT";
     public static final String OPERATIONAL = "OPERATIONAL";
-    public static final String DEBT_PAYMENT = "DEBT_PAYMENT";
     public static final String RETURN_REFUND_PAYOUT = "RETURN_REFUND_PAYOUT";
     public static final String EMPLOYEE_ADVANCE_REPAYMENT = "EMPLOYEE_ADVANCE_REPAYMENT";
     public static final String OTHER = "OTHER";
 
     /** All valid types, in display order. */
     public static final List<String> ALL = List.of(
-            GOODS_PAYMENT, OPERATIONAL, DEBT_PAYMENT, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
+            GOODS_PAYMENT, OPERATIONAL, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
+
+    /** Dược sĩ chỉ được lập phiếu hoàn tiền có giá trị nhỏ hơn ngưỡng này. */
+    public static final BigDecimal PHARMACIST_REFUND_LIMIT = BigDecimal.valueOf(500_000);
+
+    /**
+     * Phiếu chi do dược sĩ lập với giá trị dưới ngưỡng này thì không cần Chủ nhà thuốc duyệt — tự
+     * động sang thẳng {@code ExpenseStatus#AWAITING_PAYMENT} (BA 2026-08-13), cùng cách Owner tự
+     * duyệt phiếu của chính mình. Một hằng số riêng với {@link #PHARMACIST_REFUND_LIMIT} dù cùng giá
+     * trị: đây là quy tắc về DUYỆT, còn hằng kia là trần SỐ TIỀN được tạo — hai quyết định BA độc
+     * lập, tình cờ trùng ngưỡng hôm nay.
+     */
+    public static final BigDecimal PHARMACIST_AUTO_APPROVE_LIMIT = BigDecimal.valueOf(500_000);
 
     /**
      * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #GOODS_PAYMENT}
@@ -44,9 +56,6 @@ public final class ExpenseType {
      * lọc thêm điều kiện "không gắn phiếu nhập" để loại tiền hàng ra khỏi chi phí được trừ (tiền hàng
      * đã nằm trong giá vốn) — điều kiện đó chỉ còn cần cho các phiếu cũ lưu trước khi tách loại.
      * <strong>Đừng thêm {@link #GOODS_PAYMENT} vào danh sách được trừ.</strong></p>
-     *
-     * <p>{@link #DEBT_PAYMENT} vẫn cố tình không nằm ở đây: nó dành cho khoản nợ phát sinh ở chỗ khác,
-     * không có chứng từ nào trong hệ thống để trỏ tới.</p>
      *
      * <p>Các phiếu cũ mang {@code OPERATIONAL} kèm {@code purchaseID} vẫn còn trong DB và vẫn hiển thị
      * bình thường — theo lệ "màn hình đọc đúng cột trong DB".</p>
@@ -73,7 +82,6 @@ public final class ExpenseType {
         return switch (type) {
             case GOODS_PAYMENT -> "Thanh toán hàng";
             case OPERATIONAL -> "Chi phí vận hành";
-            case DEBT_PAYMENT -> "Trả nợ";
             case RETURN_REFUND_PAYOUT -> "Hoàn tiền trả hàng";
             case EMPLOYEE_ADVANCE_REPAYMENT -> "Lương ứng của nhân viên";
             case OTHER -> "Chi khác";

@@ -195,9 +195,44 @@ public class CustomerService {
         String phone = trimToNull(req.getPhoneNumber());
         String taxCode = trimToNull(req.getTaxCode());
 
+        validateRequiredFields(company, taxCode, trimToNull(req.getAddress()),
+                trimToNull(req.getBankAccountNumber()), trimToNull(req.getBankName()));
         validateTaxCode(company, taxCode);
         validatePhoneUnique(phone, excludeId);
         validateTaxCodeUnique(company, taxCode, excludeId);
+    }
+
+    /**
+     * MỌI trường của khách hàng đều bắt buộc, trừ ghi chú.
+     *
+     * <ul>
+     *   <li>Doanh nghiệp là mã số thuế, cá nhân là số CCCD/CMND.</li>
+     *
+     *   <li>Số tài khoản + tên ngân hàng: chỉ khách doanh nghiệp</li>
+     * </ul>
+     *
+     * <p>Tên và số điện thoại đã do {@code @NotBlank} trên {@code CustomerRequest} chặn từ trước khi
+     * vào service</p>
+     */
+    private void validateRequiredFields(boolean company, String taxCode, String address,
+                                        String bankAccountNumber, String bankName) {
+        if (taxCode == null) {
+            throw new IllegalArgumentException(company
+                    ? "Vui lòng nhập mã số thuế của khách doanh nghiệp"
+                    : "Vui lòng nhập số CCCD/CMND của khách cá nhân");
+        }
+        if (address == null) {
+            throw new IllegalArgumentException("Vui lòng nhập địa chỉ khách hàng");
+        }
+        if (!company) {
+            return;
+        }
+        if (bankAccountNumber == null) {
+            throw new IllegalArgumentException("Vui lòng nhập số tài khoản ngân hàng của khách doanh nghiệp");
+        }
+        if (bankName == null) {
+            throw new IllegalArgumentException("Vui lòng nhập tên ngân hàng của khách doanh nghiệp");
+        }
     }
 
     private void apply(Customer c, CustomerRequest req) {
@@ -237,8 +272,8 @@ public class CustomerService {
     }
 
     /**
-     * CCCD/MST định danh duy nhất một pháp nhân nên không thể dùng chung. Bỏ qua khi để trống:
-     * trường này không bắt buộc, khách lẻ không cần xuất hóa đơn thì không phải khai.
+     * CCCD/MST định danh duy nhất một pháp nhân nên không thể dùng chung. Nhánh "để trống thì bỏ qua"
+     * chỉ còn là phòng — {@link #validateRequiredFields} đã chặn giá trị rỗng từ trước đó.
      */
     private void validateTaxCodeUnique(boolean company, String taxCode, Integer excludeId) {
         if (taxCode == null || taxCode.isBlank()) return;

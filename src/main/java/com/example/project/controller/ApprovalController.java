@@ -12,7 +12,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
 
 /**
- * Owner-only unified Approve List: aggregates Return, StockAdjustment, StockCount and ShiftReport
+ * Owner-only unified Approve List: aggregates Return, PurchaseInvoice, StockReview, ShiftReport and Expense
  * items (see {@link ApprovalService}) — PENDING ones plus a short recent window of resolved ones so
  * a just-handled row stays visible instead of disappearing. Read-only view — each row's Duyệt/Từ
  * chối posts straight to that module's own endpoint (with redirectTo=/owner/approvals so the user

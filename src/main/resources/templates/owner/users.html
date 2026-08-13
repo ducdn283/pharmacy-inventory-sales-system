@@ -5,7 +5,12 @@
     <meta charset="UTF-8"/>
     <title>Danh sách người dùng | PharmaManager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
+    <meta name="_csrf"
+          th:if="${_csrf}"
+          th:content="${_csrf.token}">
+    <meta name="_csrf_header"
+          th:if="${_csrf}"
+          th:content="${_csrf.headerName}">
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/images/apple-touch-icon.png" th:href="@{/assets/images/apple-touch-icon.png}">
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/images/favicon-32x32.png" th:href="@{/assets/images/favicon-32x32.png}">
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/images/favicon-16x16.png" th:href="@{/assets/images/favicon-16x16.png}">
@@ -100,6 +105,83 @@
 
         .pagination .page-item.disabled .page-link {
             color: #9ca3af;
+        }
+
+        .employee-note-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1080;
+            display: none;
+        }
+
+        .employee-note-modal.is-open {
+            display: block;
+        }
+
+        .employee-note-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            border: 0;
+            background: rgba(15, 23, 42, .55);
+        }
+
+        .employee-note-modal-dialog {
+            position: relative;
+            width: calc(100% - 32px);
+            max-width: 720px;
+            max-height: calc(100vh - 64px);
+            margin: 32px auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+        }
+
+        .employee-note-modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .employee-note-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .employee-note-item {
+            padding: 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #f9fafb;
+        }
+
+        .employee-note-content {
+            margin: 0;
+            color: #374151;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .employee-note-date {
+            margin-top: 8px;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .employee-note-create-box {
+            padding: 16px;
+            border: 1px solid #a7f3d0;
+            border-radius: 12px;
+            background: #f0fdf4;
+        }
+
+        @media (max-width: 575.98px) {
+            .employee-note-modal-dialog {
+                width: calc(100% - 16px);
+                max-height: calc(100vh - 16px);
+                margin: 8px auto;
+            }
         }
     </style>
 </head>
@@ -282,31 +364,70 @@
                             </span>
                         </td>
                         <td class="text-end">
-                            <form th:if="${user.canDeactivate}"
-                                  th:action="@{/owner/users/{accountId}/deactivate(accountId=${user.accountId})}"
-                                  method="post"
-                                  class="d-inline"
-                                  onsubmit="return confirm('Bạn có chắc chắn muốn vô hiệu hóa tài khoản này không?');">
-                                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    Vô hiệu hóa
-                                </button>
-                            </form>
+                            <div class="d-inline-flex flex-wrap justify-content-end gap-1">
 
-                            <form th:if="${user.canActivate}"
-                                  th:action="@{/owner/users/{accountId}/activate(accountId=${user.accountId})}"
-                                  method="post"
-                                  class="d-inline"
-                                  onsubmit="return confirm('Bạn có chắc chắn muốn kích hoạt lại tài khoản này không?');">
-                                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                                <button type="submit" class="btn btn-sm btn-outline-success">
-                                    Bỏ vô hiệu hóa
-                                </button>
-                            </form>
+                                <!-- Nút ghi chú chỉ hiển thị với tài khoản nhân viên -->
+                                <button th:if="${user.canDeactivate || user.canActivate}"
+                                        type="button"
+                                        class="btn btn-sm btn-outline-primary"
+                                        title="Xem và tạo ghi chú nhân viên"
+                                        data-employee-note-button
+                                        th:data-account-id="${user.accountId}"
+                                        th:data-employee-name="${user.name}"
+                                        th:data-employee-code="${user.employeeCode}">
 
-                            <span th:if="${!user.canDeactivate && !user.canActivate}" class="text-secondary small">
-        Không khả dụng
-    </span>
+                                    <i class="ti ti-notes me-1"></i>
+                                    Ghi chú
+                                </button>
+
+                                <form th:if="${user.canDeactivate}"
+                                      th:action="@{/owner/users/{accountId}/deactivate(
+                  accountId=${user.accountId}
+              )}"
+                                      method="post"
+                                      class="d-inline"
+                                      onsubmit="return confirm(
+                  'Bạn có chắc chắn muốn vô hiệu hóa tài khoản này không?'
+              );">
+
+                                    <input type="hidden"
+                                           th:if="${_csrf}"
+                                           th:name="${_csrf.parameterName}"
+                                           th:value="${_csrf.token}">
+
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger">
+                                        Vô hiệu hóa
+                                    </button>
+                                </form>
+
+                                <form th:if="${user.canActivate}"
+                                      th:action="@{/owner/users/{accountId}/activate(
+                  accountId=${user.accountId}
+              )}"
+                                      method="post"
+                                      class="d-inline"
+                                      onsubmit="return confirm(
+                  'Bạn có chắc chắn muốn kích hoạt lại tài khoản này không?'
+              );">
+
+                                    <input type="hidden"
+                                           th:if="${_csrf}"
+                                           th:name="${_csrf.parameterName}"
+                                           th:value="${_csrf.token}">
+
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-success">
+                                        Bỏ vô hiệu hóa
+                                    </button>
+                                </form>
+
+                                <span th:if="${!user.canDeactivate && !user.canActivate}"
+                                      class="text-secondary small align-self-center">
+            Không khả dụng
+        </span>
+
+                            </div>
                         </td>
                     </tr>
 
@@ -365,6 +486,649 @@
 
     </div>
 </main>
+<div id="employeeNoteModal"
+     class="employee-note-modal"
+     aria-hidden="true">
 
+    <button type="button"
+            class="employee-note-modal-backdrop"
+            data-employee-note-close
+            aria-label="Đóng modal">
+    </button>
+
+    <div class="employee-note-modal-dialog"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="employeeNoteModalTitle">
+
+        <div class="employee-note-modal-header
+                    d-flex justify-content-between
+                    align-items-start gap-3">
+
+            <div>
+                <h2 id="employeeNoteModalTitle"
+                    class="fs-5 mb-1">
+                    Ghi chú nhân viên
+                </h2>
+
+                <div id="employeeNoteModalSubtitle"
+                     class="small text-secondary">
+                </div>
+            </div>
+
+            <button type="button"
+                    class="btn-close"
+                    data-employee-note-close
+                    aria-label="Đóng">
+            </button>
+        </div>
+
+        <div class="employee-note-modal-body">
+
+            <div id="employeeNoteAlert"
+                 class="alert d-none"
+                 role="alert">
+            </div>
+
+            <div class="d-flex justify-content-between
+                        align-items-center gap-3 mb-3">
+
+                <h3 class="fs-6 mb-0">
+                    Danh sách ghi chú
+                </h3>
+
+                <button id="showCreateEmployeeNoteButton"
+                        type="button"
+                        class="btn btn-sm btn-owner-primary">
+
+                    <i class="ti ti-plus me-1"></i>
+                    Tạo ghi chú mới
+                </button>
+            </div>
+
+            <form id="employeeNoteCreateForm"
+                  class="employee-note-create-box d-none mb-4">
+                <h4 id="employeeNoteFormTitle"
+                    class="fs-6 mb-3">
+                    Tạo ghi chú mới
+                </h4>
+                <label for="employeeNoteContent"
+                       class="form-label fw-semibold">
+
+                    Nội dung ghi chú
+                    <span class="text-danger">*</span>
+                </label>
+
+                <textarea id="employeeNoteContent"
+                          class="form-control"
+                          rows="4"
+                          maxlength="2000"
+                          required
+                          placeholder="Nhập nội dung ghi chú cho nhân viên...">
+                </textarea>
+
+                <div class="d-flex justify-content-end gap-2 mt-3">
+
+                    <button id="cancelCreateEmployeeNoteButton"
+                            type="button"
+                            class="btn btn-sm btn-outline-secondary">
+                        Hủy
+                    </button>
+
+                    <button id="saveEmployeeNoteButton"
+                            type="submit"
+                            class="btn btn-sm btn-owner-primary">
+
+                        <i class="ti ti-device-floppy me-1"></i>
+                        Lưu ghi chú
+                    </button>
+                </div>
+            </form>
+
+            <div id="employeeNoteList"
+                 class="d-flex flex-column gap-3">
+
+                <div class="text-center text-secondary py-4">
+                    Đang tải ghi chú...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function () {
+        const modal =
+            document.getElementById('employeeNoteModal');
+
+        const modalTitle =
+            document.getElementById('employeeNoteModalTitle');
+
+        const modalSubtitle =
+            document.getElementById(
+                'employeeNoteModalSubtitle'
+            );
+
+        const noteList =
+            document.getElementById('employeeNoteList');
+
+        const alertBox =
+            document.getElementById('employeeNoteAlert');
+
+        const createForm =
+            document.getElementById(
+                'employeeNoteCreateForm'
+            );
+
+        const formTitle =
+            document.getElementById(
+                'employeeNoteFormTitle'
+            );
+
+        const noteContent =
+            document.getElementById(
+                'employeeNoteContent'
+            );
+
+        const showCreateButton =
+            document.getElementById(
+                'showCreateEmployeeNoteButton'
+            );
+
+        const cancelCreateButton =
+            document.getElementById(
+                'cancelCreateEmployeeNoteButton'
+            );
+
+        const saveButton =
+            document.getElementById(
+                'saveEmployeeNoteButton'
+            );
+
+        const csrfTokenElement =
+            document.querySelector(
+                'meta[name="_csrf"]'
+            );
+
+        const csrfHeaderElement =
+            document.querySelector(
+                'meta[name="_csrf_header"]'
+            );
+
+        const csrfToken = csrfTokenElement
+            ? csrfTokenElement.content
+            : null;
+
+        const csrfHeader = csrfHeaderElement
+            ? csrfHeaderElement.content
+            : null;
+
+        let currentAccountId = null;
+        let editingNoteId = null;
+        let lastTriggerButton = null;
+
+        function showAlert(message, type) {
+            alertBox.textContent = message;
+            alertBox.className =
+                'alert alert-' + type;
+        }
+
+        function hideAlert() {
+            alertBox.textContent = '';
+            alertBox.className = 'alert d-none';
+        }
+
+        function setSaveButton(editing, loading) {
+            saveButton.disabled = loading;
+
+            if (loading) {
+                saveButton.innerHTML = `
+                    <span class="
+                        spinner-border
+                        spinner-border-sm
+                        me-1">
+                    </span>
+                    Đang lưu...
+                `;
+
+                return;
+            }
+
+            saveButton.innerHTML = `
+                <i class="
+                    ti ti-device-floppy me-1">
+                </i>
+                ${
+                editing
+                    ? 'Cập nhật ghi chú'
+                    : 'Lưu ghi chú'
+            }
+            `;
+        }
+
+        function showCreateForm() {
+            editingNoteId = null;
+
+            formTitle.textContent =
+                'Tạo ghi chú mới';
+
+            createForm.reset();
+
+            setSaveButton(false, false);
+
+            createForm.classList.remove('d-none');
+            showCreateButton.classList.add('d-none');
+
+            noteContent.focus();
+        }
+
+        function showEditForm(note) {
+            editingNoteId = note.id;
+
+            formTitle.textContent =
+                'Chỉnh sửa ghi chú';
+
+            noteContent.value = note.content || '';
+
+            setSaveButton(true, false);
+
+            createForm.classList.remove('d-none');
+            showCreateButton.classList.add('d-none');
+
+            createForm.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
+            });
+
+            noteContent.focus();
+        }
+
+        function hideCreateForm() {
+            editingNoteId = null;
+
+            createForm.classList.add('d-none');
+            showCreateButton.classList.remove('d-none');
+
+            createForm.reset();
+
+            formTitle.textContent =
+                'Tạo ghi chú mới';
+
+            setSaveButton(false, false);
+        }
+
+        function openModal(button) {
+            currentAccountId =
+                button.dataset.accountId;
+
+            lastTriggerButton = button;
+
+            const employeeName =
+                button.dataset.employeeName
+                || 'Nhân viên';
+
+            const employeeCode =
+                button.dataset.employeeCode
+                || '';
+
+            modalTitle.textContent =
+                'Ghi chú của ' + employeeName;
+
+            modalSubtitle.textContent =
+                employeeCode;
+
+            hideAlert();
+            hideCreateForm();
+
+            modal.classList.add('is-open');
+
+            modal.setAttribute(
+                'aria-hidden',
+                'false'
+            );
+
+            document.body.classList.add(
+                'overflow-hidden'
+            );
+
+            loadNotes();
+        }
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+
+            modal.setAttribute(
+                'aria-hidden',
+                'true'
+            );
+
+            document.body.classList.remove(
+                'overflow-hidden'
+            );
+
+            currentAccountId = null;
+
+            hideAlert();
+            hideCreateForm();
+
+            if (lastTriggerButton) {
+                lastTriggerButton.focus();
+            }
+        }
+
+        function renderNotes(notes) {
+            noteList.replaceChildren();
+
+            if (!notes || notes.length === 0) {
+                const emptyMessage =
+                    document.createElement('div');
+
+                emptyMessage.className =
+                    'text-center text-secondary py-4';
+
+                emptyMessage.textContent =
+                    'Nhân viên này chưa có ghi chú nào.';
+
+                noteList.appendChild(emptyMessage);
+                return;
+            }
+
+            notes.forEach(function (note) {
+                const item =
+                    document.createElement('div');
+
+                item.className =
+                    'employee-note-item';
+
+                const header =
+                    document.createElement('div');
+
+                header.className =
+                    'd-flex justify-content-between '
+                    + 'align-items-center gap-3 mb-2';
+
+                const createdAt =
+                    document.createElement('div');
+
+                createdAt.className =
+                    'employee-note-date mt-0';
+
+                createdAt.textContent =
+                    'Ngày tạo: '
+                    + (note.dateDisplay || '-');
+
+                const editButton =
+                    document.createElement('button');
+
+                editButton.type = 'button';
+
+                editButton.className =
+                    'btn btn-sm btn-outline-primary';
+
+                editButton.innerHTML =
+                    '<i class="ti ti-edit me-1"></i>'
+                    + 'Chỉnh sửa';
+
+                editButton.addEventListener(
+                    'click',
+                    function () {
+                        showEditForm(note);
+                    }
+                );
+
+                const content =
+                    document.createElement('p');
+
+                content.className =
+                    'employee-note-content';
+
+                /*
+                 * Không dùng innerHTML cho nội dung note
+                 * để tránh XSS.
+                 */
+                content.textContent =
+                    note.content || '';
+
+                header.appendChild(createdAt);
+                header.appendChild(editButton);
+
+                item.appendChild(header);
+                item.appendChild(content);
+
+                noteList.appendChild(item);
+            });
+        }
+
+        async function getErrorMessage(
+            response,
+            fallback
+        ) {
+            try {
+                const data =
+                    await response.json();
+
+                return data.message || fallback;
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        async function loadNotes() {
+            if (!currentAccountId) {
+                return;
+            }
+
+            noteList.innerHTML = `
+                <div class="
+                    text-center
+                    text-secondary
+                    py-4">
+
+                    <span class="
+                        spinner-border
+                        spinner-border-sm
+                        me-2">
+                    </span>
+
+                    Đang tải ghi chú...
+                </div>
+            `;
+
+            try {
+                const url =
+                    '/owner/users/'
+                    + encodeURIComponent(
+                        currentAccountId
+                    )
+                    + '/notes';
+
+                const response = await fetch(
+                    url,
+                    {
+                        headers: {
+                            'Accept':
+                                'application/json'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        await getErrorMessage(
+                            response,
+                            'Không thể tải danh sách ghi chú'
+                        )
+                    );
+                }
+
+                const notes =
+                    await response.json();
+
+                renderNotes(notes);
+
+            } catch (error) {
+                noteList.innerHTML = '';
+
+                showAlert(
+                    error.message
+                    || 'Không thể tải danh sách ghi chú',
+                    'danger'
+                );
+            }
+        }
+
+        async function saveNote(event) {
+            event.preventDefault();
+
+            if (!currentAccountId) {
+                return;
+            }
+
+            const content =
+                noteContent.value.trim();
+
+            if (!content) {
+                showAlert(
+                    'Nội dung ghi chú không được để trống',
+                    'warning'
+                );
+
+                noteContent.focus();
+                return;
+            }
+
+            const isEditing =
+                editingNoteId !== null;
+
+            let url =
+                '/owner/users/'
+                + encodeURIComponent(
+                    currentAccountId
+                )
+                + '/notes';
+
+            if (isEditing) {
+                url += '/'
+                    + encodeURIComponent(
+                        editingNoteId
+                    );
+            }
+
+            const headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            };
+
+            if (csrfHeader && csrfToken) {
+                headers[csrfHeader] = csrfToken;
+            }
+
+            setSaveButton(isEditing, true);
+
+            try {
+                const response = await fetch(
+                    url,
+                    {
+                        method: isEditing
+                            ? 'PUT'
+                            : 'POST',
+
+                        headers: headers,
+
+                        body: JSON.stringify({
+                            content: content
+                        })
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        await getErrorMessage(
+                            response,
+                            isEditing
+                                ? 'Không thể cập nhật ghi chú'
+                                : 'Không thể tạo ghi chú'
+                        )
+                    );
+                }
+
+                hideCreateForm();
+
+                showAlert(
+                    isEditing
+                        ? 'Cập nhật ghi chú thành công'
+                        : 'Tạo ghi chú mới thành công',
+                    'success'
+                );
+
+                await loadNotes();
+
+            } catch (error) {
+                showAlert(
+                    error.message
+                    || 'Không thể lưu ghi chú',
+                    'danger'
+                );
+            } finally {
+                setSaveButton(
+                    isEditing,
+                    false
+                );
+            }
+        }
+
+        document
+            .querySelectorAll(
+                '[data-employee-note-button]'
+            )
+            .forEach(function (button) {
+                button.addEventListener(
+                    'click',
+                    function () {
+                        openModal(button);
+                    }
+                );
+            });
+
+        document
+            .querySelectorAll(
+                '[data-employee-note-close]'
+            )
+            .forEach(function (button) {
+                button.addEventListener(
+                    'click',
+                    closeModal
+                );
+            });
+
+        showCreateButton.addEventListener(
+            'click',
+            showCreateForm
+        );
+
+        cancelCreateButton.addEventListener(
+            'click',
+            hideCreateForm
+        );
+
+        createForm.addEventListener(
+            'submit',
+            saveNote
+        );
+
+        document.addEventListener(
+            'keydown',
+            function (event) {
+                if (
+                    event.key === 'Escape'
+                    && modal.classList.contains(
+                        'is-open'
+                    )
+                ) {
+                    closeModal();
+                }
+            }
+        );
+    })();
+</script>
 </body>
 </html>

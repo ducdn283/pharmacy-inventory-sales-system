@@ -26,15 +26,12 @@ public class TaxPeriodDetailResponse {
     private boolean taxExempt;
 
     private BigDecimal vatOutput;
-    private BigDecimal vatInput;
-    private BigDecimal vatCarryforwardIn;
-    private BigDecimal vatCarryforwardOut;
     private BigDecimal vatPayable;
 
     /** Thuế TNCN của kỳ. Stored, not re-derived — see {@code TaxPeriodUpdateRequest}. */
     private BigDecimal incomeTax;
 
-    private BigDecimal cashBalanceAtPeriodEnd;
+    private BigDecimal quarterlyRevenue;
 
     /** Group to apply from the day after {@code endDate}; defaults to this period's own group. */
     private Integer nextPeriodTaxType;

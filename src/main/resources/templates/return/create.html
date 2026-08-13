@@ -211,7 +211,7 @@
                                 <div class="mb-1"><i class="ti ti-info-circle text-success me-1"></i>
                                     <strong>Lưu ý mặt hàng được trả:</strong></div>
                                 <ul class="mb-0 ps-4">
-                                    <li><strong>Không trả được</strong> (tự loại khỏi danh sách): <strong>combo</strong>,
+                                    <li><strong>Không trả được</strong> (tự loại khỏi danh sách):
                                         <strong>thiết bị máy</strong> (theo bảo hành), và toàn bộ hóa đơn
                                         <strong>thuốc kê đơn</strong>.</li>
                                     <li>Hàng bán lẻ (không phải đơn vị đóng gói mặc định, vd viên):
@@ -233,7 +233,7 @@
                                 <thead>
                                 <tr>
                                     <th>Tên hàng hóa</th>
-                                    <th>Lô</th>
+                                    <th>Tên lô</th>
                                     <th>HSD</th>
                                     <th>Đơn vị</th>
                                     <th>Đã bán</th>
@@ -284,16 +284,14 @@
                             <div class="mb-3">
                                 <label class="form-label">Tỷ lệ hoàn cho khách <span class="text-danger">*</span></label>
                                 <div class="input-group input-group-sm">
+                                    <!-- Số nguyên phần trăm: step="1" để trình duyệt chặn số lẻ ngay tại ô;
+                                         data-invalid-message cho fragment field-validation hiện đúng câu
+                                         mà server sẽ trả về, thay vì "Giá trị không hợp lệ" chung chung. -->
                                     <input type="number" class="form-control" id="refundRate" name="refundRate"
-                                           min="0.01" max="100" step="0.01"
+                                           min="1" max="100" step="1" inputmode="numeric"
+                                           data-invalid-message="Tỷ lệ hoàn phải là số nguyên từ 1 đến 100"
                                            th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
                                     <span class="input-group-text">%</span>
-                                </div>
-                                <div class="form-text">
-                                    Mặc định theo thiết lập tài chính
-                                    (<span th:text="${#numbers.formatDecimal(defaultRefundRate, 0, 'POINT', 2, 'COMMA')}">80</span>%),
-                                    sửa được cho từng phiếu. Phần không hoàn nhà thuốc giữ lại và vẫn tính là
-                                    doanh thu chịu thuế.
                                 </div>
                             </div>
 
@@ -331,21 +329,12 @@
                                     <strong id="summaryPayout">0đ</strong>
                                 </div>
                             </div>
-                            <hr>
-                            <!-- Tách net/thuế NGAY TỪ tiền hoàn theo thuế suất của dòng hóa đơn gốc
-                                 (net = hoàn ÷ (1+t), thuế = hoàn − net). Số chốt do server tính lại khi lưu. -->
-                            <div class="summary-line">
-                                <span class="text-secondary">Doanh thu giảm trừ (chưa thuế)</span>
-                                <span id="summaryPreTax">0đ</span>
-                            </div>
-                            <div class="summary-line">
-                                <span class="text-secondary">Thuế GTGT đầu ra giảm trừ</span>
-                                <strong id="summaryVat">0đ</strong>
-                            </div>
+                            <!-- 2 dòng thuế (doanh thu giảm trừ / GTGT đầu ra giảm trừ) đã bỏ hẳn 04/08/2026:
+                                 hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ % ở mọi nhóm, không khấu trừ
+                                 đầu ra ⇒ phiếu trả không phát sinh số thuế nào. -->
                             <div class="form-text mb-3">
                                 Phiếu trả chỉ tính tiền và cấn trừ công nợ, KHÔNG chi tiền mặt — việc chi trả phần
-                                còn lại cho khách thực hiện ở phiếu chi bên Kế toán. Phần thuế trên đây được ghi
-                                giảm vào kỳ tính thuế của ngày trả hàng, không sửa lại kỳ bán gốc.
+                                còn lại cho khách thực hiện ở phiếu chi bên Kế toán.
                             </div>
 
                             <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
@@ -372,14 +361,17 @@
             <button type="button" class="pm-modal-close" id="closeModalBtn">&times;</button>
         </div>
         <div class="pm-modal-body">
+            <!-- KHÔNG tìm theo số điện thoại: bảng dưới không có cột nào chứa số điện thoại, và hóa
+                 đơn khách lẻ còn không có bản ghi khách hàng để lưu số. Đổi sang tìm theo TÊN/MÃ
+                 SẢN PHẨM — khách mang thuốc tới trả thường không cầm theo số hóa đơn. -->
             <input type="text" class="form-control mb-3" id="invoiceSearch"
-                   placeholder="Tìm theo số hóa đơn, tên khách hoặc số điện thoại">
+                   placeholder="Tìm theo số hóa đơn, tên khách hoặc tên/mã sản phẩm">
 
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
                     <tr>
-                        <th>Số hóa đơn</th>
+                        <th>Số hóa đơn / Sản phẩm</th>
                         <th>Ngày bán</th>
                         <th>Nhân viên</th>
                         <th>Khách hàng</th>
@@ -397,8 +389,15 @@
                                  data-customer=${inv.customerName},
                                  data-date=${inv.dateDisplay},
                                  data-debt=${inv.debtAmount},
-                                 data-search=${inv.invoiceCode + ' ' + inv.customerName}">
-                        <td class="fw-semibold text-success" th:text="${inv.invoiceCode}">HD000046</td>
+                                 data-search=${inv.searchText}">
+                        <td>
+                            <div class="fw-semibold text-success" th:text="${inv.invoiceCode}">HD000046</div>
+                            <div class="text-secondary small text-truncate"
+                                 style="max-width: 220px;"
+                                 th:if="${inv.productSummary != null and !inv.productSummary.isEmpty()}"
+                                 th:title="${inv.productSummary}"
+                                 th:text="${inv.productSummary}">Paracetamol · Vitamin C</div>
+                        </td>
                         <td th:text="${inv.dateDisplay}">06/07/2026 16:32</td>
                         <td th:text="${inv.employeeName}">Dược sĩ A</td>
                         <td th:text="${inv.customerName}">Anh Hoàng</td>
@@ -442,8 +441,6 @@
         const emptyRow = document.getElementById('emptyRow');
         const summaryItems = document.getElementById('summaryItems');
         const summaryRefund = document.getElementById('summaryRefund');
-        const summaryPreTax = document.getElementById('summaryPreTax');
-        const summaryVat = document.getElementById('summaryVat');
         const summaryOriginal = document.getElementById('summaryOriginal');
         const summaryRetained = document.getElementById('summaryRetained');
         const retainedRow = document.getElementById('retainedRow');
@@ -476,10 +473,21 @@
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('open'); });
 
         // ---- Modal client-side search ----
+        // Bỏ dấu cả 2 vế: tìm sản phẩm mà bắt gõ đúng dấu thì gõ "thuoc" không ra "Thuốc" nào.
+        function normalizeSearch(value) {
+            return (value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\u0111/g, 'd')
+                .replace(/\u0110/g, 'D')
+                .toLowerCase()
+                .trim();
+        }
+
         document.getElementById('invoiceSearch').addEventListener('input', function () {
-            const q = this.value.trim().toLowerCase();
+            const q = normalizeSearch(this.value);
             document.querySelectorAll('#invoicePickBody .pick-row').forEach(row => {
-                const hay = (row.getAttribute('data-search') || '').toLowerCase();
+                const hay = normalizeSearch(row.getAttribute('data-search'));
                 row.style.display = hay.includes(q) ? '' : 'none';
             });
         });
@@ -545,7 +553,7 @@
                 const tr = document.createElement('tr');
                 tr.innerHTML =
                     '<td>' + escapeHtml(line.productName) + '</td>' +
-                    '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(line.lotNumber || '') + '</span></td>' +
+                    '<td><span class="badge bg-secondary-subtle text-secondary">' + escapeHtml(line.batchName || '') + '</span></td>' +
                     '<td>' + escapeHtml(line.expirationDateDisplay || '') + '</td>' +
                     '<td>' + escapeHtml(line.unitName || '') + '</td>' +
                     '<td>' + line.soldQty + '</td>' +
@@ -556,7 +564,6 @@
                             '<button type="button" class="btn btn-outline-secondary qty-minus">−</button>' +
                             '<input type="number" class="form-control text-center qty-input" min="0" max="' + full +
                                 '" value="' + qty + '" data-price="' + line.unitSellPrice +
-                                '" data-vat-rate="' + (line.vatRate == null ? 0 : line.vatRate) +
                                 '" name="items[' + i + '].returnQty">' +
                             '<button type="button" class="btn btn-outline-secondary qty-plus">+</button>' +
                         '</div>' +
@@ -613,7 +620,6 @@
             const rate = currentRate();
             let totalOriginal = 0;
             let totalRefund = 0;
-            let totalVat = 0;
             let itemCount = 0;
             lineBody.querySelectorAll('.qty-input').forEach(inp => {
                 let qty = parseInt(inp.value, 10) || 0;
@@ -630,12 +636,6 @@
                 if (qty > 0) itemCount++;
                 totalOriginal += originalValue;
                 totalRefund += lineRefund;
-                // Đơn giá bán là giá GỘP → tách thuế từ trong TIỀN HOÀN (không phải giá trị gốc), không
-                // cộng thêm lên trên: hoàn 80% thì chỉ giảm trừ thuế trên đúng 80% đó.
-                const vatRate = parseFloat(inp.getAttribute('data-vat-rate')) || 0;
-                if (vatRate > 0) {
-                    totalVat += lineRefund - (lineRefund / (1 + vatRate / 100));
-                }
             });
             summaryItems.textContent = itemCount;
             summaryOriginal.textContent = formatMoney(totalOriginal);
@@ -651,12 +651,6 @@
                 summaryOffset.textContent = formatMoney(offset);
                 summaryPayout.textContent = formatMoney(Math.round(totalRefund) - offset);
             }
-
-            // Làm tròn thuế trước rồi lấy net = tổng − thuế, để 2 dòng luôn cộng đúng bằng tổng tiền hoàn
-            // (làm tròn độc lập 2 số có thể lệch 1đ).
-            const vatRounded = Math.round(totalVat);
-            summaryPreTax.textContent = formatMoney(Math.round(totalRefund) - vatRounded);
-            summaryVat.textContent = formatMoney(vatRounded);
         }
 
         if (refundRateInput) {
@@ -696,5 +690,6 @@
 <!-- "Lý do trả hàng" bắt buộc (ReturnService cũng chặn) — báo ngay dưới ô thay vì để người dùng bấm
      Tạo, chờ nạp lại cả trang mới thấy thông báo ở đầu trang. -->
 <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

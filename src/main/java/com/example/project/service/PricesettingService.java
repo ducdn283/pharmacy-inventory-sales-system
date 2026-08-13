@@ -131,9 +131,10 @@ public class PricesettingService {
     }
 
     /**
-     * Updates a single {@code ProductUnit.sellPrice}. Each row on the screen saves independently
-     * (same pattern as the Permission Table's per-cell save), so one bad value never blocks the
-     * rest.
+     * Updates a single {@code ProductUnit.sellPrice}. The screen itself now saves every unit of a
+     * product together in one action (see {@link #updatePrices}, which calls this once per changed
+     * unit) rather than posting one row at a time — this method is the single-unit primitive both
+     * that orchestration and its own dedicated tests build on.
      *
      * <p><strong>Base-unit cascade:</strong> when the edited row is the product's base unit, every
      * sibling unit whose current price still exactly matches {@code oldBasePrice × ratio} is
@@ -169,6 +170,59 @@ public class PricesettingService {
             return 0;
         }
         return cascadeToSiblings(unit, oldBasePrice, roundedPrice);
+    }
+
+    /** Result of a whole-product save — see {@link #updatePrices}. */
+    public record PriceUpdateResult(int explicitCount, int cascadedCount) {
+    }
+
+    /**
+     * Saves every changed unit price for one product in a single action — the screen used to post a
+     * separate {@code /cell} request per unit row (one "Lưu" button each); this is the one-button
+     * replacement, called once per product with every row's price at once.
+     *
+     * <p>A row whose submitted price is unchanged from what's stored is skipped entirely — no
+     * wasted write, no wasted cascade check. Any base-unit edit in the batch is applied
+     * <strong>last</strong>, after every other changed unit in the same submission — so
+     * {@link #updatePrice}'s existing cascade-to-siblings rule (see its javadoc) still fires
+     * correctly, and a sibling the user ALSO typed an explicit new price for in this same
+     * submission keeps that explicit value: by the time the base unit's cascade runs, that
+     * sibling's stored price no longer matches the old ratio formula, so the cascade's own
+     * "still-following-the-formula" check naturally leaves it alone.</p>
+     *
+     * @param sellPriceByUnitId every row's posted price, keyed by {@code Productunit.id}; a unit
+     *                          with no entry (or a {@code null} value) is left untouched
+     * @return how many rows were explicitly changed, and how many more were cascaded as a side effect
+     */
+    @Transactional
+    public PriceUpdateResult updatePrices(Integer productId, Map<Integer, BigDecimal> sellPriceByUnitId) {
+        List<Productunit> units = productunitRepository.findByProductId(productId);
+        if (units.isEmpty()) {
+            throw new IllegalArgumentException("Không tìm thấy sản phẩm");
+        }
+
+        List<Productunit> changed = units.stream()
+                .filter(unit -> isPriceChanged(unit, sellPriceByUnitId.get(unit.getId())))
+                // false < true, so a base-unit row always sorts after every non-base row.
+                .sorted(Comparator.comparing(unit -> Boolean.TRUE.equals(unit.getIsBaseUnit())))
+                .toList();
+
+        int explicitCount = 0;
+        int cascadedCount = 0;
+        for (Productunit unit : changed) {
+            cascadedCount += updatePrice(unit.getId(), sellPriceByUnitId.get(unit.getId()));
+            explicitCount++;
+        }
+
+        return new PriceUpdateResult(explicitCount, cascadedCount);
+    }
+
+    private boolean isPriceChanged(Productunit unit, BigDecimal submitted) {
+        if (submitted == null) {
+            return false;
+        }
+        BigDecimal current = unit.getSellPrice();
+        return current == null || roundMoney(current).compareTo(roundMoney(submitted)) != 0;
     }
 
     private int cascadeToSiblings(Productunit baseUnit, BigDecimal oldBasePrice, BigDecimal newBasePrice) {
@@ -261,8 +315,10 @@ public class PricesettingService {
                                                          BigDecimal vatRatePercent, String vatRateSource) {
         Integer group = taxperiodsnapshotService.currentRevenueGroup();
         boolean exempt = TaxRevenueGroup.isTaxExempt(group);
-        boolean deduction = TaxRevenueGroup.isDeductionGroup(group);
-        boolean direct = !exempt && !deduction;
+        // Group 3 now projects identically to group 2 — GTGT trực tiếp trên doanh thu cho cả hai
+        // (BA quyết định trực tiếp, xem TaxRevenueGroup.DEDUCTION javadoc) — so there is no longer a
+        // separate deduction-method branch here at all.
+        boolean direct = !exempt;
 
         // An unknown figure stays null all the way to the screen and renders "—". Substituting zero
         // would turn "chưa có lô tồn nên chưa biết giá vốn" into "giá vốn bằng 0", which reads as
@@ -288,29 +344,20 @@ public class PricesettingService {
             incomeTax = BigDecimal.ZERO;
             formula = "Nhóm 1 miễn thuế hoàn toàn — không kê khai GTGT lẫn TNCN.";
             caveat = null;
-        } else if (direct) {
+        } else {
             // The percentage method never looks at cost, so an unknown cost does not make the tax
-            // unknown — only the margin below it.
+            // unknown — only the margin below it. Applies to groups 2 and 3 alike now.
             outputVat = priceKnown ? sellPrice.multiply(TaxRevenueGroup.DIRECT_VAT_RATE) : null;
             inputVat = BigDecimal.ZERO;
             incomeTaxBase = priceKnown ? sellPrice : null;
             incomeTaxRate = TaxRevenueGroup.DIRECT_PIT_RATE;
             incomeTax = priceKnown ? sellPrice.multiply(incomeTaxRate) : null;
-            formula = "Nhóm 2 tính thẳng trên doanh thu: GTGT = giá bán × 1%, TNCN = giá bán × 0,5%.";
+            formula = "Tính trực tiếp trên doanh thu: GTGT = giá bán × 1%, TNCN = giá bán × 0,5%.";
             caveat = "Giá vốn không ảnh hưởng tới số thuế — lô nhập đắt hay rẻ vẫn nộp bằng nhau, "
                     + "nên chênh lệch giá nhập rơi hết vào lợi nhuận.";
-        } else {
-            outputVat = priceKnown ? embeddedVat(sellPrice, vatRatePercent) : null;
-            inputVat = costKnown ? embeddedVat(importPrice, vatRatePercent) : null;
-            // A loss-making unit owes no TNCN; it does not create a negative tax (same as the period).
-            incomeTaxBase = marginKnown ? sellPrice.subtract(importPrice).max(BigDecimal.ZERO) : null;
-            incomeTaxRate = TaxRevenueGroup.DEDUCTION_PIT_RATE;
-            incomeTax = incomeTaxBase == null ? null : incomeTaxBase.multiply(incomeTaxRate);
-            formula = "Nhóm 3 khấu trừ: GTGT phải nộp = GTGT đầu ra − GTGT đầu vào; "
-                    + "TNCN = 15% × (giá bán − giá vốn).";
-            caveat = "Ước tính trên 1 đơn vị: chi phí vận hành (điện, nước, lương) chỉ trừ được ở "
-                    + "cấp kỳ thuế nên TNCN thực tế sẽ THẤP HƠN số này; GTGT đầu vào cũng chỉ được "
-                    + "khấu trừ nếu phiếu nhập của lô đủ điều kiện (Điều 26 NĐ 181/2025).";
+            // Biết trước: nhóm 2 có thể chọn tính TNCN theo lợi nhuận thay vì doanh thu
+            // (Financialsetting.taxCalculationMethod, xem TaxperiodsnapshotService.computePeriod) —
+            // panel một-đơn-vị này chưa đọc lựa chọn đó, luôn chiếu theo công thức doanh thu × 0,5%.
         }
 
         BigDecimal vatPayable = subtractIfKnown(outputVat, inputVat);
@@ -319,19 +366,23 @@ public class PricesettingService {
         BigDecimal netProfit = subtractIfKnown(grossMargin, totalTax);
 
         if (!costKnown) {
-            caveat = "Sản phẩm chưa có lô nào còn tồn nên chưa biết giá vốn — phần chênh lệch, lợi "
-                    + "nhuận" + (deduction ? " và GTGT đầu vào" : "") + " để trống thay vì tính bằng 0.";
+            caveat = "Sản phẩm chưa có lô nào còn tồn nên chưa biết giá vốn — phần chênh lệch để "
+                    + "trống thay vì tính bằng 0.";
         }
 
         return new PriceSettingTaxProjectionResponse(
                 group,
                 TaxRevenueGroup.label(group),
                 exempt,
-                deduction,
+                // Luôn false: không nhóm nào còn tách riêng GTGT đầu vào theo lô nữa, nên bảng lô
+                // hàng (batchTable() trong price-settings.html) không còn cột "GTGT đầu vào" cho ai.
+                false,
                 direct,
                 scale2(vatRatePercent),
                 vatRateSource,
-                deduction,
+                // Không nhóm nào còn tính thuế dựa trên thuế suất GTGT riêng của sản phẩm nữa (nhóm 3
+                // bỏ khấu trừ, nên vatRatePercent giờ chỉ mang tính tham khảo cho mọi nhóm).
+                false,
                 costKnown,
                 nullableScale2(sellPrice),
                 nullableScale2(importPrice),

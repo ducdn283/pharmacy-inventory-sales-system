@@ -22,8 +22,6 @@ public class InvoiceDetailItemResponse {
     private Integer quantity;
     private BigDecimal unitSellPrice;
     private BigDecimal subtotal;
-    private BigDecimal vatRate;
-    private BigDecimal preTaxAmount;
-    private BigDecimal vatAmount;
     private Integer returnedQty;
+    private String note;
 }

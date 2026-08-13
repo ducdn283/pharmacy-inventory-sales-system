@@ -16,9 +16,7 @@ public class InvoiceDetailUnitLineResponse {
     private Integer quantity;
     private BigDecimal unitSellPrice;
     private BigDecimal lineSubtotal;
-    private BigDecimal vatRate;
-    private BigDecimal preTaxAmount;
-    private BigDecimal vatAmount;
     private Integer returnedQty;
     private String batchLabel;
+    private String note;
 }

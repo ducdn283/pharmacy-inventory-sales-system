@@ -8,7 +8,6 @@ import com.example.project.dto.request.ExpenseCreateRequest;
 import com.example.project.dto.response.ExpenseDetailResponse;
 import com.example.project.dto.response.ExpenseListItemResponse;
 import com.example.project.dto.response.ExpenseReferenceOptionResponse;
-import com.example.project.dto.response.ExpenseResponse;
 import com.example.project.dto.response.ExpenseStatsResponse;
 import com.example.project.entity.Account;
 import com.example.project.entity.Customer;
@@ -22,6 +21,7 @@ import com.example.project.repository.AccountRepository;
 import com.example.project.repository.AccountpermissionRepository;
 import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.ReturnRepository;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,23 +70,45 @@ import java.util.stream.Collectors;
  *
  * <p><strong>Paying a supplier.</strong> A {@link ExpenseType#GOODS_PAYMENT} slip can point at a
  * {@code PurchaseInvoice} and is the real payment leg for it — including money still owed, since
- * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE}). Approving or
- * paying the slip pushes the money onto {@code Purchaseinvoice.paid} via
+ * that debt is the import invoice itself (see {@link ExpenseType#PURCHASE_LINKABLE}). Only once the
+ * Owner confirms the money actually left (see {@link #confirmPayment}) does the slip push money onto
+ * {@code Purchaseinvoice.paid} via
  * {@link PurchaseinvoiceService#applyPayment(Integer, java.math.BigDecimal)}, which re-derives and
- * stores the invoice's status in the same transaction. Cancelling an already-approved slip reverses
- * it. Money is only ever considered disbursed once the slip is approved — see
- * {@link #disbursedAmount}.</p>
+ * stores the invoice's status in the same transaction. Money is only ever considered disbursed once
+ * the slip is {@link ExpenseStatus#COMPLETED} — see {@link #disbursedAmount}.</p>
  *
  * <p><strong>Shift attachment.</strong> A slip is stamped with the actor's open shift at the moment
- * the money is authorised, so the register can be reconciled — see {@link #attachOpenShift}. A
- * shift's whole {@code totalCashOut} is the sum of its slips' {@code paidByCash}, so this stamp is
- * load-bearing: a slip left unstamped is cash the register can never account for.</p>
+ * the money is <em>actually paid</em> (not merely approved), so the register can be reconciled —
+ * see {@link #attachOpenShift}. A shift's whole {@code totalCashOut} is the sum of its slips'
+ * {@code paidByCash}, so this stamp is load-bearing: a slip left unstamped is cash the register can
+ * never account for.</p>
  *
- * <p>Workflow mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a
- * payment step ({@link ExpenseStatus#AWAITING_PAYMENT} → {@link ExpenseStatus#COMPLETED}) since an
- * Expense tracks real cash leaving the register, not just an approval. In practice a slip is always
- * paid in full at creation (see {@link #createExpense}), so {@code AWAITING_PAYMENT} is legacy
- * display-only for slips saved before that rule.</p>
+ * <p><strong>Approval and real payment are two separate steps (BA 2026-08).</strong> Workflow
+ * mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a real payment
+ * step: {@link #createExpense}/{@link #submit}/{@link #approve} only ever move a slip as far as
+ * {@link ExpenseStatus#AWAITING_PAYMENT} — approved, but nothing has left the drawer/bank account
+ * yet. Only {@link #confirmPayment} moves it the rest of the way to {@link ExpenseStatus#COMPLETED}
+ * and triggers the money-moving side effects above — Owner-only for most slips, see the next
+ * paragraph for the one exception. {@link ExpenseStatus#CANCELLED} is reachable right up until real
+ * payment — see {@link #cancel} — but not after, since by then there is real money to un-ring the
+ * bell on.</p>
+ *
+ * <p><strong>A Pharmacist's small slip is self-service end to end (BA 2026-08-13).</strong> Same
+ * self-approval treatment the Owner already gets, but capped by amount: a Pharmacist-raised slip
+ * under {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} goes straight to
+ * {@link ExpenseStatus#AWAITING_PAYMENT} at creation (no Owner sign-off needed), and the SAME
+ * Pharmacist may then also {@link #confirmPayment(Integer, Integer) confirm the payment} on their
+ * own slip — they raised it and they're the one physically handing over the cash, so there is no
+ * reason to make them wait on the Owner for either step. At or above the limit both steps still need
+ * the Owner: creation/submission lands on {@link ExpenseStatus#PENDING} like any other non-Owner
+ * slip, and only the Owner's unrestricted {@link #confirmPayment(Integer)} overload can move it to
+ * {@link ExpenseStatus#COMPLETED}.</p>
+ *
+ * <p><strong>Cash vs. chuyển khoản is role-locked, not just Owner-vs-everyone (BA 2026-08-13).</strong>
+ * Owner may split freely between both. Pharmacist may only pay cash — a shift only ever opens with
+ * a fixed float, never a bank transfer, so there is nothing to reconcile a banking leg against.
+ * Accountant may only pay by chuyển khoản — never present in person to hand over cash and holds no
+ * float/shift to reconcile one against. See {@link #resolveSplit}.</p>
  */
 @Service
 public class ExpenseService {
@@ -101,29 +124,30 @@ public class ExpenseService {
     private final AccountpermissionRepository accountpermissionRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
     private final ShiftreportService shiftreportService;
+    private final WorkflowNotificationService workflowNotificationService;
+    private final FinancialsettingService financialsettingService;
+    // @Lazy vì ReturnService đã inject ExpenseService (chiều ngược) — cần phá vòng lặp bean. Chỉ
+    // dùng ở confirmPayment() để báo ReturnService đồng bộ lại trạng thái sau khi tiền thực chi.
+    private final ReturnService returnService;
 
     public ExpenseService(ExpenseRepository expenseRepository,
                           AccountRepository accountRepository,
                           ReturnRepository returnRepository,
                           AccountpermissionRepository accountpermissionRepository,
                           PurchaseinvoiceService purchaseinvoiceService,
-                          ShiftreportService shiftreportService) {
+                          ShiftreportService shiftreportService,
+                          WorkflowNotificationService workflowNotificationService,
+                          FinancialsettingService financialsettingService,
+                          @Lazy ReturnService returnService) {
         this.expenseRepository = expenseRepository;
         this.accountRepository = accountRepository;
         this.returnRepository = returnRepository;
         this.accountpermissionRepository = accountpermissionRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
         this.shiftreportService = shiftreportService;
-    }
-
-    // ------------------------------------------------------------------ generated-REST passthrough
-
-    @Transactional(readOnly = true)
-    public List<ExpenseResponse> getAll() {
-        return expenseRepository.findAll()
-                .stream()
-                .map(ExpenseResponse::from)
-                .toList();
+        this.workflowNotificationService = workflowNotificationService;
+        this.financialsettingService = financialsettingService;
+        this.returnService = returnService;
     }
 
     // ------------------------------------------------------------------ list / search
@@ -135,6 +159,17 @@ public class ExpenseService {
                                                  String expenseType,
                                                  String status,
                                                  Pageable pageable) {
+        return search(keyword, fromDate, toDate, expenseType, status, pageable, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ExpenseListItemResponse> search(String keyword,
+                                                 String fromDate,
+                                                 String toDate,
+                                                 String expenseType,
+                                                 String status,
+                                                 Pageable pageable,
+                                                 Integer applicantAccountId) {
         final String normalizedKeyword = normalize(keyword);
         final LocalDate from = parseDate(fromDate);
         final LocalDate to = parseDate(toDate);
@@ -142,6 +177,7 @@ public class ExpenseService {
         List<Expense> expenses = expenseRepository.findAll();
 
         List<ExpenseListItemResponse> filtered = expenses.stream()
+                .filter(expense -> belongsToApplicant(expense, applicantAccountId))
                 .filter(expense -> matchesKeyword(expense, normalizedKeyword))
                 .filter(expense -> matchesDate(expense, from, to))
                 .filter(expense -> expenseType == null || expenseType.isBlank()
@@ -167,7 +203,14 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public ExpenseStatsResponse getStats() {
-        List<Expense> expenses = expenseRepository.findAll();
+        return getStats(null);
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseStatsResponse getStats(Integer applicantAccountId) {
+        List<Expense> expenses = expenseRepository.findAll().stream()
+                .filter(expense -> belongsToApplicant(expense, applicantAccountId))
+                .toList();
         YearMonth currentMonth = YearMonth.now();
 
         List<Expense> thisMonth = expenses.stream()
@@ -175,10 +218,12 @@ public class ExpenseService {
                 .filter(expense -> YearMonth.from(toLocalDate(expense.getDate())).equals(currentMonth))
                 .toList();
 
-        // Cancelled slips don't count as real cash out (same convention as
-        // PurchaseinvoiceService.getStats() excluding cancelled invoices from its totals).
+        // BA 2026-08: chỉ COMPLETED là tiền THẬT đã rời quỹ (xem ExpenseService.confirmPayment) —
+        // DRAFT/PENDING/AWAITING_PAYMENT/CANCELLED đều chưa/không phải tiền thật, không được cộng
+        // vào "Đã chi trong tháng". Trước đây cờ này chỉ loại CANCELLED, hợp lý khi duyệt = hoàn
+        // thành ngay lập tức; giờ AWAITING_PAYMENT có thể tồn tại lâu nên phải loại nốt.
         BigDecimal monthlyPaidTotal = thisMonth.stream()
-                .filter(expense -> !ExpenseStatus.CANCELLED.equals(expense.getStatus()))
+                .filter(expense -> ExpenseStatus.COMPLETED.equals(expense.getStatus()))
                 .map(Expense::getPaid)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -217,7 +262,7 @@ public class ExpenseService {
      *       {@code ReturnStatus}'s javadoc there is deliberately no "Duyệt" for returns, because
      *       approving one means the pharmacy now owes the customer money;</li>
      *   <li>it has a real cash refund — see {@link #cashRefundAmount};</li>
-     *   <li>no live Expense already points at it — see {@link #linkedReturnIds}.</li>
+     *   <li>no live Expense already points at it — see {@link #committedByReturnId()}.</li>
      * </ol>
      */
     @Transactional(readOnly = true)
@@ -249,6 +294,50 @@ public class ExpenseService {
     @Transactional(readOnly = true)
     public Map<Integer, BigDecimal> customerReturnAmounts() {
         return amountsById(listCustomerReturns());
+    }
+
+    /**
+     * {@code returnId -> phần còn phải hoàn thực}, cho màn Return của {@code ReturnService} hiển thị
+     * đúng "còn phải hoàn bao nhiêu" sau khi trừ những phiếu chi RETURN_REFUND_PAYOUT còn sống đã
+     * chi ra — cùng vai trò {@code PurchaseinvoiceService.remainingDebt()} đóng cho
+     * {@code Purchaseinvoice.paid}, chỉ khác chỗ Return không có cột tiền-đã-chi của riêng nó nên
+     * nguồn sự thật nằm hẳn ở Expense (xem "Read second": phiếu trả CHỈ TÍNH tiền, không chi tiền).
+     * Trả 0 cho một return đã được hoàn đủ (kể cả supplier return — công thức vẫn đúng vì
+     * {@code committedByReturnId()} chỉ đếm phiếu chi thực sự trỏ vào nó, mà chỉ trả hàng khách mới
+     * có phiếu chi loại này).
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> outstandingRefundByReturnId(Collection<Return> returns) {
+        Map<Integer, BigDecimal> committed = committedByReturnId();
+        Map<Integer, BigDecimal> result = new LinkedHashMap<>();
+        for (Return ret : returns) {
+            if (ret != null && ret.getId() != null) {
+                result.put(ret.getId(), availableToRefund(ret, committed));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Tổng tiền các phiếu chi RETURN_REFUND_PAYOUT đã THỰC CHI ({@link ExpenseStatus#COMPLETED}) cho
+     * một phiếu trả — dùng bởi {@code ReturnService.syncStatusAfterRefundPayment()} để biết khi nào
+     * phiếu trả đã được hoàn ĐỦ tiền thật. Khác {@link #committedByReturnId()} (đếm cả phiếu mới chỉ
+     * CAM KẾT — DRAFT/PENDING/AWAITING_PAYMENT — chưa chắc tiền đã rời quỹ): dùng con số đó ở đây sẽ
+     * chuyển phiếu trả sang Hoàn thành ngay khi phiếu chi được TẠO, trước cả khi Owner xác nhận
+     * thanh toán.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal disbursedRefundAmount(Integer returnId) {
+        if (returnId == null) {
+            return BigDecimal.ZERO;
+        }
+        return expenseRepository.findAll().stream()
+                .filter(expense -> ExpenseStatus.COMPLETED.equals(expense.getStatus()))
+                .filter(expense -> expense.getReturnID() != null
+                        && returnId.equals(expense.getReturnID().getId()))
+                .map(Expense::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
@@ -294,9 +383,29 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public ExpenseDetailResponse getDetail(Integer expenseId) {
+        return getDetail(expenseId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseDetailResponse getDetail(Integer expenseId, Integer requiredApplicantAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        ensureApplicantAccess(expense, requiredApplicantAccountId);
         return toDetail(expense);
+    }
+
+    /**
+     * The cancel action belongs to the account that created the slip, independent of that account's
+     * role. This method is used by the detail page only; {@link #cancel} repeats the same ownership
+     * check as the authoritative server-side gate.
+     */
+    @Transactional(readOnly = true)
+    public boolean canCancel(Integer expenseId, Integer currentAccountId) {
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        return isApplicant(expense, currentAccountId)
+                && !ExpenseStatus.CANCELLED.equals(expense.getStatus())
+                && !ExpenseStatus.COMPLETED.equals(expense.getStatus());
     }
 
     // ------------------------------------------------------------------ create
@@ -304,20 +413,40 @@ public class ExpenseService {
     /**
      * Creates a new expense slip. When {@code asDraft} is true it is saved as
      * {@link ExpenseStatus#DRAFT} regardless of role. Otherwise: the Owner's slip is auto-approved
-     * (status resolved straight to {@link ExpenseStatus#AWAITING_PAYMENT} or
-     * {@link ExpenseStatus#COMPLETED} depending on whether it's fully paid); anyone else's goes to
-     * {@link ExpenseStatus#PENDING} for the Owner to approve.
+     * straight to {@link ExpenseStatus#AWAITING_PAYMENT} (money has not left yet — see
+     * {@link #confirmPayment}); anyone else's goes to {@link ExpenseStatus#PENDING} for the Owner to
+     * approve. This overload always passes {@code isPharmacist = false} — callers that need the
+     * Pharmacist-specific auto-approve/payment-method rules must use the 6-arg overload.
      */
     @Transactional
     public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
                                   boolean asDraft) {
+        return createExpense(request, currentAccountId, isOwner, asDraft, false, null);
+    }
+
+    /**
+     * @param isPharmacist whether the creator is a Pharmacist — drives both the auto-approve
+     *                     threshold ({@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT}) and the
+     *                     cash-only payment restriction (see {@link #resolveSplit}).
+     */
+    @Transactional
+    public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
+                                  boolean asDraft, boolean isPharmacist, String requiredExpenseType) {
         String expenseType = resolveExpenseType(request.getExpenseType());
+        if (requiredExpenseType != null && !requiredExpenseType.equals(expenseType)) {
+            throw new IllegalArgumentException("Tài khoản này chỉ được tạo phiếu chi hoàn tiền trả hàng");
+        }
 
         // Both links are resolved before validation because whenever a slip points at a document,
         // that document decides the amount — the posted value is display-only and never trusted.
         Return linkedReturn = resolveCustomerReturn(request, expenseType);
         Purchaseinvoice linkedPurchase = resolvePurchaseInvoice(request, expenseType);
         BigDecimal amount = resolveAmount(request, linkedReturn, linkedPurchase);
+        if (ExpenseType.RETURN_REFUND_PAYOUT.equals(requiredExpenseType)
+                && amount.compareTo(ExpenseType.PHARMACIST_REFUND_LIMIT) >= 0) {
+            throw new IllegalArgumentException(
+                    "Dược sĩ chỉ được tạo phiếu hoàn tiền trả hàng dưới 500.000đ");
+        }
 
         // Every NOT NULL column (expenseType/reason/amount) must have a real value even for a
         // draft — unlike Stock Adjustment's items, Expense has no field that's genuinely optional
@@ -349,7 +478,9 @@ public class ExpenseService {
 
         // Một phiếu là một lần chi: tiền đã chi luôn đúng bằng số tiền của phiếu, không có phiếu
         // "chi thiếu so với chính nó". Chi thiếu so với CHỨNG TỪ thì nằm ở chỗ khác — chứng từ còn nợ.
-        BigDecimal[] split = resolveSplit(request, amount, isOwner);
+        boolean canPayCash = isOwner || isPharmacist;
+        boolean canPayBanking = !isPharmacist;
+        BigDecimal[] split = resolveSplit(request, amount, canPayCash, canPayBanking);
         expense.setPaid(amount);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
@@ -360,7 +491,7 @@ public class ExpenseService {
 
         if (asDraft) {
             expense.setStatus(ExpenseStatus.DRAFT);
-        } else if (isOwner) {
+        } else if (isOwner || pharmacistAutoApproves(isPharmacist, amount)) {
             applyApproval(expense, applicant);
         } else {
             expense.setStatus(ExpenseStatus.PENDING);
@@ -371,14 +502,36 @@ public class ExpenseService {
         // Re-stamp the human-facing code from the real generated id (matches Stock Adjustment/
         // Purchase Invoice convention: the placeholder above only reserves a slot in sequence).
         saved.setExpenseCode(formatCode(saved.getId()));
-        return expenseRepository.save(saved).getId();
+
+        Expense finalSaved = expenseRepository.save(saved);
+
+        if (ExpenseStatus.PENDING.equals(finalSaved.getStatus())) {
+            workflowNotificationService.expensePending(finalSaved);
+        }
+
+        return finalSaved.getId();
     }
 
     /** Sends a {@link ExpenseStatus#DRAFT} slip forward, same shape as {@code StockadjustmentService#submit}. */
     @Transactional
     public void submit(Integer expenseId, Integer currentAccountId, boolean isOwner) {
+        submit(expenseId, currentAccountId, isOwner, false);
+    }
+
+    /**
+     * @param isPharmacist restricts submission to the slip's own applicant (a Pharmacist may only
+     *                      submit their own draft) AND, per {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT},
+     *                      lets a small-enough slip skip {@link ExpenseStatus#PENDING} the same way
+     *                      {@link #createExpense} does.
+     */
+    @Transactional
+    public void submit(Integer expenseId, Integer currentAccountId, boolean isOwner,
+                       boolean isPharmacist) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        if (isPharmacist) {
+            ensureApplicantAccess(expense, currentAccountId);
+        }
 
         if (!ExpenseStatus.DRAFT.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Chỉ có thể gửi duyệt phiếu đang ở trạng thái nháp");
@@ -387,13 +540,18 @@ public class ExpenseService {
         Account actor = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
-        if (isOwner) {
+        boolean autoApproved = isOwner || pharmacistAutoApproves(isPharmacist, expense.getAmount());
+        if (autoApproved) {
             applyApproval(expense, actor);
         } else {
             expense.setStatus(ExpenseStatus.PENDING);
         }
 
         expenseRepository.save(expense);
+        if (!autoApproved) {
+            workflowNotificationService
+                    .expensePending(expense);
+        }
     }
 
     @Transactional
@@ -410,6 +568,7 @@ public class ExpenseService {
 
         applyApproval(expense, approver);
         expenseRepository.save(expense);
+        workflowNotificationService.expenseApproved(expense);
     }
 
     @Transactional
@@ -427,6 +586,7 @@ public class ExpenseService {
         expense.setStatus(ExpenseStatus.REJECTED);
         expense.setApprovedAt(Instant.now());
         expenseRepository.save(expense);
+        workflowNotificationService.expenseRejected(expense);
         // approver identity for a rejection isn't modeled separately from approvedAt/status;
         // Expense has no dedicated "rejectedBy" column (see Pharmacy-Database-Description.docx).
     }
@@ -434,26 +594,29 @@ public class ExpenseService {
     /**
      * Internal correction for a wrongly-entered slip — same spirit as
      * {@code PurchaseinvoiceService.cancelPurchaseInvoice()}: not a real accounting reversal, just
-     * marks the record void and gives the money back to the linked document.
+     * marks the record void.
      *
-     * <p><strong>A completed slip can still be cancelled.</strong> A phiếu chi cannot be edited or
-     * topped up after creation, so if a completed one also couldn't be cancelled, a mis-keyed slip
-     * would have no correction path at all. The money already pushed onto the linked document is
-     * reversed via {@link #disbursedAmount}, then a new slip is raised with the right figure.</p>
+     * <p><strong>Only before real money has left (BA 2026-08).</strong> A phiếu chi cannot be edited
+     * or topped up after creation, so {@code DRAFT}/{@code PENDING}/{@code AWAITING_PAYMENT} can
+     * still be cancelled — nothing has been disbursed yet at any of those, so there is nothing to
+     * reverse (no purchase invoice / fund / shift effect has fired — see {@link #confirmPayment}). A
+     * {@code COMPLETED} slip is terminal: real money is already out, so cancelling would need an
+     * actual reversal this method never performed even under the old rules; raise a fresh slip
+     * instead to record what actually happened.</p>
      */
     @Transactional
-    public void cancel(Integer expenseId, String reason) {
+    public void cancel(Integer expenseId, String reason, Integer currentAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        ensureCancelCreator(expense, currentAccountId);
 
         if (ExpenseStatus.CANCELLED.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Phiếu chi này đã bị hủy trước đó");
         }
-
-        // Give the money back to the invoice's outstanding debt before voiding the slip. Computed
-        // while the status is still the pre-cancel one, since that is what decides whether anything
-        // was ever disbursed. A DRAFT/PENDING slip pushed nothing, so this is a no-op for them.
-        settlePurchaseInvoice(expense, disbursedAmount(expense).negate());
+        if (ExpenseStatus.COMPLETED.equals(expense.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Phiếu chi đã hoàn thành (tiền đã thực chi) không thể hủy nữa");
+        }
 
         expense.setStatus(ExpenseStatus.CANCELLED);
         String trimmedReason = trimToNull(reason);
@@ -489,6 +652,30 @@ public class ExpenseService {
                 expense.getStatus(),
                 statusCssClass(expense.getStatus())
         );
+    }
+
+    private boolean belongsToApplicant(Expense expense, Integer applicantAccountId) {
+        return applicantAccountId == null
+                || expense.getApplicantID() != null
+                && applicantAccountId.equals(expense.getApplicantID().getId());
+    }
+
+    private boolean isApplicant(Expense expense, Integer accountId) {
+        return accountId != null
+                && expense.getApplicantID() != null
+                && accountId.equals(expense.getApplicantID().getId());
+    }
+
+    private void ensureCancelCreator(Expense expense, Integer currentAccountId) {
+        if (!isApplicant(expense, currentAccountId)) {
+            throw new IllegalArgumentException("Chỉ tài khoản đã tạo phiếu chi này mới có thể hủy phiếu");
+        }
+    }
+
+    private void ensureApplicantAccess(Expense expense, Integer requiredApplicantAccountId) {
+        if (!belongsToApplicant(expense, requiredApplicantAccountId)) {
+            throw new IllegalArgumentException("Bạn không có quyền xem hoặc thao tác phiếu chi này");
+        }
     }
 
     /**
@@ -577,7 +764,8 @@ public class ExpenseService {
                 linkedPurchase != null ? linkedPurchase.getPurchaseInvoiceCode() : null,
                 supplier != null ? supplier.getName() : null,
                 shift != null ? shift.getId() : null,
-                shift != null ? shift.getShiftReportCode() : null
+                shift != null ? shift.getShiftReportCode() : null,
+                underPharmacistAutoApproveLimit(expense.getAmount())
         );
     }
 
@@ -589,18 +777,105 @@ public class ExpenseService {
     // ------------------------------------------------------------------ helpers
 
     /**
-     * The single choke point where a slip becomes authorised — reached from create-as-Owner,
-     * submit-as-Owner and approve. Pushes the money onto a linked purchase invoice and jumps
-     * straight to {@link ExpenseStatus#COMPLETED}, since a slip is always paid in full at creation.
-     * {@link ExpenseStatus#AWAITING_PAYMENT} is never produced here — the constant only remains so
-     * the screen can still display slips saved under the old rules.
+     * The single choke point where a slip becomes approved — reached from create-as-Owner,
+     * submit-as-Owner and approve. Lands on {@link ExpenseStatus#AWAITING_PAYMENT}, not
+     * {@link ExpenseStatus#COMPLETED}: approving only authorises the slip, it does not move any
+     * money yet — see {@link #confirmPayment} for the step that actually does.
      */
     private void applyApproval(Expense expense, Account approver) {
         expense.setApprovedAt(Instant.now());
+        expense.setStatus(ExpenseStatus.AWAITING_PAYMENT);
+    }
+
+    /**
+     * Whether a Pharmacist-raised slip of this amount qualifies for the self-service treatment (BA
+     * 2026-08-13): skipping Owner approval at creation ({@link #pharmacistAutoApproves}), and
+     * skipping the Owner at {@link #confirmPayment} too — same {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT}
+     * threshold governs both.
+     */
+    private boolean underPharmacistAutoApproveLimit(BigDecimal amount) {
+        return amount != null && amount.compareTo(ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT) < 0;
+    }
+
+    /**
+     * Whether a Pharmacist-raised slip is small enough to skip {@link ExpenseStatus#PENDING}
+     * entirely (BA 2026-08-13) — same self-approval treatment the Owner always gets, just capped by
+     * {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT}. Always {@code false} for anyone else; the
+     * caller is expected to OR this with its own {@code isOwner} check.
+     */
+    private boolean pharmacistAutoApproves(boolean isPharmacist, BigDecimal amount) {
+        return isPharmacist && underPharmacistAutoApproveLimit(amount);
+    }
+
+    /**
+     * The Owner confirms that an {@link ExpenseStatus#AWAITING_PAYMENT} slip's money has actually
+     * left — the real payment leg. Owner-only regardless of who raised or approved the slip
+     * (Accountant included): {@code ExpensePageController} only maps this route under
+     * {@code /owner/**}, matching approve/reject. This is the single choke point that pushes money
+     * onto a linked purchase invoice, debits the financial-setting fund and stamps the shift — none
+     * of that happens at approval any more. For a {@link ExpenseType#RETURN_REFUND_PAYOUT} slip, this
+     * is also the point that syncs the linked {@code Return}'s status back —
+     * see {@link ReturnService#syncStatusAfterRefundPayment(Integer)}.
+     *
+     * <p>Unrestricted overload — no applicant/amount check. Kept for the Owner's own route, which is
+     * allowed to confirm ANY slip, not just small self-raised ones (see the 2-arg overload below).</p>
+     */
+    @Transactional
+    public void confirmPayment(Integer expenseId) {
+        applyConfirmedPayment(loadForConfirmPayment(expenseId));
+    }
+
+    /**
+     * A Pharmacist may also confirm payment for their OWN slip, but only when it was small enough to
+     * have skipped Owner approval in the first place ({@link #underPharmacistAutoApproveLimit}, BA
+     * 2026-08-13) — same self-service threshold end to end: they raised it, it auto-approved, and
+     * since they're the one physically handing over the cash, they confirm it themselves instead of
+     * waiting on the Owner. A slip at or above the limit — or one that merely happens to belong to
+     * someone else — still needs the Owner's unrestricted overload above.
+     */
+    @Transactional
+    public void confirmPayment(Integer expenseId, Integer currentAccountId) {
+        Expense expense = loadForConfirmPayment(expenseId);
+        ensureApplicantAccess(expense, currentAccountId);
+        if (!underPharmacistAutoApproveLimit(expense.getAmount())) {
+            throw new IllegalArgumentException(
+                    "Phiếu từ " + String.format(Locale.forLanguageTag("vi-VN"), "%,.0fđ",
+                            ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT)
+                            + " trở lên phải do Chủ nhà thuốc xác nhận thanh toán");
+        }
+        applyConfirmedPayment(expense);
+    }
+
+    private Expense loadForConfirmPayment(Integer expenseId) {
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        if (!ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Chỉ có thể xác nhận thanh toán cho phiếu đang ở trạng thái chờ thanh toán");
+        }
+        return expense;
+    }
+
+    /** @see #confirmPayment(Integer) */
+    private void applyConfirmedPayment(Expense expense) {
         BigDecimal paid = nullToZero(expense.getPaid());
         expense.setStatus(ExpenseStatus.COMPLETED);
         settlePurchaseInvoice(expense, paid);
+        // Tiền rời quỹ đúng lúc này — cùng thời điểm status chuyển COMPLETED, không phải lúc duyệt
+        // (Chờ thanh toán chưa phải tiền thật). Xem FinancialsettingService.adjustFundBalances: quỹ
+        // chưa từng được thiết lập (còn null) thì delta của quỹ đó bị bỏ qua lặng lẽ.
+        financialsettingService.adjustFundBalances(
+                nullToZero(expense.getPaidByCash()).negate(),
+                nullToZero(expense.getPaidByBanking()).negate());
         attachOpenShift(expense, applicantIdOf(expense));
+        expenseRepository.save(expense);
+
+        // Đường thứ hai vào ReturnStatus.COMPLETED (xem javadoc của ReturnStatus): phiếu chi hoàn
+        // tiền vừa thực chi xong, báo ReturnService tự kiểm và tất toán phiếu trả nếu không còn nợ.
+        // No-op cho mọi loại phiếu chi khác (getReturnID() luôn null ngoài RETURN_REFUND_PAYOUT).
+        if (expense.getReturnID() != null) {
+            returnService.syncStatusAfterRefundPayment(expense.getReturnID().getId());
+        }
     }
 
     /** Người LẬP phiếu — xem {@link #attachOpenShift}. */
@@ -758,7 +1033,11 @@ public class ExpenseService {
      * refund payout.
      */
     private Purchaseinvoice resolvePurchaseInvoice(ExpenseCreateRequest request, String expenseType) {
-        if (!ExpenseType.supportsPurchaseInvoiceLink(expenseType) || request.getPurchaseId() == null) {
+        if (!ExpenseType.GOODS_PAYMENT.equals(expenseType)) {
+            return null;
+        }
+
+        if (request.getPurchaseId() == null) {
             return null;
         }
 
@@ -777,16 +1056,20 @@ public class ExpenseService {
 
     /**
      * Số tiền của phiếu = số tiền người lập nhập cho lần chi này — không có khái niệm "chi thiếu so
-     * với chính nó" (một phiếu là một lần chi). Chỉ bị chặn trần ở phần chứng từ còn thiếu (xem
+     * với chính nó" (một phiếu là một lần chi). Chặn trần ở phần chứng từ còn thiếu (xem
      * {@link #cappedByDocument}), để hai phiếu chi cùng lúc không cùng trả vượt phần còn nợ.
+     *
+     * <p><strong>Ngoại lệ: hoàn tiền trả hàng không nhận số người dùng gõ, luôn lấy nguyên phần
+     * còn phải hoàn của phiếu trả</strong> (đúng như {@link ExpenseCreateRequest#getReturnId()} đã ghi
+     * — "the posted value is never trusted"), khác phiếu nhập vẫn cho trả một phần. Ô tiền trên form
+     * chỉ hiển thị, không sửa được khi chọn loại hoàn tiền — xem {@code expense/create.html}.</p>
      */
     private BigDecimal resolveAmount(ExpenseCreateRequest request,
                                      Return linkedReturn,
                                      Purchaseinvoice linkedPurchase) {
         BigDecimal posted = request.getAmount();
         if (linkedReturn != null) {
-            return cappedByDocument(posted, availableToRefund(linkedReturn, committedByReturnId()),
-                    "Số tiền hoàn vượt quá phần còn phải hoàn của phiếu trả hàng");
+            return availableToRefund(linkedReturn, committedByReturnId());
         }
         if (linkedPurchase != null) {
             return cappedByDocument(posted, availableToPay(linkedPurchase, committedByPurchaseId()),
@@ -842,14 +1125,17 @@ public class ExpenseService {
     }
 
     /**
-     * Money this slip has actually pushed onto its purchase invoice. Only an <em>approved</em> slip
-     * has disbursed anything: a draft or a pending one records a {@code paid} figure the creator
-     * typed, but nobody has authorised it leaving the register yet.
+     * Money this slip has actually pushed onto its purchase invoice. Only a {@code COMPLETED} slip
+     * has disbursed anything — approval alone ({@code AWAITING_PAYMENT}) authorises the slip but does
+     * not move money yet, see {@link #confirmPayment}.
      */
     private BigDecimal disbursedAmount(Expense expense) {
-        boolean approved = ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())
-                || ExpenseStatus.COMPLETED.equals(expense.getStatus());
-        return approved ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+        return isDisbursed(expense) ? nullToZero(expense.getPaid()) : BigDecimal.ZERO;
+    }
+
+    /** Whether money has actually left for this slip — status-only, independent of amount. */
+    private boolean isDisbursed(Expense expense) {
+        return ExpenseStatus.COMPLETED.equals(expense.getStatus());
     }
 
     private List<Expense> liveExpenses() {
@@ -894,27 +1180,31 @@ public class ExpenseService {
     /**
      * Returns {@code [paidByCash, paidByBanking]}.
      *
-     * <p><strong>Only the Owner may pay in cash</strong>: an Accountant settles by transfer and never
-     * opens the drawer — which is also why they have no shift. Enforcing it here
-     * is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe: an Accountant's
-     * slip has no shift, so any cash on it would be money no register could ever account for. The
-     * default therefore flips with the role — an unsplit amount is all cash for the Owner and all
-     * banking for anyone else, rather than silently landing in the drawer.</p>
+     * <p><strong>Cash is Owner/Pharmacist-only; chuyển khoản is Owner/Accountant-only (BA
+     * 2026-08-13).</strong> Owner and Pharmacist run the register and may pay cash — Accountant
+     * settles by transfer and never opens the drawer, so it never touches cash. Conversely a
+     * Pharmacist's shift only ever opens with a fixed float (không có chuyển khoản mở ca), so a
+     * Pharmacist may only pay cash, never chuyển khoản — only Owner and Accountant may. Enforcing
+     * this here is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe. The
+     * default when neither is posted is therefore all cash when cash is allowed, all banking
+     * otherwise — an Owner (who can do both) defaults to cash.</p>
      */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean isOwner) {
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount,
+                                       boolean canPayCash, boolean canPayBanking) {
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
         BigDecimal cash = request.getPaidByCash();
         BigDecimal banking = request.getPaidByBanking();
         if (cash == null && banking == null) {
-            return isOwner
+            return canPayCash
                     ? new BigDecimal[]{amount, BigDecimal.ZERO}
                     : new BigDecimal[]{BigDecimal.ZERO, amount};
         }
         cash = nullToZero(cash);
         banking = nullToZero(banking);
-        assertCashAllowed(cash, isOwner);
+        assertCashAllowed(cash, canPayCash);
+        assertBankingAllowed(banking, canPayBanking);
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
                 .compareTo(amount.setScale(2, RoundingMode.HALF_UP)) != 0) {
             throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền chi");
@@ -923,10 +1213,18 @@ public class ExpenseService {
     }
 
     /** @see #resolveSplit */
-    private void assertCashAllowed(BigDecimal cash, boolean isOwner) {
-        if (!isOwner && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
+    private void assertCashAllowed(BigDecimal cash, boolean canPayCash) {
+        if (!canPayCash && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException(
                     "Kế toán chỉ được chi qua chuyển khoản; phần tiền mặt phải do Chủ nhà thuốc chi");
+        }
+    }
+
+    /** @see #resolveSplit */
+    private void assertBankingAllowed(BigDecimal banking, boolean canPayBanking) {
+        if (!canPayBanking && nullToZero(banking).compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException(
+                    "Dược sĩ chỉ được chi bằng tiền mặt; phần chuyển khoản phải do Chủ nhà thuốc hoặc Kế toán chi");
         }
     }
 

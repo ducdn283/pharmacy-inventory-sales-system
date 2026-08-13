@@ -101,7 +101,9 @@
                   <i class="ti ti-user"></i>
                   <span>
                     <span class="t-title d-block">Cá nhân</span>
-                    <span class="t-desc">Khách lẻ mua thuốc</span>
+                    <!-- KHÔNG gọi là "khách lẻ": khách vãng lai không được lưu vào hệ thống, đã có
+                         bản ghi thì là khách định danh được bằng CCCD/CMND. -->
+                    <span class="t-desc">Có CCCD/CMND, địa chỉ</span>
                   </span>
                 </label>
                 <label class="type-option" id="optCompany">
@@ -143,7 +145,8 @@
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}"></div>
               </div>
               <div class="col-12 col-md-6">
-                <label id="cusTaxLabel" for="cusTax" class="form-label">Mã số thuế</label>
+                <label for="cusTax" class="form-label"><span id="cusTaxLabel">Mã số thuế</span>
+                  <span class="text-danger">*</span></label>
                 <!-- Cá nhân = CCCD/CMND (9 hoặc 12 số), doanh nghiệp = MST (10 số, có thể kèm "-3 số")
                      nên phải cho gõ dấu gạch ngang ngoài chữ số. -->
                 <input id="cusTax" type="text" class="form-control"
@@ -153,23 +156,26 @@
                        data-unique-url="/customer/check-duplicate"
                        data-unique-field="taxCode"
                        data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
+                       required
                        maxlength="100" placeholder="Nhập mã số thuế">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
               </div>
             </div>
 
             <div class="mb-3">
-              <label for="cusAddress" class="form-label">Địa chỉ</label>
+              <label for="cusAddress" class="form-label">Địa chỉ <span class="text-danger">*</span></label>
               <input id="cusAddress" type="text" class="form-control"
                      th:field="*{address}"
                      th:classappend="${#fields.hasErrors('address')} ? ' is-invalid'"
+                     required
                      maxlength="100" placeholder="Nhập địa chỉ khách hàng">
               <div class="invalid-feedback" th:if="${#fields.hasErrors('address')}" th:errors="*{address}"></div>
             </div>
 
             <div class="row g-3 mb-3 company-field">
               <div class="col-12 col-md-6">
-                <label for="cusBankAcc" class="form-label">Số tài khoản ngân hàng</label>
+                <label for="cusBankAcc" class="form-label">Số tài khoản ngân hàng
+                  <span class="text-danger">*</span></label>
                 <input id="cusBankAcc" type="text" class="form-control"
                        th:field="*{bankAccountNumber}"
                        th:classappend="${#fields.hasErrors('bankAccountNumber')} ? ' is-invalid'"
@@ -178,7 +184,8 @@
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('bankAccountNumber')}" th:errors="*{bankAccountNumber}"></div>
               </div>
               <div class="col-12 col-md-6">
-                <label for="cusBankName" class="form-label">Tên ngân hàng</label>
+                <label for="cusBankName" class="form-label">Tên ngân hàng
+                  <span class="text-danger">*</span></label>
                 <input id="cusBankName" type="text" class="form-control"
                        th:field="*{bankName}"
                        th:classappend="${#fields.hasErrors('bankName')} ? ' is-invalid'"
@@ -198,7 +205,10 @@
               <ul class="tip-list mb-0">
                 <li><i class="ti ti-phone"></i><span>Số điện thoại nên có đủ 10 chữ số và là duy nhất.</span></li>
                 <li><i class="ti ti-search"></i><span>Kiểm tra khách hàng trùng trước khi tạo mới.</span></li>
-                <li><i class="ti ti-building"></i><span>Khách doanh nghiệp cần điền mã số thuế và thông tin ngân hàng.</span></li>
+                <li><i class="ti ti-id"></i><span>Mã định danh (MST với doanh nghiệp, CCCD/CMND với cá nhân)
+                  và địa chỉ bắt buộc với cả hai loại khách.</span></li>
+                <li><i class="ti ti-building"></i><span>Khách doanh nghiệp phải có thêm số tài khoản
+                  và tên ngân hàng. Chỉ ô Ghi chú là không bắt buộc.</span></li>
               </ul>
             </div>
 
@@ -228,6 +238,9 @@
     var optCompany = document.getElementById('optCompany');
     var taxLabel = document.getElementById('cusTaxLabel');
     var taxInput = document.getElementById('cusTax');
+    // 2 ô ngân hàng chỉ TỒN TẠI với khách doanh nghiệp: hiện thì bắt buộc, ẩn thì gỡ `required`.
+    // Không gỡ thì submit bị chặn bởi một ô người dùng không nhìn thấy — bế tắc hoàn toàn.
+    var bankInputs = [document.getElementById('cusBankAcc'), document.getElementById('cusBankName')];
 
     function selectedType() {
       var checked = form.querySelector('input[name="customerType"]:checked');
@@ -242,6 +255,12 @@
       // taxCode dùng cho cả 2 loại: doanh nghiệp = Mã số thuế, cá nhân = số CCCD/CMND.
       if (taxLabel) { taxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND'; }
       if (taxInput) { taxInput.setAttribute('placeholder', isCompany ? 'Nhập mã số thuế' : 'Nhập số CCCD/CMND'); }
+      // Ô mã định danh và địa chỉ BẮT BUỘC với cả 2 loại (`required` viết thẳng trong HTML, không
+      // bật/tắt theo loại) — đổi loại khách chỉ đổi tên gọi của mã, không đổi việc phải nhập.
+      bankInputs.forEach(function (input) {
+        if (!input) return;
+        if (isCompany) { input.setAttribute('required', 'required'); } else { input.removeAttribute('required'); }
+      });
     }
 
     form.querySelectorAll('input[name="customerType"]').forEach(function (r) {
@@ -263,5 +282,6 @@
      Ô "Mã số thuế / CCCD" nằm trong khối chỉ hiện với khách doanh nghiệp — fragment bỏ qua ô đang
      bị ẩn, nên không có chuyện bị chặn bởi một ô không nhìn thấy. -->
 <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

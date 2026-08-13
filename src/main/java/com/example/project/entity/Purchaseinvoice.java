@@ -10,6 +10,7 @@ import org.hibernate.annotations.ColumnDefault;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -37,6 +38,9 @@ public class Purchaseinvoice {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employeeID")
     private Account employeeID;
+
+    @Column(name = "approvedAt")
+    private LocalDateTime approvedAt;
 
     @Column(name = "additionCost", precision = 15, scale = 2)
     private BigDecimal additionCost;
@@ -75,14 +79,6 @@ public class Purchaseinvoice {
     @NotNull
     @Column(name = "vatInvoiceDate", nullable = false)
     private LocalDate vatInvoiceDate;
-
-    @NotNull
-    @Column(name = "totalVATInput", nullable = false, precision = 15, scale = 2)
-    private BigDecimal totalVATInput ;
-
-    @ColumnDefault("1")
-    @Column(name = "isValidForDeduction")
-    private Boolean isValidForDeduction;
 
     @Column(name = "dueDate")
     private LocalDate dueDate;

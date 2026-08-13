@@ -231,7 +231,8 @@
             <div class="invalid-feedback" th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}"></div>
           </div>
           <div class="col-12 col-md-6">
-            <label id="editTaxLabel" for="editTax" class="form-label">Mã số thuế</label>
+            <label for="editTax" class="form-label"><span id="editTaxLabel">Mã số thuế</span>
+              <span class="text-danger">*</span></label>
             <!-- Cá nhân = CCCD/CMND, doanh nghiệp = MST (10 số, có thể kèm "-3 số") → cho cả dấu gạch. -->
             <input id="editTax" type="text" class="form-control"
                    inputmode="numeric" data-digits="-"
@@ -239,25 +240,29 @@
                    data-unique-field="taxCode"
                    th:attr="data-unique-id=${customer.id}"
                    data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
+                   required
                    th:field="*{taxCode}" maxlength="100" placeholder="Nhập mã số thuế">
           </div>
         </div>
 
         <div class="mb-3">
-          <label for="editAddress" class="form-label">Địa chỉ</label>
+          <label for="editAddress" class="form-label">Địa chỉ <span class="text-danger">*</span></label>
           <input id="editAddress" type="text" class="form-control"
+                 required
                  th:field="*{address}" maxlength="100" placeholder="Nhập địa chỉ khách hàng">
         </div>
 
         <div class="row g-3 mb-3 company-field">
           <div class="col-12 col-md-6">
-            <label for="editBankAcc" class="form-label">Số tài khoản ngân hàng</label>
+            <label for="editBankAcc" class="form-label">Số tài khoản ngân hàng
+              <span class="text-danger">*</span></label>
             <input id="editBankAcc" type="text" class="form-control"
                    inputmode="numeric" data-digits
                    th:field="*{bankAccountNumber}" maxlength="100" placeholder="Nhập số tài khoản">
           </div>
           <div class="col-12 col-md-6">
-            <label for="editBankName" class="form-label">Tên ngân hàng</label>
+            <label for="editBankName" class="form-label">Tên ngân hàng
+              <span class="text-danger">*</span></label>
             <input id="editBankName" type="text" class="form-control"
                    th:field="*{bankName}" maxlength="100" placeholder="Nhập tên ngân hàng">
           </div>
@@ -344,6 +349,8 @@
     var optCompany = document.getElementById('optCompany');
     var editTaxLabel = document.getElementById('editTaxLabel');
     var editTaxInput = document.getElementById('editTax');
+    // Xem chú thích ở customer/create.html: ẩn khối ngân hàng thì phải gỡ luôn `required`.
+    var bankInputs = [document.getElementById('editBankAcc'), document.getElementById('editBankName')];
 
     function selectedType() {
       var checked = editFormEl.querySelector('input[name="customerType"]:checked');
@@ -357,6 +364,11 @@
       // taxCode dùng cho cả 2 loại: doanh nghiệp = Mã số thuế, cá nhân = số CCCD/CMND.
       if (editTaxLabel) { editTaxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND'; }
       if (editTaxInput) { editTaxInput.setAttribute('placeholder', isCompany ? 'Nhập mã số thuế' : 'Nhập số CCCD/CMND'); }
+      // Mã định danh + địa chỉ bắt buộc với cả 2 loại — xem chú thích ở customer/create.html.
+      bankInputs.forEach(function (input) {
+        if (!input) return;
+        if (isCompany) { input.setAttribute('required', 'required'); } else { input.removeAttribute('required'); }
+      });
     }
     editFormEl.querySelectorAll('input[name="customerType"]').forEach(function (r) {
       r.addEventListener('change', applyType);
@@ -378,5 +390,6 @@
 
 <!-- Ô bắt buộc để trống / sai định dạng: báo ngay dưới ô, không dùng bong bóng của trình duyệt. -->
 <div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

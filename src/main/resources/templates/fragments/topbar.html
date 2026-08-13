@@ -31,6 +31,17 @@
 
             <div class="pm-topbar-actions">
 
+                <a th:if="${currentSellingUrl != null}"
+                   class="pm-topbar-icon-btn pm-selling-btn"
+                   th:href="${currentSellingUrl}"
+                   href="#"
+                   role="button"
+                   aria-label="Bán hàng"
+                   title="Bán hàng">
+                    <i class="ti ti-shopping-cart"></i>
+                    <span class="pm-selling-btn-label">Bán hàng</span>
+                </a>
+
                 <div class="dropdown">
                     <a class="position-relative pm-topbar-icon-btn"
                        data-bs-toggle="dropdown"
@@ -38,49 +49,80 @@
                        href="#"
                        role="button"
                        aria-label="Thông báo">
+
                         <i class="ti ti-bell"></i>
-                        <span th:if="${unreadNotificationCount != null and unreadNotificationCount > 0}"
+
+                        <span id="notificationDot"
+                              th:if="${unreadNotificationCount != null
+                       and unreadNotificationCount > 0}"
                               class="pm-notification-dot"
-                              aria-hidden="true"></span>
+                              aria-hidden="true">
+        </span>
                     </a>
 
-                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-md p-0 pm-notification-menu">
+                    <div class="dropdown-menu dropdown-menu-end
+                dropdown-menu-md p-0 pm-notification-menu">
+
                         <ul class="list-unstyled p-0 m-0">
-                            <li class="px-3 py-3 border-bottom d-flex justify-content-between align-items-center">
-                                <span class="fw-semibold small">Thông báo mới</span>
-                                <span class="badge bg-success"
-                                      th:if="${unreadNotificationCount != null and unreadNotificationCount > 0}"
+
+                            <li class="px-3 py-3 border-bottom
+                       d-flex justify-content-between
+                       align-items-center">
+
+                <span class="fw-semibold small">
+                    Thông báo mới
+                </span>
+
+                                <span id="notificationCountBadge"
+                                      class="badge bg-success"
+                                      th:if="${unreadNotificationCount != null
+                               and unreadNotificationCount > 0}"
                                       th:text="${unreadNotificationCount}">
-            0
-        </span>
+                    0
+                </span>
                             </li>
 
-                            <li th:if="${latestNotifications == null or #lists.isEmpty(latestNotifications)}"
+                            <li id="notificationEmptyState"
+                                th:if="${latestNotifications == null
+                         or #lists.isEmpty(latestNotifications)}"
                                 class="p-3 border-bottom">
+
                                 <div class="small text-secondary">
                                     Hiện chưa có thông báo.
                                 </div>
                             </li>
 
                             <li th:each="item : ${latestNotifications}"
-                                class="p-3 border-bottom">
+                                class="p-3 border-bottom
+                       realtime-notification-item">
+
                                 <div class="small">
-                                    <p class="mb-1 fw-semibold" th:text="${item.title}">
+                                    <p class="mb-1 fw-semibold"
+                                       th:text="${item.title}">
                                         Tiêu đề thông báo
                                     </p>
-                                    <p class="mb-1 text-secondary" th:text="${item.message}">
+
+                                    <p class="mb-1 text-secondary"
+                                       th:text="${item.message}">
                                         Nội dung thông báo
                                     </p>
-                                    <span class="text-secondary" th:text="${item.createdAtDisplay}">
-                28/07/2026 22:00
-            </span>
+
+                                    <span class="text-secondary"
+                                          th:text="${item.createdAtDisplay}">
+                        28/07/2026 22:00
+                    </span>
                                 </div>
                             </li>
 
-                            <li class="px-4 py-3 text-center">
-                                <a th:href="${currentNotificationsUrl != null ? currentNotificationsUrl : '#'}"
+                            <li id="notificationViewAll"
+                                class="px-4 py-3 text-center">
+
+                                <a th:href="${currentNotificationsUrl != null
+                              ? currentNotificationsUrl
+                              : '#'}"
                                    href="#"
                                    class="pm-menu-link">
+
                                     Xem tất cả thông báo
                                 </a>
                             </li>
@@ -234,6 +276,41 @@
             line-height: 1;
         }
 
+        .pm-selling-btn {
+            width: auto;
+            height: 38px;
+            gap: 7px;
+            padding: 0 14px;
+            border-color: #059669;
+            border-radius: 10px;
+            background: #059669;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(5, 150, 105, .22);
+        }
+
+        .pm-selling-btn:hover,
+        .pm-selling-btn:focus-visible {
+            border-color: #047857;
+            background: #047857;
+            color: #ffffff;
+            box-shadow: 0 5px 14px rgba(5, 150, 105, .3);
+            transform: translateY(-1px);
+        }
+
+        .pm-selling-btn:active {
+            background: #065f46;
+            border-color: #065f46;
+            box-shadow: none;
+            transform: translateY(0);
+        }
+
+        .pm-selling-btn-label {
+            line-height: 1;
+        }
+
         .pm-notification-dot {
             position: absolute;
             top: 7px;
@@ -248,6 +325,11 @@
         .pm-topbar-divider {
             height: 24px;
             opacity: .5;
+            /* Bootstrap's .vr sets align-self:stretch; with an explicit height that no longer
+               stretches the element, so it keeps the flex-start (top) fallback instead of
+               following .pm-topbar-actions' align-items:center like its siblings. Force it back
+               to center so the line sits level with the icon/avatar next to it. */
+            align-self: center;
         }
 
         .pm-topbar-user {
@@ -375,27 +457,472 @@
             .pm-topbar-actions {
                 gap: 10px;
             }
+
+            .pm-selling-btn {
+                height: 36px;
+                padding: 0 11px;
+            }
         }
     </style>
 
     <script th:inline="none">
-    (function () {
-        var POLL_MS = 30000;
-        setInterval(function () {
-            fetch('/api/session/check')
-                .then(function (res) {
-                    // Đi theo đích mà server điều hướng tới:
-                    //  - /signin?roleChanged : vai trò/quyền bị đổi (ConcurrentSessionFilter) -> hiện thông báo
-                    //  - /signin             : chỉ mất phiên (hết hạn, app khởi động lại, đăng xuất...) -> KHÔNG hiện thông báo
-                    if (res.redirected) {
-                        window.location.replace(res.url);
-                    } else if (res.status === 401 || res.status === 403) {
-                        window.location.replace('/signin');
+        (function () {
+            var SUMMARY_URL =
+                '/notifications/realtime/summary';
+
+            var STREAM_URL =
+                '/notifications/realtime/stream';
+
+            /**
+             * Chuyển giá trị null thành chuỗi rỗng.
+             */
+            function safeText(value) {
+                return value == null
+                    ? ''
+                    : String(value);
+            }
+
+            /**
+             * Lấy số notification chưa đọc và danh sách
+             * notification mới nhất.
+             */
+            function refreshNotificationTopbar() {
+                fetch(
+                    SUMMARY_URL,
+                    {
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        credentials: 'same-origin'
                     }
-                })
-                .catch(function () { /* bỏ qua lỗi mạng tạm thời */ });
-        }, POLL_MS);
-    })();
+                )
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error(
+                                'Không thể tải thông báo'
+                            );
+                        }
+
+                        return response.json();
+                    })
+                    .then(renderNotificationTopbar)
+                    .catch(function () {
+                        /*
+                         * Bỏ qua lỗi mạng tạm thời.
+                         * SSE sẽ gửi sự kiện lại khi có thay đổi tiếp theo.
+                         */
+                    });
+            }
+
+            /**
+             * Cập nhật badge và dropdown notification.
+             */
+            function renderNotificationTopbar(data) {
+                var count = Number(
+                    data && data.unreadCount
+                        ? data.unreadCount
+                        : 0
+                );
+
+                var bell = document.querySelector(
+                    '[aria-label="Thông báo"]'
+                );
+
+                var dot = document.getElementById(
+                    'notificationDot'
+                );
+
+                var badge = document.getElementById(
+                    'notificationCountBadge'
+                );
+
+                /*
+                 * Cập nhật chấm báo và số chưa đọc.
+                 */
+                if (count > 0) {
+                    if (!dot && bell) {
+                        dot = document.createElement(
+                            'span'
+                        );
+
+                        dot.id = 'notificationDot';
+                        dot.className =
+                            'pm-notification-dot';
+
+                        dot.setAttribute(
+                            'aria-hidden',
+                            'true'
+                        );
+
+                        bell.appendChild(dot);
+                    }
+
+                    if (!badge) {
+                        badge = document.createElement(
+                            'span'
+                        );
+
+                        badge.id =
+                            'notificationCountBadge';
+
+                        badge.className =
+                            'badge bg-success';
+
+                        var header =
+                            document.querySelector(
+                                '.pm-notification-menu '
+                                + 'li:first-child'
+                            );
+
+                        if (header) {
+                            header.appendChild(badge);
+                        }
+                    }
+
+                    if (badge) {
+                        badge.textContent =
+                            String(count);
+                    }
+                } else {
+                    if (dot) {
+                        dot.remove();
+                    }
+
+                    if (badge) {
+                        badge.remove();
+                    }
+                }
+
+                /*
+                 * Xóa các notification cũ khỏi dropdown.
+                 */
+                document
+                    .querySelectorAll(
+                        '.realtime-notification-item'
+                    )
+                    .forEach(function (item) {
+                        item.remove();
+                    });
+
+                var oldEmpty =
+                    document.getElementById(
+                        'notificationEmptyState'
+                    );
+
+                if (oldEmpty) {
+                    oldEmpty.remove();
+                }
+
+                var viewAll =
+                    document.getElementById(
+                        'notificationViewAll'
+                    );
+
+                var list = viewAll
+                    ? viewAll.parentElement
+                    : null;
+
+                var notifications =
+                    data
+                    && Array.isArray(
+                        data.latestNotifications
+                    )
+                        ? data.latestNotifications
+                        : [];
+
+                if (!list || !viewAll) {
+                    return;
+                }
+
+                /*
+                 * Trạng thái không có notification.
+                 */
+                if (notifications.length === 0) {
+                    var empty =
+                        document.createElement('li');
+
+                    empty.id =
+                        'notificationEmptyState';
+
+                    empty.className =
+                        'p-3 border-bottom';
+
+                    var emptyText =
+                        document.createElement('div');
+
+                    emptyText.className =
+                        'small text-secondary';
+
+                    emptyText.textContent =
+                        'Hiện chưa có thông báo.';
+
+                    empty.appendChild(emptyText);
+
+                    list.insertBefore(
+                        empty,
+                        viewAll
+                    );
+
+                    return;
+                }
+
+                /*
+                 * Dùng textContent thay vì innerHTML để tránh
+                 * đưa nội dung notification trực tiếp thành HTML.
+                 */
+                notifications.forEach(
+                    function (notification) {
+                        var item =
+                            document.createElement('li');
+
+                        item.className =
+                            'p-3 border-bottom '
+                            + 'realtime-notification-item';
+
+                        var content =
+                            document.createElement('div');
+
+                        content.className = 'small';
+
+                        var title =
+                            document.createElement('p');
+
+                        title.className =
+                            'mb-1 fw-semibold';
+
+                        title.textContent =
+                            safeText(
+                                notification.title
+                            );
+
+                        var message =
+                            document.createElement('p');
+
+                        message.className =
+                            'mb-1 text-secondary';
+
+                        message.textContent =
+                            safeText(
+                                notification.message
+                            );
+
+                        var createdAt =
+                            document.createElement('span');
+
+                        createdAt.className =
+                            'text-secondary';
+
+                        createdAt.textContent =
+                            safeText(
+                                notification
+                                    .createdAtDisplay
+                            );
+
+                        content.appendChild(title);
+                        content.appendChild(message);
+                        content.appendChild(createdAt);
+
+                        item.appendChild(content);
+
+                        list.insertBefore(
+                            item,
+                            viewAll
+                        );
+                    }
+                );
+            }
+
+            /**
+             * Mốc THAO TÁC THẬT gần nhất của người dùng.
+             *
+             * Chỉ kiểm tab có hiển thị hay không là CHƯA ĐỦ: máy ở
+             * quầy thường để nguyên trình duyệt mở, tab vẫn "visible"
+             * suốt đêm dù không ai đụng vào. Khi đó vòng poll và SSE
+             * vẫn chạy ⇒ phiên vẫn bất tử, đúng cái lỗi đang muốn
+             * chữa. Nên phải đo bằng thao tác thật.
+             *
+             * CỐ Ý KHÔNG nghe 'mousemove': chuột bị va nhẹ khi lau
+             * bàn không phải là người dùng đang làm việc.
+             *
+             * 5 phút < 30 phút (hạn phiên) nên sau khi rời máy, lần
+             * ping cuối cùng cách lúc rời đi tối đa 5 phút — phiên
+             * chắc chắn hết hạn, chỉ muộn hơn đúng khoảng đó.
+             */
+            var IDLE_MS = 5 * 60 * 1000;
+
+            var lastActivityAt = Date.now();
+
+            function isUserActive() {
+                return document.visibilityState === 'visible'
+                    && (Date.now() - lastActivityAt) <= IDLE_MS;
+            }
+
+            /**
+             * Mở kết nối SSE.
+             *
+             * EventSource tự kết nối lại nếu kết nối bị timeout
+             * hoặc mất mạng tạm thời.
+             *
+             * ĐÓNG LẠI KHI TAB BỊ ẨN HOẶC NGƯỜI DÙNG BỎ MÁY ĐI —
+             * xem khối "kiểm tra phiên" bên dưới để biết lý do.
+             * SseEmitter đặt timeout đúng 30 phút, bằng luôn thời hạn
+             * phiên: mỗi lần nó tự kết nối lại là một request mới làm
+             * mới phiên ngay tại thời điểm phiên đáng lẽ hết hạn, nên
+             * chỉ cần một tab bỏ quên là tài khoản không bao giờ được
+             * nhả ra.
+             */
+            var notificationStream = null;
+
+            function openNotificationStream() {
+                if (!window.EventSource
+                    || notificationStream) {
+                    return;
+                }
+
+                notificationStream =
+                    new EventSource(STREAM_URL);
+
+                notificationStream
+                    .addEventListener(
+                        'notification-refresh',
+                        refreshNotificationTopbar
+                    );
+            }
+
+            function closeNotificationStream() {
+                if (!notificationStream) {
+                    return;
+                }
+
+                notificationStream.close();
+                notificationStream = null;
+            }
+
+            openNotificationStream();
+
+            window.addEventListener(
+                'beforeunload',
+                closeNotificationStream
+            );
+
+            /**
+             * Người dùng thao tác trở lại sau một quãng nghỉ dài:
+             * mở lại SSE và nạp bù phần thông báo đã bỏ lỡ.
+             */
+            function markUserActivity() {
+                lastActivityAt = Date.now();
+
+                /*
+                 * Điều kiện là "SSE đang đóng", KHÔNG phải "vừa mới
+                 * nghỉ đủ lâu": tab bị ẩn 10 giây cũng đã đóng SSE
+                 * rồi, mà quãng nghỉ đó chưa tới ngưỡng nghỉ dài —
+                 * đo theo ngưỡng thì quay lại tab sẽ không có thông
+                 * báo realtime nữa.
+                 */
+                if (document.visibilityState === 'visible'
+                    && !notificationStream) {
+                    openNotificationStream();
+                    refreshNotificationTopbar();
+                }
+            }
+
+            [
+                'pointerdown',
+                'keydown',
+                'scroll',
+                'wheel',
+                'touchstart'
+            ].forEach(
+                function (eventName) {
+                    window.addEventListener(
+                        eventName,
+                        markUserActivity,
+                        { passive: true }
+                    );
+                }
+            );
+
+            document.addEventListener(
+                'visibilitychange',
+                function () {
+                    if (document.visibilityState
+                        === 'visible') {
+                        /*
+                         * Chuyển sang tab này CŨNG là một thao tác
+                         * thật của người dùng.
+                         */
+                        markUserActivity();
+                    } else {
+                        closeNotificationStream();
+                    }
+                }
+            );
+
+            /*
+             * Logic kiểm tra phiên đăng nhập hiện tại.
+             */
+            var POLL_MS = 30000;
+
+            setInterval(
+                function () {
+                    /*
+                     * CHỈ hỏi khi người dùng ĐANG THẬT SỰ LÀM VIỆC
+                     * (tab hiển thị VÀ có thao tác trong IDLE_MS).
+                     *
+                     * Mọi request đều làm mới lastAccessedTime của
+                     * HttpSession, nên vòng lặp 30 giây này giữ
+                     * phiên sống VĨNH VIỄN — luật "30 phút không
+                     * thao tác thì hết phiên" (F-01) không bao giờ
+                     * có cơ hội chạy khi còn một tab bỏ quên ở đâu
+                     * đó. Cộng với maximumSessions(1) +
+                     * maxSessionsPreventsLogin(true) (F-02), người
+                     * dùng quên đăng xuất sẽ bị chặn ở mọi lần đăng
+                     * nhập sau, mà SessionRegistry nằm trong RAM
+                     * nên chỉ restart app mới gỡ được.
+                     *
+                     * Đóng luôn SSE ở đây: đó là chỗ DUY NHẤT phát
+                     * hiện được "đang mở màn hình nhưng đã bỏ đi" —
+                     * trình duyệt không bắn sự kiện nào khi người
+                     * dùng ngừng thao tác.
+                     */
+                    if (!isUserActive()) {
+                        closeNotificationStream();
+                        return;
+                    }
+
+                    fetch('/api/session/check')
+                        .then(function (res) {
+                            /*
+                             * Đi theo đích server điều hướng:
+                             *
+                             * /signin?roleChanged:
+                             * Vai trò hoặc quyền đã bị đổi.
+                             *
+                             * /signin:
+                             * Phiên đăng nhập đã hết hạn.
+                             */
+                            if (res.redirected) {
+                                window.location.replace(
+                                    res.url
+                                );
+                            } else if (
+                                res.status === 401
+                                || res.status === 403
+                            ) {
+                                window.location.replace(
+                                    '/signin'
+                                );
+                            }
+                        })
+                        .catch(function () {
+                            /*
+                             * Bỏ qua lỗi mạng tạm thời.
+                             */
+                        });
+                },
+                POLL_MS
+            );
+        })();
     </script>
 
 </th:block>

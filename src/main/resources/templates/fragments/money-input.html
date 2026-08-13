@@ -79,6 +79,8 @@
             };
 
             function initInput(input) {
+                if (!input || input.dataset.moneyInitialized === 'true') return;
+                input.dataset.moneyInitialized = 'true';
                 // type=number refuses a value containing dots, so these must be plain text fields.
                 input.setAttribute('type', 'text');
                 input.setAttribute('inputmode', allowsNegative(input) ? 'text' : 'numeric');
@@ -110,9 +112,20 @@
             }
 
             function init() {
-                document.querySelectorAll('input[data-money]').forEach(initInput);
+                window.pmInitMoneyInputs(document);
                 document.querySelectorAll('form').forEach(initForm);
             }
+
+            // Dùng cho các dòng form được thêm bằng JavaScript sau DOMContentLoaded.
+            window.pmInitMoneyInputs = function (scope) {
+                var root = scope || document;
+                if (root.matches && root.matches('input[data-money]')) {
+                    initInput(root);
+                }
+                if (root.querySelectorAll) {
+                    root.querySelectorAll('input[data-money]').forEach(initInput);
+                }
+            };
 
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', init);

@@ -8,6 +8,7 @@ import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Getter
@@ -92,6 +93,10 @@ public class Invoice {
     @Column(name = "returnStatus", length = 50)
     private String returnStatus;
 
+    @Size(max = 255)
+    @Column(name = "image")
+    private String image;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shiftReportID")
     private Shiftreport shiftReportID;
@@ -101,13 +106,6 @@ public class Invoice {
 
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
-
-    @Column(name = "totalVATOutput", precision = 15, scale = 2)
-    private BigDecimal totalVATOutput;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rootInvoiceID")
-    private Invoice rootInvoiceID;
 
     @Version
     @Column(name = "version", nullable = false)

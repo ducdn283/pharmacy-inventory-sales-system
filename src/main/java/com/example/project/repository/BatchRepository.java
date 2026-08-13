@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface BatchRepository extends JpaRepository<Batch, Integer> {
@@ -68,11 +69,52 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    """)
     List<Batch> findInStockBatchesByProduct(@Param("productId") Integer productId);
 
-    /** Most recent import (batch) events of one product, for the history preview. */
+    /**
+     * Same filters as {@link #findInStockBatchesByProduct}, but FEFO for selling: dated lots first
+     * (soonest expiry), lots without HSD last — used on the create-invoice / selling screen only.
+     */
+    @Query("""
+   select b
+   from Batch b
+   left join fetch b.importUnitID
+   where b.productID.productID = :productId
+     and b.storageQuantity > 0
+     and b.status = true
+   order by case when b.expirationDate is null then 1 else 0 end, b.expirationDate asc, b.id asc
+   """)
+    List<Batch> findInStockBatchesByProductForSale(@Param("productId") Integer productId);
+
+    /**
+     * Most recent import (batch) events of one product, for the history preview.
+     *
+     * <p><strong>Chỉ lô NHẬP THẬT từ nhà cung cấp.</strong> Loại hai nhóm lô do hệ thống tự sinh:
+     * {@code RT-} (hàng khách trả lại, {@code ReturnService.cloneReturnBatch}) và {@code RS-} (hàng
+     * thừa khi rà soát kho, {@code StockadjustmentService}; {@code KK-} là tiền tố cũ trước
+     * 13/08/2026, giữ lại để dữ liệu cũ vẫn được lọc). Hai nhóm đó ĐÃ có dòng riêng trong màn
+     * Lịch sử tồn kho — lấy từ {@code returndetail} và {@code stockadjustmentdetail} — nên để chúng ở
+     * đây nữa là một lần nhập hàng hiện thành HAI dòng, và hai dòng đó còn khác đơn vị nhau (dòng lô
+     * ghi theo đơn vị nhập "+5 Hộp", dòng trả hàng ghi theo đơn vị cơ sở "+100 Cái") nên rất dễ đọc
+     * thành nhập kho hai lần.</p>
+     *
+     * <p><strong>Lọc theo TIỀN TỐ MÃ LÔ, không lọc theo "có dòng trả hàng nào trỏ vào lô này".</strong>
+     * Bản merge 402a111 dùng {@code not exists (select 1 from Returndetail rd where rd.batchID = b
+     * and rd.returnID.returnType = 'CUSTOMER')}; cách đó ẩn nhầm chính LÔ NHẬP GỐC trong hai trường
+     * hợp, vì {@code returndetail.batchID} chỉ được trỏ sang lô {@code RT-} mới lúc phiếu trả được
+     * DUYỆT và chỉ với dòng nhập lại kho:</p>
+     * <ul>
+     *   <li>dòng hàng KHÔNG nhập lại kho ({@code restockable = false}) giữ nguyên batchID = lô gốc;</li>
+     *   <li>phiếu trả còn Nháp / Chờ duyệt cũng đang trỏ vào lô gốc.</li>
+     * </ul>
+     * <p>Cả hai đều làm lô nhập thật biến mất khỏi lịch sử. Ngoài ra cách đó cũng không lọc lô
+     * {@code KK-}. Tiền tố mã lô do chính hai service sinh ra đặt nên không có ca nào nhầm.</p>
+     */
     @Query("""
    select b
    from Batch b
    where b.productID.productID = :productId
+     and b.batchCode not like 'RT-%'
+     and b.batchCode not like 'RS-%'
+     and b.batchCode not like 'KK-%'
    order by b.importDate desc
    """)
     List<Batch> findRecentImportsByProduct(@Param("productId") Integer productId,
@@ -91,4 +133,50 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    order by b.expirationDate asc
    """)
     List<Batch> findAllByProduct(@Param("productId") Integer productId);
+
+    /**
+     * Distinct IDs of products carrying at least one in-stock batch expiring within
+     * {@code [today, threshold]} — backs the Product List "Sắp hết hạn" filter.
+     */
+    @Query("""
+   select distinct b.productID.productID
+   from Batch b
+   where b.status = true
+     and b.storageQuantity > 0
+     and b.expirationDate is not null
+     and b.expirationDate between :today and :threshold
+   """)
+    List<Integer> findProductIdsNearExpiry(@Param("today") LocalDate today,
+                                           @Param("threshold") LocalDate threshold);
+
+    /**
+     * Tổng tồn của từng sản phẩm,
+     * chỉ tính các lô đang hoạt động.
+     *
+     * Mỗi Object[] gồm:
+     * [0] = productID
+     * [1] = tổng storageQuantity
+     */
+    @Query("""
+       select b.productID.productID,
+              coalesce(sum(b.storageQuantity), 0)
+       from Batch b
+       where b.productID is not null
+         and b.status = true
+       group by b.productID.productID
+       """)
+    List<Object[]> sumActiveStorageGroupedByProduct();
+
+    /**
+     * Lấy toàn bộ lô cùng thông tin sản phẩm
+     * để kiểm tra hạn sử dụng.
+     */
+    @Query("""
+       select b
+       from Batch b
+       left join fetch b.productID p
+       where b.productID is not null
+       order by b.expirationDate asc, b.id asc
+       """)
+    List<Batch> findAllWithProductForNotifications();
 }

@@ -37,16 +37,20 @@ public class StockAdjustmentDetailPageResponse {
 
     private List<StockAdjustmentDetailItemResponse> items;
 
-    /** True chỉ khi loại phiếu là INTERNAL_USE/GIFT/SAMPLE → hiện cột thuế GTGT đầu ra trên màn chi tiết. */
-    private boolean showOutputVat;
+    /**
+     * Phiếu loại {@code DATE_ADJUSTMENT} — màn chi tiết đổi hẳn bộ cột (hạn cũ → hạn mới thay cho
+     * chênh lệch số lượng) vì phiếu này KHÔNG làm đổi tồn kho.
+     */
+    private boolean dateAdjustment;
 
-    /** Tổng thuế GTGT đầu ra của phiếu (0 nếu loại không phát sinh). */
-    private BigDecimal totalOutputVat;
+    /** Mã phiếu rà soát kho làm căn cứ (null nếu phiếu lập tay không gắn phiếu nào) + nhãn loại của nó. */
+    private String stockReviewCode;
+    private String stockReviewTypeDisplay;
 
     /**
-     * True khi loại phiếu là {@code DESTROY_EMPLOYEE_FAULT} / {@code COUNT_DECREASE} — hai loại thất
-     * thoát mà nhân viên có thể phải đền bù, và là hai loại duy nhất được liên kết phiếu thu
-     * (Dac_ta_Income_StockAdjustment sheet 03, cột "Liên kết Income?").
+     * True khi loại phiếu là {@code DESTROY_EMPLOYEE_FAULT} — loại DUY NHẤT được đề xuất đền bù và liên
+     * kết phiếu thu. Phiếu điều chỉnh theo rà soát kho đã bị loại khỏi diện này (06/08/2026): kiểm đếm
+     * chỉ cho biết tồn thiếu bao nhiêu, không cho biết thiếu vì đâu và do ai.
      */
     private boolean employeeLiable;
 
@@ -59,4 +63,13 @@ public class StockAdjustmentDetailPageResponse {
     /** Phiếu thu đền bù đã lập cho phiếu này (null nếu chưa có) — để màn chi tiết trỏ qua. */
     private Integer linkedIncomeId;
     private String linkedIncomeCode;
+
+    /**
+     * Phiếu này có hủy được không. Phiếu {@code Nháp} thì luôn được (không đảo gì cả); phiếu
+     * {@code Hoàn thành} thì tùy loại — xem {@code StockadjustmentService.assertReversible}.
+     */
+    private boolean cancellable;
+
+    /** Câu giải thích vì sao không hủy được, để hiện thay cho nút Hủy. Null khi hủy được. */
+    private String cancelBlockedReason;
 }

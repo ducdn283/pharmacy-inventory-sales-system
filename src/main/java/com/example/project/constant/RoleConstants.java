@@ -30,9 +30,13 @@ public final class RoleConstants {
 
     /**
      * Roles assignable from the single-store Permission Table ({@code /owner/permissions}), in
-     * display order. The removed {@code CASHIER} role was never part of this set.
+     * display order. {@code OWNER} is deliberately excluded — the system has exactly one Owner,
+     * fixed at account creation ({@code OwnerUserService} already refuses to create a second one);
+     * the Permission Table can only move an account between {@code PHARMACIST}/{@code ACCOUNTANT}/
+     * unassigned, never promote anyone to Owner. The removed {@code CASHIER} role was never part
+     * of this set either.
      */
-    public static final List<String> PERMISSION_TABLE_ROLES = List.of(PHARMACIST, ACCOUNTANT, OWNER);
+    public static final List<String> PERMISSION_TABLE_ROLES = List.of(PHARMACIST, ACCOUNTANT);
 
     /**
      * Safe fallback used only when an <em>invalid</em> role string is supplied to a lookup

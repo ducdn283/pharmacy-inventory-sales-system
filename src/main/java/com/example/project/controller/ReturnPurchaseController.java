@@ -119,8 +119,6 @@ public class ReturnPurchaseController {
     private void addCreateFormOptions(Model model) {
         model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        // Chỉ Nhóm 3/4 mới có thuế GTGT đầu vào đã khấu trừ để đảo lại khi trả hàng.
-        model.addAttribute("deductionGroup", returnPurchaseService.isDeductionGroup());
         model.addAttribute("defaultRefundRate", returnPurchaseService.getDefaultRefundRate());
         model.addAttribute("autoOffsetDebt", returnPurchaseService.isAutoOffsetDebt());
         model.addAttribute("basePath", BASE);

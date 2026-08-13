@@ -127,7 +127,10 @@ class ProfileServiceTest {
 
         ProfileViewResponse result = profileService.getProfile(accountId);
 
-        assertEquals("Dược sĩ, Dược sĩ trưởng", result.getRole());
+        // CHIEF_PHARMACIST đã bị gộp vào OWNER, nên formatRole() ánh xạ "chief_pharmacist" thành
+        // "Chủ nhà thuốc" chứ không còn "Dược sĩ trưởng" — hai quyền vẫn ra hai nhãn khác nhau nên
+        // phép nối distinct vẫn được kiểm đúng như ý định ban đầu của test.
+        assertEquals("Dược sĩ, Chủ nhà thuốc", result.getRole());
     }
 
     @Test

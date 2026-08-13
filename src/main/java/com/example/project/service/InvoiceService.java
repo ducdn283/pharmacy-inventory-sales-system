@@ -1,6 +1,5 @@
 package com.example.project.service;
 
-import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.InvoiceCreateRequest;
 import com.example.project.dto.request.InvoiceDetailCreateRequest;
 import com.example.project.dto.response.CustomerOptionResponse;
@@ -24,16 +23,18 @@ import com.example.project.entity.Invoice;
 import com.example.project.entity.Invoicedetail;
 import com.example.project.entity.Product;
 import com.example.project.entity.Productunit;
-import com.example.project.entity.Type;
+import com.example.project.entity.Position;
 import com.example.project.repository.AccountRepository;
 import com.example.project.repository.BatchRepository;
 import com.example.project.repository.CustomerRepository;
 import com.example.project.repository.FinancialsettingRepository;
 import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.InvoicedetailRepository;
+import com.example.project.repository.PositionRepository;
 import com.example.project.repository.ProductRepository;
 import com.example.project.repository.ProductunitRepository;
 import com.example.project.repository.ReturnRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -65,8 +66,8 @@ public class InvoiceService {
 
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
-    /** Hóa đơn GTGT — chỉ gán cho hóa đơn bán tạo khi nhà thuốc đang ở Nhóm 3+. */
-    private static final String INVOICE_TYPE_VAT = "Hóa đơn GTGT";
+    /** Legacy type from older data — displayed as "Bán hàng". */
+    private static final String INVOICE_TYPE_VAT_LEGACY = "Hóa đơn GTGT";
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
     private static final String INVOICE_TYPE_ADJUSTMENT_LEGACY = "adjustment";
     private static final String INVOICE_TYPE_RETURN = "return";
@@ -77,47 +78,68 @@ public class InvoiceService {
     private static final String PAYMENT_DEBT = "DEBT";
 
     private static final String STATUS_COMPLETED = "Hoàn thành";
+    private static final String PRESCRIPTION_PRODUCT_TYPE = "Thuốc kê đơn";
     private static final String STATUS_DEBT = "Còn nợ";
     private static final String STATUS_SIGNED = "Đã ký";
     private static final String STATUS_RETURNED_FULL = "Đã trả hàng toàn bộ";
     private static final String STATUS_RETURNED_PARTIAL = "Đã trả hàng 1 phần";
-    private static final String INVOICE_NUMBER_PREFIX = "HD";
+    private static final List<String> ALL_STATUSES = List.of(STATUS_COMPLETED, STATUS_DEBT);
+    private static final String RETAIL_BUYER_PRINT_LABEL = "Bán cho người tiêu dùng";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    private static final String[] MONEY_WORD_DIGITS = {
+            "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"
+    };
 
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
     private final ProductRepository productRepository;
     private final ProductunitRepository productunitRepository;
+    private final PositionRepository positionRepository;
     private final BatchRepository batchRepository;
     private final CustomerRepository customerRepository;
     private final AccountRepository accountRepository;
     private final FinancialsettingRepository financialsettingRepository;
+    private final FinancialsettingService financialsettingService;
     private final ReturnRepository returnRepository;
     // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
     // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
     // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
     private final ShiftreportService shiftreportService;
+    private InventoryAlertEventService inventoryAlertEventService;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           InvoicedetailRepository invoicedetailRepository,
                           ProductRepository productRepository,
                           ProductunitRepository productunitRepository,
+                          PositionRepository positionRepository,
                           BatchRepository batchRepository,
                           CustomerRepository customerRepository,
                           AccountRepository accountRepository,
                           FinancialsettingRepository financialsettingRepository,
+                          FinancialsettingService financialsettingService,
                           ReturnRepository returnRepository,
                           ShiftreportService shiftreportService) {
         this.invoiceRepository = invoiceRepository;
         this.invoicedetailRepository = invoicedetailRepository;
         this.productRepository = productRepository;
         this.productunitRepository = productunitRepository;
+        this.positionRepository = positionRepository;
         this.batchRepository = batchRepository;
         this.customerRepository = customerRepository;
         this.accountRepository = accountRepository;
         this.financialsettingRepository = financialsettingRepository;
+        this.financialsettingService = financialsettingService;
         this.returnRepository = returnRepository;
         this.shiftreportService = shiftreportService;
+    }
+
+    @Autowired
+    public void setInventoryAlertEventService(
+            InventoryAlertEventService inventoryAlertEventService
+    ) {
+        this.inventoryAlertEventService =
+                inventoryAlertEventService;
     }
 
     @Transactional(readOnly = true)
@@ -158,12 +180,7 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<String> listStatuses() {
-        return invoiceRepository.findAll().stream()
-                .map(Invoice::getStatus)
-                .filter(status -> status != null && !status.isBlank())
-                .distinct()
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
+        return ALL_STATUSES;
     }
 
     @Transactional(readOnly = true)
@@ -258,9 +275,19 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<SellProductOptionResponse> listSellableProducts() {
-        Map<Integer, Long> stockByProduct = new LinkedHashMap<>();
-        for (Object[] row : batchRepository.sumStorageGroupedByProduct()) {
-            stockByProduct.put((Integer) row[0], (Long) row[1]);
+        Map<Integer, List<String>> positionsByProduct = new LinkedHashMap<>();
+        for (Position position : positionRepository.findAllWithProduct()) {
+            Product product = position.getProductID();
+            if (product == null || product.getProductID() == null) {
+                continue;
+            }
+            String name = trimToNull(position.getName());
+            if (name == null) {
+                continue;
+            }
+            positionsByProduct
+                    .computeIfAbsent(product.getProductID(), ignored -> new ArrayList<>())
+                    .add(name);
         }
 
         Map<Integer, List<Productunit>> unitsByProduct = new LinkedHashMap<>();
@@ -272,13 +299,12 @@ public class InvoiceService {
         }
 
         List<SellProductOptionResponse> options = new ArrayList<>();
-        for (Product product : productRepository.findAll()) {
+        for (Product product : productRepository.findAllWithRelations()) {
             if (!Boolean.TRUE.equals(product.getStatus())) {
                 continue;
             }
-            long baseStock = stockByProduct.getOrDefault(product.getProductID(), 0L);
             List<Productunit> units = unitsByProduct.getOrDefault(product.getProductID(), List.of());
-            if (baseStock <= 0 || units.isEmpty()) {
+            if (units.isEmpty()) {
                 continue;
             }
 
@@ -294,7 +320,7 @@ public class InvoiceService {
                     .toList();
 
             List<SellBatchOptionResponse> batchOptions = batchRepository
-                    .findInStockBatchesByProduct(product.getProductID())
+                    .findInStockBatchesByProductForSale(product.getProductID())
                     .stream()
                     .map(batch -> new SellBatchOptionResponse(
                             batch.getId(),
@@ -302,8 +328,16 @@ public class InvoiceService {
                             batch.getLotNumber(),
                             batch.getExpirationDate(),
                             formatLocalDate(batch.getExpirationDate()),
-                            batch.getStorageQuantity()))
+                            batch.getStorageQuantity(),
+                            isBatchExpired(batch)))
                     .toList();
+
+            long baseStock = batchOptions.stream()
+                    .mapToLong(batch -> batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0L)
+                    .sum();
+            if (baseStock <= 0) {
+                continue;
+            }
 
             options.add(new SellProductOptionResponse(
                     product.getProductID(),
@@ -312,7 +346,9 @@ public class InvoiceService {
                     product.getBarcode(),
                     baseStock,
                     unitOptions,
-                    batchOptions));
+                    batchOptions,
+                    isPrescriptionProduct(product),
+                    positionsByProduct.getOrDefault(product.getProductID(), List.of())));
         }
 
         options.sort(Comparator.comparing(SellProductOptionResponse::getName,
@@ -353,6 +389,17 @@ public class InvoiceService {
             throw new IllegalArgumentException(
                     "Mã đơn thuốc không đúng định dạng (12 ký tự chữ/số, dấu \"-\", rồi c/n/h/y)");
         }
+        if (invoiceContainsPrescriptionProduct(request.getDetails())) {
+            if (!prescriptionRequired) {
+                throw new IllegalArgumentException("Hóa đơn có thuốc kê đơn — vui lòng tick \"Hóa đơn thuốc kê đơn\"");
+            }
+            if (prescriptionCode == null) {
+                throw new IllegalArgumentException("Vui lòng nhập mã đơn thuốc để bán thuốc kê đơn");
+            }
+        }
+        if (!prescriptionRequired && prescriptionCode != null) {
+            prescriptionCode = null;
+        }
 
         LocalDateTime invoiceDateTime = LocalDateTime.now(VN_ZONE);
 
@@ -363,7 +410,7 @@ public class InvoiceService {
         invoice.setDate(invoiceDateTime);
         invoice.setEmployeeID(employee);
         invoice.setCustomerID(customer);
-        invoice.setInvoiceType(isDeductionGroup() ? INVOICE_TYPE_VAT : INVOICE_TYPE_NORMAL);
+        invoice.setInvoiceType(INVOICE_TYPE_NORMAL);
         invoice.setPrescriptionRequired(prescriptionRequired);
         invoice.setPrescriptionCode(prescriptionCode);
         invoice.setNote(trimToNull(request.getNote()));
@@ -380,11 +427,8 @@ public class InvoiceService {
         Invoice savedInvoice = saveInvoiceGuardingConcurrentEdit(invoice);
 
         BigDecimal subtotal = BigDecimal.ZERO;
-        BigDecimal totalVATOutput = BigDecimal.ZERO;
         for (InvoiceDetailCreateRequest item : request.getDetails()) {
-            SavedLineTotals lineTotals = saveLineAndDeductStock(savedInvoice, item);
-            subtotal = subtotal.add(lineTotals.subtotal());
-            totalVATOutput = totalVATOutput.add(lineTotals.vatAmount());
+            subtotal = subtotal.add(saveLineAndDeductStock(savedInvoice, item));
         }
 
         BigDecimal discount = maxZero(request.getDiscount());
@@ -414,7 +458,6 @@ public class InvoiceService {
         savedInvoice.setPaidByCash(paidByCash);
         savedInvoice.setPaidByBanking(paidByBanking);
         savedInvoice.setDebtAmount(debt);
-        savedInvoice.setTotalVATOutput(totalVATOutput);
         savedInvoice.setStatus(debt.compareTo(BigDecimal.ZERO) > 0 ? STATUS_DEBT : STATUS_COMPLETED);
 
         // A sale is a real transaction the instant it's recorded, regardless of payment mix —
@@ -423,10 +466,12 @@ public class InvoiceService {
 
         saveInvoiceGuardingConcurrentEdit(savedInvoice);
 
+        financialsettingService.applyFundDelta(paidByCash, paidByBanking);
+
         return savedInvoice.getId();
     }
 
-    private SavedLineTotals saveLineAndDeductStock(Invoice invoice, InvoiceDetailCreateRequest item) {
+    private BigDecimal saveLineAndDeductStock(Invoice invoice, InvoiceDetailCreateRequest item) {
         if (item.getProductId() == null || item.getProductUnitId() == null) {
             throw new IllegalArgumentException("Dòng hàng chưa chọn sản phẩm hoặc đơn vị bán");
         }
@@ -449,9 +494,6 @@ public class InvoiceService {
 
         BigDecimal unitSellPrice = unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO;
         BigDecimal lineSubtotal = unitSellPrice.multiply(BigDecimal.valueOf(quantity));
-        BigDecimal vatRate = resolveVatRateSnapshot(product);
-        BigDecimal preTaxAmount = calculateSaleLinePreTaxAmount(lineSubtotal, vatRate);
-        BigDecimal vatAmount = calculateSaleLineVatAmount(preTaxAmount, vatRate);
 
         List<BatchAllocation> allocations = deductStock(
                 product, baseQty, quantity, ratio, unit.getUnitName(), item.getBatchId());
@@ -469,19 +511,12 @@ public class InvoiceService {
             detail.setUnitSellPrice(unitSellPrice);
             detail.setSubtotal(lineSubtotal);
             detail.setReturnedQty(0);
-            detail.setVatRate(vatRate);
-            detail.setPreTaxAmount(preTaxAmount);
-            detail.setVatAmount(vatAmount);
+            detail.setNote(trimToNull(item.getNote()));
             invoicedetailRepository.save(detail);
-            return new SavedLineTotals(lineSubtotal, vatAmount);
+            return lineSubtotal;
         }
 
-        // Deduction spanned more than one batch — persist one row per batch actually touched, keeping
-        // the sale unit the cashier chose so invoice detail matches the POS screen. Money and sale
-        // quantity are split proportionally by base quantity; the last chunk absorbs rounding remainders.
         BigDecimal remainingSubtotal = lineSubtotal;
-        BigDecimal remainingPreTax = preTaxAmount;
-        BigDecimal remainingVat = vatAmount;
         int remainingBaseQty = baseQty;
         int remainingSellQty = quantity;
 
@@ -504,19 +539,13 @@ public class InvoiceService {
             }
 
             BigDecimal chunkSubtotal;
-            BigDecimal chunkPreTax;
-            BigDecimal chunkVat;
             if (lastChunk) {
                 chunkSubtotal = remainingSubtotal;
-                chunkPreTax = remainingPreTax;
-                chunkVat = remainingVat;
             } else {
                 BigDecimal share = BigDecimal.valueOf(chunkBaseQty)
                         .divide(BigDecimal.valueOf(remainingBaseQty == 0 ? 1 : remainingBaseQty),
                                 10, RoundingMode.HALF_UP);
                 chunkSubtotal = lineSubtotal.multiply(share).setScale(2, RoundingMode.HALF_UP);
-                chunkPreTax = preTaxAmount.multiply(share).setScale(2, RoundingMode.HALF_UP);
-                chunkVat = vatAmount.multiply(share).setScale(2, RoundingMode.HALF_UP);
             }
 
             Invoicedetail detail = new Invoicedetail();
@@ -530,61 +559,16 @@ public class InvoiceService {
             detail.setUnitSellPrice(unitSellPrice);
             detail.setSubtotal(chunkSubtotal);
             detail.setReturnedQty(0);
-            detail.setVatRate(vatRate);
-            detail.setPreTaxAmount(chunkPreTax);
-            detail.setVatAmount(chunkVat);
+            detail.setNote(trimToNull(item.getNote()));
             invoicedetailRepository.save(detail);
 
             remainingSubtotal = remainingSubtotal.subtract(chunkSubtotal);
-            remainingPreTax = remainingPreTax.subtract(chunkPreTax);
-            remainingVat = remainingVat.subtract(chunkVat);
             remainingBaseQty -= chunkBaseQty;
             remainingSellQty -= chunkSellQty;
         }
 
-        return new SavedLineTotals(lineSubtotal, vatAmount);
+        return lineSubtotal;
     }
-
-    /**
-     * Snapshot thuế suất GTGT tại thời điểm bán: {@code Product.vatRateOverride} nếu có,
-     * ngược lại {@code Type.defaultVATRate}; lưu vào dòng hóa đơn, không tham chiếu động tới Product.
-     */
-    private BigDecimal resolveVatRateSnapshot(Product product) {
-        if (product.getVatRateOverride() != null) {
-            return product.getVatRateOverride();
-        }
-        Type type = product.getTypeID();
-        if (type != null && type.getDefaultVATRate() != null) {
-            return type.getDefaultVATRate();
-        }
-        return BigDecimal.ZERO;
-    }
-
-    /** Giá trị dòng hàng chưa gồm thuế GTGT — subtotal đã gồm thuế: subtotal ÷ (1 + vatRate/100). */
-    private BigDecimal calculateSaleLinePreTaxAmount(BigDecimal grossSubtotal, BigDecimal vatRatePercent) {
-        if (grossSubtotal == null || grossSubtotal.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        BigDecimal rate = vatRatePercent != null ? vatRatePercent : BigDecimal.ZERO;
-        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-            return grossSubtotal.setScale(2, RoundingMode.HALF_UP);
-        }
-        BigDecimal divisor = BigDecimal.ONE.add(
-                rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
-        return grossSubtotal.divide(divisor, 2, RoundingMode.HALF_UP);
-    }
-
-    /** Số tiền thuế GTGT đầu ra của dòng hàng — preTaxAmount × vatRate / 100. */
-    private BigDecimal calculateSaleLineVatAmount(BigDecimal preTaxAmount, BigDecimal vatRatePercent) {
-        BigDecimal preTax = preTaxAmount != null ? preTaxAmount : BigDecimal.ZERO;
-        BigDecimal rate = vatRatePercent != null ? vatRatePercent : BigDecimal.ZERO;
-        if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        return preTax.multiply(rate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-    }
-
-    private record SavedLineTotals(BigDecimal subtotal, BigDecimal vatAmount) {}
 
     /** One batch's contribution to a single line's FEFO deduction. */
     private record BatchAllocation(Batch batch, int baseQtyTaken) {}
@@ -602,6 +586,12 @@ public class InvoiceService {
             if (!Boolean.TRUE.equals(batch.getStatus())) {
                 throw new IllegalArgumentException("Lô hàng không còn hoạt động");
             }
+            if (isBatchExpired(batch)) {
+                String code = batch.getBatchCode() != null ? batch.getBatchCode() : String.valueOf(batch.getId());
+                String hsd = formatLocalDate(batch.getExpirationDate());
+                throw new IllegalArgumentException("Lô \"" + code + "\" đã hết hạn sử dụng"
+                        + (hsd.isBlank() ? "" : " (" + hsd + ") — không thể bán"));
+            }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch < baseQty) {
                 BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0
@@ -616,14 +606,29 @@ public class InvoiceService {
             }
             batch.setStorageQuantity(inBatch - baseQty);
             batchRepository.save(batch);
-            return List.of(new BatchAllocation(batch, baseQty));
+
+            scheduleInventoryAlert(
+                    product,
+                    batch
+            );
+
+            return List.of(
+                    new BatchAllocation(
+                            batch,
+                            baseQty
+                    )
+            );
         }
 
-        List<Batch> batches = batchRepository.findInStockBatchesByProduct(product.getProductID());
+        List<Batch> batches = batchRepository.findInStockBatchesByProductForSale(product.getProductID());
         long available = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
                 .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
                 .sum();
         if (available < baseQty) {
+            if (hasOnlyExpiredStock(batches)) {
+                throwNoSellableBatchStock(product);
+            }
             BigDecimal safeRatio = ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0 ? ratio : BigDecimal.ONE;
             long availableInUnit = BigDecimal.valueOf(available)
                     .divide(safeRatio, 0, RoundingMode.DOWN).longValue();
@@ -639,6 +644,9 @@ public class InvoiceService {
             if (remaining <= 0) {
                 break;
             }
+            if (isBatchExpired(batch)) {
+                continue;
+            }
             int inBatch = batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity();
             if (inBatch <= 0) {
                 continue;
@@ -646,25 +654,62 @@ public class InvoiceService {
             int take = Math.min(inBatch, remaining);
             batch.setStorageQuantity(inBatch - take);
             batchRepository.save(batch);
-            allocations.add(new BatchAllocation(batch, take));
+
+            scheduleInventoryAlert(
+                    product,
+                    batch
+            );
+
+            allocations.add(
+                    new BatchAllocation(
+                            batch,
+                            take
+                    )
+            );
+
             remaining -= take;
         }
         return allocations;
     }
 
+    private void scheduleInventoryAlert(
+            Product product,
+            Batch batch
+    ) {
+        if (inventoryAlertEventService == null
+                || product == null
+                || batch == null) {
+            return;
+        }
+
+        inventoryAlertEventService
+                .checkBatchAfterCommit(
+                        product.getProductID(),
+                        batch.getId()
+                );
+    }
+
+    /** Số hóa đơn bán hàng: 8 chữ số, không prefix (vd. 00008131). */
     private String generateInvoiceNumber() {
-        int nextId = invoiceRepository.findAll().stream()
-                .map(Invoice::getId)
+        long maxNumber = invoiceRepository.findAll().stream()
+                .map(Invoice::getInvoiceNumber)
                 .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(0) + 1;
-        return INVOICE_NUMBER_PREFIX + String.format("%06d", nextId);
+                .map(String::trim)
+                .filter(number -> !number.isEmpty())
+                .map(number -> number.replaceAll("\\D", ""))
+                .filter(digits -> !digits.isEmpty())
+                .mapToLong(Long::parseLong)
+                .max()
+                .orElse(0L);
+        long next = maxNumber + 1;
+        if (next > 99_999_999L) {
+            throw new IllegalStateException("Đã hết dãy số hóa đơn 8 chữ số");
+        }
+        return String.format("%08d", next);
     }
 
     /**
-     * Ký hiệu hóa đơn 7 ký tự: 1 (GTGT, Nhóm 3+) hoặc 2 (bán hàng thường) + K (không mã CQT)
-     * + YY (năm) + M (máy tính tiền) + AA.
-     * Khi ký đẩy lên CQT, ký hiệu K được chuyển thành C (xem {@link #toSignedInvoicePattern}).
+     * Ký hiệu hóa đơn 7 ký tự: 2 (bán hàng) + K (không mã CQT) + YY (năm) + M (máy tính tiền) + AA.
      * Hai ký tự cuối lấy từ {@code vatInvoiceSeries} trong thiết lập tài chính.
      */
     private String buildInvoicePattern(LocalDate date) {
@@ -685,41 +730,8 @@ public class InvoiceService {
                     "Hai ký tự cuối của ký hiệu mẫu số hóa đơn phải là chữ cái (VD: AA, YY)");
         }
 
-        char kindPrefix = isDeductionGroup() ? '1' : '2';
         String yearPart = String.format("%02d", date.getYear() % 100);
-        return kindPrefix + "K" + yearPart + "M" + sellerSuffix;
-    }
-
-    /** Nhóm 3/4 (khấu trừ) — đọc từ thiết lập tài chính tại thời điểm lập hóa đơn. */
-    private boolean isDeductionGroup() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
-                .map(Financialsetting::getRevenueGroup)
-                .map(TaxRevenueGroup::isDeductionGroup)
-                .orElse(false);
-    }
-
-    /**
-     * Hóa đơn GTGT (Nhóm 3+) hay hóa đơn bán hàng thường — dựa trên dữ liệu đã lưu trên hóa đơn,
-     * không theo nhóm hiện tại (hóa đơn cũ vẫn giữ dạng cũ sau khi đổi nhóm).
-     */
-    private boolean isVatSaleInvoice(Invoice invoice) {
-        if (invoice == null) {
-            return false;
-        }
-        String type = invoice.getInvoiceType();
-        if (INVOICE_TYPE_VAT.equals(type)) {
-            return true;
-        }
-        String pattern = invoice.getInvoicePattern();
-        return pattern != null && !pattern.isEmpty() && pattern.charAt(0) == '1';
-    }
-
-    /** Chuyển ký hiệu K (không mã CQT) → C (có mã CQT) khi hóa đơn được ký. */
-    private String toSignedInvoicePattern(String pattern) {
-        if (pattern == null || pattern.length() < 2) {
-            return pattern;
-        }
-        return pattern.charAt(0) + "C" + pattern.substring(2);
+        return "2K" + yearPart + "M" + sellerSuffix;
     }
 
     private BigDecimal maxZero(BigDecimal value) {
@@ -733,6 +745,30 @@ public class InvoiceService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private boolean isPrescriptionProduct(Product product) {
+        if (product == null || product.getTypeID() == null || product.getTypeID().getName() == null) {
+            return false;
+        }
+        return PRESCRIPTION_PRODUCT_TYPE.equalsIgnoreCase(product.getTypeID().getName().trim());
+    }
+
+    private boolean invoiceContainsPrescriptionProduct(List<InvoiceDetailCreateRequest> details) {
+        if (details == null) {
+            return false;
+        }
+        for (InvoiceDetailCreateRequest item : details) {
+            if (item == null || item.getProductId() == null
+                    || item.getQuantity() == null || item.getQuantity() <= 0) {
+                continue;
+            }
+            Product product = productRepository.findDetailById(item.getProductId()).orElse(null);
+            if (isPrescriptionProduct(product)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The lines of one invoice, for the quick-view modal (JSON). */
     @Transactional(readOnly = true)
     public List<InvoiceLineResponse> loadLines(Integer invoiceId) {
@@ -742,44 +778,6 @@ public class InvoiceService {
         return invoicedetailRepository.findByInvoiceIdWithRelations(invoiceId).stream()
                 .map(this::toLine)
                 .toList();
-    }
-
-    /** Marks a sale invoice as signed ({@code status = Đã ký}). Owner and Accountant only. */
-    @Transactional
-    public void sign(Integer invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
-        if (isStatus(invoice.getStatus(), STATUS_SIGNED)) {
-            throw new IllegalArgumentException("Hóa đơn đã được ký");
-        }
-        invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
-        invoice.setStatus(STATUS_SIGNED);
-        saveInvoiceGuardingConcurrentEdit(invoice);
-    }
-
-    /** Signs multiple sale invoices. Skips ones already signed; returns how many were updated. */
-    @Transactional
-    public int signMany(List<Integer> invoiceIds) {
-        if (invoiceIds == null || invoiceIds.isEmpty()) {
-            throw new IllegalArgumentException("Vui lòng chọn ít nhất một hóa đơn");
-        }
-
-        int signed = 0;
-        for (Integer invoiceId : invoiceIds.stream().distinct().toList()) {
-            Invoice invoice = invoiceRepository.findById(invoiceId).orElse(null);
-            if (invoice == null || isStatus(invoice.getStatus(), STATUS_SIGNED)) {
-                continue;
-            }
-            invoice.setInvoicePattern(toSignedInvoicePattern(invoice.getInvoicePattern()));
-            invoice.setStatus(STATUS_SIGNED);
-            saveInvoiceGuardingConcurrentEdit(invoice);
-            signed++;
-        }
-
-        if (signed == 0) {
-            throw new IllegalArgumentException("Không có hóa đơn nào được ký (có thể đã ký trước đó)");
-        }
-        return signed;
     }
 
     /** Full sale-invoice detail for the detail page. */
@@ -804,21 +802,8 @@ public class InvoiceService {
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        BigDecimal totalVATOutput = invoice.getTotalVATOutput();
-        if (totalVATOutput == null) {
-            totalVATOutput = lines.stream()
-                    .map(Invoicedetail::getVatAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-        BigDecimal totalPreTaxAmount = lines.stream()
-                .map(Invoicedetail::getPreTaxAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         Customer customer = invoice.getCustomerID();
         Invoice original = invoice.getOriginalInvoiceID();
-        Invoice root = invoice.getRootInvoiceID();
 
         Map<Integer, String> returnSlips = returnRepository
                 .findByInvoiceID_IdOrderByReturnDateDesc(invoiceId)
@@ -830,12 +815,8 @@ public class InvoiceService {
                         LinkedHashMap::new));
 
         String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
-        String taxCode = isStatus(statusName, STATUS_SIGNED)
-                ? financialsettingRepository.findFirstByOrderByIdAsc()
-                        .map(setting -> trimToNull(setting.getTaxCode()))
-                        .orElse(null)
-                : null;
-        boolean showVatBreakdown = isVatSaleInvoice(invoice);
+        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
+        String taxCode = setting != null ? trimToNull(setting.getTaxCode()) : null;
 
         return new InvoiceDetailPageResponse(
                 invoice.getId(),
@@ -848,7 +829,6 @@ public class InvoiceService {
                 customer != null ? customer.getPhoneNumber() : null,
                 invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
                 invoiceTypeDisplay(invoice.getInvoiceType()),
-                showVatBreakdown,
                 statusName,
                 statusCssClass(invoice.getStatus()),
                 Boolean.TRUE.equals(invoice.getPrescriptionRequired()),
@@ -858,12 +838,8 @@ public class InvoiceService {
                 returnSlips,
                 original != null ? original.getId() : null,
                 original != null ? invoiceCode(original) : null,
-                root != null ? root.getId() : null,
-                root != null ? invoiceCode(root) : null,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
-                totalPreTaxAmount,
-                totalVATOutput,
                 invoice.getTotal(),
                 invoice.getPaidByCash(),
                 invoice.getPaidByBanking(),
@@ -883,31 +859,14 @@ public class InvoiceService {
 
         List<Invoicedetail> lines = invoicedetailRepository.findByInvoiceIdWithRelations(invoiceId);
 
-        BigDecimal totalVATOutput = invoice.getTotalVATOutput();
-        if (totalVATOutput == null) {
-            totalVATOutput = lines.stream()
-                    .map(Invoicedetail::getVatAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-        BigDecimal totalPreTaxAmount = lines.stream()
-                .map(Invoicedetail::getPreTaxAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         int totalQuantity = lines.stream()
                 .map(Invoicedetail::getQuantity)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
 
-        boolean showVatBreakdown = isVatSaleInvoice(invoice);
-        String statusName = invoice.getStatus() != null ? invoice.getStatus() : "";
-        String taxCode = isStatus(statusName, STATUS_SIGNED)
-                ? financialsettingRepository.findFirstByOrderByIdAsc()
-                        .map(setting -> trimToNull(setting.getTaxCode()))
-                        .orElse(null)
-                : null;
+        boolean signed = hasCqtCode(invoice);
+        LocalDateTime signedAt = invoice.getDate();
 
         Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         Customer customer = invoice.getCustomerID();
@@ -916,26 +875,54 @@ public class InvoiceService {
                 .map(this::toPrintLine)
                 .toList();
 
+        String buyerCompanyName;
+        String buyerTaxCode;
+        String buyerAddress;
+        if (isRetailCustomer(customer)) {
+            buyerCompanyName = RETAIL_BUYER_PRINT_LABEL;
+            buyerTaxCode = "";
+            buyerAddress = "";
+        } else {
+            buyerCompanyName = nullToEmpty(customer.getName());
+            buyerTaxCode = nullToEmpty(customer.getTaxCode());
+            buyerAddress = nullToEmpty(customer.getAddress());
+        }
+
+        BigDecimal printTotal = invoice.getTotal() != null ? invoice.getTotal() : BigDecimal.ZERO;
+
         return new InvoicePrintPageResponse(
                 invoice.getId(),
                 invoiceCode(invoice),
                 invoice.getInvoicePattern(),
+                formatInvoiceSerialNumber(invoice),
                 invoiceTypeDisplay(invoice.getInvoiceType()),
-                showVatBreakdown,
+                signed,
+                formatDateLong(invoice.getDate()),
                 formatDate(invoice.getDate()),
-                setting != null ? setting.getLocationName() : "",
-                setting != null ? setting.getTaxCode() : "",
-                setting != null ? setting.getPhoneNumber() : "",
+                pharmacyBrandShort(setting),
+                receiptInvoiceCode(invoice),
+                signed ? buildTaxAuthorityCode(invoice, setting) : null,
+                signed ? formatSignedAt(signedAt) : null,
+                setting != null ? nullToEmpty(setting.getLocationName()) : "",
+                setting != null ? nullToEmpty(setting.getTaxCode()) : "",
+                setting != null ? nullToEmpty(setting.getAddress()) : "",
+                setting != null ? nullToEmpty(setting.getLocationCode()) : "",
+                setting != null ? nullToEmpty(setting.getPhoneNumber()) : "",
+                setting != null ? nullToEmpty(setting.getEmail()) : "",
+                setting != null ? nullToEmpty(setting.getBankAccountNumber()) : "",
+                setting != null ? nullToEmpty(setting.getBankName()) : "",
+                buyerCompanyName,
+                buyerTaxCode,
+                buyerAddress,
+                paymentMethodShort(invoice),
+                moneyAmountInWords(printTotal),
                 customer != null ? customer.getName() : "Khách lẻ",
                 customer != null ? customer.getPhoneNumber() : null,
                 invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
-                taxCode,
                 totalQuantity,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
-                totalPreTaxAmount,
-                totalVATOutput,
-                invoice.getTotal(),
+                printTotal,
                 invoice.getPaidByCash(),
                 invoice.getPaidByBanking(),
                 invoice.getDebtAmount() != null ? invoice.getDebtAmount() : BigDecimal.ZERO,
@@ -953,9 +940,7 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getVatRate(),
-                line.getPreTaxAmount(),
-                line.getVatAmount());
+                trimToNull(line.getNote()));
     }
 
     private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines) {
@@ -1001,11 +986,9 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getVatRate(),
-                line.getPreTaxAmount(),
-                line.getVatAmount(),
                 line.getReturnedQty() != null ? line.getReturnedQty() : 0,
-                formatBatchLabel(line.getBatchID()));
+                formatBatchLabel(line.getBatchID()),
+                trimToNull(line.getNote()));
     }
 
     private InvoiceDetailItemResponse toDetailItem(Invoicedetail line) {
@@ -1026,10 +1009,8 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getVatRate(),
-                line.getPreTaxAmount(),
-                line.getVatAmount(),
-                line.getReturnedQty() != null ? line.getReturnedQty() : 0);
+                line.getReturnedQty() != null ? line.getReturnedQty() : 0,
+                trimToNull(line.getNote()));
     }
 
     private String batchLotNumber(Batch batch) {
@@ -1090,13 +1071,43 @@ public class InvoiceService {
                 line.getQuantity(),
                 line.getUnitSellPrice(),
                 line.getSubtotal(),
-                line.getReturnedQty() != null ? line.getReturnedQty() : 0);
+                line.getReturnedQty() != null ? line.getReturnedQty() : 0,
+                trimToNull(line.getNote()));
     }
 
     /** The visible invoice number (the {@code invoiceNumber} column). */
     private String invoiceCode(Invoice invoice) {
         String number = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber().trim() : "";
         return number.isEmpty() ? "—" : number;
+    }
+
+    /** Mã hiển thị trên phiếu in POS: số hóa đơn 8 chữ số (vd. 00000018). */
+    private String receiptInvoiceCode(Invoice invoice) {
+        if (invoice == null) {
+            return "—";
+        }
+        String serial = formatInvoiceSerialNumber(invoice);
+        return serial.isEmpty() ? "—" : serial;
+    }
+
+    /** Tên thương hiệu ngắn lấy từ phần local-part email (vd. nhathuochangngoc). */
+    private String pharmacyBrandShort(Financialsetting setting) {
+        if (setting == null) {
+            return "";
+        }
+        String email = setting.getEmail();
+        if (email != null && !email.isBlank()) {
+            String normalized = email.trim().toLowerCase(Locale.ROOT);
+            int at = normalized.indexOf('@');
+            if (at > 0) {
+                return normalized.substring(0, at).replaceAll("\\d+$", "");
+            }
+        }
+        String locationName = setting.getLocationName();
+        if (locationName != null && !locationName.isBlank()) {
+            return locationName.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+        }
+        return "";
     }
 
     private boolean matchesKeyword(Invoice invoice, String normalizedKeyword) {
@@ -1153,11 +1164,9 @@ public class InvoiceService {
             return "—";
         }
         if (INVOICE_TYPE_NORMAL.equalsIgnoreCase(invoiceType)
-                || INVOICE_TYPE_NORMAL_LEGACY.equalsIgnoreCase(invoiceType)) {
+                || INVOICE_TYPE_NORMAL_LEGACY.equalsIgnoreCase(invoiceType)
+                || INVOICE_TYPE_VAT_LEGACY.equals(invoiceType)) {
             return "Bán hàng";
-        }
-        if (INVOICE_TYPE_VAT.equals(invoiceType)) {
-            return "Hóa đơn GTGT";
         }
         if (INVOICE_TYPE_ADJUSTMENT.equalsIgnoreCase(invoiceType)
                 || INVOICE_TYPE_ADJUSTMENT_LEGACY.equalsIgnoreCase(invoiceType)) {
@@ -1167,6 +1176,189 @@ public class InvoiceService {
             case INVOICE_TYPE_RETURN -> "Trả hàng";
             default -> invoiceType;
         };
+    }
+
+    private String paymentMethodShort(Invoice invoice) {
+        boolean cash = isPositive(invoice.getPaidByCash());
+        boolean banking = isPositive(invoice.getPaidByBanking());
+        if (cash && banking) {
+            return "TM/CK";
+        }
+        if (cash) {
+            return "TM";
+        }
+        if (banking) {
+            return "CK";
+        }
+        if (isPositive(invoice.getDebtAmount())) {
+            return "Ghi nợ";
+        }
+        return "TM";
+    }
+
+    private String formatDateLong(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return "";
+        }
+        LocalDate date = dateTime.toLocalDate();
+        return String.format("Ngày %d tháng %02d năm %d",
+                date.getDayOfMonth(), date.getMonthValue(), date.getYear());
+    }
+
+    /** dd/MM/yyyy — dùng trên khung chữ ký điện tử của phiếu in. */
+    private String formatSignedAt(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return "";
+        }
+        return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(dateTime);
+    }
+
+    private String formatInvoiceSerialNumber(Invoice invoice) {
+        if (invoice == null) {
+            return "";
+        }
+        String number = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber().trim() : "";
+        String digits = number.replaceAll("\\D", "");
+        if (digits.isEmpty() && invoice.getId() != null) {
+            digits = String.valueOf(invoice.getId());
+        }
+        if (digits.isEmpty()) {
+            return "";
+        }
+        try {
+            return String.format("%08d", Long.parseLong(digits));
+        } catch (NumberFormatException ex) {
+            return digits;
+        }
+    }
+
+    private String buildTaxAuthorityCode(Invoice invoice, Financialsetting setting) {
+        if (invoice == null || invoice.getInvoicePattern() == null || invoice.getInvoicePattern().length() < 4) {
+            return null;
+        }
+        String pattern = invoice.getInvoicePattern();
+        char kind = pattern.charAt(0);
+        String yearPart = pattern.substring(2, 4);
+        String series = setting != null && setting.getVatInvoiceSeries() != null
+                ? setting.getVatInvoiceSeries().trim().toUpperCase(Locale.ROOT)
+                : "BGALS";
+        if (series.length() < 5) {
+            series = "BGALS";
+        }
+        int invoiceKey = invoice.getId() != null ? invoice.getId() : 0;
+        return String.format("M%c-%s-%s-%011d", kind, yearPart, series, invoiceKey);
+    }
+
+    private String moneyAmountInWords(BigDecimal amount) {
+        if (amount == null) {
+            return "";
+        }
+        long value = amount.setScale(0, RoundingMode.HALF_UP).longValue();
+        if (value == 0L) {
+            return "Không đồng chẵn.";
+        }
+        if (value < 0L) {
+            return "Âm " + capitalizeMoneyWords(readMoneyNumber(-value)) + " đồng chẵn.";
+        }
+        return capitalizeMoneyWords(readMoneyNumber(value)) + " đồng chẵn.";
+    }
+
+    private String readMoneyNumber(long number) {
+        if (number == 0L) {
+            return MONEY_WORD_DIGITS[0];
+        }
+
+        String[] units = {"", " nghìn", " triệu", " tỷ", " nghìn tỷ", " triệu tỷ"};
+        StringBuilder result = new StringBuilder();
+        int unitIndex = 0;
+
+        while (number > 0L) {
+            int chunk = (int) (number % 1000L);
+            if (chunk != 0) {
+                String chunkWords = readMoneyThreeDigits(chunk, unitIndex > 0);
+                if (!result.isEmpty()) {
+                    result.insert(0, chunkWords + units[unitIndex] + " ");
+                } else {
+                    result.insert(0, chunkWords + units[unitIndex]);
+                }
+            }
+            number /= 1000L;
+            unitIndex++;
+        }
+
+        return result.toString().trim();
+    }
+
+    private String readMoneyThreeDigits(int number, boolean fullReading) {
+        int hundreds = number / 100;
+        int tens = (number % 100) / 10;
+        int ones = number % 10;
+        StringBuilder words = new StringBuilder();
+
+        if (hundreds > 0) {
+            words.append(MONEY_WORD_DIGITS[hundreds]).append(" trăm");
+            if (tens == 0 && ones > 0) {
+                words.append(" lẻ");
+            }
+        } else if (fullReading && (tens > 0 || ones > 0)) {
+            words.append("không trăm");
+        }
+
+        if (tens > 1) {
+            if (!words.isEmpty()) {
+                words.append(' ');
+            }
+            words.append(MONEY_WORD_DIGITS[tens]).append(" mươi");
+            if (ones == 1) {
+                words.append(" mốt");
+            } else if (ones == 4) {
+                words.append(" tư");
+            } else if (ones == 5) {
+                words.append(" lăm");
+            } else if (ones > 0) {
+                words.append(' ').append(MONEY_WORD_DIGITS[ones]);
+            }
+        } else if (tens == 1) {
+            if (!words.isEmpty()) {
+                words.append(' ');
+            }
+            words.append("mười");
+            if (ones == 5) {
+                words.append(" lăm");
+            } else if (ones > 0) {
+                words.append(' ').append(MONEY_WORD_DIGITS[ones]);
+            }
+        } else if (ones > 0) {
+            if (!words.isEmpty()) {
+                words.append(' ');
+            }
+            if (hundreds > 0 || fullReading) {
+                words.append("lẻ ");
+            }
+            words.append(MONEY_WORD_DIGITS[ones]);
+        }
+
+        return words.toString().trim();
+    }
+
+    private String capitalizeMoneyWords(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    /** Walk-in sale: no customer row, or the synthetic "Khách lẻ" placeholder. */
+    private boolean isRetailCustomer(Customer customer) {
+        if (customer == null) {
+            return true;
+        }
+        String name = nullToEmpty(customer.getName());
+        return name.isBlank() || "Khách lẻ".equalsIgnoreCase(name);
     }
 
     private String paymentDisplay(Invoice invoice) {
@@ -1239,6 +1431,18 @@ public class InvoiceService {
         return normalize(actual).equals(normalize(expected));
     }
 
+    /** Legacy: ký hiệu C (có mã CQT) hoặc trạng thái cũ "Đã ký". */
+    private boolean hasCqtCode(Invoice invoice) {
+        if (invoice == null) {
+            return false;
+        }
+        if (isStatus(invoice.getStatus(), STATUS_SIGNED)) {
+            return true;
+        }
+        String pattern = invoice.getInvoicePattern();
+        return pattern != null && pattern.length() >= 2 && pattern.charAt(1) == 'C';
+    }
+
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
@@ -1252,6 +1456,38 @@ public class InvoiceService {
 
     private String formatLocalDate(LocalDate date) {
         return date == null ? "" : date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    private LocalDate todayInVn() {
+        return LocalDate.now(VN_ZONE);
+    }
+
+    /** Lô đã quá HSD tính tới hôm nay (VN). Không có HSD thì coi như còn hạn. */
+    private boolean isBatchExpired(Batch batch) {
+        LocalDate expiry = batch.getExpirationDate();
+        return expiry != null && expiry.isBefore(todayInVn());
+    }
+
+    private boolean hasOnlyExpiredStock(List<Batch> batches) {
+        if (batches == null || batches.isEmpty()) {
+            return false;
+        }
+        long totalStock = batches.stream()
+                .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
+                .sum();
+        if (totalStock <= 0) {
+            return false;
+        }
+        long sellableStock = batches.stream()
+                .filter(batch -> !isBatchExpired(batch))
+                .mapToLong(batch -> batch.getStorageQuantity() == null ? 0 : batch.getStorageQuantity())
+                .sum();
+        return sellableStock == 0;
+    }
+
+    private void throwNoSellableBatchStock(Product product) {
+        throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
+                + "\" đã hết lô còn hạn sử dụng — không thể bán.");
     }
 
     private LocalDate toLocalDate(LocalDateTime dateTime) {

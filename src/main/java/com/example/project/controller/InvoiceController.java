@@ -1,26 +1,34 @@
 package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
+import com.example.project.dto.request.CustomerRequest;
 import com.example.project.dto.request.InvoiceCreateRequest;
+import com.example.project.dto.response.CustomerOptionResponse;
 import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.InvoiceLineResponse;
 import com.example.project.dto.response.InvoicePrintPageResponse;
 import com.example.project.dto.response.InvoiceListItemResponse;
 import com.example.project.dto.response.InvoiceResponse;
+import com.example.project.service.CustomerService;
 import com.example.project.service.InvoiceService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.beans.propertyeditors.CustomNumberEditor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -28,14 +36,19 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 public class InvoiceController {
     private final InvoiceService invoiceService;
+    private final CustomerService customerService;
     private final CurrentUserContext currentUserContext;
 
-    public InvoiceController(InvoiceService invoiceService, CurrentUserContext currentUserContext) {
+    public InvoiceController(InvoiceService invoiceService,
+                             CustomerService customerService,
+                             CurrentUserContext currentUserContext) {
         this.invoiceService = invoiceService;
+        this.customerService = customerService;
         this.currentUserContext = currentUserContext;
     }
 
@@ -121,48 +134,13 @@ public class InvoiceController {
             "/pharmacist/invoices/{invoiceId}/print",
             "/accountant/invoices/{invoiceId}/print"})
     public String printPage(@PathVariable Integer invoiceId,
+                            @RequestParam(name = "embed", required = false) String embed,
                             HttpServletRequest request,
                             Model model) {
         InvoicePrintPageResponse printData = invoiceService.getPrintPage(invoiceId);
         model.addAttribute("printData", printData);
         model.addAttribute("basePath", resolveBasePath(request));
-        return "invoice/print";
-    }
-
-    @PostMapping({"/owner/invoices/{invoiceId}/sign", "/accountant/invoices/{invoiceId}/sign"})
-    public String signInvoice(@PathVariable Integer invoiceId,
-                              HttpServletRequest request,
-                              RedirectAttributes redirectAttributes) {
-        String basePath = resolveBasePath(request);
-        try {
-            invoiceService.sign(invoiceId);
-            redirectAttributes.addFlashAttribute("success", "Đã ký hóa đơn thành công");
-        } catch (IllegalArgumentException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
-        }
-        return "redirect:" + basePath + "/" + invoiceId;
-    }
-
-    @PostMapping({"/owner/invoices/sign-bulk", "/accountant/invoices/sign-bulk"})
-    public String signInvoicesBulk(@RequestParam(name = "invoiceIds", required = false) List<Integer> invoiceIds,
-                                   @RequestParam(name = "search", required = false) String search,
-                                   @RequestParam(name = "fromDate", required = false) String fromDate,
-                                   @RequestParam(name = "toDate", required = false) String toDate,
-                                   @RequestParam(name = "paymentType", required = false) String paymentType,
-                                   @RequestParam(name = "status", required = false) String status,
-                                   @RequestParam(name = "sellerId", required = false) Integer sellerId,
-                                   @RequestParam(name = "page", defaultValue = "0") int page,
-                                   @RequestParam(name = "size", defaultValue = "5") int size,
-                                   HttpServletRequest request,
-                                   RedirectAttributes redirectAttributes) {
-        String basePath = resolveBasePath(request);
-        try {
-            int signed = invoiceService.signMany(invoiceIds);
-            redirectAttributes.addFlashAttribute("success", "Đã ký " + signed + " hóa đơn thành công");
-        } catch (IllegalArgumentException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
-        }
-        return "redirect:" + listRedirectUrl(basePath, search, fromDate, toDate, paymentType, status, sellerId, page, size);
+        return embed != null ? "invoice/print-receipt" : "invoice/print";
     }
 
     @GetMapping({"/owner/selling", "/pharmacist/selling"})
@@ -176,18 +154,48 @@ public class InvoiceController {
 
     @PostMapping({"/owner/selling", "/pharmacist/selling"})
     public String createSale(@ModelAttribute("form") InvoiceCreateRequest form,
+                             @RequestParam(name = "printAfterSave", defaultValue = "false") boolean printAfterSave,
                              HttpServletRequest request,
                              RedirectAttributes redirectAttributes,
                              Model model) {
         try {
-            invoiceService.createSaleInvoice(
+            Integer invoiceId = invoiceService.createSaleInvoice(
                     form, currentUserContext.getCurrentAccountId(), !currentUserContext.isPharmacist());
-            redirectAttributes.addFlashAttribute("success", "Tạo hóa đơn bán hàng thành công");
-            return "redirect:" + invoiceListBasePath(request);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã tạo hóa đơn thành công");
+            String redirectUrl = resolveSellingBasePath(request);
+            if (printAfterSave) {
+                redirectUrl += "?printId=" + invoiceId;
+            }
+            return "redirect:" + redirectUrl;
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             addSellingPageData(request, model);
             return "invoice/create-invoice";
+        }
+    }
+
+    @PostMapping(value = {"/owner/selling/customers", "/pharmacist/selling/customers"},
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<?> createCustomerFromSelling(@Valid @RequestBody CustomerRequest request,
+                                                       BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            String message = bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("Dữ liệu không hợp lệ");
+            return ResponseEntity.badRequest().body(Map.of("message", message));
+        }
+        try {
+            Integer id = customerService.create(request);
+            return ResponseEntity.ok(new CustomerOptionResponse(
+                    id,
+                    request.getName(),
+                    request.getPhoneNumber(),
+                    request.getCustomerType()));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
     }
 
@@ -196,8 +204,11 @@ public class InvoiceController {
         model.addAttribute("customers", invoiceService.listCustomers());
         model.addAttribute("sellerName", currentUserContext.getCurrentAccountName());
         model.addAttribute("debtAllowed", !currentUserContext.isPharmacist());
-        model.addAttribute("basePath", resolveSellingBasePath(request));
+        String sellingBasePath = resolveSellingBasePath(request);
+        model.addAttribute("basePath", sellingBasePath);
+        model.addAttribute("customerCreateUrl", sellingBasePath + "/customers");
         model.addAttribute("invoicesPath", invoiceListBasePath(request));
+        model.addAttribute("invoicePrintBasePath", invoiceListBasePath(request));
     }
 
     private String resolveSellingBasePath(HttpServletRequest request) {

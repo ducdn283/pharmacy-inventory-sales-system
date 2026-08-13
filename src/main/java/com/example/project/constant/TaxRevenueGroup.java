@@ -30,11 +30,32 @@ public final class TaxRevenueGroup {
     /** Between threshold 1 and 2 — taxed directly on revenue, so there is no input VAT to deduct. */
     public static final int DIRECT = 2;
 
-    /** Above threshold 2 — deduction method: input VAT is offset against output VAT. */
+    /**
+     * Above threshold 2. The name is historical — this group used to offset input VAT against output
+     * VAT for its GTGT liability. <strong>BA quyết định trực tiếp (chưa có tài liệu): group 3's GTGT
+     * is now computed directly on revenue too</strong>, exactly like group 2 ({@link #DIRECT_VAT_RATE}
+     * — see {@code TaxperiodsnapshotService.computePeriod}); only its personal income tax ({@link
+     * #GROUP3_PIT_RATE}) still works off profit rather than a flat rate. {@link #isDeductionGroup}
+     * keeps its literal {@code group >= 3} meaning for callers that still care about group identity
+     * for other reasons (supplier-return VAT reversal, price-projection display) — it no longer
+     * implies "this group's GTGT is deducted".
+     */
     public static final int DEDUCTION = 3;
 
     /** Selectable groups, in ascending order. */
     public static final List<Integer> ALL = List.of(EXEMPT, DIRECT, DEDUCTION);
+
+    /**
+     * Annual revenue threshold between {@link #EXEMPT} and {@link #DIRECT} — 1 tỷ đồng.
+     *
+     * <p>Was configurable via {@code Financialsetting.annualRevenueThreshold1} until it was dropped
+     * from the schema (2026-08-04, per {@code Tax-Invoice.xlsx}): the group boundaries are fixed by
+     * law, not a per-pharmacy setting, so this is now the single hardcoded definition.</p>
+     */
+    public static final BigDecimal THRESHOLD_1 = new BigDecimal("1000000000.00");
+
+    /** Annual revenue threshold between {@link #DIRECT} and {@link #DEDUCTION} — 3 tỷ đồng. See {@link #THRESHOLD_1}. */
+    public static final BigDecimal THRESHOLD_2 = new BigDecimal("3000000000.00");
 
     /**
      * VAT rate applied to revenue under the {@link #DIRECT} method: <strong>1%</strong> for retail
@@ -50,19 +71,34 @@ public final class TaxRevenueGroup {
     public static final BigDecimal DIRECT_VAT_RATE = new BigDecimal("0.01");
 
     /**
-     * Personal income tax under the {@link #DIRECT} method: <strong>0.5%</strong> of revenue for
-     * retail and wholesale of goods — the twin of {@link #DIRECT_VAT_RATE}, declared in the same
-     * quarterly filing.
+     * Personal income tax under the {@link #DIRECT} method ("Cách 1 — theo doanh thu"):
+     * <strong>0.5%</strong> of revenue for retail and wholesale of goods, applied only to the part
+     * of revenue <strong>above {@link #THRESHOLD_1}</strong> — unlike {@link #DIRECT_VAT_RATE}, which
+     * taxes the whole revenue figure with no threshold subtracted. Only Group 2 can reach this rate;
+     * Group 3 always uses {@link #GROUP3_PIT_RATE} on profit instead (see {@code
+     * TaxperiodsnapshotService.computePeriod}).
      */
     public static final BigDecimal DIRECT_PIT_RATE = new BigDecimal("0.005");
 
     /**
-     * Personal income tax under the {@link #DEDUCTION} method: <strong>15%</strong> of taxable
-     * income, i.e. revenue less legitimate costs, rather than a flat slice of revenue. That is the
-     * whole reason group 3 is described as "tính theo lợi nhuận" — a loss-making quarter owes
-     * nothing, which a percentage of revenue could never express.
+     * Personal income tax on taxable income (doanh thu tính thuế TNCN − chi phí hợp lý), rather than
+     * a flat slice of revenue — a loss-making quarter owes nothing, which a percentage of revenue
+     * could never express.
+     *
+     * <p><strong>Group 2's optional profit method only</strong> (BA quyết định trực tiếp,
+     * chưa có tài liệu — xem {@code TaxperiodsnapshotService}): since group 2 can now choose between
+     * the flat {@link #DIRECT_PIT_RATE} and this profit-based rate via
+     * {@code Financialsetting.taxCalculationMethod}, while group 3 always uses the profit method at
+     * its own, higher rate ({@link #GROUP3_PIT_RATE}), the two can no longer share one constant.</p>
      */
     public static final BigDecimal DEDUCTION_PIT_RATE = new BigDecimal("0.15");
+
+    /**
+     * Personal income tax under the profit method for {@link #DEDUCTION} (group 3): <strong>17%</strong>
+     * of taxable income — group 3's own rate, distinct from group 2's optional {@link
+     * #DEDUCTION_PIT_RATE} (15%) even though both compute taxable income the same way.
+     */
+    public static final BigDecimal GROUP3_PIT_RATE = new BigDecimal("0.17");
 
     private static final Map<Integer, String> LABELS = Map.of(
             EXEMPT, "Nhóm 1 — dưới ngưỡng 1 (miễn thuế)",
@@ -70,9 +106,12 @@ public final class TaxRevenueGroup {
             DEDUCTION, "Nhóm 3 — trên ngưỡng 2 (phương pháp khấu trừ)");
 
     /**
-     * Whether input VAT may be offset against output VAT for this group. Mirrors
-     * {@code ReturnPurchaseService.isDeductionGroup()} — the two must agree, otherwise a supplier
-     * return would reverse input VAT that the tax period never counted in the first place.
+     * {@code group >= 3}. <strong>No longer means "GTGT is deducted for this group"</strong> — see
+     * {@link #DEDUCTION}'s javadoc; neither {@code TaxperiodsnapshotService} nor {@code
+     * PricesettingService} call this to decide a GTGT formula any more (group 3 projects identically
+     * to group 2 in both). Kept for {@code ReturnPurchaseService.isDeductionGroup()} — whether a
+     * supplier return still reverses input VAT, left unchanged since {@code vatInput} no longer
+     * affects the amount payable either way — and for group-identity display (badges, labels).
      */
     public static boolean isDeductionGroup(Integer group) {
         return group != null && group >= DEDUCTION;

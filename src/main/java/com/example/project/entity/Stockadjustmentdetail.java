@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -62,17 +63,13 @@ public class Stockadjustmentdetail {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-    @Column(name = "vatRate", precision = 5, scale = 2)
-    private BigDecimal vatRate;
-
     @Column(name = "refSellPrice", precision = 15, scale = 2)
     private BigDecimal refSellPrice;
 
-    @Column(name = "preTaxAmount", precision = 15, scale = 2)
-    private BigDecimal preTaxAmount;
+    @Column(name = "oldExpirationDate")
+    private LocalDate oldExpirationDate;
 
-    @Column(name = "vatAmount", precision = 15, scale = 2)
-    private BigDecimal vatAmount;
-
+    @Column(name = "newExpirationDate")
+    private LocalDate newExpirationDate;
 
 }

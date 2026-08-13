@@ -12,6 +12,7 @@ public class PurchaseInvoiceDetailItemResponse {
 
     private Integer productId;
     private String productName;
+    private String batchName;
     private String lotNumber;
     private LocalDate productionDate;
     private String productionDateDisplay;
@@ -24,4 +25,6 @@ public class PurchaseInvoiceDetailItemResponse {
     private BigDecimal vatRate;
     private BigDecimal preTaxAmount;
     private BigDecimal vatAmount;
+    /** Current base-unit sell price of the product, for cross-reference only; null if unset. */
+    private BigDecimal sellPrice;
 }

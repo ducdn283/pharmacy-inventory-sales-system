@@ -140,13 +140,17 @@
                 <div class="tax-card p-4">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
+                            <!-- Không nhóm nào còn khấu trừ GTGT đầu vào/đầu ra nữa — nhóm 3 giờ
+                                 tính trực tiếp trên doanh thu giống nhóm 2 (xem TaxRevenueGroup
+                                 .DEDUCTION javadoc), nên deductionGroup không còn quyết định dòng
+                                 chữ này. -->
                             <div class="text-secondary small">Phương pháp tính thuế GTGT</div>
                             <div class="fs-5 fw-bold"
-                                 th:text="${taxExempt ? 'Miễn thuế' : (deductionGroup ? 'Khấu trừ' : 'Trực tiếp trên doanh thu')}">
-                                Khấu trừ
+                                 th:text="${taxExempt ? 'Miễn thuế' : 'Trực tiếp trên doanh thu'}">
+                                Trực tiếp trên doanh thu
                             </div>
                             <div class="text-secondary small"
-                                 th:text="${deductionGroup ? 'Thuế GTGT đầu vào được khấu trừ' : 'Không khấu trừ thuế GTGT đầu vào'}">
+                                 th:text="${taxExempt ? '—' : 'Không khấu trừ thuế GTGT đầu vào'}">
                                 —
                             </div>
                         </div>

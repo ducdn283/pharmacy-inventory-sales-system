@@ -259,7 +259,7 @@
       <!-- Header của card -->
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fs-5 fw-semibold mb-0" style="color:#111827;">Danh sách nhà cung cấp</h2>
-        <a th:if="${currentRole == 'OWNER'}" th:href="@{/supplier/create}" class="btn-create">
+        <a th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" th:href="@{/supplier/create}" class="btn-create">
           <i class="ti ti-plus"></i>Tạo nhà cung cấp
         </a>
       </div>

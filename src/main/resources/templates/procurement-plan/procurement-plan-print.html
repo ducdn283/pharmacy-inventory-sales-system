@@ -82,17 +82,39 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 8px;
+            font-size: 12px;
+        }
+
+        .detail-table {
+            table-layout: fixed;
         }
 
         th, td {
             border: 1px solid #000;
-            padding: 8px 6px;
             vertical-align: middle;
+        }
+
+        .detail-table th,
+        .detail-table td {
+            padding: 5px 4px;
+            line-height: 1.3;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        .detail-table th {
+            font-size: 11px;
+            line-height: 1.25;
         }
 
         th {
             text-align: center;
             font-weight: bold;
+            padding: 8px 6px;
+        }
+
+        td {
+            padding: 8px 6px;
         }
 
         .text-center {
@@ -102,6 +124,31 @@
         .text-right {
             text-align: right;
         }
+
+        .product-name-cell {
+            line-height: 1.35;
+        }
+
+        .unit-conversion-col {
+            font-size: 10px;
+            line-height: 1.3;
+        }
+
+        .supplier-col {
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        .col-stt { width: 4%; }
+        .col-code { width: 7%; }
+        .col-name { width: 18%; }
+        .col-conversion { width: 14%; }
+        .col-stock { width: 5%; }
+        .col-stock-unit { width: 6%; }
+        .col-qty { width: 5%; }
+        .col-unit { width: 5%; }
+        .col-money { width: 9%; }
+        .col-supplier { width: 18%; }
 
         .note {
             margin-top: 14px;
@@ -182,18 +229,33 @@
         </div>
     </div>
 
-    <table>
+    <table class="detail-table">
+        <colgroup>
+            <col class="col-stt">
+            <col class="col-code">
+            <col class="col-name">
+            <col class="col-conversion">
+            <col class="col-stock">
+            <col class="col-stock-unit">
+            <col class="col-qty">
+            <col class="col-unit">
+            <col class="col-money">
+            <col class="col-money">
+            <col class="col-supplier">
+        </colgroup>
         <thead>
         <tr>
-            <th style="width: 40px;">STT</th>
-            <th style="width: 90px;">Mã hàng</th>
+            <th>STT</th>
+            <th>Mã hàng</th>
             <th>Tên hàng</th>
-            <th style="width: 60px;">Tồn</th>
-            <th style="width: 70px;">SL dự trù</th>
-            <th style="width: 70px;">ĐVT</th>
-            <th style="width: 100px;">Đơn giá ước tính</th>
-            <th style="width: 110px;">Thành tiền ước tính</th>
-            <th style="width: 120px;">Nhà cung cấp</th>
+            <th>Quy đổi ĐVT</th>
+            <th>Tồn</th>
+            <th>ĐVT tồn</th>
+            <th>SL<br>dự trù</th>
+            <th>ĐVT</th>
+            <th>ĐG<br>ước tính</th>
+            <th>TT<br>ước tính</th>
+            <th>NCC</th>
         </tr>
         </thead>
 
@@ -201,8 +263,14 @@
         <tr th:each="line, iterStat : ${printData.lines}">
             <td class="text-center" th:text="${iterStat.index + 1}">1</td>
             <td th:text="${line.productCode}">MED001</td>
-            <td th:text="${line.productName}">Paracetamol 500mg</td>
+            <td class="product-name-cell" th:text="${line.productName}">Paracetamol 500mg</td>
+            <td class="text-center unit-conversion-col"
+                th:text="${line.unitConversionHint != null && !line.unitConversionHint.isBlank() ? line.unitConversionHint : '—'}">
+                1 Hộp = 10 Vỉ = 100 Viên
+            </td>
             <td class="text-center" th:text="${line.currentStock != null ? line.currentStock : '—'}">0</td>
+            <td class="text-center"
+                th:text="${line.stockUnit != null && !line.stockUnit.isBlank() ? line.stockUnit : '—'}">Viên</td>
             <td class="text-center" th:text="${line.requestedQuantity}">1</td>
             <td class="text-center" th:text="${line.unit != null && !line.unit.isBlank() ? line.unit : '—'}">Hộp</td>
             <td class="text-right"
@@ -213,11 +281,11 @@
                 th:text="${line.estimatedPrice != null ? #numbers.formatDecimal(line.estimatedPrice, 0, 'POINT', 0, 'COMMA') : '—'}">
                 0
             </td>
-            <td th:text="${line.supplierName}">Nhà cung cấp A</td>
+            <td th:text="${line.supplierName}" class="supplier-col">Nhà cung cấp A</td>
         </tr>
 
         <tr th:if="${#lists.isEmpty(printData.lines)}">
-            <td colspan="9" class="text-center">Không có dữ liệu.</td>
+            <td colspan="11" class="text-center">Không có dữ liệu.</td>
         </tr>
         </tbody>
     </table>

@@ -109,7 +109,7 @@
             <div class="text-md-end">
                 <div class="info-label">Tổng tồn kho</div>
                 <div class="fs-3 fw-bold"
-                     th:text="${product.totalStock + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName)}">0</div>
+                     th:text="${product.totalStock + (#strings.isEmpty(product.baseUnitName) ? '' : ' ' + product.baseUnitName)}">0</div>
             </div>
         </div>
 
@@ -126,8 +126,8 @@
                 <div class="col-6 col-md-3"><div class="info-label">Nhà sản xuất</div><div class="info-value" th:text="${product.producerName}">—</div></div>
                 <div class="col-6 col-md-3"><div class="info-label">Xuất xứ</div><div class="info-value" th:text="${product.originName}">—</div></div>
                 <div class="col-6 col-md-3"><div class="info-label">Số đăng ký</div><div class="info-value" th:text="${product.registrationNumber != null ? product.registrationNumber : '—'}">—</div></div>
-                <div class="col-6 col-md-3"><div class="info-label">Tồn tối thiểu</div><div class="info-value" th:text="${product.minStock != null ? product.minStock : '—'}">—</div></div>
-                <div class="col-6 col-md-3"><div class="info-label">Tồn tối đa</div><div class="info-value" th:text="${product.maxStock != null ? product.maxStock : '—'}">—</div></div>
+                <div class="col-6 col-md-3"><div class="info-label">Tồn tối thiểu</div><div class="info-value" th:text="${product.minStock != null ? product.minStock + (#strings.isEmpty(product.baseUnitName) ? '' : ' ' + product.baseUnitName) : '—'}">—</div></div>
+                <div class="col-6 col-md-3"><div class="info-label">Tồn tối đa</div><div class="info-value" th:text="${product.maxStock != null ? product.maxStock + (#strings.isEmpty(product.baseUnitName) ? '' : ' ' + product.baseUnitName) : '—'}">—</div></div>
                 <div class="col-12 col-md-6">
                     <div class="info-label">Hoạt chất</div>
                     <div class="info-value">
@@ -146,7 +146,7 @@
                     <thead>
                     <tr>
                         <th>Đơn vị</th>
-                        <th class="text-end">Tỷ lệ quy đổi</th>
+                        <th class="text-end">Tỷ lệ quy đổi (so với đơn vị cơ bản)</th>
                         <th class="text-end">Giá bán</th>
                         <th>Phân loại</th>
                     </tr>
@@ -154,7 +154,8 @@
                     <tbody>
                     <tr th:each="u : ${product.units}">
                         <td class="fw-semibold" th:text="${u.unitName}">Hộp</td>
-                        <td class="text-end" th:text="${u.ratio != null ? #numbers.formatDecimal(u.ratio, 0, 'POINT', 0, 'COMMA') : '—'}">1</td>
+                        <td class="text-end"
+                            th:text="${u.isBaseUnit() or u.ratio == null ? '—' : '1 ' + u.unitName + ' = ' + #numbers.formatDecimal(u.ratio, 0, 'POINT', 0, 'COMMA') + ' ' + (#strings.isEmpty(product.baseUnitName) ? 'đơn vị cơ bản' : product.baseUnitName)}">1</td>
                         <td class="text-end" th:text="${u.sellPrice != null ? #numbers.formatDecimal(u.sellPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">70.000đ</td>
                         <td>
                             <span th:if="${u.isDefault()}" class="status-badge status-instock me-1">Mặc định</span>
@@ -180,32 +181,32 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead>
                     <tr>
-                        <th>Số lô</th>
+                        <th>Tên lô</th>
                         <th>Ngày nhập</th>
                         <th>Ngày SX</th>
                         <th>Hạn SD</th>
                         <th class="text-end">Tồn kho (đơn vị cơ bản)</th>
-                        <th>Đơn vị nhập</th>
-                        <th class="text-end">Giá nhập</th>
-                        <th>Trạng thái</th>
-                        <th>Ghi chú</th>
+                        <th th:if="${basePath != '/pharmacist/products'}">Đơn vị nhập</th>
+                        <th th:if="${basePath != '/pharmacist/products'}" class="text-end">Giá nhập</th>
+                        <th th:if="${basePath != '/pharmacist/products'}">Trạng thái</th>
+                        <th th:if="${basePath != '/pharmacist/products'}">Ghi chú</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr th:each="b : ${product.batches}">
-                        <td class="fw-semibold" th:text="${b.lotNumber != null ? b.lotNumber : b.batchName}">LOT-001</td>
+                        <td class="fw-semibold" th:text="${b.batchName != null and !b.batchName.isEmpty() ? b.batchName : '—'}">Lô nhập tháng 08</td>
                         <td th:text="${b.importDateDisplay}">01/06/2026 09:00</td>
                         <td th:text="${b.productionDateDisplay}">01/01/2026</td>
                         <td th:text="${b.expirationDateDisplay}">01/01/2028</td>
                         <td class="text-end"
                             th:text="${b.storageQuantity + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName)}">0</td>
-                        <td th:text="${b.importUnitName}">Hộp</td>
-                        <td class="text-end" th:text="${b.importPrice != null ? #numbers.formatDecimal(b.importPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">50.000đ</td>
-                        <td><span class="status-badge badge-soft" th:text="${b.statusLabel}">Còn hiệu lực</span></td>
-                        <td th:text="${b.note != null and !b.note.isEmpty()} ? ${b.note} : '—'">—</td>
+                        <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.importUnitName}">Hộp</td>
+                        <td th:if="${basePath != '/pharmacist/products'}" class="text-end" th:text="${b.importPrice != null ? #numbers.formatDecimal(b.importPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">50.000đ</td>
+                        <td th:if="${basePath != '/pharmacist/products'}"><span class="status-badge badge-soft" th:text="${b.statusLabel}">Còn hiệu lực</span></td>
+                        <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.note != null and !b.note.isEmpty()} ? ${b.note} : '—'">—</td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(product.batches)}">
-                        <td colspan="9" class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
+                        <td th:attr="colspan=${basePath == '/pharmacist/products'} ? 5 : 9" class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -225,6 +226,7 @@
                         <th>Mã tham chiếu</th>
                         <th>Số lô</th>
                         <th class="text-end">SL thay đổi</th>
+                        <th class="text-end">Tổng tồn sau thay đổi</th>
                         <th>Ghi chú</th>
                     </tr>
                     </thead>
@@ -236,10 +238,12 @@
                         <td th:text="${h.lotNumber != null ? h.lotNumber : '—'}">LOT-001</td>
                         <td class="text-end" th:classappend="${h.quantityChange >= 0} ? ' qty-in' : ' qty-out'"
                             th:text="${(h.quantityChange > 0 ? '+' + h.quantityChange : h.quantityChange) + (h.unitName != null and !h.unitName.isEmpty() ? ' ' + h.unitName : '')}">+30 hộp</td>
+                        <td class="text-end"
+                            th:text="${h.resultingStock != null ? h.resultingStock + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName) : '—'}">1000 Viên</td>
                         <td th:text="${h.note != null and !h.note.isEmpty()} ? ${h.note} : '—'">—</td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(product.recentHistory)}">
-                        <td colspan="6" class="text-center text-secondary py-3">Chưa có biến động tồn kho gần đây.</td>
+                        <td colspan="7" class="text-center text-secondary py-3">Chưa có biến động tồn kho gần đây.</td>
                     </tr>
                     </tbody>
                 </table>

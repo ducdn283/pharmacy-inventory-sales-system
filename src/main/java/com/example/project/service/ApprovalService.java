@@ -2,19 +2,23 @@ package com.example.project.service;
 
 import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ExpenseType;
+import com.example.project.constant.PurchaseInvoiceStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
-import com.example.project.constant.StockCountStatus;
+import com.example.project.constant.StockReviewStatus;
+import com.example.project.constant.StockReviewType;
 import com.example.project.dto.response.ApprovalItemResponse;
 import com.example.project.dto.response.ApprovalStatsResponse;
 import com.example.project.entity.Expense;
+import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
-import com.example.project.entity.Stockcount;
+import com.example.project.entity.Stockreview;
 import com.example.project.repository.ExpenseRepository;
+import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.ShiftreportRepository;
-import com.example.project.repository.StockcountRepository;
+import com.example.project.repository.StockreviewRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,24 +35,30 @@ import java.util.Locale;
 
 /**
  * Read-only aggregator for the Owner's unified Approve List. Approve/reject business logic still
- * lives in each module's own service (Return/StockCount/ShiftReport/Expense) — this class
- * only reads their PENDING + a recent window of resolved items for display, and dispatches the
+ * lives in each module's own service (Return/StockReview/ShiftReport/Expense/PurchaseInvoice) — this
+ * class only reads their PENDING + a recent window of resolved items for display, and dispatches the
  * bulk-approve action to each one's existing {@code approve(...)} method.
  */
 @Service
 public class ApprovalService {
 
     private static final String TYPE_RETURN = "Trả hàng";
-    private static final String TYPE_STOCK_COUNT = "Kiểm kê";
+    private static final String TYPE_STOCK_REVIEW = "Rà soát kho";
     private static final String TYPE_SHIFT_REPORT = "Báo cáo ca";
     private static final String TYPE_EXPENSE = "Phiếu chi";
+    /**
+     * Phiếu nhập hàng — phải qua một bước duyệt độc lập trước khi hàng thật sự vào kho, vì
+     * {@code PurchaseinvoiceService.approvePurchaseInvoice} là nơi DUY NHẤT cộng tồn.
+     */
+    private static final String TYPE_PURCHASE_INVOICE = "Phiếu nhập";
 
     /** Short, stable codes for the bulk-approve checkbox value ("CODE:id") — distinct from the
      *  Vietnamese TYPE_* display labels used for the type filter dropdown. */
     private static final String TYPE_CODE_RETURN = "RETURN";
-    private static final String TYPE_CODE_STOCK_COUNT = "STOCK_COUNT";
+    private static final String TYPE_CODE_STOCK_REVIEW = "STOCK_REVIEW";
     private static final String TYPE_CODE_SHIFT_REPORT = "SHIFT_REPORT";
     private static final String TYPE_CODE_EXPENSE = "EXPENSE";
+    private static final String TYPE_CODE_PURCHASE_INVOICE = "PURCHASE_INVOICE";
 
     /** How far back a resolved (Đã duyệt/Từ chối) item stays visible after being handled, so approving
      *  something doesn't make it vanish immediately — purely a display window, not a data retention rule. */
@@ -57,30 +67,36 @@ public class ApprovalService {
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ReturnRepository returnRepository;
-    private final StockcountRepository stockcountRepository;
+    private final StockreviewRepository stockreviewRepository;
     private final ShiftreportRepository shiftreportRepository;
     private final ExpenseRepository expenseRepository;
+    private final PurchaseinvoiceRepository purchaseinvoiceRepository;
     private final ReturnService returnService;
-    private final StockcountService stockcountService;
+    private final StockreviewService stockreviewService;
     private final ShiftreportService shiftreportService;
     private final ExpenseService expenseService;
+    private final PurchaseinvoiceService purchaseinvoiceService;
 
     public ApprovalService(ReturnRepository returnRepository,
-                           StockcountRepository stockcountRepository,
+                           StockreviewRepository stockreviewRepository,
                            ShiftreportRepository shiftreportRepository,
                            ExpenseRepository expenseRepository,
+                           PurchaseinvoiceRepository purchaseinvoiceRepository,
                            ReturnService returnService,
-                           StockcountService stockcountService,
+                           StockreviewService stockreviewService,
                            ShiftreportService shiftreportService,
-                           ExpenseService expenseService) {
+                           ExpenseService expenseService,
+                           PurchaseinvoiceService purchaseinvoiceService) {
         this.returnRepository = returnRepository;
-        this.stockcountRepository = stockcountRepository;
+        this.stockreviewRepository = stockreviewRepository;
         this.shiftreportRepository = shiftreportRepository;
         this.expenseRepository = expenseRepository;
+        this.purchaseinvoiceRepository = purchaseinvoiceRepository;
         this.returnService = returnService;
-        this.stockcountService = stockcountService;
+        this.stockreviewService = stockreviewService;
         this.shiftreportService = shiftreportService;
         this.expenseService = expenseService;
+        this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
     @Transactional(readOnly = true)
@@ -91,7 +107,11 @@ public class ApprovalService {
         if (matchesType(typeFilter, TYPE_RETURN)) {
             returnRepository.findAllWithRelations().stream()
                     .filter(ret -> ret.getInvoiceID() != null)
+                    // DEBT và COMPLETED đều nghĩa là "đã duyệt", chỉ khác còn nợ tiền hay không —
+                    // thiếu COMPLETED thì phiếu duyệt xong mà cấn trừ hết nợ sẽ biến mất khỏi màn
+                    // duyệt ngay lập tức, thay vì nằm lại đủ thời gian nhìn cho hết.
                     .filter(ret -> isStatus(ret.getStatus(), ReturnStatus.PENDING) || isStatus(ret.getStatus(), ReturnStatus.DEBT)
+                            || isStatus(ret.getStatus(), ReturnStatus.COMPLETED)
                             || isStatus(ret.getStatus(), ReturnStatus.REJECTED))
                     .map(this::toApprovalItem)
                     .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
@@ -101,9 +121,9 @@ public class ApprovalService {
         // Điều chỉnh kho KHÔNG còn ở đây: BA bỏ bước duyệt (chỉ Owner tạo, tự chịu trách nhiệm) nên
         // phiếu đi thẳng Nháp → Hoàn thành, không bao giờ có trạng thái chờ duyệt để gom vào đây.
 
-        if (matchesType(typeFilter, TYPE_STOCK_COUNT)) {
-            stockcountRepository.findAllWithRelations().stream()
-                    .filter(count -> !isStatus(count.getStatus(), StockCountStatus.DRAFT))
+        if (matchesType(typeFilter, TYPE_STOCK_REVIEW)) {
+            stockreviewRepository.findAllWithRelations().stream()
+                    .filter(count -> !isStatus(count.getStatus(), StockReviewStatus.DRAFT))
                     .map(this::toApprovalItem)
                     .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
                     .forEach(items::add);
@@ -125,6 +145,18 @@ public class ApprovalService {
                     .forEach(items::add);
         }
 
+        if (matchesType(typeFilter, TYPE_PURCHASE_INVOICE)) {
+            // Phiếu Nháp chưa nộp và phiếu Đã hủy không phải việc của người duyệt. Từ chối một phiếu
+            // nhập đưa nó VỀ Nháp (không hủy), nên phiếu vừa bị từ chối cũng không hiện lại ở đây —
+            // khác 4 loại kia (có trạng thái "Từ chối" riêng để còn nhìn thấy trong 3 ngày).
+            purchaseinvoiceRepository.findAll().stream()
+                    .filter(invoice -> !isStatus(invoice.getStatus(), PurchaseInvoiceStatus.DRAFT)
+                            && !isStatus(invoice.getStatus(), PurchaseInvoiceStatus.CANCELLED))
+                    .map(this::toApprovalItem)
+                    .filter(item -> item.isPending() || isWithinLookback(item.getRequestedAt(), cutoff))
+                    .forEach(items::add);
+        }
+
         return items.stream()
                 .sorted(Comparator.comparing(ApprovalItemResponse::isPending).reversed()
                         .thenComparing(ApprovalItemResponse::getRequestedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -136,8 +168,8 @@ public class ApprovalService {
         long returnCount = returnRepository.findAllWithRelations().stream()
                 .filter(ret -> ret.getInvoiceID() != null && isStatus(ret.getStatus(), ReturnStatus.PENDING))
                 .count();
-        long stockCountCount = stockcountRepository.findAllWithRelations().stream()
-                .filter(count -> isStatus(count.getStatus(), StockCountStatus.PENDING))
+        long stockReviewCount = stockreviewRepository.findAllWithRelations().stream()
+                .filter(count -> isStatus(count.getStatus(), StockReviewStatus.PENDING))
                 .count();
         long shiftReportCount = shiftreportRepository.findAllWithRelations().stream()
                 .filter(shift -> isStatus(shift.getStatus(), ShiftReportStatus.PENDING))
@@ -145,18 +177,22 @@ public class ApprovalService {
         long expenseCount = expenseRepository.findAll().stream()
                 .filter(expense -> isStatus(expense.getStatus(), ExpenseStatus.PENDING))
                 .count();
+        long purchaseInvoiceCount = purchaseinvoiceRepository.findAll().stream()
+                .filter(invoice -> isStatus(invoice.getStatus(), PurchaseInvoiceStatus.PENDING_APPROVAL))
+                .count();
 
         return new ApprovalStatsResponse(
-                returnCount + stockCountCount + shiftReportCount + expenseCount,
+                returnCount + stockReviewCount + shiftReportCount + expenseCount + purchaseInvoiceCount,
                 returnCount,
-                stockCountCount,
+                stockReviewCount,
                 shiftReportCount,
-                expenseCount
+                expenseCount,
+                purchaseInvoiceCount
         );
     }
 
     public List<String> listTypes() {
-        return List.of(TYPE_RETURN, TYPE_STOCK_COUNT, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
+        return List.of(TYPE_RETURN, TYPE_PURCHASE_INVOICE, TYPE_STOCK_REVIEW, TYPE_SHIFT_REPORT, TYPE_EXPENSE);
     }
 
     /** Approves every "CODE:id" selector the Owner checked, dispatching to each module's own approve().
@@ -176,9 +212,10 @@ public class ApprovalService {
                 Integer id = Integer.valueOf(parts[1]);
                 switch (parts[0]) {
                     case TYPE_CODE_RETURN -> returnService.approve(id);
-                    case TYPE_CODE_STOCK_COUNT -> stockcountService.approve(id, ownerAccountId);
+                    case TYPE_CODE_STOCK_REVIEW -> stockreviewService.approve(id, ownerAccountId);
                     case TYPE_CODE_SHIFT_REPORT -> shiftreportService.approve(id, ownerAccountId);
                     case TYPE_CODE_EXPENSE -> expenseService.approve(id, ownerAccountId);
+                    case TYPE_CODE_PURCHASE_INVOICE -> purchaseinvoiceService.approvePurchaseInvoice(id);
                     default -> {
                         continue;
                     }
@@ -216,25 +253,26 @@ public class ApprovalService {
         );
     }
 
-    private ApprovalItemResponse toApprovalItem(Stockcount count) {
+    private ApprovalItemResponse toApprovalItem(Stockreview count) {
         String id = String.valueOf(count.getId());
-        boolean pending = isStatus(count.getStatus(), StockCountStatus.PENDING);
+        boolean pending = isStatus(count.getStatus(), StockReviewStatus.PENDING);
         return new ApprovalItemResponse(
-                TYPE_STOCK_COUNT,
-                TYPE_CODE_STOCK_COUNT + ":" + id,
+                TYPE_STOCK_REVIEW,
+                TYPE_CODE_STOCK_REVIEW + ":" + id,
                 count.getStockCountCode(),
                 count.getCreatedBy() != null ? count.getCreatedBy().getName() : "Không rõ",
-                count.getCountDate(),
-                formatInstant(count.getCountDate()),
-                count.getNote() != null && !count.getNote().isBlank()
-                        ? truncate(count.getNote(), 60)
-                        : "Phiếu kiểm kê",
+                count.getReviewDate(),
+                formatInstant(count.getReviewDate()),
+                // Ba loại phiếu rà soát kho (đếm số lượng / hạn dùng / tình trạng) đều vào chung nhóm này,
+                // mà hệ quả của chúng khác hẳn nhau — duyệt phiếu hạn dùng là cho phép ghi đè hạn dùng
+                // của lô. Nên loại phải hiện ngay trên dòng, không bắt người duyệt mở từng phiếu ra xem.
+                summaryOf(count),
                 count.getStatus(),
                 statusCssClass(count.getStatus()),
                 pending,
-                "/owner/stock-counts/" + id,
-                "/owner/stock-counts/" + id + "/approve",
-                "/owner/stock-counts/" + id + "/reject"
+                "/owner/stock-reviews/" + id,
+                "/owner/stock-reviews/" + id + "/approve",
+                "/owner/stock-reviews/" + id + "/reject"
         );
     }
 
@@ -282,6 +320,41 @@ public class ApprovalService {
         );
     }
 
+    /**
+     * Phiếu nhập chờ duyệt. Mốc thời gian dùng {@code date} (ngày lập phiếu) — bảng
+     * {@code purchaseinvoice} không có cột "thời điểm nộp duyệt" riêng, và {@code approvedAt} chỉ có
+     * giá trị SAU khi duyệt nên không sắp xếp được hàng đang chờ.
+     */
+    private ApprovalItemResponse toApprovalItem(Purchaseinvoice invoice) {
+        String id = String.valueOf(invoice.getId());
+        boolean pending = isStatus(invoice.getStatus(), PurchaseInvoiceStatus.PENDING_APPROVAL);
+        String supplier = invoice.getSupplierID() != null ? invoice.getSupplierID().getName() : "Không rõ NCC";
+        return new ApprovalItemResponse(
+                TYPE_PURCHASE_INVOICE,
+                TYPE_CODE_PURCHASE_INVOICE + ":" + id,
+                invoice.getPurchaseInvoiceCode(),
+                invoice.getEmployeeID() != null ? invoice.getEmployeeID().getName() : "Không rõ",
+                invoice.getDate(),
+                formatInstant(invoice.getDate()),
+                supplier + " — " + formatMoney(invoice.getTotalAmount()),
+                invoice.getStatus(),
+                statusCssClass(invoice.getStatus()),
+                pending,
+                "/owner/purchase-invoices/" + id,
+                "/owner/purchase-invoices/" + id + "/approve",
+                "/owner/purchase-invoices/" + id + "/reject"
+        );
+    }
+
+    /** "Rà soát hạn dùng" hoặc "Kiểm đếm số lượng — {ghi chú}" — loại luôn đứng trước ghi chú. */
+    private String summaryOf(Stockreview count) {
+        String typeLabel = StockReviewType.label(count.getType());
+        String note = count.getNote();
+        return note != null && !note.isBlank()
+                ? typeLabel + " — " + truncate(note, 45)
+                : typeLabel;
+    }
+
     private boolean matchesType(String typeFilter, String type) {
         return typeFilter == null || typeFilter.isBlank() || type.equals(typeFilter);
     }
@@ -302,7 +375,7 @@ public class ApprovalService {
     /**
      * Return.returnDate and Shiftreport.startTime/endTime are written via a "nowVn()" trick (VN
      * wall-clock digits stored as if they were UTC — see ReturnService/ShiftreportService) while
-     * Stockadjustment.date and Stockcount.countDate are genuine {@code Instant.now()} UTC values.
+     * Stockadjustment.date and Stockreview.reviewDate are genuine {@code Instant.now()} UTC values.
      * Undoing the VN encoding here means every {@code requestedAt} in this aggregator ends up as a
      * real UTC instant — required both to sort/window-filter the 4 sources together correctly and to
      * format them all the same way below.

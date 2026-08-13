@@ -5,9 +5,11 @@ import com.example.project.constant.ExpenseType;
 import com.example.project.constant.ReturnPurchaseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.RoleConstants;
+import com.example.project.constant.StockAdjustmentStatus;
 import com.example.project.constant.TaxRevenueGroup;
 import com.example.project.dto.request.TaxPeriodCloseRequest;
 import com.example.project.dto.request.TaxPeriodUpdateRequest;
+import com.example.project.dto.response.IncomeTypeOptionResponse;
 import com.example.project.dto.response.TaxPeriodComputationResponse;
 import com.example.project.dto.response.TaxPeriodDetailResponse;
 import com.example.project.dto.response.TaxPeriodListItemResponse;
@@ -19,11 +21,13 @@ import com.example.project.entity.Taxperiodsnapshot;
 import com.example.project.repository.AccountpermissionRepository;
 import com.example.project.repository.ExpenseRepository;
 import com.example.project.repository.FinancialsettingRepository;
+import com.example.project.repository.IncomeRepository;
 import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.InvoicedetailRepository;
 import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.ReturndetailRepository;
+import com.example.project.repository.StockadjustmentdetailRepository;
 import com.example.project.repository.TaxperiodsnapshotRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,6 +102,20 @@ public class TaxperiodsnapshotService {
     private static final List<String> DISBURSED_EXPENSE_STATUSES =
             List.of(ExpenseStatus.AWAITING_PAYMENT, ExpenseStatus.COMPLETED);
 
+    /**
+     * Stock-adjustment types whose goods left the store without being sold — mirrors {@code
+     * StockadjustmentService.VAT_OUTPUT_TYPES} (private there, so duplicated here; keep the two in
+     * sync). Their VAT-inclusive value is real revenue the invoice total never captured.
+     */
+    private static final List<String> GIVEN_AWAY_ADJUSTMENT_TYPES = List.of("INTERNAL_USE", "GIFT", "SAMPLE");
+
+    /**
+     * Income statuses that count as money actually received — mirrors {@code
+     * IncomeService.isCompleted} (private there): the current label plus the pre-rename legacy one,
+     * since both can still be stored.
+     */
+    private static final List<String> INCOME_COMPLETED_STATUSES = List.of("Hoàn thành", "Duyệt");
+
     private final TaxperiodsnapshotRepository taxperiodsnapshotRepository;
     private final InvoiceRepository invoiceRepository;
     private final ReturnRepository returnRepository;
@@ -105,9 +123,11 @@ public class TaxperiodsnapshotService {
     private final FinancialsettingRepository financialsettingRepository;
     private final AccountpermissionRepository accountpermissionRepository;
     private final InvoicedetailRepository invoicedetailRepository;
-    private final ReturndetailRepository returndetailRepository;
+    private final IncomeRepository incomeRepository;
+    private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
     private final ExpenseRepository expenseRepository;
     private final PurchaseinvoiceService purchaseinvoiceService;
+    private final ReturndetailRepository returndetailRepository;
 
     public TaxperiodsnapshotService(TaxperiodsnapshotRepository taxperiodsnapshotRepository,
                                     InvoiceRepository invoiceRepository,
@@ -116,9 +136,11 @@ public class TaxperiodsnapshotService {
                                     FinancialsettingRepository financialsettingRepository,
                                     AccountpermissionRepository accountpermissionRepository,
                                     InvoicedetailRepository invoicedetailRepository,
-                                    ReturndetailRepository returndetailRepository,
+                                    IncomeRepository incomeRepository,
+                                    StockadjustmentdetailRepository stockadjustmentdetailRepository,
                                     ExpenseRepository expenseRepository,
-                                    PurchaseinvoiceService purchaseinvoiceService) {
+                                    PurchaseinvoiceService purchaseinvoiceService,
+                                    ReturndetailRepository returndetailRepository) {
         this.taxperiodsnapshotRepository = taxperiodsnapshotRepository;
         this.invoiceRepository = invoiceRepository;
         this.returnRepository = returnRepository;
@@ -126,9 +148,11 @@ public class TaxperiodsnapshotService {
         this.financialsettingRepository = financialsettingRepository;
         this.accountpermissionRepository = accountpermissionRepository;
         this.invoicedetailRepository = invoicedetailRepository;
-        this.returndetailRepository = returndetailRepository;
+        this.incomeRepository = incomeRepository;
+        this.stockadjustmentdetailRepository = stockadjustmentdetailRepository;
         this.expenseRepository = expenseRepository;
         this.purchaseinvoiceService = purchaseinvoiceService;
+        this.returndetailRepository = returndetailRepository;
     }
 
     // ------------------------------------------------------------------ the period itself
@@ -228,7 +252,7 @@ public class TaxperiodsnapshotService {
     @Transactional(readOnly = true)
     public Integer groupForPeriod(TaxPeriod period) {
         return previousSnapshot(period)
-                .map(Taxperiodsnapshot::getNextPeriodTaxType)
+                .map(Taxperiodsnapshot::getPeriodTaxType)
                 .orElseGet(this::settingRevenueGroup);
     }
 
@@ -265,16 +289,15 @@ public class TaxperiodsnapshotService {
      * (December) — exactly when the caller is deciding the group for next year's first quarter.</p>
      */
     private Integer autoNextGroup(TaxPeriod period, Integer groupOfPeriod) {
-        Financialsetting setting = financialsettingRepository.findFirstByOrderByIdAsc().orElse(null);
         int year = period.startDate().getYear();
 
         if (Integer.valueOf(TaxRevenueGroup.EXEMPT).equals(groupOfPeriod)) {
-            if (revenueForYear(year).compareTo(threshold1(setting)) >= 0) {
+            if (revenueForYear(year).compareTo(TaxRevenueGroup.THRESHOLD_1) >= 0) {
                 return TaxRevenueGroup.DIRECT;
             }
         } else if (Integer.valueOf(TaxRevenueGroup.DIRECT).equals(groupOfPeriod)
                 && period.endDate().getMonthValue() == 12) {
-            if (revenueForYear(year).compareTo(threshold2(setting)) >= 0) {
+            if (revenueForYear(year).compareTo(TaxRevenueGroup.THRESHOLD_2) >= 0) {
                 return TaxRevenueGroup.DEDUCTION;
             }
         }
@@ -322,7 +345,7 @@ public class TaxperiodsnapshotService {
         // anything has ever closed — there is nothing on the chain to retro-fix, so the seed itself
         // (Financialsetting.revenueGroup) is what needs to change instead.
         previousSnapshot(current).ifPresent(snapshot -> {
-            snapshot.setNextPeriodTaxType(TaxRevenueGroup.DIRECT);
+            snapshot.setPeriodTaxType(TaxRevenueGroup.DIRECT);
             taxperiodsnapshotRepository.save(snapshot);
         });
         syncFinancialSettingRevenueGroup(TaxRevenueGroup.DIRECT);
@@ -346,31 +369,19 @@ public class TaxperiodsnapshotService {
         financialsettingRepository.save(setting);
     }
 
-    private BigDecimal threshold1(Financialsetting setting) {
-        return setting != null && setting.getAnnualRevenueThreshold1() != null
-                ? setting.getAnnualRevenueThreshold1()
-                : new BigDecimal("1000000000.00");
-    }
-
-    private BigDecimal threshold2(Financialsetting setting) {
-        return setting != null && setting.getAnnualRevenueThreshold2() != null
-                ? setting.getAnnualRevenueThreshold2()
-                : new BigDecimal("3000000000.00");
-    }
-
     // ------------------------------------------------------------------ live computation
 
     // ------------------------------------------------------------------ revenue
 
     /**
-     * Revenue between two dates, both inclusive: what was sold, less what customers brought back.
+     * Revenue between two dates, both inclusive.
      *
      * <p>Exists so the pharmacy has <strong>one</strong> definition of revenue. {@link #computePeriod}
-     * needs it per quarter (it is the base of the group-2 percentage tax and of the group-3 profit),
-     * and the revenue-threshold warning needs it per year to decide when the household crosses into
-     * the next group. Two hand-written copies of the same sum would eventually disagree — and then
-     * the yearly figure would stop being the sum of its quarters, on exactly the number that decides
-     * which tax regime applies.</p>
+     * needs it per quarter (it is the base of the GTGT percentage tax for groups 2 and 3, and of the
+     * taxable-income figure both feed into), and the revenue-threshold warning needs it per year to
+     * decide when the household crosses into the next group. Two hand-written copies of the same sum
+     * would eventually disagree — and then the yearly figure would stop being the sum of its quarters,
+     * on exactly the number that decides which tax regime applies.</p>
      */
     @Transactional(readOnly = true)
     public BigDecimal revenueBetween(LocalDate from, LocalDate to) {
@@ -378,18 +389,15 @@ public class TaxperiodsnapshotService {
             throw new IllegalArgumentException("Khoảng thời gian tính doanh thu không hợp lệ");
         }
         TaxPeriod span = new TaxPeriod(from + " → " + to, from, to);
-        List<Invoice> invoices = invoiceRepository.findInPeriod(localStart(span), localEndExclusive(span));
-        List<Return> customerReturns = returnRepository
-                .findInPeriod(instantStart(span), instantEndExclusive(span)).stream()
-                .filter(TaxperiodsnapshotService::isApprovedCustomerReturn)
-                .toList();
-        return scaled(revenueOf(invoices, customerReturns));
+        List<Invoice> invoices = invoiceRepository.findValidInPeriod(localStart(span), localEndExclusive(span));
+        return scaled(revenueOf(invoices, span));
     }
 
     /**
      * Revenue of a whole calendar year — what the revenue-threshold warning compares against
-     * {@code Financialsetting.annualRevenueThreshold1/2}. The thresholds are annual, and the group
-     * a household belongs to is decided by the year's revenue, not by any single quarter's.
+     * {@link TaxRevenueGroup#THRESHOLD_1}/{@link TaxRevenueGroup#THRESHOLD_2}. The thresholds are
+     * annual, and the group a household belongs to is decided by the year's revenue, not by any
+     * single quarter's.
      */
     @Transactional(readOnly = true)
     public BigDecimal revenueForYear(int year) {
@@ -397,13 +405,68 @@ public class TaxperiodsnapshotService {
     }
 
     /**
-     * The definition itself: sales less refunds, never negative. Kept private and taking the already
-     * loaded rows so {@link #computePeriod} does not have to fetch them twice.
+     * Doanh thu tính thuế GTGT: sales that are <strong>"còn hiệu lực"</strong> (see {@link
+     * InvoiceRepository#findValidInPeriod} — a superseded original and its refund are no longer both
+     * summed and then netted, which used to double-count), plus two things an invoice total never
+     * captures — hoa hồng nhà cung cấp thu được trong kỳ, and the VAT-inclusive value of goods given
+     * away rather than sold (biếu tặng/dùng nội bộ/hàng mẫu). Never negative.
+     *
+     * <p>Takes the already-loaded invoice list so {@link #computePeriod} does not have to fetch it
+     * twice.</p>
      */
-    private static BigDecimal revenueOf(List<Invoice> invoices, List<Return> approvedCustomerReturns) {
-        return sum(invoices, Invoice::getTotal)
-                .subtract(sum(approvedCustomerReturns, Return::getTotalRefund))
-                .max(BigDecimal.ZERO);
+    private BigDecimal revenueOf(List<Invoice> validInvoices, TaxPeriod period) {
+        BigDecimal invoiceRevenue = sum(validInvoices, Invoice::getTotal);
+        BigDecimal supplierCommission = safe(incomeRepository.sumByTypeInPeriod(
+                IncomeTypeOptionResponse.labelOf(IncomeTypeOptionResponse.SUPPLIER_COMMISSION),
+                INCOME_COMPLETED_STATUSES, instantStart(period), instantEndExclusive(period)));
+        BigDecimal givenAwayGrossValue = safe(stockadjustmentdetailRepository.sumGrossValueInPeriod(
+                GIVEN_AWAY_ADJUSTMENT_TYPES, StockAdjustmentStatus.COMPLETED,
+                instantStart(period), instantEndExclusive(period)));
+        return invoiceRevenue.add(supplierCommission).add(givenAwayGrossValue).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Doanh thu tính thuế TNCN — <strong>chỉ dùng cho thuế TNCN, không dùng cho GTGT</strong> (mục D
+     * của yêu cầu). Bằng {@link #revenueOf} cộng thêm ba khoản riêng cho TNCN: tiền thu được từ
+     * người chịu trách nhiệm đền bù (Income {@code EMPLOYEE}, TT40/2021 Điều 10.1 — khoản bồi thường
+     * chỉ tính vào doanh thu TNCN), giá vốn của hàng thừa kiểm kê không rõ nguồn gốc (được ghi nhận
+     * là thu nhập vì không có hóa đơn mua thật đứng sau nó), và phần nhà thuốc GIỮ LẠI khi hoàn tiền
+     * khách ở tỷ lệ &lt;100% (xem {@link #customerReturnRetainedOf}).
+     */
+    private BigDecimal taxableIncomeRevenueOf(BigDecimal revenue, BigDecimal customerReturnRetained,
+                                              TaxPeriod period) {
+        BigDecimal employeeIncome = safe(incomeRepository.sumByTypeInPeriod(
+                IncomeTypeOptionResponse.labelOf(IncomeTypeOptionResponse.EMPLOYEE),
+                INCOME_COMPLETED_STATUSES, instantStart(period), instantEndExclusive(period)));
+        BigDecimal unknownOriginSurplusCost = safe(stockadjustmentdetailRepository
+                .sumUnknownOriginIncreaseCostInPeriod(StockAdjustmentStatus.COMPLETED,
+                        instantStart(period), instantEndExclusive(period)));
+        return revenue.add(employeeIncome).add(unknownOriginSurplusCost).add(customerReturnRetained);
+    }
+
+    /**
+     * "Thu nhập phát sinh" từ trả hàng một phần ({@code Ho_so_nghiep_vu_v2.xlsx}, sheet
+     * "05_Tra_Hang"): khi một phiếu trả khách hoàn ở tỷ lệ &lt;100%, phần nhà thuốc KHÔNG hoàn lại
+     * ({@code Σ(originalLineValue − lineRefund)} trên các dòng trả) là một khoản thu nhập thật, dù đã
+     * nằm sẵn trong {@code Invoice(thay thế).total} dưới dạng dòng "tiền không kèm hàng" (xem
+     * {@code ReturnService.retainedValueOf}/{@code moneyOnlyLine}) — không phải một khoản mới phát
+     * sinh ngoài sổ sách, mà là làm RÕ một thành phần đã có trong doanh thu hóa đơn, riêng cho mục
+     * đích TNCN.
+     *
+     * <p><strong>Không được suy ra từ {@code Invoice(gốc).total − Invoice(thay thế).total}</strong> —
+     * hiệu đó luôn đúng bằng {@code Return.totalRefund} vì
+     * {@code ReturnService.createReplacementInvoice()} định nghĩa
+     * {@code newTotal = oldTotal − totalRefund}, không bao giờ ra đúng phần giữ lại. Phải tính trực
+     * tiếp từ {@code Returndetail.originalLineValue}/{@code .lineRefund} — xem
+     * {@link ReturndetailRepository#sumCustomerReturnRetainedInPeriod}.</p>
+     *
+     * <p>Không lưu vào đâu cả — tính lại mỗi lần từ dữ liệu gốc, cùng cách mọi khoản khác trong
+     * {@link #taxableIncomeRevenueOf} đang làm.</p>
+     */
+    private BigDecimal customerReturnRetainedOf(TaxPeriod period) {
+        return safe(returndetailRepository.sumCustomerReturnRetainedInPeriod(
+                ReturnStatus.DEBT, ReturnStatus.COMPLETED,
+                instantStart(period), instantEndExclusive(period)));
     }
 
     /** Computes {@link #nextPeriodToClose()} without storing anything. */
@@ -444,30 +507,40 @@ public class TaxperiodsnapshotService {
      * Totals a period straight from the transactions inside it. Nothing is written — this is the
      * "xem trước" figure, and later the pre-fill when the period is closed.
      *
-     * <p>Output VAT is simply what the sales carry, less the VAT on goods customers brought back
-     * <em>in this period</em> — the docx is explicit that a refund is deducted from the period its
-     * {@code returnDate} falls in, not the period of the original sale. Input VAT is gated on the
-     * group: outside the deduction method there is nothing to deduct, which mirrors
-     * {@code ReturnPurchaseService.isDeductionGroup()}. A tax-exempt group declares nothing at
-     * all.</p>
+     * <p><strong>GTGT (BA quyết định trực tiếp, chưa có tài liệu):</strong> both group 2 and group 3
+     * now pay a flat {@link TaxRevenueGroup#DIRECT_VAT_RATE} on revenue — group 3 no longer offsets
+     * input VAT against output VAT, so there is nothing left to carry forward between periods
+     * ({@code vatInput}/{@code vatCarryforwardIn/Out} are always zero from here on; see {@link
+     * TaxRevenueGroup#DEDUCTION}'s javadoc). {@code vatPayable()}/{@code carryForwardOut()} are still
+     * called with those zeros rather than inlined, so the "output − input − carryIn" identity stays
+     * in one place even though two of its three inputs never move any more.</p>
+     *
+     * <p><strong>TNCN:</strong> group 3 always pays on profit ({@link TaxRevenueGroup#GROUP3_PIT_RATE}
+     * of {@link #taxableIncomeRevenueOf} minus chi phí hợp lý); group 1 pays nothing. Group 2 is new
+     * ground — it now <em>chooses</em>, via {@code Financialsetting.taxCalculationMethod} (a field
+     * that existed before this but was never read here), between the flat {@link
+     * TaxRevenueGroup#DIRECT_PIT_RATE} on revenue and the same profit method group 3 uses, at its own
+     * {@link TaxRevenueGroup#DEDUCTION_PIT_RATE}.</p>
      */
     @Transactional(readOnly = true)
     public TaxPeriodComputationResponse computePeriod(TaxPeriod period) {
         Integer group = groupForPeriod(period);
-        boolean deduction = TaxRevenueGroup.isDeductionGroup(group);
         boolean exempt = TaxRevenueGroup.isTaxExempt(group);
+        // "group == 3" on its own terms — no longer implies a deduction-method GTGT calc, see
+        // TaxRevenueGroup.DEDUCTION's javadoc. Still exactly what group 3's PIT rate/method needs.
+        boolean group3 = TaxRevenueGroup.isDeductionGroup(group);
 
         Optional<Taxperiodsnapshot> previous = previousSnapshot(period);
-        BigDecimal carryIn = previous
-                .map(Taxperiodsnapshot::getVatCarryforwardOut)
-                .map(TaxperiodsnapshotService::safe)
-                .orElse(BigDecimal.ZERO);
 
-        List<Invoice> invoices = invoiceRepository.findInPeriod(localStart(period), localEndExclusive(period));
+        List<Invoice> invoices = invoiceRepository.findValidInPeriod(localStart(period), localEndExclusive(period));
         List<Return> returns = returnRepository.findInPeriod(instantStart(period), instantEndExclusive(period));
         List<Purchaseinvoice> purchases =
                 purchaseinvoiceRepository.findInPeriod(instantStart(period), instantEndExclusive(period));
 
+        // Kept only for the informational counts on the response now — no longer subtracted from
+        // revenue (a superseded original's "Thay thế"/"Điều chỉnh" already carries the net amount,
+        // see InvoiceRepository.findValidInPeriod) and no longer part of any VAT figure (group 3
+        // dropped the deduction method that needed a separate input-VAT-reversal line).
         List<Return> customerReturns = returns.stream()
                 .filter(TaxperiodsnapshotService::isApprovedCustomerReturn)
                 .toList();
@@ -478,59 +551,58 @@ public class TaxperiodsnapshotService {
                 .filter(purchaseinvoiceService::isDeductible)
                 .toList();
 
-        BigDecimal revenue = revenueOf(invoices, customerReturns);
+        BigDecimal revenue = exempt ? BigDecimal.ZERO : revenueOf(invoices, period);
+        // Tính riêng ra ngoài để đưa vào response hiển thị được trên UI (xem tax-period/preview.html)
+        // — không tính lại lần hai bên trong taxableIncomeRevenueOf.
+        BigDecimal customerReturnRetained = exempt ? BigDecimal.ZERO : customerReturnRetainedOf(period);
+        BigDecimal taxableIncomeRevenue = exempt ? BigDecimal.ZERO
+                : taxableIncomeRevenueOf(revenue, customerReturnRetained, period);
 
-        // Only the deduction method has an input side, so only it can carry credit between periods.
-        if (!deduction) {
-            carryIn = BigDecimal.ZERO;
-        }
-
-        BigDecimal vatOutputFromSales;
-        BigDecimal vatOutputReturnDeduction;
-        if (deduction) {
-            vatOutputFromSales = sum(invoices, Invoice::getTotalVATOutput);
-            vatOutputReturnDeduction = sum(customerReturns, Return::getTotalVATRefund);
-        } else if (exempt) {
-            vatOutputFromSales = BigDecimal.ZERO;
-            vatOutputReturnDeduction = BigDecimal.ZERO;
-        } else {
-            // Percentage method: the whole liability is a flat rate on revenue, and the returns
-            // already came off the revenue above rather than off a separate output-VAT figure.
-            vatOutputFromSales = revenue.multiply(TaxRevenueGroup.DIRECT_VAT_RATE);
-            vatOutputReturnDeduction = BigDecimal.ZERO;
-        }
-        BigDecimal vatOutput = vatOutputFromSales.subtract(vatOutputReturnDeduction);
-
-        BigDecimal vatInputFromPurchases =
-                deduction ? sum(deductiblePurchases, Purchaseinvoice::getTotalVATInput) : BigDecimal.ZERO;
-        BigDecimal vatInputReturnReversal =
-                deduction ? sum(supplierReturns, Return::getTotalVATRefund) : BigDecimal.ZERO;
-        BigDecimal vatInput = vatInputFromPurchases.subtract(vatInputReturnReversal);
-
+        // --- GTGT: trực tiếp trên doanh thu cho cả nhóm 2 và nhóm 3, không nhóm nào còn khấu trừ.
+        BigDecimal vatOutput = exempt ? BigDecimal.ZERO : revenue.multiply(TaxRevenueGroup.DIRECT_VAT_RATE);
+        BigDecimal vatOutputFromSales = vatOutput;
+        BigDecimal vatOutputReturnDeduction = BigDecimal.ZERO;
+        BigDecimal vatInputFromPurchases = BigDecimal.ZERO;
+        BigDecimal vatInputReturnReversal = BigDecimal.ZERO;
+        BigDecimal vatInput = BigDecimal.ZERO;
+        BigDecimal carryIn = BigDecimal.ZERO;
         BigDecimal vatPayable = vatPayable(vatOutput, vatInput, carryIn);
         BigDecimal carryOut = carryForwardOut(vatOutput, vatInput, carryIn);
 
-        // --- personal income tax. Group 2 pays a slice of revenue; group 3 pays a slice of profit,
-        //     so only group 3 needs the cost side worked out at all.
+        // --- TNCN: nhóm 3 luôn theo lợi nhuận; nhóm 1 miễn; nhóm 2 chọn qua taxCalculationMethod.
+        boolean pitCostMethod = !exempt && (group3 || Integer.valueOf(2).equals(taxCalculationMethod()));
+
         BigDecimal costOfGoodsSold = BigDecimal.ZERO;
         BigDecimal operatingCost = BigDecimal.ZERO;
+        BigDecimal supplierReturnShortfall = BigDecimal.ZERO;
         BigDecimal taxableIncome = BigDecimal.ZERO;
         BigDecimal incomeTax = BigDecimal.ZERO;
+        BigDecimal incomeTaxRate = BigDecimal.ZERO;
 
-        if (deduction) {
+        if (pitCostMethod) {
             costOfGoodsSold = safe(invoicedetailRepository
-                    .sumCostOfGoodsSoldInPeriod(localStart(period), localEndExclusive(period)))
-                    .subtract(safe(returndetailRepository.sumRestockedCostInPeriod(
-                            instantStart(period), instantEndExclusive(period), ReturnStatus.DEBT)))
-                    .max(BigDecimal.ZERO);
+                    .sumCostOfGoodsSoldInPeriod(localStart(period), localEndExclusive(period)));
             operatingCost = safe(expenseRepository.sumOperatingCostInPeriod(
                     instantStart(period), instantEndExclusive(period),
                     DEDUCTIBLE_EXPENSE_TYPES, DISBURSED_EXPENSE_STATUSES));
+            // A supplier that doesn't refund a return in full leaves the pharmacy out of pocket for
+            // the shortfall — a real cost, per Tax-Invoice.xlsx sheet "03_Cong_Thuc_TNCN".
+            supplierReturnShortfall = safe(returndetailRepository.sumSupplierReturnShortfallInPeriod(
+                    ReturnPurchaseStatus.APPROVED, instantStart(period), instantEndExclusive(period)));
             // A loss-making quarter owes nothing; it does not create a negative tax.
-            taxableIncome = revenue.subtract(costOfGoodsSold).subtract(operatingCost).max(BigDecimal.ZERO);
-            incomeTax = taxableIncome.multiply(TaxRevenueGroup.DEDUCTION_PIT_RATE);
+            taxableIncome = taxableIncomeRevenue.subtract(costOfGoodsSold).subtract(operatingCost)
+                    .subtract(supplierReturnShortfall).max(BigDecimal.ZERO);
+            incomeTaxRate = group3 ? TaxRevenueGroup.GROUP3_PIT_RATE : TaxRevenueGroup.DEDUCTION_PIT_RATE;
+            incomeTax = taxableIncome.multiply(incomeTaxRate);
         } else if (!exempt) {
-            incomeTax = revenue.multiply(TaxRevenueGroup.DIRECT_PIT_RATE);
+            // Nhóm 2, Cách 1 (theo doanh thu) — theo Tax-Invoice.xlsx, ngưỡng 1 (1 tỷ) được trừ
+            // trước khi nhân tỷ lệ, khác với Cách 2 (theo lợi nhuận) không trừ ngưỡng nào. Sàn 0 vì
+            // một quý mới chớm vượt ngưỡng 1 (đang giữa việc tự động chuyển từ Nhóm 1 sang Nhóm 2)
+            // có thể có doanh thu cả năm chưa vượt xa ngưỡng.
+            incomeTaxRate = TaxRevenueGroup.DIRECT_PIT_RATE;
+            BigDecimal taxableRevenueAfterThreshold =
+                    taxableIncomeRevenue.subtract(TaxRevenueGroup.THRESHOLD_1).max(BigDecimal.ZERO);
+            incomeTax = taxableRevenueAfterThreshold.multiply(incomeTaxRate);
         }
 
         return new TaxPeriodComputationResponse(
@@ -539,10 +611,12 @@ public class TaxperiodsnapshotService {
                 DATE.format(period.endDate()),
                 group,
                 TaxRevenueGroup.label(group),
-                deduction,
+                group3,
                 exempt,
-                !deduction && !exempt,
+                !exempt,
                 scaled(revenue),
+                scaled(taxableIncomeRevenue),
+                scaled(customerReturnRetained),
                 percent(TaxRevenueGroup.DIRECT_VAT_RATE),
                 scaled(vatOutputFromSales),
                 scaled(vatOutputReturnDeduction),
@@ -555,18 +629,30 @@ public class TaxperiodsnapshotService {
                 scaled(vatPayable),
                 scaled(costOfGoodsSold),
                 scaled(operatingCost),
+                scaled(supplierReturnShortfall),
                 scaled(taxableIncome),
                 scaled(incomeTax),
-                percent(deduction
-                        ? TaxRevenueGroup.DEDUCTION_PIT_RATE
-                        : (exempt ? BigDecimal.ZERO : TaxRevenueGroup.DIRECT_PIT_RATE)),
+                percent(incomeTaxRate),
+                scaled(vatPayable.add(incomeTax)),
                 invoices.size(),
                 customerReturns.size(),
                 deductiblePurchases.size(),
                 supplierReturns.size(),
                 purchases.size() - deductiblePurchases.size(),
                 previous.map(Taxperiodsnapshot::getPeriodLabel).orElse(null),
-                taxperiodsnapshotRepository.existsByPeriodLabel(period.label()));
+                taxperiodsnapshotRepository.existsByPeriodLabel(period.label()),
+                pitCostMethod);
+    }
+
+    /**
+     * {@code Financialsetting.taxCalculationMethod} — pre-existing field (1 = theo doanh thu, 2 =
+     * theo lợi nhuận), read here for the first time to let group 2 actually choose between the two
+     * PIT methods instead of always defaulting to the flat rate.
+     */
+    private Integer taxCalculationMethod() {
+        return financialsettingRepository.findFirstByOrderByIdAsc()
+                .map(Financialsetting::getTaxCalculationMethod)
+                .orElse(1);
     }
 
     /**
@@ -588,22 +674,13 @@ public class TaxperiodsnapshotService {
     // ------------------------------------------------------------------ who may close a period
 
     /**
-     * Whether the pharmacy currently employs an accountant with an enabled account. The BA's rule
-     * hands the closing job to the Accountant and falls back to the Owner only when there is none,
-     * so this is a live-data question, not a static role matrix.
+     * Whether the given role may close a period right now. The Owner has full permission and may
+     * always close, regardless of whether an Accountant is active (2026-08-11 — supersedes the
+     * earlier rule that locked the Owner out once an Accountant existed).
      */
     @Transactional(readOnly = true)
-    public boolean hasActiveAccountant() {
-        return accountpermissionRepository.existsActiveByRole(RoleConstants.ACCOUNTANT);
-    }
-
-    /** Whether the given role may close a period right now. */
-    @Transactional(readOnly = true)
     public boolean canClose(String role) {
-        if (RoleConstants.ACCOUNTANT.equals(role)) {
-            return true;
-        }
-        return RoleConstants.OWNER.equals(role) && !hasActiveAccountant();
+        return RoleConstants.ACCOUNTANT.equals(role) || RoleConstants.OWNER.equals(role);
     }
 
     /**
@@ -613,8 +690,7 @@ public class TaxperiodsnapshotService {
     @Transactional(readOnly = true)
     public String closeBlockedReason(String role, TaxPeriod period) {
         if (!canClose(role)) {
-            return "Chỉ Kế toán được chốt kỳ thuế. Chủ nhà thuốc chỉ chốt thay khi nhà thuốc "
-                    + "không có tài khoản kế toán đang hoạt động.";
+            return "Chỉ Kế toán hoặc Chủ nhà thuốc mới được chốt kỳ thuế.";
         }
         if (taxperiodsnapshotRepository.existsByPeriodLabel(period.label())) {
             return "Kỳ " + period.label() + " đã được chốt.";
@@ -664,6 +740,9 @@ public class TaxperiodsnapshotService {
             throw new IllegalArgumentException(blocked);
         }
 
+        // cashBalanceAtPeriodEnd is validated but no longer stored anywhere — see the note on
+        // quarterlyRevenue/vatRevenue below. Kept as a typed sanity check on the form; nothing reads
+        // it back once submitted.
         BigDecimal cashBalance = request.getCashBalanceAtPeriodEnd();
         if (cashBalance != null && cashBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Số dư quỹ tiền mặt cuối kỳ không được âm");
@@ -677,12 +756,14 @@ public class TaxperiodsnapshotService {
         snapshot.setStartDate(due.startDate());
         snapshot.setEndDate(due.endDate());
         snapshot.setVatOutput(computed.getVatOutput());
-        snapshot.setVatInput(computed.getVatInput());
-        snapshot.setVatCarryforwardIn(computed.getVatCarryforwardIn());
-        snapshot.setVatCarryforwardOut(computed.getVatCarryforwardOut());
         snapshot.setIncomeTax(computed.getIncomeTax());
-        snapshot.setNextPeriodTaxType(nextGroup);
-        snapshot.setCashBalanceAtPeriodEnd(cashBalance);
+        snapshot.setPeriodTaxType(nextGroup);
+        // quarterlyRevenue = "Doanh thu TNCN", vatRevenue = "Doanh thu GTGT" (Pharmacy-Database-
+        // Description.docx) — tên quarterlyRevenue là tàn dư đổi tên từ cashBalanceAtPeriodEnd
+        // (§0.10 lịch sử), trước giờ vẫn bị ghi nhầm bằng cashBalance thay vì doanh thu thật. Sửa lại
+        // đúng nghĩa cột, lấy thẳng từ computePeriod() — không suy ra từ đâu khác.
+        snapshot.setQuarterlyRevenue(computed.getTaxableIncomeRevenue());
+        snapshot.setVatRevenue(computed.getPeriodRevenue());
         snapshot.setNote(trimToNull(request.getNote()));
         snapshot.setRecordedAt(LocalDateTime.now(VN_ZONE));
 
@@ -739,18 +820,18 @@ public class TaxperiodsnapshotService {
             incomeTax = BigDecimal.ZERO;
         }
 
+        // cashBalanceAtPeriodEnd validated but not stored — same note as closePeriod(). An amendment
+        // only re-types VAT/PIT figures (see this method's own javadoc: "figures taken as typed, not
+        // a recalculation"); quarterlyRevenue/vatRevenue are never among the typed fields, so they
+        // stay exactly as closePeriod() computed and stored them — not overwritten here at all.
         BigDecimal cashBalance = request.getCashBalanceAtPeriodEnd();
         if (cashBalance != null && cashBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Số dư quỹ tiền mặt cuối kỳ không được âm");
         }
 
         snapshot.setVatOutput(vatOutput);
-        snapshot.setVatInput(vatInput);
-        snapshot.setVatCarryforwardIn(carryIn);
-        snapshot.setVatCarryforwardOut(carryForwardOut(vatOutput, vatInput, carryIn));
         snapshot.setIncomeTax(incomeTax);
-        snapshot.setNextPeriodTaxType(nextGroup);
-        snapshot.setCashBalanceAtPeriodEnd(cashBalance);
+        snapshot.setPeriodTaxType(nextGroup);
         snapshot.setNote(trimToNull(request.getNote()));
 
         taxperiodsnapshotRepository.save(snapshot);
@@ -785,8 +866,6 @@ public class TaxperiodsnapshotService {
 
     private TaxPeriodListItemResponse toListItem(Taxperiodsnapshot snapshot, Integer newestId) {
         BigDecimal vatOutput = safe(snapshot.getVatOutput());
-        BigDecimal vatInput = safe(snapshot.getVatInput());
-        BigDecimal carryIn = safe(snapshot.getVatCarryforwardIn());
         Integer group = storedGroup(snapshot);
 
         return new TaxPeriodListItemResponse(
@@ -796,7 +875,7 @@ public class TaxperiodsnapshotService {
                 formatDate(snapshot.getEndDate()),
                 group,
                 TaxRevenueGroup.shortLabel(group),
-                scaled(vatPayable(vatOutput, vatInput, carryIn)),
+                scaled(vatPayable(vatOutput, BigDecimal.ZERO, BigDecimal.ZERO)),
                 scaled(snapshot.getIncomeTax()),
                 formatDateTime(snapshot.getRecordedAt()),
                 snapshot.getId() != null && snapshot.getId().equals(newestId));
@@ -810,8 +889,6 @@ public class TaxperiodsnapshotService {
 
         Integer group = storedGroup(snapshot);
         BigDecimal vatOutput = safe(snapshot.getVatOutput());
-        BigDecimal vatInput = safe(snapshot.getVatInput());
-        BigDecimal carryIn = safe(snapshot.getVatCarryforwardIn());
 
         Optional<Taxperiodsnapshot> previous = snapshot.getStartDate() == null
                 ? Optional.empty()
@@ -833,16 +910,13 @@ public class TaxperiodsnapshotService {
                 TaxRevenueGroup.isDeductionGroup(group),
                 TaxRevenueGroup.isTaxExempt(group),
                 scaled(vatOutput),
-                scaled(vatInput),
-                scaled(carryIn),
-                scaled(safe(snapshot.getVatCarryforwardOut())),
-                scaled(vatPayable(vatOutput, vatInput, carryIn)),
+                scaled(vatPayable(vatOutput, BigDecimal.ZERO, BigDecimal.ZERO)),
                 scaled(snapshot.getIncomeTax()),
-                snapshot.getCashBalanceAtPeriodEnd() == null
+                snapshot.getQuarterlyRevenue() == null
                         ? null
-                        : scaled(snapshot.getCashBalanceAtPeriodEnd()),
-                snapshot.getNextPeriodTaxType(),
-                TaxRevenueGroup.label(snapshot.getNextPeriodTaxType()),
+                        : scaled(snapshot.getQuarterlyRevenue()),
+                snapshot.getPeriodTaxType(),
+                TaxRevenueGroup.label(snapshot.getPeriodTaxType()),
                 formatDateTime(snapshot.getRecordedAt()),
                 snapshot.getNote(),
                 previous.map(Taxperiodsnapshot::getPeriodLabel).orElse(null),

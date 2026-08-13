@@ -63,6 +63,7 @@
         .status-pending { background: #fef3c7; color: #d97706; }
         .status-draft { background: #f3f4f6; color: #4b5563; }
         .status-rejected { background: #fee2e2; color: #dc2626; }
+        .status-cancelled { background: #fee2e2; color: #dc2626; }
         .status-default { background: #f3f4f6; color: #4b5563; }
 
         .summary-row {
@@ -99,6 +100,155 @@
             background: #047857;
             border-color: #047857;
             color: #fff;
+        }
+
+        .btn-income-danger {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: #fff;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .btn-income-danger:hover {
+            background: #b91c1c;
+            border-color: #b91c1c;
+            color: #fff;
+        }
+
+        .btn-income-outline {
+            border-radius: 12px;
+            font-weight: 500;
+            border-color: #d1d5db;
+            color: #374151;
+        }
+
+        .btn-income-outline:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+            color: #111827;
+        }
+
+        .cancel-notice {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 14px 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .cancel-notice-warn {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef9c3 100%);
+            border: 1px solid #fde68a;
+        }
+
+        .cancel-notice-info {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border: 1px solid #bfdbfe;
+        }
+
+        .cancel-notice-icon {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .cancel-notice-warn .cancel-notice-icon {
+            color: #d97706;
+            border: 1px solid #fde68a;
+        }
+
+        .cancel-notice-info .cancel-notice-icon {
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+        }
+
+        .cancel-notice-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .cancel-notice-warn .cancel-notice-title { color: #92400e; }
+        .cancel-notice-info .cancel-notice-title { color: #1e40af; }
+
+        .cancel-notice-text {
+            font-size: 13px;
+            line-height: 1.55;
+            margin: 0;
+        }
+
+        .cancel-notice-warn .cancel-notice-text { color: #78350f; }
+        .cancel-notice-info .cancel-notice-text { color: #1e3a8a; }
+
+        .cancel-notice-meta {
+            margin-top: 10px;
+            padding-top: 10px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .cancel-notice-warn .cancel-notice-meta {
+            border-top: 1px dashed #fde68a;
+            color: #92400e;
+        }
+
+        .cancel-notice-info .cancel-notice-meta {
+            border-top: 1px dashed #bfdbfe;
+            color: #1e40af;
+        }
+
+        .cancel-form-panel {
+            padding: 16px;
+            border-radius: 12px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            margin-bottom: 16px;
+        }
+
+        .cancel-form-panel .form-label {
+            font-weight: 600;
+            color: #991b1b;
+        }
+
+        .cancel-form-panel .form-control {
+            border-radius: 10px;
+            border-color: #fecaca;
+        }
+
+        .cancel-form-panel .form-control:focus {
+            border-color: #f87171;
+            box-shadow: 0 0 0 3px rgba(248, 113, 113, .15);
+        }
+
+        .payment-total {
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border: 1px solid #a7f3d0;
+            margin-bottom: 16px;
+        }
+
+        .payment-total-label {
+            font-size: 13px;
+            color: #047857;
+            margin-bottom: 4px;
+        }
+
+        .payment-total-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #059669;
+            line-height: 1.2;
         }
 
         @media (max-width: 991.98px) {
@@ -379,29 +529,29 @@
                         Thanh toán
                     </div>
 
-                    <div class="d-flex justify-content-between mb-3">
-                        <span class="text-secondary">Tổng số tiền thu</span>
-                        <strong class="text-success"
-                                th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                    <div class="payment-total">
+                        <div class="payment-total-label">Tổng số tiền thu</div>
+                        <div class="payment-total-value"
+                             th:text="${#numbers.formatDecimal(detail.amount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                             0đ
-                        </strong>
+                        </div>
                     </div>
 
-                    <div class="d-flex justify-content-between mb-3">
+                    <div class="summary-row">
                         <span class="text-secondary">Tiền mặt</span>
                         <strong th:text="${#numbers.formatDecimal(detail.paidByCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                             0đ
                         </strong>
                     </div>
 
-                    <div class="d-flex justify-content-between mb-3">
+                    <div class="summary-row">
                         <span class="text-secondary">Chuyển khoản</span>
                         <strong th:text="${#numbers.formatDecimal(detail.paidByBanking, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                             0đ
                         </strong>
                     </div>
 
-                    <div class="d-flex justify-content-between mb-3"
+                    <div class="summary-row"
                          th:if="${detail.paidByCredit != null and detail.paidByCredit.signum() > 0}">
                         <span class="text-secondary">Cấn trừ công nợ</span>
                         <strong th:text="${#numbers.formatDecimal(detail.paidByCredit, 0, 'POINT', 0, 'COMMA') + 'đ'}">
@@ -409,14 +559,73 @@
                         </strong>
                     </div>
 
-                    <div class="d-flex justify-content-between">
+                    <div class="summary-row">
                         <span class="text-secondary">Hình thức</span>
                         <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
                     </div>
                 </div>
 
                 <div class="income-card p-4">
-                    <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
+                    <div class="section-title mb-3">
+                        <i class="ti ti-click text-success me-1"></i>
+                        Thao tác
+                    </div>
+
+                    <div th:if="${detail.statusName != 'Đã hủy' and !detail.cancellable}"
+                         th:class="${#strings.contains(detail.cancelBlockedReason, 'bù trừ')
+                             ? 'cancel-notice cancel-notice-info'
+                             : 'cancel-notice cancel-notice-warn'}">
+                        <div class="cancel-notice-icon">
+                            <i th:class="${#strings.contains(detail.cancelBlockedReason, 'bù trừ')
+                                ? 'ti ti-shield-check'
+                                : 'ti ti-lock'}"></i>
+                        </div>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="cancel-notice-title">Không thể hủy phiếu thu</div>
+                            <p class="cancel-notice-text" th:text="${detail.cancelBlockedReason}">
+                                Không thể hủy phiếu thu này.
+                            </p>
+                            <div class="cancel-notice-meta"
+                                 th:if="${#strings.contains(detail.cancelBlockedReason, 'người lập')}">
+                                <i class="ti ti-user"></i>
+                                <span>Người lập:
+                                    <strong th:text="${detail.applicantName}">—</strong>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form th:if="${detail.cancellable}"
+                          th:action="${basePath + '/' + detail.id + '/cancel'}"
+                          method="post"
+                          class="cancel-form-panel"
+                          id="cancelForm">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <label class="form-label small mb-2">
+                            Lý do hủy
+                            <span class="text-secondary fw-normal">(không bắt buộc)</span>
+                        </label>
+                        <input type="text" class="form-control form-control-sm mb-3" name="reason"
+                               placeholder="VD: Lập nhầm số tiền">
+                        <button type="submit" class="btn btn-income-danger w-100"
+                                data-confirm="Bạn có chắc chắn muốn hủy phiếu thu này không? Đây là thao tác sửa lỗi nội bộ, không thể hoàn tác.">
+                            <i class="ti ti-trash me-1"></i>
+                            Hủy phiếu thu
+                        </button>
+                    </form>
+
+                    <div th:if="${detail.statusName == 'Đã hủy'}"
+                         class="cancel-notice cancel-notice-info mb-3">
+                        <div class="cancel-notice-icon">
+                            <i class="ti ti-ban"></i>
+                        </div>
+                        <div>
+                            <div class="cancel-notice-title">Phiếu thu đã bị hủy</div>
+                            <p class="cancel-notice-text mb-0">Phiếu này không còn hiệu lực và không thể thao tác thêm.</p>
+                        </div>
+                    </div>
+
+                    <a th:href="${basePath}" class="btn btn-income-outline w-100">
                         <i class="ti ti-arrow-left me-1"></i>
                         Quay lại danh sách
                     </a>

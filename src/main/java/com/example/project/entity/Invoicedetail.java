@@ -64,12 +64,6 @@ public class Invoicedetail {
     @Column(name = "returnedQty")
     private Integer returnedQty;
 
-    @Column(name = "vatRate", precision = 5, scale = 2)
-    private BigDecimal vatRate;
-
-    @Column(name = "preTaxAmount", precision = 15, scale = 2)
-    private BigDecimal preTaxAmount;
-
-    @Column(name = "vatAmount", precision = 15, scale = 2)
-    private BigDecimal vatAmount;
+    @Column(name = "note", columnDefinition = "TEXT")
+    private String note;
 }

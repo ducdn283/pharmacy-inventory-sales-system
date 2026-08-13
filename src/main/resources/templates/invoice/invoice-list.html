@@ -223,33 +223,6 @@
 
     .empty-row td { color: var(--sup-muted); font-size: 13px; padding: 40px 0; }
 
-    .invoice-check {
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-      accent-color: var(--sup-green);
-    }
-
-    .btn-bulk-sign {
-      height: 40px;
-      padding: 0 18px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: none;
-      cursor: pointer;
-      background: var(--sup-green);
-      color: #fff;
-    }
-    .btn-bulk-sign:hover { background: var(--sup-green-dark); }
-    .btn-bulk-sign:disabled {
-      background: #d1d5db;
-      cursor: not-allowed;
-    }
-
     @media (max-width: 767px) {
       .filter-row { flex-direction: column; align-items: stretch; }
       .filter-input { width: 100%; }
@@ -376,38 +349,10 @@
         </div>
       </form>
 
-      <form th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}"
-            id="bulkSignForm"
-            th:action="${basePath + '/sign-bulk'}"
-            method="post"
-            class="mb-3">
-        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-        <input type="hidden" name="search" th:value="${search}">
-        <input type="hidden" name="fromDate" th:value="${fromDate}">
-        <input type="hidden" name="toDate" th:value="${toDate}">
-        <input type="hidden" name="paymentType" th:value="${filterPaymentType}">
-        <input type="hidden" name="status" th:value="${filterStatus}">
-        <input type="hidden" name="sellerId" th:value="${filterSellerId}">
-        <input type="hidden" name="page" th:value="${currentPage}">
-        <input type="hidden" name="size" th:value="${pageSize}">
-
-        <button type="submit"
-                id="btnBulkSign"
-                class="btn-bulk-sign"
-                disabled
-                data-confirm="Ký các hóa đơn đã chọn? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
-          <i class="ti ti-writing-sign"></i>
-          Ký hóa đơn đã chọn
-        </button>
-      </form>
-
       <div style="overflow-x:auto;">
         <table class="sup-table">
           <thead>
             <tr>
-              <th th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" style="width:44px;text-align:center;">
-                <input type="checkbox" id="selectAllInvoices" class="invoice-check" title="Chọn tất cả">
-              </th>
               <th>Số hóa đơn</th>
               <th>Ngày lập</th>
               <th>Loại hóa đơn</th>
@@ -422,14 +367,6 @@
           </thead>
           <tbody>
             <tr th:each="item : ${invoices}">
-              <td th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" style="text-align:center;">
-                <input type="checkbox"
-                       class="invoice-check invoice-row-check"
-                       name="invoiceIds"
-                       th:value="${item.id}"
-                       th:disabled="${item.statusName == 'Đã ký'}"
-                       form="bulkSignForm">
-              </td>
               <td>
                 <span class="sup-name" th:text="${item.code}">HD000046</span>
                 <span class="rx-badge ms-1" th:if="${item.prescriptionRequired}"
@@ -470,7 +407,7 @@
             </tr>
 
             <tr th:if="${#lists.isEmpty(invoices)}" class="empty-row">
-              <td th:colspan="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT' ? 11 : 10}" style="text-align:center;">
+              <td colspan="10" style="text-align:center;">
                 Không tìm thấy hóa đơn nào.
               </td>
             </tr>
@@ -510,46 +447,5 @@
 
   </div>
 </main>
-
-<script th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}">
-  (function () {
-    const selectAll = document.getElementById('selectAllInvoices');
-    const bulkBtn = document.getElementById('btnBulkSign');
-    if (!selectAll || !bulkBtn) return;
-
-    function selectableChecks() {
-      return Array.from(document.querySelectorAll('.invoice-row-check:not(:disabled)'));
-    }
-
-    function selectedChecks() {
-      return selectableChecks().filter(function (c) { return c.checked; });
-    }
-
-    function refreshBulkState() {
-      const checks = selectableChecks();
-      const selected = selectedChecks();
-      bulkBtn.disabled = selected.length === 0;
-
-      if (!checks.length) {
-        selectAll.checked = false;
-        selectAll.indeterminate = false;
-        return;
-      }
-      selectAll.checked = selected.length === checks.length;
-      selectAll.indeterminate = selected.length > 0 && selected.length < checks.length;
-    }
-
-    selectAll.addEventListener('change', function () {
-      selectableChecks().forEach(function (c) { c.checked = selectAll.checked; });
-      refreshBulkState();
-    });
-
-    document.querySelectorAll('.invoice-row-check').forEach(function (c) {
-      c.addEventListener('change', refreshBulkState);
-    });
-
-    refreshBulkState();
-  })();
-</script>
 </body>
 </html>

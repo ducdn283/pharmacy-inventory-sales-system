@@ -10,6 +10,7 @@ import com.example.project.dto.response.InvoiceDetailPageResponse;
 import com.example.project.dto.response.ReturnPurchaseDetailPageResponse;
 import com.example.project.dto.response.ShiftReportDetailPageResponse;
 import com.example.project.dto.response.StockAdjustmentDetailPageResponse;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.example.project.service.IncomeService;
 import com.example.project.service.InvoiceService;
 import com.example.project.service.ReturnPurchaseService;
@@ -96,8 +97,6 @@ public class IncomeController {
         model.addAttribute("totalIncomes", incomeService.countAll());
         model.addAttribute("todayIncomes", incomeService.countToday());
         model.addAttribute("todayAmount", incomeService.sumTodayAmount());
-        model.addAttribute("pendingIncomes", incomeService.countPending());
-        model.addAttribute("pendingAmount", incomeService.sumPendingAmount());
         model.addAttribute("approvedIncomes", incomeService.countApproved());
         model.addAttribute("approvedAmount", incomeService.sumApprovedAmount());
         model.addAttribute("statuses", incomeService.listStatuses());
@@ -122,7 +121,8 @@ public class IncomeController {
 
     @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}", ACCOUNTANT_BASE + "/{incomeId}"})
     public String detail(@PathVariable Integer incomeId, HttpServletRequest request, Model model) {
-        IncomeDetailResponse detail = incomeService.getDetail(incomeId);
+        IncomeDetailResponse detail = incomeService.getDetail(
+                incomeId, currentUserContext.getCurrentAccountId());
         String basePath = resolveBasePath(request);
 
         model.addAttribute("detail", detail);
@@ -186,8 +186,16 @@ public class IncomeController {
             ACCOUNTANT_BASE + "/references/supplier-returns/{id}/detail"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ReturnPurchaseDetailPageResponse supplierReturnReferenceDetail(@PathVariable("id") Integer id) {
-        return returnPurchaseService.getDetail(id);
+    public SupplierReturnReferenceDetailPayload supplierReturnReferenceDetail(@PathVariable("id") Integer id) {
+        return new SupplierReturnReferenceDetailPayload(
+                returnPurchaseService.getDetail(id),
+                incomeService.remainingCollectibleForSupplierReturn(id));
+    }
+
+    /** JSON payload for supplier-return detail on the income create screen (flattened via {@link JsonUnwrapped}). */
+    private record SupplierReturnReferenceDetailPayload(
+            @JsonUnwrapped ReturnPurchaseDetailPageResponse detail,
+            BigDecimal remainingCollectibleAmount) {
     }
 
     @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments/{id}/detail",
@@ -214,6 +222,9 @@ public class IncomeController {
                              @RequestParam(name = "invoiceId", required = false) Integer invoiceId,
                              @RequestParam(name = "supplierId", required = false) Integer supplierId,
                              @RequestParam(name = "returnId", required = false) Integer returnId,
+                             @RequestParam(name = "accountId", required = false) Integer accountId,
+                             @RequestParam(name = "shiftReportOfAccountId", required = false)
+                             Integer shiftReportOfAccountId,
                              HttpServletRequest request,
                              Model model) {
         if (!model.containsAttribute("form")) {
@@ -225,6 +236,10 @@ public class IncomeController {
             form.setInvoiceId(invoiceId);
             form.setSupplierId(supplierId);
             form.setReturnId(returnId);
+            // Điền sẵn khi mở từ màn báo cáo ca bị thâm hụt quỹ (loại SHIFT_SHORTAGE): người chịu
+            // trách nhiệm = người trực ca, chứng từ liên quan = chính ca đó.
+            form.setAccountId(accountId);
+            form.setShiftReportOfAccountId(shiftReportOfAccountId);
             model.addAttribute("form", form);
         }
         addCreatePageData(request, model);
@@ -243,17 +258,9 @@ public class IncomeController {
             Integer incomeId = incomeService.createIncome(
                     form,
                     currentUserContext.getCurrentAccountId(),
-                    currentUserContext.isOwner(),
                     asDraft);
 
-            String message;
-            if (asDraft) {
-                message = "Đã lưu nháp phiếu thu";
-            } else if (currentUserContext.isOwner()) {
-                message = "Tạo phiếu thu thành công";
-            } else {
-                message = "Đã gửi phiếu thu, đang chờ duyệt";
-            }
+            String message = asDraft ? "Đã lưu nháp phiếu thu" : "Tạo phiếu thu thành công";
             redirectAttributes.addFlashAttribute("successMessage", message);
             return "redirect:" + basePath + "/" + incomeId;
         } catch (IllegalArgumentException exception) {
@@ -262,6 +269,22 @@ public class IncomeController {
             addCreatePageData(request, model);
             return "income/create-income";
         }
+    }
+
+    @PostMapping({OWNER_BASE + "/{incomeId}/cancel", PHARMACIST_BASE + "/{incomeId}/cancel",
+            ACCOUNTANT_BASE + "/{incomeId}/cancel"})
+    public String cancel(@PathVariable Integer incomeId,
+                         @RequestParam(name = "reason", required = false) String reason,
+                         HttpServletRequest request,
+                         RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+        try {
+            incomeService.cancel(incomeId, reason, currentUserContext.getCurrentAccountId());
+            redirectAttributes.addFlashAttribute("successMessage", "Đã hủy phiếu thu");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+        }
+        return "redirect:" + basePath + "/" + incomeId;
     }
 
     private void addCreatePageData(HttpServletRequest request, Model model) {

@@ -55,6 +55,11 @@ public class Financialsetting {
     @Column(name = "locationName", nullable = false, length = 100)
     private String locationName;
 
+    @Size(max = 100)
+    @NotNull
+    @Column(name = "address", nullable = false, length = 100)
+    private String address;
+
     @Size(max = 10)
     @NotNull
     @Column(name = "phoneNumber", nullable = false, length = 10)
@@ -79,14 +84,6 @@ public class Financialsetting {
     @Column(name = "revenueGroup")
     private Integer revenueGroup;
 
-    @ColumnDefault("1000000000.00")
-    @Column(name = "annualRevenueThreshold1", precision = 15, scale = 2)
-    private BigDecimal annualRevenueThreshold1;
-
-    @ColumnDefault("3000000000.00")
-    @Column(name = "annualRevenueThreshold2", precision = 15, scale = 2)
-    private BigDecimal annualRevenueThreshold2;
-
     @ColumnDefault("1")
     @Column(name = "autoOffsetDebtOnRefund")
     private Boolean autoOffsetDebtOnRefund;
@@ -100,6 +97,14 @@ public class Financialsetting {
     @Column(name = "cashSafeBalance", precision = 15, scale = 2)
     private BigDecimal cashSafeBalance;
 
+    @ColumnDefault("0")
+    @Column(name = "setupConfirmed")
+    private Boolean setupConfirmed;
+
     @Column(name = "balanceUpdatedAt")
     private LocalDateTime balanceUpdatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
 }

@@ -57,4 +57,9 @@ public class CurrentUserContext {
     public boolean isPharmacist() {
         return RoleConstants.PHARMACIST.equals(getCurrentRole());
     }
+
+    /** Whether the signed-in user is an Accountant. */
+    public boolean isAccountant() {
+        return RoleConstants.ACCOUNTANT.equals(getCurrentRole());
+    }
 }

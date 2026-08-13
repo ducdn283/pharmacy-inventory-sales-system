@@ -48,12 +48,5 @@ public class ReturnPurchaseDetailPageResponse {
     /** Khoản LỖ do NCC không hoàn đủ = totalOriginalValue − totalRefund (chi phí hợp lý, cần chứng từ). */
     private BigDecimal lossAmount;
 
-    /** Giá trị hàng trả lại chưa thuế = Σ preTaxAmount của các dòng. */
-    private BigDecimal totalPreTaxRefund;
-    /** Thuế GTGT ĐẦU VÀO đã khấu trừ nay phải giảm trừ (0 nếu Nhóm 2) = Return.totalVATRefund. */
-    private BigDecimal totalVATRefund;
-    /** Nhóm 3/4 mới có thuế đầu vào để đảo — dùng để chú thích đúng ngữ cảnh trên màn hình. */
-    private boolean deductionGroup;
-
     private List<ReturnPurchaseDetailItemResponse> items;
 }

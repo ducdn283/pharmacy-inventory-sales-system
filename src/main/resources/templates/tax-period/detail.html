@@ -155,11 +155,11 @@
                         </div>
 
                         <div class="col-12">
-                            <div class="info-label">Số dư quỹ tiền mặt cuối kỳ (tham chiếu)</div>
+                            <div class="info-label">Doanh thu tính TNCN của kỳ</div>
                             <div class="info-value"
-                                 th:text="${detail.cashBalanceAtPeriodEnd == null
+                                 th:text="${detail.quarterlyRevenue == null
                                            ? 'Chưa ghi nhận'
-                                           : #numbers.formatDecimal(detail.cashBalanceAtPeriodEnd, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                           : #numbers.formatDecimal(detail.quarterlyRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                 Chưa ghi nhận
                             </div>
                         </div>
@@ -178,8 +178,10 @@
 
                     <table class="table vat-table mb-0">
                         <tbody>
-                        <!-- Nhóm 3 (khấu trừ): đầu ra − đầu vào − chuyển tiếp. -->
-                        <th:block th:if="${detail.deductionGroup}">
+                        <!-- Không nhóm nào còn khấu trừ GTGT đầu vào nữa (nhóm 3 chuyển sang tính
+                             trực tiếp trên doanh thu, giống nhóm 2) — khối này vĩnh viễn không hiện,
+                             giữ lại markup/DTO field để không phải đổi schema. -->
+                        <th:block th:if="false">
                             <tr>
                                 <td>Thuế GTGT đầu ra</td>
                                 <td class="amount"
@@ -197,13 +199,13 @@
                             </tr>
                         </th:block>
 
-                        <!-- Nhóm 2 (tỷ lệ % trên doanh thu): không có đầu vào/đầu ra để đối trừ. -->
-                        <tr th:if="${!detail.deductionGroup and !detail.taxExempt}">
+                        <!-- Cả nhóm 2 lẫn nhóm 3: tỷ lệ % trên doanh thu, không có đầu vào/đầu ra. -->
+                        <tr th:if="${!detail.taxExempt}">
                             <td>
                                 Thuế GTGT theo tỷ lệ trên doanh thu
                                 <span class="text-secondary small d-block">
-                                    Nhóm 2 nộp theo tỷ lệ cố định trên doanh thu, không kê khai thuế
-                                    GTGT đầu vào / đầu ra
+                                    Nộp theo tỷ lệ cố định trên doanh thu, không kê khai thuế GTGT
+                                    đầu vào / đầu ra
                                 </span>
                             </td>
                             <td class="amount"
@@ -228,7 +230,7 @@
                                 th:text="${#numbers.formatDecimal(detail.vatPayable, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
                         </tr>
 
-                        <tr th:if="${detail.deductionGroup}">
+                        <tr th:if="false">
                             <td>Thuế GTGT còn được khấu trừ chuyển sang kỳ sau</td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(detail.vatCarryforwardOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
@@ -237,10 +239,15 @@
                         <tr class="row-total" th:unless="${detail.taxExempt}">
                             <td>
                                 Thuế TNCN của kỳ
+                                <!-- Nhóm 3 luôn tính theo lợi nhuận (17%) nên nêu rõ được; nhóm 2 từ
+                                     nay có thể đã dùng MỘT trong hai cách (Financialsetting
+                                     .taxCalculationMethod tại thời điểm chốt kỳ không được lưu lại
+                                     riêng cho từng kỳ), nên không còn nêu đích danh % được — chỉ số
+                                     tiền th:text bên cạnh là số đã lưu, luôn đúng. -->
                                 <span class="text-secondary small d-block"
                                       th:text="${detail.deductionGroup
-                                                ? '15% trên thu nhập chịu thuế (doanh thu − chi phí)'
-                                                : '0,5% trên doanh thu'}">—</span>
+                                                ? '17% trên thu nhập chịu thuế (doanh thu − chi phí)'
+                                                : 'Theo phương thức tính thuế đã áp dụng cho kỳ này'}">—</span>
                             </td>
                             <td class="amount"
                                 th:text="${#numbers.formatDecimal(detail.incomeTax, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
@@ -248,7 +255,7 @@
                         </tbody>
                     </table>
 
-                    <div class="text-secondary small mt-3" th:if="${detail.deductionGroup}">
+                    <div class="text-secondary small mt-3" th:if="false">
                         <i class="ti ti-info-circle me-1"></i>
                         Số phải nộp và số chuyển kỳ sau là hai vế của cùng một phép trừ — chỉ một
                         trong hai có thể khác 0.
@@ -276,10 +283,7 @@
                 <!-- Nhóm 1 không có ô thuế nào: kỳ miễn thuế thì mọi chỉ tiêu luôn bằng 0, và
                      TaxperiodsnapshotService.updateLatest cũng bỏ qua mọi giá trị gửi lên. -->
                 <div class="col-12 col-md-4" th:unless="${detail.taxExempt}">
-                    <label for="vatOutputInput" class="form-label"
-                           th:text="${detail.deductionGroup ? 'Thuế GTGT đầu ra' : 'Thuế GTGT phải nộp'}">
-                        Thuế GTGT đầu ra
-                    </label>
+                    <label for="vatOutputInput" class="form-label">Thuế GTGT phải nộp</label>
                     <input id="vatOutputInput" type="text" inputmode="numeric" data-money
                            name="vatOutput" class="form-control"
                            th:value="${detail.vatOutput}">
@@ -293,16 +297,18 @@
                     </div>
                 </div>
 
-                <!-- Đầu vào và khấu trừ chuyển tiếp chỉ tồn tại ở nhóm khấu trừ; ô không hiện thì
-                     không post lên và server ghi 0, đúng nghĩa "nhóm này không có khoản đó". -->
-                <div class="col-12 col-md-4" th:if="${detail.deductionGroup}">
+                <!-- Không nhóm nào còn khấu trừ GTGT đầu vào nữa — hai ô này vĩnh viễn không hiện,
+                     giữ lại markup vì không được đổi schema (Taxperiodsnapshot.vatInput/
+                     vatCarryforwardIn vẫn còn cột, chỉ luôn ghi 0 từ nay). Ô không hiện thì không
+                     post lên và server ghi 0, đúng nghĩa "không còn khoản này nữa". -->
+                <div class="col-12 col-md-4" th:if="false">
                     <label for="vatInputInput" class="form-label">Thuế GTGT đầu vào được khấu trừ</label>
                     <input id="vatInputInput" type="text" inputmode="numeric" data-money
                            name="vatInput" class="form-control"
                            th:value="${detail.vatInput}">
                 </div>
 
-                <div class="col-12 col-md-4" th:if="${detail.deductionGroup}">
+                <div class="col-12 col-md-4" th:if="false">
                     <label for="carryInInput" class="form-label">Khấu trừ chuyển từ kỳ trước</label>
                     <input id="carryInInput" type="text" inputmode="numeric" data-money
                            name="vatCarryforwardIn" class="form-control"
@@ -316,7 +322,7 @@
                            th:value="${detail.incomeTax}">
                 </div>
 
-                <div class="col-12" th:if="${detail.deductionGroup}">
+                <div class="col-12" th:if="false">
                     <div class="alert alert-secondary small p-3 mb-0">
                         <i class="ti ti-calculator me-1"></i>
                         Số còn phải nộp và số chuyển sang kỳ sau được tính lại từ ba ô trên, không
@@ -326,13 +332,17 @@
 
                 <div class="col-12 col-md-9">
                     <label for="cashBalanceInput" class="form-label">Số dư quỹ tiền mặt cuối kỳ</label>
+                    <!-- Không có cột nào lưu số dư quỹ tiền mặt cuối kỳ đã chốt (giá trị gõ ở đây chỉ
+                         được validate rồi bỏ, xem TaxperiodsnapshotService) — nên không có gì để điền
+                         sẵn. Trước đây ô này bị điền nhầm bằng detail.quarterlyRevenue (Doanh thu tính
+                         TNCN của kỳ, một số liệu hoàn toàn khác), khiến người sửa tưởng đó là số dư quỹ
+                         tiền mặt đang lưu. -->
                     <input id="cashBalanceInput"
                            type="text"
                            inputmode="numeric"
                            data-money
                            name="cashBalanceAtPeriodEnd"
                            class="form-control"
-                           th:value="${detail.cashBalanceAtPeriodEnd}"
                            placeholder="Có thể bỏ trống">
                 </div>
 

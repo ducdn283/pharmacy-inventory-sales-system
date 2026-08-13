@@ -1,34 +1,30 @@
 package com.example.project.service;
 
-import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.constant.ShiftReportStatus;
-import com.example.project.constant.StockAdjustmentStatus;
-import com.example.project.constant.StockCountStatus;
+import com.example.project.constant.StockReviewStatus;
+import com.example.project.constant.StockReviewType;
 import com.example.project.dto.response.ApprovalItemResponse;
+import com.example.project.dto.response.DashboardView.ChartSeries;
+import com.example.project.dto.response.DashboardView.DashboardChart;
 import com.example.project.dto.response.DashboardView.MetricCard;
 import com.example.project.dto.response.DashboardView.PerformanceRow;
 import com.example.project.dto.response.DashboardView.QuickAction;
 import com.example.project.dto.response.DashboardView.RecentInvoice;
 import com.example.project.dto.response.DashboardView.RoleDashboard;
 import com.example.project.dto.response.DashboardView.TodoItem;
-import com.example.project.dto.response.DashboardView.ChartSeries;
-import com.example.project.dto.response.DashboardView.DashboardChart;
-import com.example.project.entity.Income;
-import com.example.project.repository.IncomeRepository;
 import com.example.project.entity.Account;
-import com.example.project.entity.Batch;
-import com.example.project.entity.Customer;
+import com.example.project.entity.Income;
 import com.example.project.entity.Invoice;
 import com.example.project.entity.Invoicedetail;
 import com.example.project.entity.Product;
 import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Return;
 import com.example.project.entity.Shiftreport;
-import com.example.project.entity.Stockadjustment;
-import com.example.project.entity.Stockcount;
+import com.example.project.entity.Stockreview;
 import com.example.project.repository.BatchRepository;
 import com.example.project.repository.CustomerRepository;
+import com.example.project.repository.IncomeRepository;
 import com.example.project.repository.InvoiceRepository;
 import com.example.project.repository.InvoicedetailRepository;
 import com.example.project.repository.ProductRepository;
@@ -36,10 +32,7 @@ import com.example.project.repository.PurchaseinvoiceRepository;
 import com.example.project.repository.ReturnRepository;
 import com.example.project.repository.ShiftreportRepository;
 import com.example.project.repository.StockadjustmentRepository;
-import com.example.project.repository.StockcountRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.example.project.repository.StockreviewRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
@@ -58,17 +51,28 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.time.Instant;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DashboardService {
 
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final DateTimeFormatter DATE_DISPLAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final DateTimeFormatter DATE_TIME_DISPLAY = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    private static final DateTimeFormatter TIME_DISPLAY = DateTimeFormatter.ofPattern("HH:mm");
+
+    private static final DateTimeFormatter DATE_DISPLAY =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    private static final DateTimeFormatter DATE_TIME_DISPLAY =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    private static final DateTimeFormatter TIME_DISPLAY =
+            DateTimeFormatter.ofPattern("HH:mm");
+
     private static final String INCOME_STATUS_DRAFT = "Nháp";
+
     private static final String INCOME_STATUS_REJECTED = "Từ chối";
+
+    private static final String INVOICE_STATUS_CANCELLED = "Đã hủy";
 
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
@@ -78,32 +82,34 @@ public class DashboardService {
     private final BatchRepository batchRepository;
     private final CustomerRepository customerRepository;
     private final PurchaseinvoiceRepository purchaseinvoiceRepository;
-    private final StockcountRepository stockcountRepository;
+    private final StockreviewRepository stockreviewRepository;
     private final StockadjustmentRepository stockadjustmentRepository;
     private final ShiftreportRepository shiftreportRepository;
     private final ApprovalService approvalService;
 
-    public DashboardService(InvoiceRepository invoiceRepository,
-                            InvoicedetailRepository invoicedetailRepository,
-                            IncomeRepository incomeRepository,
-                            ReturnRepository returnRepository,
-                            ProductRepository productRepository,
-                            BatchRepository batchRepository,
-                            CustomerRepository customerRepository,
-                            PurchaseinvoiceRepository purchaseinvoiceRepository,
-                            StockcountRepository stockcountRepository,
-                            StockadjustmentRepository stockadjustmentRepository,
-                            ShiftreportRepository shiftreportRepository,
-                            ApprovalService approvalService) {
+    public DashboardService(
+            InvoiceRepository invoiceRepository,
+            InvoicedetailRepository invoicedetailRepository,
+            IncomeRepository incomeRepository,
+            ReturnRepository returnRepository,
+            ProductRepository productRepository,
+            BatchRepository batchRepository,
+            CustomerRepository customerRepository,
+            PurchaseinvoiceRepository purchaseinvoiceRepository,
+            StockreviewRepository stockreviewRepository,
+            StockadjustmentRepository stockadjustmentRepository,
+            ShiftreportRepository shiftreportRepository,
+            ApprovalService approvalService
+    ) {
         this.invoiceRepository = invoiceRepository;
-        this.incomeRepository = incomeRepository;
         this.invoicedetailRepository = invoicedetailRepository;
+        this.incomeRepository = incomeRepository;
         this.returnRepository = returnRepository;
         this.productRepository = productRepository;
         this.batchRepository = batchRepository;
         this.customerRepository = customerRepository;
         this.purchaseinvoiceRepository = purchaseinvoiceRepository;
-        this.stockcountRepository = stockcountRepository;
+        this.stockreviewRepository = stockreviewRepository;
         this.stockadjustmentRepository = stockadjustmentRepository;
         this.shiftreportRepository = shiftreportRepository;
         this.approvalService = approvalService;
@@ -112,33 +118,55 @@ public class DashboardService {
     @Transactional(readOnly = true)
     public RoleDashboard ownerDashboard(String currentAccountName) {
         LocalDate today = LocalDate.now(VN_ZONE);
+
         LocalDate yesterday = today.minusDays(1);
 
         List<Invoice> invoices = invoiceRepository.findAllWithRelations();
+
         List<Product> products = productRepository.findAllWithRelations();
-        List<Purchaseinvoice> purchaseInvoices = purchaseinvoiceRepository.findAllWithRelations();
 
-        BigDecimal todayRevenue = sumInvoiceTotal(invoices, invoice -> isDate(invoice.getDate(), today));
-        BigDecimal yesterdayRevenue = sumInvoiceTotal(invoices, invoice -> isDate(invoice.getDate(), yesterday));
-        long todayInvoiceCount = invoices.stream().filter(invoice -> isDate(invoice.getDate(), today)).count();
+        List<Purchaseinvoice> purchaseInvoices =
+                purchaseinvoiceRepository.findAllWithRelations();
 
-        BigDecimal customerDebt = invoices.stream()
+        BigDecimal todayRevenue = sumInvoiceTotal(invoices, invoice ->
+                isDate(invoice.getDate(), today)
+        );
+
+        BigDecimal yesterdayRevenue = sumInvoiceTotal(invoices, invoice ->
+                isDate(invoice.getDate(), yesterday)
+        );
+
+        long todayInvoiceCount = invoices
+                .stream()
+                .filter(invoice -> isDate(invoice.getDate(), today))
+                .count();
+
+        BigDecimal customerDebt = invoices
+                .stream()
                 .map(Invoice::getDebtAmount)
                 .map(this::safe)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal purchaseDebt = purchaseInvoices.stream()
+        BigDecimal purchaseDebt = purchaseInvoices
+                .stream()
                 .map(this::calculatePurchaseDebt)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         long pendingApprovals = approvalService.getStats().getTotalCount();
-        long monthlyVatInvoices = invoices.stream()
+
+        long monthlyInvoices = invoices
+                .stream()
                 .filter(invoice -> isCurrentMonth(invoice.getDate(), today))
-                .filter(invoice -> safe(invoice.getTotalVATOutput()).compareTo(BigDecimal.ZERO) > 0)
+                .filter(
+                        invoice -> !isStatus(invoice.getStatus(), INVOICE_STATUS_CANCELLED)
+                )
                 .count();
 
         long lowStockProducts = countLowStockProducts(products);
-        List<ApprovalItemResponse> pendingApprovalItems = approvalService.list(null).stream()
+
+        List<ApprovalItemResponse> pendingApprovalItems = approvalService
+                .list(null)
+                .stream()
                 .filter(ApprovalItemResponse::isPending)
                 .limit(5)
                 .toList();
@@ -147,38 +175,21 @@ public class DashboardService {
                 "OWNER",
                 "Tổng quan",
                 currentAccountName,
-                "Tổng quan vận hành nhà thuốc hôm nay • Ngày "
-                        + today.format(DATE_DISPLAY),
+                "Tổng quan vận hành nhà thuốc hôm nay • Ngày " +
+                        today.format(DATE_DISPLAY),
 
                 List.of(
-                        new QuickAction(
-                                "Xem phê duyệt",
-                                "/owner/approvals",
-                                true
-                        ),
-                        new QuickAction(
-                                "Xem công nợ",
-                                "/owner/debts",
-                                false
-                        ),
-                        new QuickAction(
-                                "Xem tồn kho",
-                                "/owner/stock-counts",
-                                false
-                        ),
-                        new QuickAction(
-                                "Xem hóa đơn VAT",
-                                "/owner/invoices",
-                                false
-                        )
+                        new QuickAction("Xem phê duyệt", "/owner/approvals", true),
+                        new QuickAction("Xem công nợ", "/owner/debts", false),
+                        new QuickAction("Rà soát kho", "/owner/stock-reviews", false),
+                        new QuickAction("Xem hóa đơn", "/owner/invoices", false)
                 ),
 
                 List.of(
                         new MetricCard(
                                 "Doanh thu hôm nay",
                                 moneyShort(todayRevenue),
-                                compareRevenue(todayRevenue, yesterdayRevenue)
-                                        + " so với hôm qua",
+                                compareRevenue(todayRevenue, yesterdayRevenue) + " so với hôm qua",
                                 "ti ti-trending-up",
                                 "success",
                                 "/owner/invoices"
@@ -208,9 +219,9 @@ public class DashboardService {
                                 "/owner/approvals"
                         ),
                         new MetricCard(
-                                "Hóa đơn VAT tháng này",
-                                String.valueOf(monthlyVatInvoices),
-                                "Có phát sinh VAT đầu ra",
+                                "Hóa đơn tháng này",
+                                String.valueOf(monthlyInvoices),
+                                "Giao dịch bán hàng trong tháng",
                                 "ti ti-receipt-tax",
                                 "success",
                                 "/owner/invoices"
@@ -231,10 +242,7 @@ public class DashboardService {
                                 "line",
                                 lastSevenDayLabels(today),
                                 List.of(
-                                        new ChartSeries(
-                                                "Doanh thu",
-                                                lastSevenDayRevenue(invoices, today)
-                                        )
+                                        new ChartSeries("Doanh thu", lastSevenDayRevenue(invoices, today))
                                 )
                         )
                 ),
@@ -261,55 +269,36 @@ public class DashboardService {
         LocalDate today = LocalDate.now(VN_ZONE);
 
         List<Invoice> invoices = invoiceRepository.findAllWithRelations();
+
         List<Income> incomes = incomeRepository.findAllWithRelations();
+
         List<Shiftreport> shiftReports =
                 shiftreportRepository.findAllWithRelations();
-        List<Stockcount> stockCounts =
-                stockcountRepository.findAllWithRelations();
-        List<Return> returns =
-                returnRepository.findAllWithRelations();
 
-        /*
-         * Tất cả phiếu thu có hiệu lực.
-         *
-         * Nháp và Từ chối không được tính vì chưa phải khoản tiền thu
-         * hợp lệ tại quầy.
-         */
-        List<Income> effectiveIncomes = incomes.stream()
+        List<Stockreview> stockReviews =
+                stockreviewRepository.findAllWithRelations();
+
+        List<Return> returns = returnRepository.findAllWithRelations();
+
+        List<Income> effectiveIncomes = incomes
+                .stream()
                 .filter(this::isEffectiveIncome)
                 .toList();
 
-        /*
-         * Các hóa đơn được tạo bởi pharmacist đang đăng nhập.
-         */
-        List<Invoice> myInvoices = invoices.stream()
-                .filter(invoice ->
-                        sameAccount(invoice.getEmployeeID(), accountId))
+        List<Invoice> myInvoices = invoices
+                .stream()
+                .filter(invoice -> sameAccount(invoice.getEmployeeID(), accountId))
                 .toList();
 
-        /*
-         * Các phiếu thu do pharmacist đang đăng nhập lập.
-         */
-        List<Income> myEffectiveIncomes = effectiveIncomes.stream()
-                .filter(income ->
-                        sameAccount(income.getApplicantID(), accountId))
+        List<Income> myEffectiveIncomes = effectiveIncomes
+                .stream()
+                .filter(income -> sameAccount(income.getApplicantID(), accountId))
                 .toList();
 
-        /*
-         * BÁN ĐƯỢC:
-         * Tổng giá trị hóa đơn phát sinh trong ngày.
-         */
-        BigDecimal todayInvoiceSales = sumInvoiceTotal(
-                myInvoices,
-                invoice -> isDate(invoice.getDate(), today)
+        BigDecimal todayInvoiceSales = sumInvoiceTotal(myInvoices, invoice ->
+                isDate(invoice.getDate(), today)
         );
 
-        /*
-         * Tiền nhận trực tiếp khi tạo hóa đơn.
-         *
-         * Phải trừ các Income thu nợ đã cập nhật ngược vào
-         * Invoice.paidByCash và Invoice.paidByBanking để tránh cộng trùng.
-         */
         BigDecimal todayInvoiceCash = sumInitialInvoicePayment(
                 myInvoices,
                 effectiveIncomes,
@@ -324,9 +313,6 @@ public class DashboardService {
                 false
         );
 
-        /*
-         * Tiền thu từ các phiếu Income do pharmacist hiện tại lập.
-         */
         BigDecimal todayIncomeCash = sumIncomePayment(
                 myEffectiveIncomes,
                 income -> isDate(income.getDate(), today),
@@ -339,72 +325,40 @@ public class DashboardService {
                 false
         );
 
-        /*
-         * THU ĐƯỢC:
-         * Tiền thanh toán trực tiếp từ Invoice
-         * cộng với tiền thu từ Income.
-         */
-        BigDecimal todayCashCollected =
-                todayInvoiceCash.add(todayIncomeCash);
+        BigDecimal todayCashCollected = todayInvoiceCash.add(todayIncomeCash);
 
-        BigDecimal todayBankingCollected =
-                todayInvoiceBanking.add(todayIncomeBanking);
+        BigDecimal todayBankingCollected = todayInvoiceBanking.add(
+                todayIncomeBanking
+        );
 
-        BigDecimal todayCollected =
-                todayCashCollected.add(todayBankingCollected);
+        BigDecimal todayCollected = todayCashCollected.add(todayBankingCollected);
 
-        long todayInvoiceCount = myInvoices.stream()
+        long todayInvoiceCount = myInvoices
+                .stream()
                 .filter(invoice -> isDate(invoice.getDate(), today))
                 .count();
 
-        String shiftStatus =
-                latestShiftStatus(shiftReports, accountId);
+        String shiftStatus = latestShiftStatus(shiftReports, accountId);
 
-        List<String> lastSevenDays =
-                lastSevenDayLabels(today);
+        List<String> lastSevenDays = lastSevenDayLabels(today);
 
         return new RoleDashboard(
                 "PHARMACIST",
                 "Tổng quan",
                 currentAccountName,
 
-                "Tổng quan bán hàng và thu tiền tại Nhà thuốc Hằng Ngọc hôm nay • "
-                        + today.format(DATE_DISPLAY),
+                "Tổng quan bán hàng và thu tiền tại " +
+                        "Nhà thuốc Hằng Ngọc hôm nay • " +
+                        today.format(DATE_DISPLAY),
 
-                /*
-                 * Quick actions
-                 */
                 List.of(
-                        new QuickAction(
-                                "Bán hàng",
-                                "/pharmacist/selling",
-                                true
-                        ),
-                        new QuickAction(
-                                "Tạo phiếu thu",
-                                "/pharmacist/incomes/create",
-                                false
-                        ),
-                        new QuickAction(
-                                "Xem hóa đơn",
-                                "/pharmacist/invoices",
-                                false
-                        ),
-                        new QuickAction(
-                                "Xem phiếu thu",
-                                "/pharmacist/incomes",
-                                false
-                        ),
-                        new QuickAction(
-                                "Tạo báo cáo ca",
-                                "/pharmacist/shift-reports",
-                                false
-                        )
+                        new QuickAction("Bán hàng", "/pharmacist/selling", true),
+                        new QuickAction("Tạo phiếu thu", "/pharmacist/incomes/create", false),
+                        new QuickAction("Xem hóa đơn", "/pharmacist/invoices", false),
+                        new QuickAction("Xem phiếu thu", "/pharmacist/incomes", false),
+                        new QuickAction("Tạo báo cáo ca", "/pharmacist/shift-reports", false)
                 ),
 
-                /*
-                 * Metric cards
-                 */
                 List.of(
                         new MetricCard(
                                 "Bán được hôm nay",
@@ -414,7 +368,6 @@ public class DashboardService {
                                 "success",
                                 "/pharmacist/invoices"
                         ),
-
                         new MetricCard(
                                 "Thu được hôm nay",
                                 money(todayCollected),
@@ -423,7 +376,6 @@ public class DashboardService {
                                 "info",
                                 "/pharmacist/incomes"
                         ),
-
                         new MetricCard(
                                 "Hóa đơn hôm nay",
                                 String.valueOf(todayInvoiceCount),
@@ -432,7 +384,6 @@ public class DashboardService {
                                 "warning",
                                 "/pharmacist/invoices"
                         ),
-
                         new MetricCard(
                                 "Tiền mặt hôm nay",
                                 money(todayCashCollected),
@@ -441,7 +392,6 @@ public class DashboardService {
                                 "success",
                                 "/pharmacist/shift-reports"
                         ),
-
                         new MetricCard(
                                 "Chuyển khoản hôm nay",
                                 money(todayBankingCollected),
@@ -450,7 +400,6 @@ public class DashboardService {
                                 "info",
                                 "/pharmacist/shift-reports"
                         ),
-
                         new MetricCard(
                                 "Báo cáo ca hiện tại",
                                 shiftStatus,
@@ -461,54 +410,28 @@ public class DashboardService {
                         )
                 ),
 
-                /*
-                 * Hai biểu đồ
-                 */
                 List.of(
-                        /*
-                         * Biểu đồ 1:
-                         * Invoice và Income trong 7 ngày gần nhất.
-                         */
                         new DashboardChart(
                                 "Invoice và Income trong 7 ngày gần nhất",
                                 "grouped-bar",
                                 lastSevenDays,
                                 List.of(
-                                        new ChartSeries(
-                                                "Invoice",
-                                                lastSevenDayRevenue(
-                                                        myInvoices,
-                                                        today
-                                                )
-                                        ),
+                                        new ChartSeries("Invoice", lastSevenDayRevenue(myInvoices, today)),
                                         new ChartSeries(
                                                 "Income",
-                                                lastSevenDayIncome(
-                                                        myEffectiveIncomes,
-                                                        today
-                                                )
+                                                lastSevenDayIncome(myEffectiveIncomes, today)
                                         )
                                 )
                         ),
 
-                        /*
-                         * Biểu đồ 2:
-                         * Tiền mặt và chuyển khoản hôm nay.
-                         */
                         new DashboardChart(
                                 "Cơ cấu tiền thu hôm nay",
                                 "donut",
-                                List.of(
-                                        "Tiền mặt",
-                                        "Chuyển khoản"
-                                ),
+                                List.of("Tiền mặt", "Chuyển khoản"),
                                 List.of(
                                         new ChartSeries(
                                                 "Thực thu",
-                                                List.of(
-                                                        todayCashCollected,
-                                                        todayBankingCollected
-                                                )
+                                                List.of(todayCashCollected, todayBankingCollected)
                                         )
                                 )
                         )
@@ -518,17 +441,13 @@ public class DashboardService {
                 pharmacistTodoItems(
                         shiftReports,
                         myInvoices,
-                        stockCounts,
+                        stockReviews,
                         returns,
                         accountId
                 ),
 
                 "Hóa đơn gần đây",
-                recentInvoices(
-                        myInvoices,
-                        accountId,
-                        "/pharmacist/invoices"
-                ),
+                recentInvoices(myInvoices, accountId, "/pharmacist/invoices"),
 
                 "",
                 List.of(),
@@ -538,148 +457,251 @@ public class DashboardService {
         );
     }
 
-    private List<TodoItem> ownerTodoItems(List<ApprovalItemResponse> approvalItems) {
+    private List<TodoItem> ownerTodoItems(
+            List<ApprovalItemResponse> approvalItems
+    ) {
         if (approvalItems.isEmpty()) {
-            return List.of(new TodoItem(
-                    "Không có yêu cầu chờ duyệt",
-                    "Hiện chưa có phiếu nào cần xử lý",
-                    "Ổn định",
-                    "success",
-                    "/owner/approvals"
-            ));
+            return List.of(
+                    new TodoItem(
+                            "Không có yêu cầu chờ duyệt",
+                            "Hiện chưa có phiếu nào cần xử lý",
+                            "Ổn định",
+                            "success",
+                            "/owner/approvals"
+                    )
+            );
         }
 
-        return approvalItems.stream()
-                .map(item -> new TodoItem(
-                        item.getType() + " " + item.getCode(),
-                        item.getRequesterName() + " • " + item.getSummary(),
-                        item.getStatus(),
-                        "warning",
-                        item.getDetailUrl()
-                ))
+        return approvalItems
+                .stream()
+                .map(item ->
+                        new TodoItem(
+                                item.getType() + " " + item.getCode(),
+                                item.getRequesterName() + " • " + item.getSummary(),
+                                item.getStatus(),
+                                "warning",
+                                item.getDetailUrl()
+                        )
+                )
                 .toList();
     }
 
-    private List<TodoItem> pharmacistTodoItems(List<Shiftreport> shifts,
-                                               List<Invoice> myInvoices,
-                                               List<Stockcount> stockCounts,
-                                               List<Return> returns,
-                                               Integer accountId) {
+    private List<TodoItem> pharmacistTodoItems(
+            List<Shiftreport> shifts,
+            List<Invoice> myInvoices,
+            List<Stockreview> stockReviews,
+            List<Return> returns,
+            Integer accountId
+    ) {
         List<TodoItem> items = new ArrayList<>();
 
-        shifts.stream()
+        shifts
+                .stream()
                 .filter(shift -> sameAccount(shift.getCashierID(), accountId))
-                .filter(shift -> isStatus(shift.getStatus(), ShiftReportStatus.DRAFT)
-                        || isStatus(shift.getStatus(), ShiftReportStatus.REJECTED))
-                .sorted(Comparator.comparing(Shiftreport::getStartTime, Comparator.nullsLast(Comparator.reverseOrder())))
+                .filter(
+                        shift ->
+                                isStatus(shift.getStatus(), ShiftReportStatus.DRAFT) ||
+                                        isStatus(shift.getStatus(), ShiftReportStatus.REJECTED)
+                )
+                .sorted(
+                        Comparator.comparing(
+                                Shiftreport::getStartTime,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
                 .limit(2)
-                .forEach(shift -> items.add(new TodoItem(
-                        "Báo cáo ca chưa gửi",
-                        shift.getShiftReportCode() + " • " + formatInstant(shift.getStartTime()),
-                        shift.getStatus(),
-                        "warning",
-                        "/pharmacist/shift-reports/" + shift.getId()
-                )));
+                .forEach(shift ->
+                        items.add(
+                                new TodoItem(
+                                        "Báo cáo ca chưa gửi",
+                                        shift.getShiftReportCode() +
+                                                " • " +
+                                                formatInstant(shift.getStartTime()),
+                                        shift.getStatus(),
+                                        "warning",
+                                        "/pharmacist/shift-reports/" + shift.getId()
+                                )
+                        )
+                );
 
-        myInvoices.stream()
-                .filter(invoice -> safe(invoice.getDebtAmount()).compareTo(BigDecimal.ZERO) > 0)
-                .sorted(Comparator.comparing(Invoice::getDate, Comparator.nullsLast(Comparator.reverseOrder())))
+        myInvoices
+                .stream()
+                .filter(
+                        invoice -> safe(invoice.getDebtAmount()).compareTo(BigDecimal.ZERO) > 0
+                )
+                .sorted(
+                        Comparator.comparing(
+                                Invoice::getDate,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
                 .limit(2)
-                .forEach(invoice -> items.add(new TodoItem(
-                        "Hóa đơn còn nợ",
-                        invoice.getInvoiceNumber() + " • " + money(invoice.getDebtAmount()),
-                        "Còn nợ",
-                        "orange",
-                        "/pharmacist/invoices/" + invoice.getId()
-                )));
+                .forEach(invoice ->
+                        items.add(
+                                new TodoItem(
+                                        "Hóa đơn còn nợ",
+                                        invoice.getInvoiceNumber() + " • " + money(invoice.getDebtAmount()),
+                                        "Còn nợ",
+                                        "orange",
+                                        "/pharmacist/invoices/" + invoice.getId()
+                                )
+                        )
+                );
 
-        stockCounts.stream()
-                .filter(count -> sameAccount(count.getCreatedBy(), accountId))
-                .filter(count -> isStatus(count.getStatus(), StockCountStatus.DRAFT)
-                        || isStatus(count.getStatus(), StockCountStatus.REJECTED))
-                .sorted(Comparator.comparing(Stockcount::getCountDate, Comparator.nullsLast(Comparator.reverseOrder())))
+        stockReviews
+                .stream()
+                .filter(review -> sameAccount(review.getCreatedBy(), accountId))
+                .filter(
+                        review ->
+                                isStatus(review.getStatus(), StockReviewStatus.DRAFT) ||
+                                        isStatus(review.getStatus(), StockReviewStatus.REJECTED)
+                )
+                .sorted(
+                        Comparator.comparing(
+                                Stockreview::getReviewDate,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
                 .limit(2)
-                .forEach(count -> items.add(new TodoItem(
-                        "Phiếu kiểm kê cần xử lý",
-                        count.getStockCountCode() + " • " + formatInstant(count.getCountDate()),
-                        count.getStatus(),
-                        "warning",
-                        "/pharmacist/stock-counts/" + count.getId()
-                )));
+                .forEach(review ->
+                        items.add(
+                                new TodoItem(
+                                        "Phiếu rà soát kho cần xử lý",
+                                        review.getStockCountCode() +
+                                                " • " +
+                                                StockReviewType.label(review.getType()) +
+                                                " • " +
+                                                formatInstant(review.getReviewDate()),
+                                        review.getStatus(),
+                                        "warning",
+                                        "/pharmacist/stock-reviews/" + review.getId()
+                                )
+                        )
+                );
 
-        returns.stream()
+        returns
+                .stream()
                 .filter(ret -> sameAccount(ret.getReturnedBy(), accountId))
-                .filter(ret -> isStatus(ret.getStatus(), ReturnStatus.DRAFT)
-                        || isStatus(ret.getStatus(), ReturnStatus.REJECTED))
-                .sorted(Comparator.comparing(Return::getReturnDate, Comparator.nullsLast(Comparator.reverseOrder())))
+                .filter(
+                        ret ->
+                                isStatus(ret.getStatus(), ReturnStatus.DRAFT) ||
+                                        isStatus(ret.getStatus(), ReturnStatus.REJECTED)
+                )
+                .sorted(
+                        Comparator.comparing(
+                                Return::getReturnDate,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
                 .limit(2)
-                .forEach(ret -> items.add(new TodoItem(
-                        "Phiếu trả hàng cần xử lý",
-                        ret.getReturnCode() + " • " + formatInstant(ret.getReturnDate()),
-                        ret.getStatus(),
-                        "danger",
-                        "/pharmacist/returns/" + ret.getId()
-                )));
+                .forEach(ret ->
+                        items.add(
+                                new TodoItem(
+                                        "Phiếu trả hàng cần xử lý",
+                                        ret.getReturnCode() + " • " + formatInstant(ret.getReturnDate()),
+                                        ret.getStatus(),
+                                        "danger",
+                                        "/pharmacist/returns/" + ret.getId()
+                                )
+                        )
+                );
 
         if (items.isEmpty()) {
-            items.add(new TodoItem(
-                    "Không có việc cần xử lý",
-                    "Bạn chưa có phiếu nháp hoặc công việc tồn đọng",
-                    "Ổn định",
-                    "success",
-                    "/pharmacist/dashboard"
-            ));
+            items.add(
+                    new TodoItem(
+                            "Không có việc cần xử lý",
+                            "Bạn chưa có phiếu nháp " + "hoặc công việc tồn đọng",
+                            "Ổn định",
+                            "success",
+                            "/pharmacist/dashboard"
+                    )
+            );
         }
 
         return items.stream().limit(5).toList();
     }
 
-    private List<RecentInvoice> recentInvoices(List<Invoice> invoices, Integer accountId, String basePath) {
-        return invoices.stream()
-                .filter(invoice -> accountId == null || sameAccount(invoice.getEmployeeID(), accountId))
-                .sorted(Comparator.comparing(Invoice::getDate, Comparator.nullsLast(Comparator.reverseOrder())))
+    private List<RecentInvoice> recentInvoices(
+            List<Invoice> invoices,
+            Integer accountId,
+            String basePath
+    ) {
+        return invoices
+                .stream()
+                .filter(
+                        invoice ->
+                                accountId == null || sameAccount(invoice.getEmployeeID(), accountId)
+                )
+                .sorted(
+                        Comparator.comparing(
+                                Invoice::getDate,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
                 .limit(5)
-                .map(invoice -> new RecentInvoice(
-                        invoice.getInvoiceNumber(),
-                        invoice.getDate() == null ? "-" : invoice.getDate().format(TIME_DISPLAY),
-                        invoice.getCustomerID() == null ? "Khách lẻ" : invoice.getCustomerID().getName(),
-                        money(invoice.getTotal()),
-                        invoice.getStatus(),
-                        invoiceTone(invoice.getStatus()),
-                        basePath + "/" + invoice.getId()
-                ))
+                .map(invoice ->
+                        new RecentInvoice(
+                                invoice.getInvoiceNumber(),
+                                invoice.getDate() == null
+                                        ? "-"
+                                        : invoice.getDate().format(TIME_DISPLAY),
+                                invoice.getCustomerID() == null
+                                        ? "Khách lẻ"
+                                        : invoice.getCustomerID().getName(),
+                                money(invoice.getTotal()),
+                                invoice.getStatus(),
+                                invoiceTone(invoice.getStatus()),
+                                basePath + "/" + invoice.getId()
+                        )
+                )
                 .toList();
     }
 
-    private List<PerformanceRow> ownerPerformanceRows(List<Invoice> invoices, LocalDate today) {
-        Map<Integer, List<Invoice>> byEmployee = invoices.stream()
+    private List<PerformanceRow> ownerPerformanceRows(
+            List<Invoice> invoices,
+            LocalDate today
+    ) {
+        Map<Integer, List<Invoice>> byEmployee = invoices
+                .stream()
                 .filter(invoice -> invoice.getEmployeeID() != null)
                 .filter(invoice -> isDate(invoice.getDate(), today))
-                .collect(Collectors.groupingBy(invoice -> invoice.getEmployeeID().getId()));
+                .collect(
+                        Collectors.groupingBy(invoice -> invoice.getEmployeeID().getId())
+                );
 
-        return byEmployee.values().stream()
-                .sorted(Comparator.comparing((List<Invoice> employeeInvoices) ->
-                        employeeInvoices.stream()
-                                .map(Invoice::getTotal)
-                                .map(this::safe)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                ).reversed())
+        return byEmployee
+                .values()
+                .stream()
+                .sorted(
+                        Comparator.comparing((List<Invoice> employeeInvoices) ->
+                                employeeInvoices
+                                        .stream()
+                                        .map(Invoice::getTotal)
+                                        .map(this::safe)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        ).reversed()
+                )
                 .limit(5)
                 .map(employeeInvoices -> {
                     Account employee = employeeInvoices.get(0).getEmployeeID();
 
-                    BigDecimal revenue = employeeInvoices.stream()
+                    BigDecimal revenue = employeeInvoices
+                            .stream()
                             .map(Invoice::getTotal)
                             .map(this::safe)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                    BigDecimal debt = employeeInvoices.stream()
+                    BigDecimal debt = employeeInvoices
+                            .stream()
                             .map(Invoice::getDebtAmount)
                             .map(this::safe)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                    String status = debt.compareTo(BigDecimal.ZERO) > 0 ? "Cần theo dõi" : "Tốt";
-                    String tone = debt.compareTo(BigDecimal.ZERO) > 0 ? "warning" : "success";
+                    String status =
+                            debt.compareTo(BigDecimal.ZERO) > 0 ? "Cần theo dõi" : "Tốt";
+
+                    String tone =
+                            debt.compareTo(BigDecimal.ZERO) > 0 ? "warning" : "success";
 
                     return new PerformanceRow(
                             employee.getName(),
@@ -700,10 +722,15 @@ public class DashboardService {
                 .toList();
     }
 
-    private List<BigDecimal> lastSevenDayRevenue(List<Invoice> invoices, LocalDate today) {
+    private List<BigDecimal> lastSevenDayRevenue(
+            List<Invoice> invoices,
+            LocalDate today
+    ) {
         return IntStream.rangeClosed(0, 6)
                 .mapToObj(offset -> today.minusDays(6L - offset))
-                .map(date -> sumInvoiceTotal(invoices, invoice -> isDate(invoice.getDate(), date)))
+                .map(date ->
+                        sumInvoiceTotal(invoices, invoice -> isDate(invoice.getDate(), date))
+                )
                 .toList();
     }
 
@@ -712,17 +739,15 @@ public class DashboardService {
             LocalDate today
     ) {
         return IntStream.rangeClosed(0, 6)
-                .mapToObj(offset ->
-                        today.minusDays(6L - offset))
-                .map(date -> incomes.stream()
-                        .filter(income ->
-                                isDate(income.getDate(), date))
-                        .map(Income::getAmount)
-                        .map(this::safe)
-                        .reduce(
-                                BigDecimal.ZERO,
-                                BigDecimal::add
-                        ))
+                .mapToObj(offset -> today.minusDays(6L - offset))
+                .map(date ->
+                        incomes
+                                .stream()
+                                .filter(income -> isDate(income.getDate(), date))
+                                .map(Income::getAmount)
+                                .map(this::safe)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                )
                 .toList();
     }
 
@@ -732,63 +757,43 @@ public class DashboardService {
             Predicate<Invoice> filter,
             boolean cash
     ) {
-        /*
-         * Invoice.paidByCash và Invoice.paidByBanking có thể đã được
-         * tăng lên khi lập phiếu thu nợ khách hàng.
-         *
-         * Vì vậy cần tổng hợp các Income liên kết với từng Invoice rồi
-         * trừ ra để lấy số tiền khách đã trả trực tiếp lúc bán hàng.
-         */
-        Map<Integer, BigDecimal> incomePaymentByInvoice =
-                effectiveIncomes.stream()
-                        .filter(income ->
-                                income.getInvoiceID() != null)
-                        .filter(income ->
-                                income.getInvoiceID().getId() != null)
-                        .collect(Collectors.groupingBy(
-                                income ->
-                                        income.getInvoiceID().getId(),
+        Map<Integer, BigDecimal> incomePaymentByInvoice = effectiveIncomes
+                .stream()
+                .filter(income -> income.getInvoiceID() != null)
+                .filter(income -> income.getInvoiceID().getId() != null)
+                .collect(
+                        Collectors.groupingBy(
+                                income -> income.getInvoiceID().getId(),
 
                                 Collectors.reducing(
                                         BigDecimal.ZERO,
 
-                                        income -> safe(
-                                                cash
-                                                        ? income.getPaidByCash()
-                                                        : income.getPaidByBanking()
-                                        ),
+                                        income ->
+                                                safe(cash ? income.getPaidByCash() : income.getPaidByBanking()),
 
                                         BigDecimal::add
                                 )
-                        ));
+                        )
+                );
 
-        return invoices.stream()
+        return invoices
+                .stream()
                 .filter(filter)
                 .map(invoice -> {
                     BigDecimal cumulativePayment = safe(
-                            cash
-                                    ? invoice.getPaidByCash()
-                                    : invoice.getPaidByBanking()
+                            cash ? invoice.getPaidByCash() : invoice.getPaidByBanking()
                     );
 
-                    BigDecimal laterIncomePayment =
-                            incomePaymentByInvoice.getOrDefault(
-                                    invoice.getId(),
-                                    BigDecimal.ZERO
-                            );
+                    BigDecimal laterIncomePayment = incomePaymentByInvoice.getOrDefault(
+                            invoice.getId(),
+                            BigDecimal.ZERO
+                    );
 
-                    /*
-                     * Không cho kết quả âm trong trường hợp dữ liệu cũ
-                     * không đồng nhất.
-                     */
                     return cumulativePayment
                             .subtract(laterIncomePayment)
                             .max(BigDecimal.ZERO);
                 })
-                .reduce(
-                        BigDecimal.ZERO,
-                        BigDecimal::add
-                );
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal sumIncomePayment(
@@ -796,39 +801,26 @@ public class DashboardService {
             Predicate<Income> filter,
             boolean cash
     ) {
-        return incomes.stream()
+        return incomes
+                .stream()
                 .filter(filter)
-                .map(income ->
-                        cash
-                                ? income.getPaidByCash()
-                                : income.getPaidByBanking())
+                .map(income -> cash ? income.getPaidByCash() : income.getPaidByBanking())
                 .map(this::safe)
-                .reduce(
-                        BigDecimal.ZERO,
-                        BigDecimal::add
-                );
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private boolean isEffectiveIncome(Income income) {
-        return income != null
-                && !isStatus(
-                income.getStatus(),
-                INCOME_STATUS_DRAFT
-        )
-                && !isStatus(
-                income.getStatus(),
-                INCOME_STATUS_REJECTED
+        return (
+                income != null &&
+                        !isStatus(income.getStatus(), INCOME_STATUS_DRAFT) &&
+                        !isStatus(income.getStatus(), INCOME_STATUS_REJECTED)
         );
     }
 
-    private boolean isDate(
-            Instant instant,
-            LocalDate date
-    ) {
-        return instant != null
-                && instant.atZone(VN_ZONE)
-                .toLocalDate()
-                .equals(date);
+    private boolean isDate(Instant instant, LocalDate date) {
+        return (
+                instant != null && instant.atZone(VN_ZONE).toLocalDate().equals(date)
+        );
     }
 
     private String vnDayLabel(LocalDate date) {
@@ -853,10 +845,13 @@ public class DashboardService {
         LocalDate today = LocalDate.now(VN_ZONE);
 
         Map<Integer, BigDecimal> revenueByHour = new HashMap<>();
-        invoices.stream()
+
+        invoices
+                .stream()
                 .filter(invoice -> isDate(invoice.getDate(), today))
                 .forEach(invoice -> {
                     int hour = invoice.getDate().getHour();
+
                     revenueByHour.merge(hour, safe(invoice.getTotal()), BigDecimal::add);
                 });
 
@@ -865,54 +860,84 @@ public class DashboardService {
                 .toList();
     }
 
-    private String topSellingProductName(List<Invoicedetail> details, Integer accountId, LocalDate today) {
+    private String topSellingProductName(
+            List<Invoicedetail> details,
+            Integer accountId,
+            LocalDate today
+    ) {
         Map<String, Integer> quantityByProduct = new HashMap<>();
 
         for (Invoicedetail detail : details) {
             Invoice invoice = detail.getInvoiceID();
+
             Product product = detail.getProductID();
 
             if (invoice == null || product == null) {
                 continue;
             }
 
-            if (!sameAccount(invoice.getEmployeeID(), accountId) || !isDate(invoice.getDate(), today)) {
+            if (
+                    !sameAccount(invoice.getEmployeeID(), accountId) ||
+                            !isDate(invoice.getDate(), today)
+            ) {
                 continue;
             }
 
-            quantityByProduct.merge(product.getName(), safeInt(detail.getQuantity()), Integer::sum);
+            quantityByProduct.merge(
+                    product.getName(),
+                    safeInt(detail.getQuantity()),
+                    Integer::sum
+            );
         }
 
-        return quantityByProduct.entrySet().stream()
+        return quantityByProduct
+                .entrySet()
+                .stream()
                 .max(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)
                 .orElse("Chưa có");
     }
 
     private long countLowStockProducts(List<Product> products) {
-        Map<Integer, Long> stockByProduct = batchRepository.sumStorageGroupedByProduct().stream()
+        Map<Integer, Long> stockByProduct = batchRepository
+                .sumStorageGroupedByProduct()
+                .stream()
                 .filter(row -> row[0] != null)
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).intValue(),
-                        row -> row[1] == null ? 0L : ((Number) row[1]).longValue()
-                ));
+                .collect(
+                        Collectors.toMap(
+                                row -> ((Number) row[0]).intValue(),
+                                row -> row[1] == null ? 0L : ((Number) row[1]).longValue()
+                        )
+                );
 
-        return products.stream()
+        return products
+                .stream()
                 .filter(product -> Boolean.TRUE.equals(product.getStatus()))
                 .filter(product -> safeInt(product.getMinStock()) > 0)
-                .filter(product -> stockByProduct.getOrDefault(product.getProductID(), 0L) <= safeInt(product.getMinStock()))
+                .filter(
+                        product ->
+                                stockByProduct.getOrDefault(product.getProductID(), 0L) <=
+                                        safeInt(product.getMinStock())
+                )
                 .count();
     }
 
     private BigDecimal calculatePurchaseDebt(Purchaseinvoice invoice) {
         BigDecimal total = safe(invoice.getTotalAmount());
+
         BigDecimal paid = safe(invoice.getPaid());
+
         BigDecimal debt = total.subtract(paid);
+
         return debt.compareTo(BigDecimal.ZERO) > 0 ? debt : BigDecimal.ZERO;
     }
 
-    private BigDecimal sumInvoiceTotal(List<Invoice> invoices, Predicate<Invoice> filter) {
-        return invoices.stream()
+    private BigDecimal sumInvoiceTotal(
+            List<Invoice> invoices,
+            Predicate<Invoice> filter
+    ) {
+        return invoices
+                .stream()
                 .filter(filter)
                 .map(Invoice::getTotal)
                 .map(this::safe)
@@ -924,23 +949,38 @@ public class DashboardService {
     }
 
     private boolean isCurrentMonth(LocalDateTime dateTime, LocalDate today) {
-        return dateTime != null
-                && dateTime.getYear() == today.getYear()
-                && dateTime.getMonth() == today.getMonth();
+        return (
+                dateTime != null &&
+                        dateTime.getYear() == today.getYear() &&
+                        dateTime.getMonth() == today.getMonth()
+        );
     }
 
     private boolean sameAccount(Account account, Integer accountId) {
-        return account != null && accountId != null && Objects.equals(account.getId(), accountId);
+        return (
+                account != null &&
+                        accountId != null &&
+                        Objects.equals(account.getId(), accountId)
+        );
     }
 
     private boolean isStatus(String actual, String expected) {
         return actual != null && actual.trim().equalsIgnoreCase(expected);
     }
 
-    private String latestShiftStatus(List<Shiftreport> shifts, Integer accountId) {
-        return shifts.stream()
+    private String latestShiftStatus(
+            List<Shiftreport> shifts,
+            Integer accountId
+    ) {
+        return shifts
+                .stream()
                 .filter(shift -> sameAccount(shift.getCashierID(), accountId))
-                .sorted(Comparator.comparing(Shiftreport::getStartTime, Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted(
+                        Comparator.comparing(
+                                Shiftreport::getStartTime,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
                 .map(Shiftreport::getStatus)
                 .findFirst()
                 .orElse("Chưa gửi");
@@ -968,13 +1008,15 @@ public class DashboardService {
 
     private String compareRevenue(BigDecimal today, BigDecimal yesterday) {
         BigDecimal safeToday = safe(today);
+
         BigDecimal safeYesterday = safe(yesterday);
 
         if (safeYesterday.compareTo(BigDecimal.ZERO) == 0) {
             return safeToday.compareTo(BigDecimal.ZERO) > 0 ? "+100%" : "0%";
         }
 
-        BigDecimal percent = safeToday.subtract(safeYesterday)
+        BigDecimal percent = safeToday
+                .subtract(safeYesterday)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(safeYesterday, 0, RoundingMode.HALF_UP);
 
@@ -993,21 +1035,32 @@ public class DashboardService {
         if (instant == null) {
             return "-";
         }
+
         return DATE_TIME_DISPLAY.format(instant.atZone(VN_ZONE));
     }
 
     private String money(BigDecimal value) {
-        NumberFormat formatter = NumberFormat.getNumberInstance(new Locale("vi", "VN"));
+        NumberFormat formatter = NumberFormat.getNumberInstance(
+                new Locale("vi", "VN")
+        );
+
         formatter.setMaximumFractionDigits(0);
+
         return formatter.format(safe(value)) + "đ";
     }
 
     private String moneyShort(BigDecimal value) {
         BigDecimal safeValue = safe(value);
+
         BigDecimal abs = safeValue.abs();
 
         if (abs.compareTo(BigDecimal.valueOf(1_000_000)) >= 0) {
-            BigDecimal million = safeValue.divide(BigDecimal.valueOf(1_000_000), 1, RoundingMode.HALF_UP);
+            BigDecimal million = safeValue.divide(
+                    BigDecimal.valueOf(1_000_000),
+                    1,
+                    RoundingMode.HALF_UP
+            );
+
             return million.stripTrailingZeros().toPlainString() + "Mđ";
         }
 

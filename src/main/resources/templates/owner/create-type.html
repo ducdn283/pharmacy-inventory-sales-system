@@ -16,11 +16,11 @@
 
     <style>
         :root {
-            --type-green: #059669;
-            --type-green-dark: #047857;
-            --type-green-bg: #e8f7f1;
-            --type-border: #e5e7eb;
-            --type-muted: #6b7280;
+            --pm-green: #059669;
+            --pm-green-dark: #047857;
+            --pm-green-bg: #ecfdf5;
+            --pm-border: #e5e7eb;
+            --pm-muted: #6b7280;
         }
 
         body { background: #f6f7f9; }
@@ -38,7 +38,7 @@
 
         .owner-card,
         .action-panel {
-            border: 1px solid var(--type-border);
+            border: 1px solid var(--pm-border);
             border-radius: 14px;
             background: #fff;
             box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
@@ -65,7 +65,7 @@
         .input-group-text {
             border-radius: 10px;
             min-height: 42px;
-            border-color: var(--type-border);
+            border-color: var(--pm-border);
             font-size: 13px;
         }
 
@@ -82,7 +82,7 @@
 
         .input-group .input-group-text {
             background: #f9fafb;
-            color: var(--type-muted);
+            color: var(--pm-muted);
             font-weight: 600;
             border-top-right-radius: 10px;
             border-bottom-right-radius: 10px;
@@ -103,7 +103,7 @@
             height: 32px;
             padding: 0 12px;
             border-radius: 999px;
-            border: 1px solid var(--type-border);
+            border: 1px solid var(--pm-border);
             background: #fff;
             color: #374151;
             font-size: 12px;
@@ -114,9 +114,9 @@
 
         .vat-chip:hover,
         .vat-chip.active {
-            background: var(--type-green-bg);
+            background: var(--pm-green-bg);
             border-color: #a7f3d0;
-            color: var(--type-green-dark);
+            color: var(--pm-green-dark);
         }
 
         .action-panel {
@@ -133,14 +133,14 @@
 
         .action-note {
             font-size: 13px;
-            color: var(--type-muted);
+            color: var(--pm-muted);
             line-height: 1.5;
             margin-bottom: 18px;
         }
 
         .btn-owner-primary {
-            background: var(--type-green);
-            border-color: var(--type-green);
+            background: var(--pm-green);
+            border-color: var(--pm-green);
             color: #fff;
             border-radius: 10px;
             min-height: 42px;
@@ -149,8 +149,8 @@
         }
 
         .btn-owner-primary:hover {
-            background: var(--type-green-dark);
-            border-color: var(--type-green-dark);
+            background: var(--pm-green-dark);
+            border-color: var(--pm-green-dark);
             color: #fff;
         }
 
@@ -197,7 +197,7 @@
                             <datalist id="sortTypeOptions">
                                 <option th:each="group : ${typeGroups}" th:value="${group}"></option>
                             </datalist>
-                            <div class="form-text">Ví dụ: thuốc, hàng hóa, thiết bị y tế, combo</div>
+                            <div class="form-text">Ví dụ: thuốc, hàng hóa, thiết bị y tế</div>
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('sortType')}" th:errors="*{sortType}"></div>
                         </div>
 

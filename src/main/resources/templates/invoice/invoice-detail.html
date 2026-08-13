@@ -158,6 +158,61 @@
             text-align: right;
         }
 
+        .product-note-line {
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+            word-break: break-word;
+            flex: 1;
+            min-width: 0;
+            padding-top: 1px;
+        }
+
+        .entry-note-row td {
+            padding: 0 14px 14px;
+            border-bottom: 10px solid #f3f4f6;
+            background: #fff;
+        }
+
+        .entry-note-panel {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 12px;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            border-left: 3px solid #059669;
+        }
+
+        .entry-note-panel-readonly .entry-note-head {
+            padding-top: 0;
+        }
+
+        .entry-note-head {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        .entry-note-head i {
+            color: #059669;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        @media (max-width: 767.98px) {
+            .entry-note-panel {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+
         .sell-items-table .col-total {
             width: 100px;
             text-align: right;
@@ -178,8 +233,14 @@
             vertical-align: middle;
         }
 
-        tr.product-group-last td {
-            border-bottom: 1px solid #e5e7eb;
+        tr.product-group-last:not(:has(+ tr.entry-note-row)) td {
+            border-bottom: 10px solid #f3f4f6;
+            padding-bottom: 14px;
+        }
+
+        tr.product-group-last:has(+ tr.entry-note-row) td {
+            border-bottom: none;
+            padding-bottom: 6px;
         }
 
         .product-cell {
@@ -251,6 +312,19 @@
             border-radius: 999px;
             background: #fef3c7;
             color: #d97706;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Dòng "0 số lượng, còn tiền" của hóa đơn thay thế — xem chú thích ở chỗ dùng. */
+        .retained-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #e0e7ff;
+            color: #4338ca;
             font-size: 11px;
             font-weight: 600;
         }
@@ -349,15 +423,6 @@
                             </div>
                         </div>
 
-                        <div class="info-row" th:if="${detail.rootInvoiceId != null}">
-                            <div class="info-label">Hóa đơn nguồn gốc</div>
-                            <div>
-                                <a th:href="${basePath + '/' + detail.rootInvoiceId}"
-                                   class="text-success fw-semibold text-decoration-none"
-                                   th:text="${detail.rootInvoiceCode}">HD000040</a>
-                            </div>
-                        </div>
-
                         <div class="info-row">
                             <div class="info-label">Khách hàng</div>
                             <div th:text="${detail.customerName}">Khách lẻ</div>
@@ -438,9 +503,6 @@
                                 <th class="col-qty">SL</th>
                                 <th class="col-price">Giá bán</th>
                                 <th class="col-line-total">Thành tiền</th>
-                                <th class="col-pretax" th:if="${detail.showVatBreakdown}">Chưa thuế</th>
-                                <th class="col-vat-rate" th:if="${detail.showVatBreakdown}">Thuế suất</th>
-                                <th class="col-vat" th:if="${detail.showVatBreakdown}">Thuế GTGT</th>
                                 <th class="col-total">Tổng</th>
                             </tr>
                             </thead>
@@ -473,6 +535,15 @@
                                               th:text="'Đã trả: ' + ${line.returnedQty}">
                                             Đã trả: 1
                                         </span>
+                                        <!-- Dòng SL = 0 chỉ sinh ra trên hóa đơn THAY THẾ, khi khách trả hết
+                                             hàng nhưng tỷ lệ hoàn < 100%: khách không còn giữ hộp nào, phần
+                                             tiền nhà thuốc giữ lại vẫn là doanh thu nên phải nằm trên hóa đơn.
+                                             Không có badge thì dòng đọc ra "SL 0 × đơn giá = thành tiền" không
+                                             nhân được, người xem tưởng hệ thống tính sai. -->
+                                        <span class="retained-badge d-block"
+                                              th:if="${line.quantity == 0 and detail.invoiceTypeDisplay == 'Thay thế'}">
+                                            Phần giữ lại (không hoàn)
+                                        </span>
                                     </td>
                                     <td class="unit-qty-cell" th:text="${line.quantity}">2</td>
                                     <td class="unit-price-cell"
@@ -481,18 +552,6 @@
                                     </td>
                                     <td class="unit-total-cell"
                                         th:text="${#numbers.formatDecimal(line.lineSubtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                        0đ
-                                    </td>
-                                    <td class="unit-total-cell text-secondary" th:if="${detail.showVatBreakdown}"
-                                        th:text="${line.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(line.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                        0đ
-                                    </td>
-                                    <td class="text-center" th:if="${detail.showVatBreakdown}"
-                                        th:text="${line.vatRate == null} ? '—' : ${#numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">
-                                        5%
-                                    </td>
-                                    <td class="unit-total-cell" th:if="${detail.showVatBreakdown}"
-                                        th:text="${line.vatAmount == null} ? '—' : ${#numbers.formatDecimal(line.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                         0đ
                                     </td>
                                     <td th:if="${stat.first}"
@@ -504,19 +563,24 @@
                                         </span>
                                     </td>
                                 </tr>
+                                <tr class="entry-note-row"
+                                    th:if="${group.lines.?[note != null && !#strings.isEmpty(note)].size() > 0}">
+                                    <td colspan="7" class="entry-note-cell">
+                                        <div class="entry-note-panel entry-note-panel-readonly">
+                                            <div class="entry-note-head">
+                                                <i class="ti ti-note"></i>
+                                                <span>Ghi chú bán hàng</span>
+                                            </div>
+                                            <div class="product-note-line"
+                                                 th:text="${group.lines.?[note != null && !#strings.isEmpty(note)][0].note}">
+                                                Uống sau ăn
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
                             </th:block>
-                            <tr th:if="${detail.showVatBreakdown and !#lists.isEmpty(detail.productGroups)}"
-                                class="fw-semibold">
-                                <td colspan="5">Tổng cộng</td>
-                                <td th:text="${#numbers.formatDecimal(detail.subtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                                <td class="text-secondary"
-                                    th:text="${#numbers.formatDecimal(detail.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                                <td></td>
-                                <td th:text="${#numbers.formatDecimal(detail.totalVATOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
-                                <td></td>
-                            </tr>
                             <tr th:if="${#lists.isEmpty(detail.productGroups)}" class="sell-items-empty">
-                                <td th:colspan="${detail.showVatBreakdown ? 10 : 7}" class="text-center text-secondary">Không có hàng hóa</td>
+                                <td colspan="7" class="text-center text-secondary">Không có hàng hóa</td>
                             </tr>
                             </tbody>
                         </table>
@@ -555,20 +619,6 @@
                             </strong>
                         </div>
 
-                        <div class="d-flex justify-content-between mb-3" th:if="${detail.showVatBreakdown}">
-                            <span class="text-secondary">Tiền hàng (chưa thuế)</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                0đ
-                            </strong>
-                        </div>
-
-                        <div class="d-flex justify-content-between mb-3" th:if="${detail.showVatBreakdown}">
-                            <span class="text-secondary">Thuế GTGT đầu ra</span>
-                            <strong th:text="${#numbers.formatDecimal(detail.totalVATOutput, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                0đ
-                            </strong>
-                        </div>
-
                         <hr>
 
                         <div class="d-flex justify-content-between mb-3">
@@ -601,6 +651,29 @@
                             </strong>
                         </div>
 
+                        <!--
+                          Khách đã đưa NHIỀU HƠN giá trị hóa đơn. Chỉ xảy ra trên hóa đơn THAY THẾ: bản
+                          thay thế kế thừa nguyên số tiền khách đã thanh toán cho hóa đơn gốc, trong khi
+                          tổng tiền đã trừ đi phần hàng trả lại ⇒ phần dư chính là số nhà thuốc nợ ngược
+                          khách.
+
+                          Tình trạng chi trả thật theo dõi ở phiếu trả hàng
+                          — mã phiếu nằm ngay ô "Mã trả hàng" phía trên.st
+                        -->
+                        <th:block th:if="${detail.total != null and detail.paidByCash != null and detail.paidByBanking != null}"
+                                  th:with="excessPaid=${detail.paidByCash.add(detail.paidByBanking).subtract(detail.total)}">
+                            <div class="d-flex justify-content-between mb-1" th:if="${excessPaid.signum() > 0}">
+                                <span class="text-secondary">Khách đã trả dư</span>
+                                <strong class="text-danger"
+                                        th:text="${#numbers.formatDecimal(excessPaid, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                    0đ
+                                </strong>
+                            </div>
+                            <div class="text-secondary small mb-3" th:if="${excessPaid.signum() > 0}">
+                                Phần chênh do trả hàng — nhà thuốc hoàn lại khách bằng phiếu chi.
+                            </div>
+                        </th:block>
+
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Hình thức TT</span>
                             <strong th:text="${detail.paymentDisplay}">Tiền mặt</strong>
@@ -627,24 +700,13 @@
                 </div>
 
                 <div class="invoice-card actions-card p-4">
-                        <button type="button" id="printInvoiceBtn"
+                        <button type="button"
+                                id="printInvoiceBtn"
                                 th:data-print-url="${basePath + '/' + detail.id + '/print'}"
                                 class="btn btn-invoice-primary w-100 mb-3">
                             <i class="ti ti-printer me-1"></i>
                             In hóa đơn
                         </button>
-
-                        <form th:if="${(currentRole == 'OWNER' or currentRole == 'ACCOUNTANT') and detail.statusName != 'Đã ký'}"
-                              th:action="${basePath + '/' + detail.id + '/sign'}"
-                              method="post"
-                              class="mb-3">
-                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                            <button type="submit" class="btn btn-invoice-primary w-100"
-                                    data-confirm="Ký hóa đơn này? Trạng thái sẽ chuyển sang &quot;Đã ký&quot;.">
-                                <i class="ti ti-writing-sign me-1"></i>
-                                Ký hóa đơn
-                            </button>
-                        </form>
 
                         <a th:href="${basePath}" class="btn btn-outline-invoice w-100">
                             <i class="ti ti-arrow-left me-1"></i>
@@ -659,23 +721,30 @@
 </main>
 
 <script th:inline="none">
-    document.getElementById('printInvoiceBtn').addEventListener('click', function () {
-        var printUrl = this.dataset.printUrl;
-
-        var iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-
-        iframe.addEventListener('load', function () {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            iframe.contentWindow.addEventListener('afterprint', function () {
-                document.body.removeChild(iframe);
+    (function () {
+        var printBtn = document.getElementById('printInvoiceBtn');
+        if (printBtn) {
+            printBtn.addEventListener('click', function () {
+                openPrintDialog(printBtn.dataset.printUrl);
             });
-        });
+        }
 
-        iframe.src = printUrl;
-        document.body.appendChild(iframe);
-    });
+        function openPrintDialog(printUrl) {
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+
+            iframe.addEventListener('load', function () {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                iframe.contentWindow.addEventListener('afterprint', function () {
+                    document.body.removeChild(iframe);
+                });
+            });
+
+            iframe.src = printUrl;
+            document.body.appendChild(iframe);
+        }
+    })();
 </script>
 </body>
 </html>

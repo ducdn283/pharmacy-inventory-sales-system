@@ -16,7 +16,7 @@ public class InvoiceDetailPageResponse {
     private Integer id;
     private String invoiceCode;
     private String invoicePattern;
-    /** Mã số thuế đơn vị — chỉ hiển thị khi hóa đơn đã ký. */
+    /** Mã số thuế đơn vị. */
     private String taxCode;
 
     private LocalDateTime date;
@@ -28,9 +28,6 @@ public class InvoiceDetailPageResponse {
     private String employeeName;
 
     private String invoiceTypeDisplay;
-
-    /** True for hóa đơn GTGT (Nhóm 3+) — hiện cột thuế trên màn chi tiết. */
-    private boolean showVatBreakdown;
 
     private String statusName;
     private String statusCssClass;
@@ -46,13 +43,8 @@ public class InvoiceDetailPageResponse {
     private Integer originalInvoiceId;
     private String originalInvoiceCode;
 
-    private Integer rootInvoiceId;
-    private String rootInvoiceCode;
-
     private BigDecimal subtotal;
     private BigDecimal discount;
-    private BigDecimal totalPreTaxAmount;
-    private BigDecimal totalVATOutput;
     private BigDecimal total;
 
     private BigDecimal paidByCash;

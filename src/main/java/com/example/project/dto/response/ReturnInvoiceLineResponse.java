@@ -18,7 +18,8 @@ public class ReturnInvoiceLineResponse {
     private Integer productId;
     private String productName;
 
-    private String lotNumber;
+    /** TEN lo (batch.batchName), khong phai SO lo - dong bo voi man chi tiet phieu tra. */
+    private String batchName;
     private String expirationDateDisplay;
 
     private String unitName;
@@ -31,12 +32,6 @@ public class ReturnInvoiceLineResponse {
     private Integer returnableQty;
 
     private BigDecimal unitSellPrice;
-
-    /**
-     * Thuế suất GTGT của DÒNG HÓA ĐƠN GỐC (snapshot lúc bán, F-12) — phiếu trả phải đảo đúng thuế suất
-     * đã kê khi bán, không lấy thuế suất hiện hành. Màn tạo dùng để tạm tính net/thuế của tiền hoàn.
-     */
-    private BigDecimal vatRate;
 
     /**
      * Whether this line's returned goods will be put back into stock — hard-coded by item type

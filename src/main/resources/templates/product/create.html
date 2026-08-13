@@ -65,6 +65,52 @@
         }
 
         @media (max-width: 991.98px) { .product-page-content { padding-top: 84px !important; } }
+
+        /* Quick "add producer" modal — same lightweight pm-modal-backdrop pattern used elsewhere
+           (e.g. the batch picker on the sale screen), not Bootstrap's JS Modal component. */
+        .pm-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, .45);
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            z-index: 1080;
+            padding: 60px 16px;
+            overflow-y: auto;
+        }
+        .pm-modal-backdrop.open { display: flex; }
+        .pm-modal {
+            background: #fff;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, .25);
+        }
+        .pm-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-bottom: 1px solid #eef0f3;
+        }
+        .pm-modal-title { font-size: 15px; font-weight: 700; }
+        .pm-modal-body { padding: 16px 18px; }
+        .pm-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid #eef0f3;
+        }
+        .pm-modal-close {
+            border: none;
+            background: transparent;
+            font-size: 20px;
+            line-height: 1;
+            color: #6b7280;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -101,14 +147,14 @@
                 <h2 class="section-title mb-3">Thông tin cơ bản</h2>
                 <div class="row g-3">
                     <div class="col-12 col-md-3">
-                        <label class="info-label">Nhóm mặt hàng</label>
+                        <label class="info-label">Nhóm mặt hàng <span class="text-danger">*</span></label>
                         <select class="form-select" th:field="*{itemGroup}" id="itemGroup">
                             <option value="">-- Chọn nhóm --</option>
                             <option th:each="g : ${typeGroups}" th:value="${g}" th:text="${#strings.capitalize(g)}"></option>
                         </select>
                     </div>
                     <div class="col-12 col-md-3">
-                        <label class="info-label">Loại hàng (Type)</label>
+                        <label class="info-label">Loại hàng (Type) <span class="text-danger">*</span></label>
                         <select class="form-select" th:field="*{typeId}" id="typeSelect">
                             <option value="">-- Chọn loại --</option>
                             <option th:each="t : ${types}" th:value="${t.id}" th:text="${t.name}" th:attr="data-group=${t.sortType}"></option>
@@ -125,8 +171,13 @@
                     </div>
                     <div class="col-12 col-md-3">
                         <label class="info-label">Nhà sản xuất</label>
-                        <input type="text" class="form-control ac-field" data-field="producer" data-target="producerId"
-                               autocomplete="off" placeholder="Gõ để tìm nhà sản xuất...">
+                        <div class="input-group">
+                            <input type="text" class="form-control ac-field" data-field="producer" data-target="producerId"
+                                   autocomplete="off" placeholder="Gõ để tìm nhà sản xuất...">
+                            <button type="button" class="btn btn-outline-secondary" id="addProducerBtn" title="Thêm nhà sản xuất mới">
+                                <i class="ti ti-plus"></i>
+                            </button>
+                        </div>
                         <input type="hidden" th:field="*{producerId}">
                     </div>
                     <div class="col-12 col-md-3">
@@ -146,23 +197,29 @@
 
                     <div class="col-12 col-md-3">
                         <label class="info-label">Số đăng ký</label>
-                        <input type="text" class="form-control" th:field="*{registrationNumber}">
+                        <input type="text" class="form-control" th:field="*{registrationNumber}"
+                               placeholder="Số đăng ký lưu hành (nếu có)">
                     </div>
                     <div class="col-6 col-md-3">
-                        <label class="info-label">Tồn tối thiểu</label>
-                        <input type="number" class="form-control" th:field="*{minStock}" min="0">
+                        <label class="info-label">Tồn tối thiểu <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" th:field="*{minStock}" min="0" placeholder="Ví dụ: 10">
                     </div>
                     <div class="col-6 col-md-3">
-                        <label class="info-label">Tồn tối đa</label>
-                        <input type="number" class="form-control" th:field="*{maxStock}" min="0">
+                        <label class="info-label">Tồn tối đa <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" th:field="*{maxStock}" min="0" placeholder="Ví dụ: 200">
                     </div>
-                    <div class="col-12 col-md-3">
+                    <!-- Tạo mới: trạng thái luôn mặc định "Đang kinh doanh" (newFormWithBaseUnit()
+                         set sẵn status=true), không cho chọn ngay lúc tạo — chỉ hiện ô chọn khi
+                         sửa hàng hóa đã tồn tại (isEdit=true). Vẫn cần input ẩn để giá trị true
+                         thật sự được submit lên khi tạo mới. -->
+                    <div class="col-12 col-md-3" th:if="${isEdit}">
                         <label class="info-label">Trạng thái</label>
                         <select class="form-select" th:field="*{status}">
                             <option th:value="true">Đang kinh doanh</option>
                             <option th:value="false">Ngừng kinh doanh</option>
                         </select>
                     </div>
+                    <input type="hidden" th:unless="${isEdit}" th:field="*{status}">
                     <div class="col-12 col-md-6">
                         <label class="info-label">Ảnh sản phẩm</label>
                         <input type="file" class="form-control" id="imageFileInput" name="imageFile" accept="image/*">
@@ -191,7 +248,7 @@
                         <i class="ti ti-plus me-1"></i> Thêm hoạt chất
                     </button>
                 </div>
-                <p class="text-secondary small" id="ingredientHint">Bắt buộc với Thuốc; tuỳ chọn với Thực phẩm chức năng; có thể bỏ trống với hàng hóa/thiết bị.</p>
+                <p class="text-secondary small" id="ingredientHint">Tuỳ chọn — có thể bỏ trống với mọi loại hàng hóa.</p>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
                         <thead>
@@ -264,7 +321,7 @@
                             <div class="col-12 col-md-4">
                                 <label class="info-label">Tên đơn vị cơ bản</label>
                                 <input type="text" class="form-control unit-name" data-field="unitName"
-                                       th:name="'units[' + ${stat.index} + '].unitName'" th:value="${u.unitName}" placeholder="VD: Viên">
+                                       th:name="'units[' + ${stat.index} + '].unitName'" th:value="${u.unitName}">
                             </div>
                             <div class="col-8 col-md-3">
                                 <label class="info-label">Giá bán</label>
@@ -294,7 +351,7 @@
                             <div class="col-12 col-md-3">
                                 <label class="info-label">Tên đơn vị</label>
                                 <input type="text" class="form-control unit-name" data-field="unitName"
-                                       th:name="'units[' + ${stat.index} + '].unitName'" th:value="${u.unitName}" placeholder="Tên đơn vị">
+                                       th:name="'units[' + ${stat.index} + '].unitName'" th:value="${u.unitName}">
                             </div>
                             <div class="col-12 col-md-3">
                                 <label class="info-label">Giá trị quy đổi</label>
@@ -344,13 +401,32 @@
     </div>
 </main>
 
+<!-- Quick "add producer" modal -->
+<div class="pm-modal-backdrop" id="addProducerModal">
+    <div class="pm-modal">
+        <div class="pm-modal-header">
+            <div class="pm-modal-title">Thêm nhà sản xuất mới</div>
+            <button type="button" class="pm-modal-close" id="addProducerCloseBtn" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="pm-modal-body">
+            <div id="addProducerError" class="alert alert-danger py-2 px-3 small d-none" role="alert"></div>
+            <label class="info-label">Tên nhà sản xuất <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="newProducerName" placeholder="Tên nhà sản xuất" maxlength="255">
+        </div>
+        <div class="pm-modal-footer">
+            <button type="button" class="btn btn-outline-secondary" id="addProducerCancelBtn">Hủy</button>
+            <button type="button" class="btn btn-stock-primary" id="addProducerSaveBtn">Lưu</button>
+        </div>
+    </div>
+</div>
+
 <!-- Row templates for JS-added rows -->
 <template id="unitTemplate">
     <div class="unit-row unit-row-extra">
         <div class="row g-3 align-items-center pb-3 mb-3 border-bottom">
             <div class="col-12 col-md-3">
                 <label class="info-label">Tên đơn vị</label>
-                <input type="text" class="form-control unit-name" data-field="unitName" placeholder="Tên đơn vị">
+                <input type="text" class="form-control unit-name" data-field="unitName">
             </div>
             <div class="col-12 col-md-3">
                 <label class="info-label">Giá trị quy đổi</label>
@@ -658,12 +734,82 @@
         });
     }
 
+    // Quick "add producer" modal — lets the user register a producer that isn't in the system yet
+    // without leaving this form. Posts to ProducerController's JSON endpoint, then fills in both
+    // the visible combobox and its hidden producerId, same as picking an existing producer would.
+    function wireAddProducerModal() {
+        const modal = document.getElementById('addProducerModal');
+        const nameInput = document.getElementById('newProducerName');
+        const errorBox = document.getElementById('addProducerError');
+        if (!modal || !nameInput) return;
+
+        function openModal() {
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+            nameInput.value = '';
+            modal.classList.add('open');
+            setTimeout(() => nameInput.focus(), 0);
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.classList.remove('d-none');
+        }
+
+        async function saveProducer() {
+            const name = nameInput.value.trim();
+            if (!name) {
+                showError('Tên nhà sản xuất không được để trống');
+                return;
+            }
+            try {
+                // The form's own _csrf hidden input is auto-injected by Spring's
+                // RequestDataValueProcessor (no thymeleaf-extras-springsecurity needed for that),
+                // but a plain fetch() never picks it up automatically — must attach it by hand,
+                // same as the sale screen's "thêm khách hàng nhanh" modal does.
+                const csrfInput = document.querySelector('#createForm input[name="_csrf"]');
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfInput) headers['X-CSRF-TOKEN'] = csrfInput.value;
+                const response = await fetch('/owner/producers/quick-create', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ name: name })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    showError(data.message || 'Không thể tạo nhà sản xuất');
+                    return;
+                }
+                AC.producer.push({ label: data.name, id: data.id });
+                const producerInput = document.querySelector('.ac-field[data-field="producer"]');
+                const producerHidden = document.querySelector('[name="producerId"]');
+                if (producerInput) producerInput.value = data.name;
+                if (producerHidden) producerHidden.value = data.id;
+                closeModal();
+            } catch (err) {
+                showError('Không thể kết nối máy chủ, vui lòng thử lại');
+            }
+        }
+
+        document.getElementById('addProducerBtn')?.addEventListener('click', openModal);
+        document.getElementById('addProducerCloseBtn')?.addEventListener('click', closeModal);
+        document.getElementById('addProducerCancelBtn')?.addEventListener('click', closeModal);
+        document.getElementById('addProducerSaveBtn')?.addEventListener('click', saveProducer);
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+        nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveProducer(); } });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         wireUnitEvents();
         recomputeUnits();
         filterTypesByGroup();
         initAcSources();
         wireImagePreview();
+        wireAddProducerModal();
         document.getElementById('itemGroup')?.addEventListener('change', filterTypesByGroup);
         document.getElementById('createForm')?.addEventListener('submit', () => {
             reindex('unitRows', 'units');

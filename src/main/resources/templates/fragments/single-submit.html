@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Chặn GỬI FORM HAI LẦN (double click / Enter liên tiếp / bấm lại khi trang đang tải). Không có nó thì
+  một cú double click trên "Tạo & duyệt" tạo ra HAI phiếu, và với phiếu điều chỉnh kho là trừ kho HAI lần.
+
+  Cách dùng: đặt MỘT lần ở cuối <body>, không cần sửa gì trên từng form:
+
+      <div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
+
+  Tự bảo vệ mọi form method="post" trong trang. Form nào cố ý cho gửi nhiều lần thì thêm
+  `data-multi-submit` vào thẻ <form>.
+
+  KHÔNG dùng `button.disabled` để khoá: nút bị disable thì name/value của nó KHÔNG được gửi lên, mà
+  nhiều màn đang phân biệt hành động bằng chính `name="action"` trên nút (Lưu nháp / Tạo & duyệt).
+  Khoá bằng cờ trên form + CSS chặn con trỏ, nút vẫn là submitter hợp lệ.
+
+  KHÔNG thay thế kiểm tra ở backend — người dùng vẫn có thể mở 2 tab hoặc POST thẳng.
+-->
+<th:block th:fragment="singleSubmit">
+    <style>
+        /* Khoá bằng pointer-events chứ không phải thuộc tính disabled — xem chú thích ở trên. */
+        form.pm-submitting button[type="submit"],
+        form.pm-submitting input[type="submit"],
+        form.pm-submitting [data-confirm] {
+            pointer-events: none;
+            opacity: .65;
+        }
+    </style>
+    <script>
+        (function () {
+            var LOCK_CLASS = 'pm-submitting';
+
+            function guarded(form) {
+                return form.method
+                    && form.method.toLowerCase() === 'post'
+                    && !form.hasAttribute('data-multi-submit');
+            }
+
+            function lock(form) {
+                form.dataset.pmSubmitting = '1';
+                form.classList.add(LOCK_CLASS);
+            }
+
+            function unlock(form) {
+                delete form.dataset.pmSubmitting;
+                form.classList.remove(LOCK_CLASS);
+            }
+
+            // Bubble phase: chạy SAU field-validation (fragment đó bắt ở capture phase và
+            // stopPropagation khi form còn lỗi) nên form không hợp lệ sẽ không bao giờ bị khoá.
+            document.addEventListener('submit', function (event) {
+                var form = event.target;
+                if (!form || form.tagName !== 'FORM' || !guarded(form)) {
+                    return;
+                }
+                if (form.dataset.pmSubmitting === '1') {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    return;
+                }
+                // Handler khác của trang đã chặn (validate riêng, xác nhận, submit bằng AJAX…) thì
+                // lần gửi này không hề xảy ra — khoá lại là làm form chết cứng.
+                if (event.defaultPrevented) {
+                    return;
+                }
+                lock(form);
+            });
+
+            // Bấm Back quay lại từ bộ nhớ đệm của trình duyệt: trang được khôi phục NGUYÊN TRẠNG lúc
+            // rời đi, tức vẫn đang khoá. Không mở lại thì người dùng không gửi được nữa.
+            window.addEventListener('pageshow', function (event) {
+                if (!event.persisted) {
+                    return;
+                }
+                Array.prototype.forEach.call(document.querySelectorAll('form.' + LOCK_CLASS), unlock);
+            });
+        })();
+    </script>
+</th:block>
+</body>
+</html>

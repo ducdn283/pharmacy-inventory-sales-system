@@ -28,12 +28,19 @@ public class StockAdjustmentDetailItemResponse {
     private BigDecimal lineCost;
     private String note;
 
-    // Thuế GTGT đầu ra (chỉ INTERNAL_USE/GIFT/SAMPLE; null với DESTROY/COUNT_*).
-    // refSellPrice = giá bán/đơn vị (đã gồm VAT); preTaxAmount/vatAmount tách net-thuế của giá trị tính thuế.
+    /**
+     * Giá bán tham chiếu tại thời điểm ghi nhận (snapshot của {@code ProductUnit.sellPrice}).
+     * Dùng cho INTERNAL_USE/GIFT/SAMPLE và cho dòng {@code COUNT} chiều IN (định giá hàng thừa).
+     *
+     * <p>3 cột {@code vatRate/preTaxAmount/vatAmount} đã bị BỎ khỏi bảng: hộ kinh doanh tính GTGT theo
+     * {@code doanh thu × tỷ lệ %}, không có khấu trừ đầu ra/đầu vào nên phiếu điều chỉnh kho không
+     * phát sinh số thuế nào để lưu (Tax_Invoice.xlsx sheet 02, 04/08/2026).</p>
+     */
     private BigDecimal refSellPrice;
-    private BigDecimal vatRate;
-    private BigDecimal preTaxAmount;
-    private BigDecimal vatAmount;
+
+    // Chỉ có giá trị với phiếu DATE_ADJUSTMENT: hạn dùng trước và sau khi sửa.
+    private String oldExpirationDateDisplay;
+    private String newExpirationDateDisplay;
 
     /**
      * Giá trị đền bù của dòng, tính theo <strong>GIÁ BÁN</strong> niêm yết (không phải giá vốn) —

@@ -9,6 +9,7 @@ import com.example.project.entity.Shiftreport;
 import com.example.project.service.ShiftreportService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
@@ -23,13 +24,28 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 
+/**
+ * Shift-report screens.
+ *
+ * <p>Owner and Pharmacist run shifts; the Accountant does not (they never handle register cash, so
+ * {@code ensureOpenShiftFor} never creates a shift for them) but must be able to READ shift reports.
+ * That is why {@code ACCOUNTANT_BASE} is mapped on the two GET screens only — close/approve/reject
+ * are never mapped for it, and the detail template gates its action cards on {@code isOwnShift} /
+ * {@code isOwner}, both false for an Accountant.</p>
+ */
 @Controller
 public class ShiftreportController {
 
+    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private static final String OWNER_BASE = "/owner/shift-reports";
     private static final String PHARMACIST_BASE = "/pharmacist/shift-reports";
+    private static final String ACCOUNTANT_BASE = "/accountant/shift-reports";
 
     private final ShiftreportService shiftreportService;
     private final CurrentUserContext currentUserContext;
@@ -42,12 +58,14 @@ public class ShiftreportController {
 
     @GetMapping({
             OWNER_BASE,
-            PHARMACIST_BASE
+            PHARMACIST_BASE,
+            ACCOUNTANT_BASE
     })
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                        @RequestParam(name = "fromDate", required = false) String fromDate,
                        @RequestParam(name = "toDate", required = false) String toDate,
                        @RequestParam(name = "status", required = false) String status,
+                       @RequestParam(name = "discrepancy", required = false) String discrepancy,
                        @RequestParam(name = "page", defaultValue = "0") int page,
                        @RequestParam(name = "size", defaultValue = "5") int size,
                        HttpServletRequest request,
@@ -60,7 +78,7 @@ public class ShiftreportController {
         }
 
         Page<ShiftReportListItemResponse> shiftPage = shiftreportService.search(
-                keyword, fromDate, toDate, status, PageRequest.of(page, size));
+                keyword, fromDate, toDate, status, discrepancy, PageRequest.of(page, size));
 
         model.addAttribute("shiftPage", shiftPage);
         model.addAttribute("shifts", shiftPage.getContent());
@@ -71,6 +89,7 @@ public class ShiftreportController {
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
         model.addAttribute("filterStatus", status);
+        model.addAttribute("filterDiscrepancy", discrepancy);
 
         model.addAttribute("currentPage", shiftPage.getNumber());
         model.addAttribute("totalPages", shiftPage.getTotalPages());
@@ -82,9 +101,57 @@ public class ShiftreportController {
         return "shift-report/list";
     }
 
+    /**
+     * Mở ca thủ công cho ngày không phát sinh giao dịch nào (ca vốn chỉ tự tạo khi có giao dịch đầu
+     * tiên). Không map cho Kế toán — họ không trực quầy, và service cũng chặn lại lần nữa.
+     *
+     * <p><strong>Giờ mở ca lấy từ mốc ĐĂNG NHẬP</strong> (BA chốt 12/08/2026), không còn ô cho người
+     * dùng gõ: bấm nút lúc 22h mà lấy giờ bấm thì ra một ca dài 5 phút, còn cho gõ tay thì không có
+     * cách nào kiểm chứng con số họ khai. {@code HttpSession.getCreationTime()} là mốc thật, hệ thống
+     * tự biết.</p>
+     *
+     * <p>Mốc thô này còn được {@code ShiftreportService.resolveManualStart} kẹp lại (đầu ngày hôm nay
+     * / lúc ca trước kết thúc) trước khi dùng — xem javadoc ở đó, đặc biệt là ca phiên đăng nhập sống
+     * xuyên nửa đêm.</p>
+     */
+    @PostMapping({
+            OWNER_BASE + "/create",
+            PHARMACIST_BASE + "/create"
+    })
+    public String createManual(HttpServletRequest request,
+                               RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
+        try {
+            Integer shiftId = shiftreportService.createManualShift(
+                    currentUserContext.getCurrentAccountId(), sessionStartedAt(request));
+            redirectAttributes.addFlashAttribute("successMessage",
+                    "Đã mở ca thủ công — nhớ chốt ca trước khi đăng xuất");
+            return "redirect:" + basePath + "/" + shiftId;
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+            return "redirect:" + basePath;
+        }
+    }
+
+    /**
+     * Thời điểm phiên đăng nhập hiện tại được tạo, quy về giờ VN.
+     *
+     * <p>{@code getSession(false)} chứ không phải {@code getSession()}: request này đã qua Spring
+     * Security nên chắc chắn có phiên — nhưng nếu vì lý do nào đó không có, tạo mới một phiên rỗng ở
+     * đây sẽ cho mốc "vừa xong", tức ca dài 0 phút, đúng cái lỗi đang muốn tránh.</p>
+     */
+    private LocalDateTime sessionStartedAt(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(session.getCreationTime()), VN_ZONE);
+    }
+
     @GetMapping({
             OWNER_BASE + "/{shiftReportId}",
-            PHARMACIST_BASE + "/{shiftReportId}"
+            PHARMACIST_BASE + "/{shiftReportId}",
+            ACCOUNTANT_BASE + "/{shiftReportId}"
     })
     public String detail(@PathVariable Integer shiftReportId,
                          HttpServletRequest request,
@@ -106,7 +173,29 @@ public class ShiftreportController {
         model.addAttribute("isOwnShift", isOwnShift);
         model.addAttribute("mustCloseNow", mustCloseNow);
 
+        // Thu lại phần quỹ thiếu = lập một phiếu THU riêng, không sửa số của ca. Chỉ Chủ nhà thuốc và
+        // Kế toán lập phiếu thu ở đây: Dược sĩ chính là người bị thu nên không tự lập phiếu cho mình.
+        model.addAttribute("incomeBasePath", resolveIncomeBasePath(request));
+        model.addAttribute("canCreateShortageIncome", !isOwnShift
+                && (currentUserContext.isOwner() || isAccountantPath(request)));
+
         return "shift-report/detail";
+    }
+
+    /** Income screens of the caller's own role prefix (IncomeController maps all three). */
+    private String resolveIncomeBasePath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri.startsWith(PHARMACIST_BASE)) {
+            return "/pharmacist/incomes";
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return "/accountant/incomes";
+        }
+        return "/owner/incomes";
+    }
+
+    private boolean isAccountantPath(HttpServletRequest request) {
+        return request.getRequestURI().startsWith(ACCOUNTANT_BASE);
     }
 
     @PostMapping({
@@ -205,6 +294,9 @@ public class ShiftreportController {
         String uri = request.getRequestURI();
         if (uri.startsWith(OWNER_BASE)) {
             return OWNER_BASE;
+        }
+        if (uri.startsWith(ACCOUNTANT_BASE)) {
+            return ACCOUNTANT_BASE;
         }
         return PHARMACIST_BASE;
     }

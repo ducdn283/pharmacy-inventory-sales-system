@@ -40,8 +40,6 @@ public class StockAdjustmentBatchCandidateResponse {
 
     private BigDecimal unitCostPrice;
 
-    // Giá bán (đã gồm VAT) của đơn vị cơ sở + thuế suất thường của sản phẩm — để màn tạo prefill
-    // ô "Thuế suất GTGT đầu ra" khi loại phiếu là INTERNAL_USE/GIFT/SAMPLE (tính thuế theo GIÁ BÁN).
+    /** Giá bán niêm yết của đơn vị cơ sở — nguồn của {@code refSellPrice} khi ghi dòng điều chỉnh. */
     private BigDecimal sellPrice;
-    private BigDecimal defaultVatRate;
 }

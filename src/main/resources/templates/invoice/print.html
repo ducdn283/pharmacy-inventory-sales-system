@@ -1,23 +1,29 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org"
+      th:classappend="${param.embed != null} ? 'embed-preview' : ''">
 
 <head>
     <meta charset="UTF-8">
-    <title th:text="${printData.showVatBreakdown ? 'Hóa đơn GTGT' : 'Hóa đơn bán hàng'} + ' | PharmaManager'">
-        Hóa đơn bán hàng | PharmaManager
-    </title>
+    <title>Hóa đơn bán hàng | PharmaManager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
         body {
-            font-family: "Times New Roman", serif;
-            font-size: 14px;
+            font-family: "Times New Roman", Times, serif;
+            font-size: 13px;
             color: #000;
             background: #fff;
+            margin: 0;
+        }
+
+        html.embed-preview,
+        html.embed-preview body {
+            overflow: hidden;
+            height: auto;
         }
 
         .no-print {
-            max-width: 900px;
+            max-width: 820px;
             margin: 16px auto;
             display: flex;
             justify-content: space-between;
@@ -38,63 +44,117 @@
         }
 
         .print-page {
-            width: 900px;
+            width: 780px;
             margin: 0 auto;
-            padding: 10px 20px 40px;
+            padding: 18px 22px 36px;
+        }
+
+        .invoice-frame {
+            border: 2px solid #1e4f91;
+            outline: 1px solid #1e4f91;
+            outline-offset: 3px;
+            padding: 18px 20px 24px;
+            position: relative;
+            background: #fff;
+        }
+
+        .invoice-watermark {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0.05;
+            font-size: 120px;
+            font-weight: bold;
+            color: #1e4f91;
+            z-index: 0;
+        }
+
+        .invoice-content {
+            position: relative;
+            z-index: 1;
         }
 
         .title {
             text-align: center;
-            font-size: 22px;
+            font-size: 20px;
             font-weight: bold;
-            margin: 12px 0 6px;
-        }
-
-        .code-line {
-            text-align: center;
-            font-size: 15px;
-            margin-bottom: 2px;
-        }
-
-        .code-line strong {
-            font-size: 16px;
+            letter-spacing: 0.5px;
+            margin: 0 0 4px;
         }
 
         .date-line {
             text-align: center;
-            font-style: italic;
             font-size: 13px;
-            margin-bottom: 16px;
+            margin: 0 0 4px;
         }
 
-        .meta-block {
-            margin-bottom: 16px;
-            line-height: 1.7;
+        .cqt-line {
+            text-align: center;
+            font-size: 12px;
+            margin: 0 0 10px;
         }
 
-        .meta-item {
+        .symbol-row {
             display: flex;
+            justify-content: flex-end;
+            gap: 28px;
+            font-size: 13px;
+            margin-bottom: 12px;
         }
 
-        .meta-label {
-            min-width: 130px;
+        .symbol-row span {
+            white-space: nowrap;
+        }
+
+        .section-block {
+            margin-bottom: 10px;
+            line-height: 1.55;
+        }
+
+        .seller-name {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 2px;
+        }
+
+        .info-line {
+            display: flex;
+            gap: 4px;
+        }
+
+        .info-label {
+            white-space: nowrap;
+        }
+
+        .buyer-block {
+            margin: 8px 0 12px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 8px;
+            margin-top: 4px;
         }
 
         th, td {
             border: 1px solid #000;
-            padding: 8px 6px;
+            padding: 5px 6px;
             vertical-align: middle;
         }
 
         th {
             text-align: center;
             font-weight: bold;
+            font-size: 12px;
+        }
+
+        table.vat-table th,
+        table.vat-table td {
+            font-size: 11px;
+            padding: 4px 5px;
         }
 
         .text-center {
@@ -105,38 +165,98 @@
             text-align: right;
         }
 
-        .note {
-            margin-top: 14px;
+        .total-row td {
+            font-weight: bold;
         }
 
-        .summary {
-            width: 380px;
-            margin-left: auto;
-            margin-top: 18px;
-            line-height: 1.8;
+        .amount-words {
+            margin-top: 10px;
+            font-style: italic;
+            line-height: 1.6;
         }
 
-        .summary-row {
+        .invoice-note {
+            margin-top: 10px;
+            line-height: 1.55;
+        }
+
+        .vat-summary {
+            margin-top: 8px;
+            line-height: 1.7;
+        }
+
+        .vat-summary-row {
             display: flex;
             justify-content: space-between;
-            gap: 12px;
-        }
-
-        .summary-row.total {
-            font-weight: bold;
+            gap: 16px;
+            max-width: 420px;
+            margin-left: auto;
         }
 
         .signature-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 24px;
-            margin-top: 48px;
+            margin-top: 28px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .signature-heading {
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .signature-note {
+            font-style: italic;
+            font-weight: normal;
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+
+        .signature-space {
+            min-height: 72px;
+        }
+
+        .signed-stamp-box {
+            display: block;
+            margin: 0 auto;
+            max-width: 280px;
             text-align: center;
         }
 
-        .signature-title {
+        .signed-stamp-inner {
+            border: 1px solid #6ab04c;
+            border-radius: 2px;
+            padding: 10px 14px 12px;
+            background: #edf7e8;
+            line-height: 1.45;
+        }
+
+        .signed-stamp-check {
+            color: #52a447;
+            font-size: 44px;
             font-weight: bold;
-            margin-bottom: 70px;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .signed-stamp-title {
+            font-weight: bold;
+            font-size: 13px;
+            color: #c0392b;
+            margin-bottom: 6px;
+        }
+
+        .signed-stamp-meta {
+            font-size: 11px;
+            color: #222;
+            text-align: left;
+            word-break: break-word;
+        }
+
+        .signed-stamp-meta + .signed-stamp-meta {
+            margin-top: 2px;
         }
 
         @media print {
@@ -152,7 +272,7 @@
 
             @page {
                 size: A4 portrait;
-                margin: 14mm;
+                margin: 10mm;
             }
         }
     </style>
@@ -160,186 +280,179 @@
 
 <body>
 
-<div class="no-print">
+<div class="no-print" th:if="${param.embed == null}">
     <a th:href="${basePath + '/' + printData.invoiceId}">Quay lại chi tiết</a>
     <button type="button" onclick="window.print()">In hóa đơn</button>
 </div>
 
 <div class="print-page">
-    <div class="title" th:text="${printData.showVatBreakdown ? 'HÓA ĐƠN GTGT' : 'HÓA ĐƠN BÁN HÀNG'}">
-        HÓA ĐƠN BÁN HÀNG
-    </div>
+    <div class="invoice-frame">
+        <div class="invoice-watermark">✦</div>
 
-    <div class="code-line">
-        Số hóa đơn:
-        <strong th:text="${printData.invoiceCode}">HD000046</strong>
-    </div>
+        <div class="invoice-content">
+            <div class="title">HÓA ĐƠN BÁN HÀNG</div>
 
-    <div class="date-line">
-        Ngày: <span th:text="${printData.dateDisplay}">01/07/2026 14:10</span>
-    </div>
+            <div class="date-line" th:text="${printData.dateLongDisplay}">
+                Ngày 24 tháng 06 năm 2026
+            </div>
 
-    <div class="meta-block">
-        <div class="meta-item" th:if="${printData.pharmacyName != null && !printData.pharmacyName.isBlank()}">
-            <div class="meta-label">Đơn vị bán:</div>
-            <div th:text="${printData.pharmacyName}">Nhà thuốc Hằng Ngọc</div>
-        </div>
+            <div class="cqt-line"
+                 th:if="${printData.signed and param.embed != null and printData.taxAuthorityCode != null and !printData.taxAuthorityCode.isBlank()}">
+                Mã CQT: <span th:text="${printData.taxAuthorityCode}">M2-26-BGALS-00000008208</span>
+            </div>
 
-        <div class="meta-item" th:if="${printData.pharmacyPhone != null && !printData.pharmacyPhone.isBlank()}">
-            <div class="meta-label">Điện thoại:</div>
-            <div th:text="${printData.pharmacyPhone}">0901234567</div>
-        </div>
+            <div class="symbol-row">
+                <span>Ký hiệu: <strong th:text="${printData.invoicePattern}">2C26MYY</strong></span>
+                <span>Số: <strong th:text="${printData.invoiceSerialNumber}">00008131</strong></span>
+            </div>
 
-        <div class="meta-item">
-            <div class="meta-label">Ký hiệu HĐ:</div>
-            <div th:text="${printData.invoicePattern}">2K26MAA</div>
-        </div>
+            <div class="section-block">
+                <div class="seller-name" th:text="${printData.pharmacyName}">HỘ KINH DOANH NHÀ THUỐC HẰNG NGỌC</div>
+                <div class="info-line">
+                    <span class="info-label">Mã số thuế:</span>
+                    <span th:text="${printData.pharmacyTaxCode}">022176001896</span>
+                </div>
+                <div class="info-line" th:if="${printData.pharmacyAddress != null && !printData.pharmacyAddress.isBlank()}">
+                    <span class="info-label">Địa chỉ:</span>
+                    <span th:text="${printData.pharmacyAddress}"></span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Mã địa điểm kinh doanh:</span>
+                    <span th:text="${printData.pharmacyLocationCode}">00999</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Tên địa điểm kinh doanh:</span>
+                    <span th:text="${printData.pharmacyName}">HỘ KINH DOANH NHÀ THUỐC HẰNG NGỌC</span>
+                </div>
+                <div class="info-line" th:if="${printData.pharmacyAddress != null && !printData.pharmacyAddress.isBlank()}">
+                    <span class="info-label">Địa chỉ địa điểm kinh doanh:</span>
+                    <span th:text="${printData.pharmacyAddress}"></span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Điện thoại:</span>
+                    <span th:text="${printData.pharmacyPhone}">0983276660</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Email:</span>
+                    <span th:text="${printData.pharmacyEmail}">nhathuochangngoc1976@gmail.com</span>
+                </div>
+                <div class="info-line"
+                     th:if="${printData.pharmacyBankAccountNumber != null && !printData.pharmacyBankAccountNumber.isBlank()}">
+                    <span class="info-label">Số tài khoản:</span>
+                    <span th:text="${printData.pharmacyBankAccountNumber}">123456789</span>
+                </div>
+                <div class="info-line"
+                     th:if="${printData.pharmacyBankName != null && !printData.pharmacyBankName.isBlank()}">
+                    <span class="info-label">Ngân hàng:</span>
+                    <span th:text="${printData.pharmacyBankName}">Vietcombank</span>
+                </div>
+            </div>
 
-        <div class="meta-item">
-            <div class="meta-label">Loại hóa đơn:</div>
-            <div th:text="${printData.invoiceTypeDisplay}">Bán hàng</div>
-        </div>
+            <div class="buyer-block section-block" style="margin-bottom: 0;">
+                <div class="info-line">
+                    <span class="info-label">Tên người mua:</span>
+                    <span th:text="${printData.buyerCompanyName}">&nbsp;</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Mã số thuế:</span>
+                    <span th:text="${printData.buyerTaxCode}">&nbsp;</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Địa chỉ:</span>
+                    <span th:text="${printData.buyerAddress}">&nbsp;</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Số điện thoại:</span>
+                    <span th:text="${printData.customerPhone != null && !printData.customerPhone.isBlank() ? printData.customerPhone : ''}">&nbsp;</span>
+                </div>
+                <div class="info-line">
+                    <span class="info-label">Hình thức thanh toán:</span>
+                    <span th:text="${printData.paymentMethodShort}">TM/CK</span>
+                </div>
+            </div>
 
-        <div class="meta-item" th:if="${printData.taxCode != null}">
-            <div class="meta-label">Mã số thuế (HĐ):</div>
-            <div th:text="${printData.taxCode}">022176001896</div>
-        </div>
+            <table>
+                <thead>
+                <tr>
+                    <th style="width: 36px;">STT</th>
+                    <th>Tên hàng hóa, dịch vụ</th>
+                    <th style="width: 72px;">Đơn vị tính</th>
+                    <th style="width: 56px;">Số lượng</th>
+                    <th style="width: 88px;">Đơn giá</th>
+                    <th style="width: 96px;">Thành tiền</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="line, iterStat : ${printData.lines}">
+                    <td class="text-center" th:text="${iterStat.index + 1}">1</td>
+                    <td>
+                        <span th:text="${line.productName}">Que thử thai nhanh HCG-Allisa</span>
+                        <div th:if="${line.note != null && !line.note.isBlank()}"
+                             style="font-size: 11px; font-style: italic; margin-top: 2px;"
+                             th:text="'Ghi chú: ' + ${line.note}">Ghi chú: Uống sau ăn</div>
+                    </td>
+                    <td class="text-center" th:text="${line.unitName}">Hộp</td>
+                    <td class="text-right" th:text="${line.quantity}">1</td>
+                    <td class="text-right"
+                        th:text="${#numbers.formatDecimal(line.unitSellPrice, 1, 'COMMA', 0, 'POINT')}">10.000</td>
+                    <td class="text-right"
+                        th:text="${#numbers.formatDecimal(line.lineSubtotal, 1, 'COMMA', 0, 'POINT')}">10.000</td>
+                </tr>
 
-        <div class="meta-item">
-            <div class="meta-label">Khách hàng:</div>
-            <div th:text="${printData.customerName}">Khách lẻ</div>
-        </div>
+                <tr th:if="${#lists.isEmpty(printData.lines)}">
+                    <td colspan="6" class="text-center">Không có dữ liệu.</td>
+                </tr>
 
-        <div class="meta-item"
-             th:if="${printData.customerPhone != null && !printData.customerPhone.isBlank()}">
-            <div class="meta-label">SĐT khách:</div>
-            <div th:text="${printData.customerPhone}">0901234567</div>
-        </div>
+                <tr class="total-row" th:if="${!#lists.isEmpty(printData.lines)}">
+                    <td colspan="5">Cộng tiền bán hàng hóa, dịch vụ</td>
+                    <td class="text-right"
+                        th:text="${#numbers.formatDecimal(printData.subtotal, 1, 'COMMA', 0, 'POINT')}">
+                        10.000
+                    </td>
+                </tr>
+                </tbody>
+            </table>
 
-        <div class="meta-item">
-            <div class="meta-label">Người bán:</div>
-            <div th:text="${printData.employeeName}">Dược sĩ A</div>
-        </div>
-    </div>
+            <div class="amount-words">
+                Số tiền viết bằng chữ:
+                <span th:text="${printData.totalInWords}">Mười nghìn đồng chẵn.</span>
+            </div>
 
-    <table>
-        <thead>
-        <tr>
-            <th style="width: 40px;">STT</th>
-            <th style="width: 90px;">Mã hàng</th>
-            <th>Tên hàng</th>
-            <th style="width: 70px;">Đơn vị</th>
-            <th style="width: 60px;">SL</th>
-            <th style="width: 90px;">Đơn giá</th>
-            <th style="width: 100px;">Thành tiền</th>
-            <th style="width: 90px;" th:if="${printData.showVatBreakdown}">Chưa thuế</th>
-            <th style="width: 60px;" th:if="${printData.showVatBreakdown}">Thuế suất</th>
-            <th style="width: 90px;" th:if="${printData.showVatBreakdown}">Thuế GTGT</th>
-        </tr>
-        </thead>
+            <div class="invoice-note"
+                 th:if="${printData.note != null && !printData.note.isBlank()}">
+                <span class="info-label">Ghi chú:</span>
+                <span th:text="${printData.note}">Ghi chú hóa đơn</span>
+            </div>
 
-        <tbody>
-        <tr th:each="line, iterStat : ${printData.lines}">
-            <td class="text-center" th:text="${iterStat.index + 1}">1</td>
-            <td th:text="${line.productCode}">SP001</td>
-            <td th:text="${line.productName}">Paracetamol 500mg</td>
-            <td class="text-center" th:text="${line.unitName}">Hộp</td>
-            <td class="text-right" th:text="${line.quantity}">1</td>
-            <td class="text-right"
-                th:text="${#numbers.formatDecimal(line.unitSellPrice, 0, 'POINT', 0, 'COMMA')}">0</td>
-            <td class="text-right"
-                th:text="${#numbers.formatDecimal(line.lineSubtotal, 0, 'POINT', 0, 'COMMA')}">0</td>
-            <td class="text-right" th:if="${printData.showVatBreakdown}"
-                th:text="${line.preTaxAmount == null} ? '—' : ${#numbers.formatDecimal(line.preTaxAmount, 0, 'POINT', 0, 'COMMA')}">0</td>
-            <td class="text-center" th:if="${printData.showVatBreakdown}"
-                th:text="${line.vatRate == null} ? '—' : ${#numbers.formatDecimal(line.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">5%</td>
-            <td class="text-right" th:if="${printData.showVatBreakdown}"
-                th:text="${line.vatAmount == null} ? '—' : ${#numbers.formatDecimal(line.vatAmount, 0, 'POINT', 0, 'COMMA')}">0</td>
-        </tr>
-
-        <tr th:if="${!#lists.isEmpty(printData.lines) and printData.showVatBreakdown}" class="fw-semibold">
-            <td colspan="6" class="text-right">Tổng cộng</td>
-            <td class="text-right"
-                th:text="${#numbers.formatDecimal(printData.subtotal, 0, 'POINT', 0, 'COMMA')}">0</td>
-            <td class="text-right"
-                th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA')}">0</td>
-            <td></td>
-            <td class="text-right"
-                th:text="${#numbers.formatDecimal(printData.totalVATOutput, 0, 'POINT', 0, 'COMMA')}">0</td>
-        </tr>
-
-        <tr th:if="${#lists.isEmpty(printData.lines)}">
-            <td th:colspan="${printData.showVatBreakdown ? 10 : 7}" class="text-center">Không có dữ liệu.</td>
-        </tr>
-        </tbody>
-    </table>
-
-    <div class="note">
-        Ghi chú:
-        <span th:text="${printData.note ?: ''}"></span>
-    </div>
-
-    <div class="summary">
-        <div class="summary-row">
-            <div>Tổng số lượng:</div>
-            <div th:text="${printData.totalQuantity}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Tiền hàng:</div>
-            <div th:text="${#numbers.formatDecimal(printData.subtotal, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row" th:if="${printData.showVatBreakdown}">
-            <div>Tiền hàng (chưa thuế):</div>
-            <div th:text="${#numbers.formatDecimal(printData.totalPreTaxAmount, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row" th:if="${printData.showVatBreakdown}">
-            <div>Thuế GTGT đầu ra:</div>
-            <div th:text="${#numbers.formatDecimal(printData.totalVATOutput, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Giảm giá:</div>
-            <div th:text="${#numbers.formatDecimal(printData.discount, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row total">
-            <div>Tổng thanh toán:</div>
-            <div th:text="${#numbers.formatDecimal(printData.total, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Tiền mặt:</div>
-            <div th:text="${#numbers.formatDecimal(printData.paidByCash, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Chuyển khoản:</div>
-            <div th:text="${#numbers.formatDecimal(printData.paidByBanking, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Còn nợ:</div>
-            <div th:text="${#numbers.formatDecimal(printData.debtAmount, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Hình thức TT:</div>
-            <div th:text="${printData.paymentDisplay}">Tiền mặt</div>
-        </div>
-    </div>
-
-    <div class="signature-grid">
-        <div>
-            <div class="signature-title">Khách hàng</div>
-            <div>.................................</div>
-        </div>
-
-        <div>
-            <div class="signature-title">Người bán</div>
-            <div>.................................</div>
+            <div class="signature-grid">
+                <div class="signature-block">
+                    <div class="signature-heading">Người mua hàng</div>
+                    <div class="signature-note">(Chữ ký số (nếu có))</div>
+                    <div class="signature-space"></div>
+                </div>
+                <div class="signature-block">
+                    <div class="signature-heading">Người bán hàng</div>
+                    <div class="signature-note">(Chữ ký điện tử, Chữ ký số)</div>
+                    <div class="signed-stamp-box"
+                         th:if="${printData.signed and param.embed != null}">
+                        <div class="signed-stamp-inner">
+                            <div class="signed-stamp-check">✓</div>
+                            <div class="signed-stamp-title">Signature Valid</div>
+                            <div class="signed-stamp-meta"
+                                 th:text="'Ký bởi: ' + ${printData.pharmacyName}">
+                                Ký bởi: HỘ KINH DOANH NHÀ THUỐC HẰNG NGỌC
+                            </div>
+                            <div class="signed-stamp-meta"
+                                 th:if="${printData.signedAtDisplay != null && !printData.signedAtDisplay.isBlank()}"
+                                 th:text="'Ký ngày: ' + ${printData.signedAtDisplay}">
+                                Ký ngày: 24/06/2026
+                            </div>
+                        </div>
+                    </div>
+                    <div class="signature-space"
+                         th:unless="${printData.signed and param.embed != null}"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

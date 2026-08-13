@@ -176,6 +176,17 @@
                             <div th:text="${detail.reason}">Hàng hết hạn sử dụng</div>
                         </div>
 
+                        <!-- Căn cứ của phiếu. Phiếu COUNT/DATE_ADJUSTMENT luôn có; phiếu hủy hàng chỉ có
+                             khi người lập gắn phiếu rà soát tình trạng (hủy do hỏng hóc). -->
+                        <div class="info-row" th:if="${detail.stockReviewCode != null}">
+                            <div class="info-label">Phiếu rà soát kho căn cứ</div>
+                            <div>
+                                <span class="fw-semibold" th:text="${detail.stockReviewCode}">KK-000001</span>
+                                <span class="badge bg-info-subtle text-info ms-1"
+                                      th:text="${detail.stockReviewTypeDisplay}">Rà soát tình trạng</span>
+                            </div>
+                        </div>
+
                         <div class="info-row">
                             <div class="info-label">Trạng thái</div>
                             <div>
@@ -217,9 +228,13 @@
                                 <th>Hạn dùng</th>
                                 <th>Đơn vị</th>
                                 <th>Tồn hiện tại</th>
-                                <th>Chênh lệch</th>
+                                <!-- Phiếu sửa hạn dùng không đổi tồn kho ⇒ cột "Chênh lệch" vô nghĩa,
+                                     thay bằng cặp hạn cũ → hạn mới. -->
+                                <th th:unless="${detail.dateAdjustment}">Chênh lệch</th>
+                                <th th:if="${detail.dateAdjustment}">Hạn cũ → Hạn mới</th>
                                 <th>Giá vốn</th>
-                                <th th:if="${detail.showOutputVat}">Thuế GTGT đầu ra</th>
+                                <!-- Cột "Thuế GTGT đầu ra" đã bỏ hẳn 04/08/2026: hộ kinh doanh tính GTGT bằng
+                                     doanh thu × tỷ lệ %, phiếu điều chỉnh kho không phát sinh thuế đầu ra. -->
                                 <th th:if="${detail.employeeLiable}">Ước tính đền bù (giá bán)</th>
                                 <th>Ghi chú</th>
                             </tr>
@@ -236,7 +251,7 @@
                                 <td th:text="${item.expirationDateDisplay}">12/05/2028</td>
                                 <td th:text="${item.unitName}">Hộp</td>
                                 <td th:text="${item.currentStock}">120</td>
-                                <td>
+                                <td th:unless="${detail.dateAdjustment}">
                                     <span class="fw-semibold"
                                           th:classappend="${item.direction == 'IN'} ? ' text-success' : ' text-danger'"
                                           th:text="${(item.direction == 'IN' ? '+' : '−') + item.quantity}">−5</span>
@@ -244,18 +259,16 @@
                                           th:classappend="${item.direction == 'IN'} ? ' bg-success-subtle text-success' : ' bg-danger-subtle text-danger'"
                                           th:text="${item.directionDisplay}">Giảm</span>
                                 </td>
+                                <td th:if="${detail.dateAdjustment}">
+                                    <span class="badge bg-danger-subtle text-danger"
+                                          th:text="${item.oldExpirationDateDisplay != null and !item.oldExpirationDateDisplay.isEmpty() ? item.oldExpirationDateDisplay : '—'}">12/05/2028</span>
+                                    <i class="ti ti-arrow-right mx-1 text-secondary"></i>
+                                    <span class="badge bg-success-subtle text-success"
+                                          th:text="${item.newExpirationDateDisplay != null and !item.newExpirationDateDisplay.isEmpty() ? item.newExpirationDateDisplay : '—'}">12/05/2029</span>
+                                </td>
                                 <td class="fw-semibold"
                                     th:text="${#numbers.formatDecimal(item.lineCost, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                     350.000đ
-                                </td>
-                                <td th:if="${detail.showOutputVat}">
-                                    <span th:if="${item.vatAmount != null}">
-                                        <span class="fw-semibold"
-                                              th:text="${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">19.047đ</span>
-                                        <span class="badge bg-secondary-subtle text-secondary ms-1"
-                                              th:text="${#numbers.formatDecimal(item.vatRate, 0, 'POINT', 0, 'COMMA') + '%'}">8%</span>
-                                    </span>
-                                    <span th:unless="${item.vatAmount != null}" class="text-secondary">—</span>
                                 </td>
                                 <td th:if="${detail.employeeLiable}">
                                     <span class="fw-semibold text-warning"
@@ -276,10 +289,6 @@
                                 <td class="text-success"
                                     th:text="${#numbers.formatDecimal(detail.estimatedValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                     650.000đ
-                                </td>
-                                <td th:if="${detail.showOutputVat}" class="text-success"
-                                    th:text="${#numbers.formatDecimal(detail.totalOutputVat, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    0đ
                                 </td>
                                 <td th:if="${detail.employeeLiable}" class="text-warning"
                                     th:text="${#numbers.formatDecimal(detail.totalReimbursementValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
@@ -334,8 +343,9 @@
                     </div>
                 </div>
 
-                <!-- Thất thoát có thể quy trách nhiệm nhân viên: chỉ 2 loại phiếu
-                     (Hủy hàng do lỗi nhân viên / Giảm theo kiểm kê) mới được liên kết phiếu thu đền bù.
+                <!-- Thất thoát có thể quy trách nhiệm nhân viên: CHỈ phiếu "Hủy hàng (lỗi nhân viên)" mới
+                     được liên kết phiếu thu đền bù. Phiếu điều chỉnh theo rà soát kho đã bị loại khỏi đây
+                     (06/08/2026): kiểm đếm chỉ nói tồn thiếu bao nhiêu, không nói thiếu vì đâu và do ai.
                      Đền bù tính theo GIÁ BÁN niêm yết, không phải giá vốn — Dac_ta_Income_StockAdjustment
                      sheet 01. Phiếu thu do Kế toán/Chủ nhà thuốc lập bên màn Phiếu thu. -->
                 <div class="stock-card mb-4" th:if="${detail.employeeLiable}">
@@ -375,7 +385,7 @@
                             <i class="ti ti-info-circle me-1"></i>
                             Số tiền đền bù tính theo <strong>giá bán niêm yết</strong> của đơn vị đã xuất, không phải
                             giá vốn. Bồi thường bằng tiền <strong>không phải xuất hóa đơn GTGT</strong> — chính phiếu
-                            thu là chứng từ. Phiếu thu lập ở màn <em>Phiếu thu</em> (loại <em>Thu tiền nhân viên đền bù</em>).
+                            thu là chứng từ. Phiếu thu lập ở màn <em>Phiếu thu</em> (loại <em>Thu tiền nhân viên làm hỏng hàng</em>).
                         </p>
                     </div>
                 </div>
@@ -397,7 +407,12 @@
                     <!-- Hủy: phiếu đã Hoàn thành thì tồn kho được đảo lại đúng phần đã cộng/trừ.
                          Ô dưới đây là LÝ DO HỦY, không phải sửa lý do điều chỉnh — nó được ghi thêm vào
                          Ghi chú của phiếu, trường reason gốc giữ nguyên (xem StockadjustmentService.cancel). -->
-                    <form th:unless="${detail.statusName == 'Đã hủy'}"
+                    <!-- Không hủy được thì hiện luôn lý do, đừng để người dùng bấm rồi mới ăn lỗi. -->
+                    <div th:if="${detail.statusName != 'Đã hủy' and !detail.cancellable}"
+                         class="alert alert-secondary small mb-3"
+                         th:text="${detail.cancelBlockedReason}">Không thể hủy phiếu này.</div>
+
+                    <form th:if="${detail.statusName != 'Đã hủy' and detail.cancellable}"
                           th:action="${basePath + '/' + detail.id + '/cancel'}"
                           method="post"
                           class="mb-3">
@@ -427,5 +442,6 @@
 
     </div>
 </main>
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

@@ -211,6 +211,10 @@
                             </div>
                         </div>
 
+                        <!-- Chỉ một mốc duy nhất: giờ mở ca. Trước đây có hiện thêm "bấm tạo lúc ..."
+                             để lộ khoảng lệch khi người trực TỰ GÕ giờ mở ca — nay giờ mở ca suy từ
+                             mốc đăng nhập, không ai khai được nữa nên không còn gì để đối chiếu, hiện
+                             hai mốc chỉ làm người đọc rối. -->
                         <div class="info-row">
                             <div class="info-label">Giờ bắt đầu</div>
                             <div th:text="${detail.startTimeDisplay}">08:00</div>
@@ -219,6 +223,18 @@
                         <div class="info-row" th:if="${detail.endTimeDisplay != null and !detail.endTimeDisplay.isEmpty()}">
                             <div class="info-label">Giờ kết thúc</div>
                             <div th:text="${detail.endTimeDisplay}">12:00</div>
+                        </div>
+
+                        <!-- Khoản quỹ cố định cấp cho mỗi ca. Không trừ vào quỹ khi mở ca, không nộp
+                             lại khi chốt ca ⇒ không nằm trong phép đối chiếu tiền mặt bên cạnh. -->
+                        <div class="info-row">
+                            <div class="info-label">Tiền mặt đầu ca</div>
+                            <div>
+                                <span th:text="${#numbers.formatDecimal(detail.openingCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</span>
+                                <span class="text-secondary small d-block">
+                                    Khoản cố định được cấp
+                                </span>
+                            </div>
                         </div>
 
                         <div class="info-row">
@@ -317,13 +333,16 @@
                      id="cashReconCard"
                      th:data-cash-in="${detail.totalCashIn}"
                      th:data-cash-out="${detail.totalCashOut}">
-                    <div class="section-title mb-4">Đối chiếu tiền mặt</div>
+                    <!-- Mọi dòng trong khối này đều là TIỀN MẶT (số đếm được trong két) — ghi rõ chữ
+                         "tiền mặt" ở từng dòng để không bị đọc nhầm sang tổng thu/chi của ca, vốn còn
+                         gồm cả chuyển khoản (xem panel "Doanh thu & công nợ trong ca").
 
-                    <div class="summary-row">
-                        <span class="text-secondary">Tiền đầu ca</span>
-                        <strong id="reconOpening"
-                                th:text="${#numbers.formatDecimal(detail.openingCash, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
-                    </div>
+                         KHÔNG có dòng "tiền mặt đầu ca": khoản đầu ca không trừ vào quỹ lúc mở ca và
+                         không nộp lại vào quỹ lúc chốt ca, nên nó không tham gia phép đối chiếu —
+                         cộng vào chỉ làm ca nào cũng lệch đúng bằng khoản đó. Số đó vẫn hiện ở khối
+                         "Thông tin ca làm việc". -->
+                    <div class="section-title mb-1">Đối chiếu tiền mặt</div>
+                    <div class="text-secondary small mb-4">Thu tiền mặt − chi tiền mặt trong ca</div>
 
                     <div class="summary-row">
                         <span class="text-secondary">Tiền mặt thu trong ca</span>
@@ -331,18 +350,22 @@
                     </div>
 
                     <div class="summary-row">
-                        <span class="text-secondary">Tiền chi trong ca</span>
+                        <span class="text-secondary">
+                            Tiền mặt chi trong ca
+                            <i class="ti ti-info-circle text-secondary"
+                               title="Chỉ tính phiếu chi đã xác nhận thanh toán — phiếu còn ở Chờ duyệt/Chờ thanh toán thì tiền vẫn nằm trong két."></i>
+                        </span>
                         <strong th:text="${#numbers.formatDecimal(detail.totalCashOut, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
                     </div>
 
                     <div class="summary-row">
-                        <span class="text-secondary">Tiền cuối ca dự kiến</span>
+                        <span class="text-secondary">Tiền mặt cuối ca dự kiến</span>
                         <strong id="reconExpected"
                                 th:text="${detail.expectedClosingCash != null ? #numbers.formatDecimal(detail.expectedClosingCash, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">0đ</strong>
                     </div>
 
                     <div class="summary-row">
-                        <span class="text-secondary">Tiền cuối ca thực tế</span>
+                        <span class="text-secondary">Tiền mặt cuối ca thực tế</span>
                         <strong id="reconActual"
                                 th:text="${detail.actualClosingCash != null ? #numbers.formatDecimal(detail.actualClosingCash, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">—</strong>
                     </div>
@@ -366,6 +389,54 @@
                     </div>
                 </div>
 
+                <!-- Thu lại phần quỹ thiếu. Doanh thu của ca KHÔNG bị sửa: hóa đơn đã bán thì doanh
+                     thu vẫn ghi nhận đủ (số của kỳ tính thuế), phần két thiếu là khoản phải thu lại
+                     của người trực và được thu bằng một phiếu thu riêng. -->
+                <div class="shift-card p-4 mb-4"
+                     th:if="${detail.cashShortage != null and detail.cashShortage.signum() > 0}">
+                    <div class="section-title mb-3">Thu tiền thâm hụt quỹ</div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Số tiền còn thiếu</span>
+                        <strong class="text-danger"
+                                th:text="${#numbers.formatDecimal(detail.cashShortage, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</strong>
+                    </div>
+
+                    <div class="summary-row">
+                        <span class="text-secondary">Người chịu trách nhiệm</span>
+                        <strong th:text="${detail.cashierName}">—</strong>
+                    </div>
+
+                    <!-- Đã có phiếu thu gắn vào ca này thì không lập phiếu thứ hai (IncomeService cũng
+                         chặn lại) — chỉ trỏ sang phiếu đã có. -->
+                    <div th:if="${detail.shortageIncomeId != null}" class="mt-3">
+                        <div class="text-secondary small mb-2">
+                            Đã lập phiếu thu
+                            <span class="fw-semibold" th:text="${detail.shortageIncomeCode}">PT-000001</span>
+                            <span th:text="${'(' + detail.shortageIncomeStatus + ')'}">(Nháp)</span>
+                        </div>
+                        <a class="btn btn-outline-secondary w-100"
+                           th:href="${incomeBasePath + '/' + detail.shortageIncomeId}">
+                            <i class="ti ti-eye me-1"></i>
+                            Xem phiếu thu
+                        </a>
+                    </div>
+
+                    <div th:if="${detail.shortageIncomeId == null}" class="mt-3">
+                        <a th:if="${canCreateShortageIncome}"
+                           class="btn btn-shift-primary w-100"
+                           th:href="@{${incomeBasePath + '/create'}(incomeType='SHIFT_SHORTAGE',
+                                     accountId=${detail.cashierId},
+                                     shiftReportOfAccountId=${detail.id})}">
+                            <i class="ti ti-cash-banknote me-1"></i>
+                            Tạo phiếu thu tiền thâm hụt
+                        </a>
+                        <div class="text-secondary small" th:unless="${canCreateShortageIncome}">
+                            Phiếu thu khoản thâm hụt do Chủ nhà thuốc hoặc Kế toán lập.
+                        </div>
+                    </div>
+                </div>
+
                 <div class="shift-card p-4">
                     <form th:if="${detail.canClose and isOwnShift}"
                           id="closeShiftForm"
@@ -375,18 +446,12 @@
                           data-validate>
                         <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
+                        <!-- Ô nhập "tiền mặt đầu ca" đã bỏ: khoản đầu ca không tham gia phép đối chiếu
+                             nữa (xem ShiftreportService.expectedClosingCashOf), nên để một ô sửa được
+                             mà sửa xong không đổi con số nào là đánh lừa người dùng. Số vẫn hiện ở
+                             khối "Thông tin ca làm việc". -->
                         <div class="mb-3">
-                            <label class="form-label">Tiền mặt đầu ca (lấy từ két)</label>
-                            <input type="text" inputmode="numeric" data-money
-                                   class="form-control"
-                                   id="inputOpeningCash"
-                                   name="openingCash"
-                                   th:value="${detail.openingCash}">
-                            <div class="form-text">Số tiền thực tế đã nhận đầu ca — có thể sửa lại nếu khác mức quỹ được cấp.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Tiền mặt cuối ca (thực đếm)</label>
+                            <label class="form-label">Tiền chốt ca (thực đếm)</label>
                             <!-- Cho phép số ÂM: nếu trong ca chi ra nhiều hơn tiền đầu ca cộng tiền thu vào
                                  thì két bị hụt, và người trực phải ghi được đúng con số âm đó thay vì bị ô
                                  nhập ép về số dương. Ô tiền đầu ca KHÔNG bật vì khoản quỹ được cấp không
@@ -400,8 +465,6 @@
                                    th:value="${detail.actualClosingCash}"
                                    required
                                    data-required-message="Vui lòng nhập số tiền mặt đã kiểm đếm khi kết thúc ca">
-                            <div class="form-text">Nhập đúng số đã kiểm đếm. Được nhập số âm (gõ dấu trừ ở
-                                đầu) nếu tiền chi ra trong ca vượt quá tiền đầu ca cộng tiền thu vào.</div>
                         </div>
 
                         <div class="mb-3">
@@ -469,14 +532,12 @@
 <script>
     (function () {
         const card = document.getElementById('cashReconCard');
-        const openingInput = document.getElementById('inputOpeningCash');
         const actualInput = document.getElementById('inputActualClosingCash');
-        if (!card || !openingInput || !actualInput) return; // read-only view (đã nộp) — server values stand
+        if (!card || !actualInput) return; // read-only view (đã nộp) — server values stand
 
         const cashIn = Number(card.dataset.cashIn || 0);
         const cashOut = Number(card.dataset.cashOut || 0);
 
-        const reconOpening = document.getElementById('reconOpening');
         const reconExpected = document.getElementById('reconExpected');
         const reconActual = document.getElementById('reconActual');
         const banner = document.getElementById('reconBanner');
@@ -490,9 +551,8 @@
         // Đọc bằng pmMoneyValue (bóc dấu chấm phân cách của money-input.js) thay vì Number(input.value)
         // trực tiếp — input giờ là type=text đã format "12.500", Number() sẽ hiểu nhầm dấu chấm là thập phân.
         function recalc() {
-            const opening = window.pmMoneyValue ? window.pmMoneyValue(openingInput) : Number(openingInput.value || 0);
-            const expected = opening + cashIn - cashOut;
-            reconOpening.textContent = fmt(opening);
+            // Thu − chi, KHÔNG cộng tiền đầu ca (khớp ShiftreportService.expectedClosingCashOf).
+            const expected = cashIn - cashOut;
             reconExpected.textContent = fmt(expected);
 
             // "-" trơ trọi = người dùng mới gõ dấu trừ, chưa có con số nào để đối chiếu.
@@ -512,7 +572,6 @@
             banner.style.display = '';
         }
 
-        openingInput.addEventListener('input', recalc);
         actualInput.addEventListener('input', recalc);
         // Phải đợi money-input.js format xong ô tiền (DOMContentLoaded, listener của nó đăng ký TRƯỚC
         // listener này nên chạy trước): trước đó ô còn giữ nguyên chuỗi server "1772000.00", pmMoneyValue
@@ -525,5 +584,6 @@
     })();
 </script>
 
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 </body>
 </html>

@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Getter
 @Setter
@@ -21,4 +22,7 @@ public class ProcurementProductSearchResponse {
     private String unit;
     private BigDecimal unitRatio;
     private BigDecimal estimatedPrice;
+    private List<ProcurementProductUnitResponse> units;
+    /** Giá bán của đơn vị nhập hiện tại ({@code Productunit.sellPrice}). */
+    private BigDecimal currentSellPrice;
 }

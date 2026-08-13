@@ -8,16 +8,27 @@ import java.util.List;
  * {@code varchar(50)} (no {@code Status} table, see CLAUDE.md) — these constants exist so the
  * vocabulary is written in exactly one place and never drifts between the service and templates.
  *
- * <p>Workflow (mirrors {@code StockAdjustmentStatus}'s draft/submit/approve/reject shape, plus a
- * payment step since an Expense tracks real cash leaving the register):
+ * <p><strong>Workflow (BA 2026-08): approval and real payment are two separate steps again</strong>
+ * — reverses the 2026-07-30 "approval = instant completion" rule. {@link #AWAITING_PAYMENT} is a
+ * real, reachable state now, not legacy display-only:
  * <ul>
  *   <li>{@link #DRAFT} — a work-in-progress slip the creator has not sent yet.</li>
- *   <li>{@link #PENDING} — submitted by a non-Owner creator, awaiting the Owner's approval.</li>
+ *   <li>{@link #PENDING} — submitted by a non-Owner creator, awaiting the Owner's approval. A
+*       Pharmacist's slip under {@code ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} skips this state
+*       entirely and lands straight on {@link #AWAITING_PAYMENT} (BA 2026-08-13).</li>
  *   <li>{@link #REJECTED} — the Owner declined a pending slip.</li>
- *   <li>{@link #AWAITING_PAYMENT} — approved but {@code paid < amount}.</li>
- *   <li>{@link #COMPLETED} — approved and fully paid ({@code paid >= amount}).</li>
+ *   <li>{@link #AWAITING_PAYMENT} — approved (by Owner directly, or Owner approving an
+ *       Accountant's pending slip), but the money has not actually left yet. Not editable, but can
+ *       still be cancelled — nothing has been disbursed, so there is nothing to reverse.</li>
+ *   <li>{@link #COMPLETED} — the Owner has confirmed the money was actually paid out. This is when
+ *       the linked purchase invoice/customer return's obligation is settled, the financial-setting
+ *       fund is debited, and the shift is stamped — see {@code ExpenseService.confirmPayment()}.
+ *       Only the Owner may reach this state, even for a slip an Accountant raised/approved-into.
+ *       Terminal — cannot be cancelled once real money has left.</li>
  *   <li>{@link #CANCELLED} — internal correction for a wrongly-entered slip (same spirit as
- *       {@code PurchaseInvoiceStatus.CANCELLED}), not a real accounting reversal.</li>
+ *       {@code PurchaseInvoiceStatus.CANCELLED}), not a real accounting reversal. Reachable from
+ *       {@link #DRAFT}/{@link #PENDING}/{@link #AWAITING_PAYMENT} only — never from
+ *       {@link #COMPLETED}.</li>
  * </ul>
  */
 public final class ExpenseStatus {

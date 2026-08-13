@@ -35,6 +35,6 @@ public class ProductRowResponse {
     private String stockStatusLabel;
     /** CSS class for the stock-status badge. */
     private String stockStatusCss;
-    /** Prescription-required display; the schema has no such column → always "—". */
+    /** "Có" / "Không" derived from the product's Type name; "—" when no type is set. */
     private String prescriptionDisplay;
 }

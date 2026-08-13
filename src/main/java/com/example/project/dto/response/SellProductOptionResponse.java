@@ -19,11 +19,17 @@ public class SellProductOptionResponse {
     private String name;
     private String barcode;
 
-    /** On-hand stock in the base unit (SUM of batch storageQuantity). */
+    /** On-hand stock in the base unit (SUM of batch storageQuantity, including expired lots). */
     private long baseStock;
 
     private List<SellUnitOptionResponse> units;
 
     /** In-stock batches (soonest-expiry first) for lot selection. */
     private List<SellBatchOptionResponse> batches;
+
+    /** True when the product type is {@code Thuốc kê đơn}. */
+    private boolean requiresPrescription;
+
+    /** Storage positions configured for this product (e.g. Kệ A1). */
+    private List<String> storagePositions;
 }

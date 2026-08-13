@@ -11,6 +11,7 @@ import java.util.List;
 public final class PurchaseInvoiceStatus {
 
     public static final String DRAFT = "Nháp";
+    public static final String PENDING_APPROVAL = "Chờ duyệt";
     public static final String DEBT = "Nợ";
     public static final String PARTIAL_DEBT = "Nợ một phần";
     public static final String COMPLETED = "Hoàn thành";
@@ -22,7 +23,8 @@ public final class PurchaseInvoiceStatus {
     public static final String CANCELLED = "Đã hủy";
 
     /** All valid statuses, in workflow order. */
-    public static final List<String> ALL = List.of(DRAFT, DEBT, PARTIAL_DEBT, COMPLETED, CANCELLED);
+    public static final List<String> ALL =
+            List.of(DRAFT, PENDING_APPROVAL, DEBT, PARTIAL_DEBT, COMPLETED, CANCELLED);
 
     /**
      * Whether a stored {@code Purchaseinvoice.status} is one this app actually knows about. The

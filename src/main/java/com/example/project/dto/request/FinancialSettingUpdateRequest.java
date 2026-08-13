@@ -2,6 +2,7 @@ package com.example.project.dto.request;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -28,17 +29,19 @@ public class FinancialSettingUpdateRequest {
     @Max(value = 3, message = "Nhóm doanh thu không hợp lệ")
     private Integer revenueGroup;
 
-    @NotNull(message = "Ngưỡng doanh thu miễn thuế không được để trống")
+    // annualRevenueThreshold1/2: đã ẩn khỏi form, cố định vĩnh viễn theo giá trị seed — không còn
+    // trường nhập nào submit hai giá trị này nữa, nên KHÔNG được @NotNull (mọi lần lưu khác sẽ luôn
+    // thất bại nếu bắt buộc). FinancialsettingService.saveSettings() không đọc hai field này nữa.
     @DecimalMin(value = "0", message = "Ngưỡng doanh thu không được nhỏ hơn 0")
     private BigDecimal annualRevenueThreshold1;
 
-    @NotNull(message = "Ngưỡng doanh thu bắt buộc tính theo lợi nhuận không được để trống")
     @DecimalMin(value = "0", message = "Ngưỡng doanh thu không được nhỏ hơn 0")
     private BigDecimal annualRevenueThreshold2;
 
     @NotNull(message = "Tỷ lệ phần trăm hàng trả không được để trống")
     @DecimalMin(value = "0", message = "Tỷ lệ phần trăm hàng trả không được nhỏ hơn 0")
     @DecimalMax(value = "100", message = "Tỷ lệ phần trăm hàng trả không được vượt quá 100")
+    @Digits(integer = 3, fraction = 0, message = "Tỷ lệ phần trăm hàng trả phải là số nguyên")
     private BigDecimal returnProductOnInvoiceValueRate;
 
     private Boolean autoGenerateVATInvoice;
@@ -63,6 +66,10 @@ public class FinancialSettingUpdateRequest {
     @Size(max = 100, message = "Tên địa điểm kinh doanh không được vượt quá 100 ký tự")
     private String locationName;
 
+    @NotBlank(message = "Địa chỉ không được để trống")
+    @Size(max = 100, message = "Địa chỉ không được vượt quá 100 ký tự")
+    private String address;
+
     @NotBlank(message = "Số điện thoại không được để trống")
     @Size(max = 10, message = "Số điện thoại không được vượt quá 10 ký tự")
     @Pattern(regexp = "0(2|3|5|7|8|9)[0-9]{8}", message = "Số điện thoại không hợp lệ")
@@ -85,4 +92,11 @@ public class FinancialSettingUpdateRequest {
 
     @Min(value = 1, message = "Số ngày cho phép trả hàng phải lớn hơn 0")
     private Integer returnPolicyMaxDays;
+
+    /** Bỏ trống nghĩa là giữ nguyên số dư quỹ hiện tại — chỉ ghi đè khi người dùng thực sự nhập. */
+    @DecimalMin(value = "0", message = "Số dư quỹ tiền mặt không được nhỏ hơn 0")
+    private BigDecimal cashSafeBalance;
+
+    @DecimalMin(value = "0", message = "Số dư quỹ ngân hàng không được nhỏ hơn 0")
+    private BigDecimal bankAccountBalance;
 }

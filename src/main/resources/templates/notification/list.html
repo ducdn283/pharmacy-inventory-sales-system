@@ -138,7 +138,17 @@
                 <p class="text-secondary mb-0">Theo dõi cảnh báo hệ thống, phê duyệt, tài chính, kho và kỳ thuế.</p>
             </div>
 
-            <form th:action="@{${basePath + '/read-all'}}" method="post" class="m-0">
+            <form th:action="@{${basePath + '/read-all'}(
+                  keyword=${keyword},
+                  category=${filterCategory},
+                  severity=${filterSeverity},
+                  status=${filterStatus},
+                  unreadOnly=${unreadOnly},
+                  page=${currentPage},
+                  size=${pageSize}
+            )}"
+                  method="post"
+                  class="m-0">
                 <input type="hidden"
                        th:if="${_csrf}"
                        th:name="${_csrf.parameterName}"
@@ -277,7 +287,16 @@
 
                     <div class="d-flex flex-column gap-3">
                         <a th:each="item : ${notifications}"
-                           th:href="@{${basePath}(selectedId=${item.id}, keyword=${keyword}, category=${filterCategory}, severity=${filterSeverity}, status=${filterStatus}, unreadOnly=${unreadOnly})}"
+                           th:href="@{${basePath}(
+                                   selectedId=${item.id},
+                                   keyword=${keyword},
+                                   category=${filterCategory},
+                                   severity=${filterSeverity},
+                                   status=${filterStatus},
+                                   unreadOnly=${unreadOnly},
+                                   page=${currentPage},
+                                   size=${pageSize}
+                            )}"
                            class="notification-item"
                            th:classappend="${selectedNotification != null and selectedNotification.id == item.id ? ' active' : ''} + ' ' + ${!item.isRead ? ' unread' : ''}">
 
@@ -310,6 +329,143 @@
                                 </span>
                             </div>
                         </a>
+                    </div>
+                    <div class="d-flex flex-column align-items-center gap-3 mt-4"
+                         th:if="${totalItems > 0}">
+
+                        <div class="small text-secondary text-center">
+                            Hiển thị
+
+                            <span th:text="${currentPage * pageSize + 1}">
+            1
+        </span>–<span th:text="${currentPage * pageSize + notifications.size()}">
+            10
+        </span>
+
+                            trong tổng số
+
+                            <span class="fw-semibold"
+                                  th:text="${totalItems}">
+            0
+        </span>
+
+                            thông báo
+                        </div>
+
+                        <nav th:if="${totalPages > 1}"
+                             aria-label="Phân trang thông báo">
+
+                            <ul class="pagination pagination-sm flex-wrap justify-content-center mb-0">
+
+                                <!-- Trang trước -->
+                                <li class="page-item"
+                                    th:classappend="${currentPage == 0} ? ' disabled'">
+
+                                    <a class="page-link"
+                                       th:href="@{${basePath}(
+                       keyword=${keyword},
+                       category=${filterCategory},
+                       severity=${filterSeverity},
+                       status=${filterStatus},
+                       unreadOnly=${unreadOnly},
+                       page=${currentPage - 1},
+                       size=${pageSize}
+                   )}">
+                                        Trước
+                                    </a>
+                                </li>
+
+                                <!-- Trang đầu tiên -->
+                                <li class="page-item"
+                                    th:if="${startPage > 0}">
+
+                                    <a class="page-link"
+                                       th:href="@{${basePath}(
+                       keyword=${keyword},
+                       category=${filterCategory},
+                       severity=${filterSeverity},
+                       status=${filterStatus},
+                       unreadOnly=${unreadOnly},
+                       page=0,
+                       size=${pageSize}
+                   )}">
+                                        1
+                                    </a>
+                                </li>
+
+                                <!-- Dấu ba chấm bên trái -->
+                                <li class="page-item disabled"
+                                    th:if="${startPage > 1}">
+
+                                    <span class="page-link">…</span>
+                                </li>
+
+                                <!-- Các số trang -->
+                                <li class="page-item"
+                                    th:each="p : ${#numbers.sequence(startPage, endPage)}"
+                                    th:classappend="${p == currentPage} ? ' active'">
+
+                                    <a class="page-link"
+                                       th:text="${p + 1}"
+                                       th:href="@{${basePath}(
+                       keyword=${keyword},
+                       category=${filterCategory},
+                       severity=${filterSeverity},
+                       status=${filterStatus},
+                       unreadOnly=${unreadOnly},
+                       page=${p},
+                       size=${pageSize}
+                   )}">
+                                        1
+                                    </a>
+                                </li>
+
+                                <!-- Dấu ba chấm bên phải -->
+                                <li class="page-item disabled"
+                                    th:if="${endPage < totalPages - 2}">
+
+                                    <span class="page-link">…</span>
+                                </li>
+
+                                <!-- Trang cuối cùng -->
+                                <li class="page-item"
+                                    th:if="${endPage < totalPages - 1}">
+
+                                    <a class="page-link"
+                                       th:text="${totalPages}"
+                                       th:href="@{${basePath}(
+                       keyword=${keyword},
+                       category=${filterCategory},
+                       severity=${filterSeverity},
+                       status=${filterStatus},
+                       unreadOnly=${unreadOnly},
+                       page=${totalPages - 1},
+                       size=${pageSize}
+                   )}">
+                                        1
+                                    </a>
+                                </li>
+
+                                <!-- Trang sau -->
+                                <li class="page-item"
+                                    th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
+
+                                    <a class="page-link"
+                                       th:href="@{${basePath}(
+                       keyword=${keyword},
+                       category=${filterCategory},
+                       severity=${filterSeverity},
+                       status=${filterStatus},
+                       unreadOnly=${unreadOnly},
+                       page=${currentPage + 1},
+                       size=${pageSize}
+                   )}">
+                                        Sau
+                                    </a>
+                                </li>
+
+                            </ul>
+                        </nav>
                     </div>
                 </div>
             </div>
@@ -369,7 +525,15 @@
                             </a>
 
                             <form th:if="${!selectedNotification.isRead}"
-                                  th:action="@{${basePath + '/' + selectedNotification.id + '/read'}}"
+                                  th:action="@{${basePath + '/' + selectedNotification.id + '/read'}(
+                                  keyword=${keyword},
+                                  category=${filterCategory},
+                                  severity=${filterSeverity},
+                                  status=${filterStatus},
+                                  unreadOnly=${unreadOnly},
+                                  page=${currentPage},
+                                  size=${pageSize}
+                              )}"
                                   method="post">
                                 <input type="hidden"
                                        th:if="${_csrf}"
@@ -381,7 +545,15 @@
                                 </button>
                             </form>
 
-                            <form th:action="@{${basePath + '/' + selectedNotification.id + '/dismiss'}}"
+                            <form th:action="@{${basePath + '/' + selectedNotification.id + '/dismiss'}(
+                                      keyword=${keyword},
+                                      category=${filterCategory},
+                                      severity=${filterSeverity},
+                                      status=${filterStatus},
+                                      unreadOnly=${unreadOnly},
+                                      page=${currentPage},
+                                      size=${pageSize}
+                                  )}"
                                   method="post">
                                 <input type="hidden"
                                        th:if="${_csrf}"

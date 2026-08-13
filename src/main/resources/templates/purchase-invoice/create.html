@@ -53,6 +53,34 @@
             vertical-align: middle;
         }
 
+        /* Ô "Sản phẩm"/"Đơn giá" cao hơn các ô khác trong hàng vì có thêm dòng tham chiếu (Giá
+           bán/Đơn giá lần trước) bên dưới ô nhập — canh trên cho cả hàng để các input còn lại không
+           bị đẩy lệch xuống giữa. */
+        #detailTable tbody.detail-item > tr:first-child > td {
+            vertical-align: top;
+        }
+
+        /* Các ô chỉ hiển thị chữ (không có khung input) — Thuế suất VAT/Giá trước thuế/Tiền
+           thuế/Thành tiền — canh trên giống cả hàng (quy tắc trên), nhưng cần thêm padding-top để
+           chữ nằm ngang tầm với chữ BÊN TRONG khung .form-control của các ô cạnh nó, thay vì dính
+           sát mép trên của ô như hiện tại. */
+        #detailTable tbody.detail-item > tr:first-child > td.readonly-line-cell {
+            padding-top: 21px;
+        }
+
+        /* Cho phép dòng tham chiếu xuống dòng để bảng không ép rộng quá khung nội dung. */
+        .product-sell-price-display,
+        .product-cost-price-display {
+            white-space: normal;
+        }
+
+        /* Loại hàng không theo dõi hạn sử dụng (thiết bị y tế máy/không hạn) — ẩn hẳn ô "Hạn dùng",
+           không có cách nào để người dùng tự nhập/bỏ qua tay (xem applyExpirationVisibility). */
+        .expiration-field.is-not-applicable {
+            display: none;
+        }
+
+
         .money-summary-row {
             display: flex;
             justify-content: space-between;
@@ -62,7 +90,38 @@
 
         .product-search-wrap {
             position: relative;
-            min-width: 220px;
+            min-width: 0;
+        }
+
+        .purchase-lines-table-wrap {
+            overflow-x: visible;
+        }
+
+        #detailTable {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        #detailTable th,
+        #detailTable td {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        /* Dành nhiều chỗ hơn cho sản phẩm và đơn giá thay vì chia đều 9 cột khiến dòng hàng bị bó. */
+        #detailTable th:nth-child(1) { width: 24%; }
+        #detailTable th:nth-child(2) { width: 8%; }
+        #detailTable th:nth-child(3) { width: 10%; }
+        #detailTable th:nth-child(4) { width: 13%; }
+        #detailTable th:nth-child(5) { width: 12%; }
+        #detailTable th:nth-child(6) { width: 9%; }
+        #detailTable th:nth-child(7) { width: 8%; }
+        #detailTable th:nth-child(8) { width: 12%; }
+        #detailTable th:nth-child(9) { width: 4%; }
+
+        .vat-rate-display {
+            white-space: nowrap;
+            font-size: 12px;
         }
 
         .product-search-results {
@@ -101,20 +160,102 @@
 
         .detail-subrow td {
             background: #fafafa;
-            padding-top: 10px;
-            padding-bottom: 12px;
+            padding: 16px;
             border-top: none;
         }
 
+        /* auto-fit + 1fr: khi ô "Hạn dùng" bị ẩn (display:none, xem .expiration-field.is-not-
+           applicable) thì track lưới của nó không còn tồn tại — 2 ô còn lại tự giãn lấp đầy hàng
+           thay vì giữ nguyên width cố định và để lại khoảng trống. */
         .subrow-fields {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            column-gap: 16px;
+            row-gap: 16px;
         }
 
         .subrow-field {
-            min-width: 180px;
-            flex: 1;
+            min-width: 0;
+        }
+
+        /* Khi vùng nội dung hẹp (sidebar hoặc tablet), mỗi mặt hàng trở thành một card grid. Các
+           trường xuống hàng thay vì kéo rộng bảng và tạo thanh cuộn ngang. */
+        @media (max-width: 1399.98px) {
+            .purchase-lines-table-wrap {
+                overflow: visible;
+            }
+
+            #detailTable,
+            #detailTable tbody,
+            #detailTable tr,
+            #detailTable td {
+                display: block;
+                width: 100%;
+            }
+
+            #detailTable thead {
+                display: none;
+            }
+
+            #detailTable tbody.detail-item {
+                margin-bottom: 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                overflow: visible;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                padding: 14px;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td {
+                padding: 0;
+                border: 0;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td:first-child {
+                grid-column: span 2;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td::before {
+                content: attr(data-label);
+                display: block;
+                margin-bottom: 5px;
+                color: #6b7280;
+                font-size: 11px;
+                font-weight: 600;
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td.readonly-line-cell {
+                padding-top: 0;
+            }
+
+            #detailTable .detail-subrow td {
+                padding: 16px;
+                border-top: 1px solid #e5e7eb;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            #detailTable tbody.detail-item > tr:first-child {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #detailTable tbody.detail-item > tr:first-child > td:first-child {
+                grid-column: 1 / -1;
+            }
+
+            .subrow-fields {
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+
+            .subrow-field {
+                min-width: 0;
+            }
         }
 
         .subrow-field label {
@@ -141,6 +282,52 @@
                 padding-top: 84px !important;
             }
         }
+
+        /* Quick "add supplier" modal — same lightweight pm-modal-backdrop pattern used elsewhere
+           (e.g. Product create's "+" nhà sản xuất), not Bootstrap's JS Modal component. */
+        .pm-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, .45);
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            z-index: 1080;
+            padding: 60px 16px;
+            overflow-y: auto;
+        }
+        .pm-modal-backdrop.open { display: flex; }
+        .pm-modal {
+            background: #fff;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, .25);
+        }
+        .pm-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-bottom: 1px solid #eef0f3;
+        }
+        .pm-modal-title { font-size: 15px; font-weight: 700; }
+        .pm-modal-body { padding: 16px 18px; }
+        .pm-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid #eef0f3;
+        }
+        .pm-modal-close {
+            border: none;
+            background: transparent;
+            font-size: 20px;
+            line-height: 1;
+            color: #6b7280;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -153,8 +340,16 @@
 
         <div class="d-flex justify-content-between align-items-start mb-4">
             <div>
-                <h1 class="fs-4 mb-1">Tạo phiếu nhập</h1>
-                <p class="text-secondary mb-0">Tạo phiếu nhập hàng từ nhà cung cấp và tự động tạo lô hàng</p>
+                <h1 class="fs-4 mb-1" th:text="${editMode} ? 'Sửa phiếu nhập' : 'Tạo phiếu nhập'">Tạo phiếu nhập</h1>
+                <p class="text-secondary mb-0" th:if="${!dualSubmit}">
+                    Tạo phiếu nhập hàng từ nhà cung cấp và tự động tạo lô hàng
+                </p>
+                <p class="text-secondary mb-0" th:if="${dualSubmit and selfApprove}">
+                    Lưu nháp để sửa sau, hoặc tạo phiếu ngay — hàng về kho ngay khi tạo phiếu
+                </p>
+                <p class="text-secondary mb-0" th:if="${dualSubmit and !selfApprove}">
+                    Lưu nháp để sửa sau, hoặc nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho sau khi được duyệt
+                </p>
             </div>
 
             <a th:href="${basePath}" class="btn btn-outline-secondary">
@@ -164,7 +359,7 @@
 
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
 
-        <form th:action="${basePath + '/create'}" th:object="${form}" method="post">
+        <form th:action="${formAction}" th:object="${form}" method="post">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
             <div th:if="${errorMessage == null and #fields.hasAnyErrors()}" class="alert alert-danger">
@@ -183,18 +378,23 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label">Nhà cung cấp <span class="text-danger">*</span></label>
-                                <div class="product-search-wrap">
-                                    <input type="text"
-                                           id="supplierSearchInput"
-                                           class="form-control product-search-input"
-                                           autocomplete="off"
-                                           required
-                                           data-required-message="Vui lòng chọn nhà cung cấp"
-                                           placeholder="Tìm nhà cung cấp theo tên"
-                                           th:value="${supplierNameById.get(form.supplierId) ?: ''}">
-                                    <input type="hidden"
-                                           th:field="*{supplierId}">
-                                    <div id="supplierSearchResults" class="product-search-results"></div>
+                                <div class="d-flex align-items-start gap-2">
+                                    <div class="product-search-wrap flex-grow-1">
+                                        <input type="text"
+                                               id="supplierSearchInput"
+                                               class="form-control product-search-input"
+                                               autocomplete="off"
+                                               required
+                                               data-required-message="Vui lòng chọn nhà cung cấp"
+                                               placeholder="Tìm nhà cung cấp theo tên"
+                                               th:value="${supplierNameById.get(form.supplierId) ?: ''}">
+                                        <input type="hidden"
+                                               th:field="*{supplierId}">
+                                        <div id="supplierSearchResults" class="product-search-results"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-secondary" id="addSupplierBtn" title="Thêm nhà cung cấp mới">
+                                        <i class="ti ti-plus"></i>
+                                    </button>
                                 </div>
                                 <div class="text-danger small mt-1"
                                      th:if="${#fields.hasErrors('supplierId')}"
@@ -247,9 +447,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chi phí phát sinh</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{additionCost}"
                                        id="additionCost"
@@ -262,9 +462,9 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Chiết khấu</label>
-                                <input type="number"
-                                       min="0"
-                                       step="1000"
+                                <input type="text"
+                                       inputmode="numeric"
+                                       data-money
                                        class="form-control"
                                        th:field="*{discount}"
                                        id="discount"
@@ -307,18 +507,33 @@
                             </button>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="px-4 pt-3 pb-2 border-bottom">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="priceIncludesVatToggle"
+                                       th:field="*{priceIncludesVat}"
+                                       onchange="calculateSummary()">
+                                <label class="form-check-label small" for="priceIncludesVatToggle">
+                                    Đơn giá đã bao gồm VAT
+                                </label>
+                            </div>
+                            <div class="form-text small mb-0">
+                                Tắt nếu nhà cung cấp báo đơn giá TRƯỚC thuế.
+                            </div>
+                        </div>
+
+                        <div class="table-responsive purchase-lines-table-wrap">
                             <table class="table table-hover align-middle mb-0" id="detailTable">
                                 <thead>
                                 <tr>
-                                    <th style="min-width: 220px;">Sản phẩm</th>
-                                    <th style="min-width: 110px;">Số lượng</th>
-                                    <th style="min-width: 100px;">Đơn vị</th>
-                                    <th style="min-width: 140px;">Giá nhập</th>
-                                    <th style="min-width: 110px;">Thuế suất VAT (%)</th>
-                                    <th style="min-width: 130px;">Giá trước thuế</th>
-                                    <th style="min-width: 120px;">Tiền thuế</th>
-                                    <th style="min-width: 130px;">Thành tiền</th>
+                                    <th>Sản phẩm</th>
+                                    <th>Số lượng</th>
+                                    <th>Đơn vị</th>
+                                    <th>Đơn giá</th>
+                                    <th>VAT</th>
+                                    <th>Trước thuế</th>
+                                    <th>Tiền thuế</th>
+                                    <th>Thành tiền</th>
                                     <th class="text-end">Xóa</th>
                                 </tr>
                                 </thead>
@@ -326,7 +541,7 @@
                                 <tbody class="detail-item"
                                        th:each="detail, iterStat : *{details}">
                                 <tr>
-                                    <td>
+                                    <td data-label="Sản phẩm">
                                         <div class="product-search-wrap">
                                             <input type="text"
                                                    class="form-control product-search-input"
@@ -340,13 +555,14 @@
                                                    th:field="*{details[__${iterStat.index}__].productId}">
                                             <div class="product-search-results"></div>
                                         </div>
+                                        <div class="small text-secondary mt-1 product-sell-price-display">Giá bán: —</div>
                                         <div class="text-danger small mt-1"
                                              th:if="${#fields.hasErrors('details[__${iterStat.index}__].productId')}"
                                              th:errors="*{details[__${iterStat.index}__].productId}">
                                         </div>
                                     </td>
 
-                                    <td>
+                                    <td data-label="Số lượng">
                                         <input type="number"
                                                min="1"
                                                required
@@ -360,45 +576,43 @@
                                         </div>
                                     </td>
 
-                                    <td>
+                                    <td data-label="Đơn vị">
                                         <input type="text"
                                                class="form-control import-unit-display"
                                                readonly
                                                placeholder="—">
                                     </td>
 
-                                    <td>
-                                        <input type="number"
-                                               min="0"
-                                               step="1"
+                                    <td data-label="Đơn giá">
+                                        <input type="text"
+                                               inputmode="numeric"
+                                               data-money
                                                required
-                                               data-required-message="Vui lòng nhập giá nhập"
+                                               data-required-message="Vui lòng nhập đơn giá"
                                                class="form-control price-input"
                                                th:field="*{details[__${iterStat.index}__].importPrice}"
                                                oninput="calculateSummary()">
+                                        <div class="small text-secondary mt-1 product-cost-price-display">Đơn giá lần trước: —</div>
                                         <div class="text-danger small mt-1"
                                              th:if="${#fields.hasErrors('details[__${iterStat.index}__].importPrice')}"
                                              th:errors="*{details[__${iterStat.index}__].importPrice}">
                                         </div>
                                     </td>
 
-                                    <td>
-                                        <input type="number"
-                                               min="0"
-                                               max="100"
-                                               step="0.01"
-                                               class="form-control vat-rate-input"
-                                               th:field="*{details[__${iterStat.index}__].vatRate}"
-                                               readonly>
+                                    <td class="readonly-line-cell text-secondary" data-label="Thuế suất VAT">
+                                        <span class="vat-rate-display">0%</span>
+                                        <input type="hidden"
+                                               class="vat-rate-input"
+                                               th:field="*{details[__${iterStat.index}__].vatRate}">
                                     </td>
 
-                                    <td class="pretax-display">0đ</td>
+                                    <td class="readonly-line-cell pretax-display" data-label="Giá trước thuế">0đ</td>
 
-                                    <td class="tax-display">0đ</td>
+                                    <td class="readonly-line-cell tax-display" data-label="Tiền thuế">0đ</td>
 
-                                    <td class="fw-semibold line-total">0đ</td>
+                                    <td class="readonly-line-cell fw-semibold line-total" data-label="Thành tiền">0đ</td>
 
-                                    <td class="text-end">
+                                    <td class="text-end" data-label="Xóa">
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-danger"
                                                 onclick="removeItemRow(this)">
@@ -411,13 +625,11 @@
                                     <td colspan="9">
                                         <div class="subrow-fields">
                                             <div class="subrow-field">
-                                                <label>Số lô <span class="text-danger">*</span></label>
+                                                <label>Số lô</label>
                                                 <input type="text"
                                                        class="form-control lot-number-input"
                                                        th:field="*{details[__${iterStat.index}__].lotNumber}"
-                                                       required
-                                                       data-required-message="Vui lòng nhập số lô"
-                                                       placeholder="VD: LOT-001">
+                                                       maxlength="50">
                                             </div>
 
                                             <div class="subrow-field">
@@ -427,18 +639,13 @@
                                                        th:field="*{details[__${iterStat.index}__].productionDate}">
                                             </div>
 
-                                            <div class="subrow-field">
+                                            <div class="subrow-field expiration-field">
                                                 <label>Hạn dùng <span class="text-danger">*</span></label>
                                                 <input type="date"
                                                        class="form-control expiration-date-input"
                                                        th:field="*{details[__${iterStat.index}__].expirationDate}"
                                                        required
-                                                       data-required-message="Vui lòng nhập hạn dùng hoặc tích &quot;Không có hạn sử dụng&quot;">
-                                                <label class="form-check-label small d-flex align-items-center gap-1 mt-1">
-                                                    <input type="checkbox" class="form-check-input no-expiration-checkbox"
-                                                           th:field="*{details[__${iterStat.index}__].noExpirationDate}">
-                                                    Không có hạn sử dụng
-                                                </label>
+                                                       data-required-message="Vui lòng nhập hạn dùng">
                                             </div>
                                         </div>
                                     </td>
@@ -455,9 +662,37 @@
                         </div>
                     </div>
 
-                    <div class="mt-4 d-flex gap-3">
+                    <div class="mt-4 d-flex gap-3" th:if="${!dualSubmit}">
                         <button type="submit" class="btn btn-purchase-primary px-4">
                             Lưu phiếu nhập
+                        </button>
+
+                        <a th:href="${basePath}" class="btn btn-outline-secondary px-4">
+                            Hủy
+                        </a>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit and selfApprove}">
+                        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary px-4">
+                            Lưu Nháp
+                        </button>
+
+                        <button type="submit" name="action" value="submit" class="btn btn-purchase-primary px-4">
+                            Tạo phiếu nhập
+                        </button>
+
+                        <a th:href="${basePath}" class="btn btn-outline-secondary px-4">
+                            Hủy
+                        </a>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-3" th:if="${dualSubmit and !selfApprove}">
+                        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary px-4">
+                            Lưu Nháp
+                        </button>
+
+                        <button type="submit" name="action" value="submit" class="btn btn-purchase-primary px-4">
+                            Nộp duyệt
                         </button>
 
                         <a th:href="${basePath}" class="btn btn-outline-secondary px-4">
@@ -501,10 +736,20 @@
                             <strong class="text-warning" id="debtDisplay">0đ</strong>
                         </div>
 
-                        <div class="text-secondary small mt-2">
+                        <div class="text-secondary small mt-2" th:if="${!dualSubmit}">
                             <i class="ti ti-info-circle me-1"></i>
                             Phiếu nhập luôn được lập ở trạng thái "Nợ". Ghi nhận thanh toán bằng cách
                             lập phiếu chi trỏ tới phiếu nhập này.
+                        </div>
+                        <div class="text-secondary small mt-2" th:if="${dualSubmit and selfApprove}">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Lưu Nháp để sửa sau; hoặc tạo phiếu ngay — hàng về kho và phiếu chuyển
+                            sang "Nợ" ngay lập tức, không cần duyệt riêng.
+                        </div>
+                        <div class="text-secondary small mt-2" th:if="${dualSubmit and !selfApprove}">
+                            <i class="ti ti-info-circle me-1"></i>
+                            Lưu Nháp để sửa sau; Nộp duyệt để Chủ nhà thuốc xét — hàng chỉ về kho và
+                            phiếu chỉ chuyển sang "Nợ" khi được duyệt.
                         </div>
                     </div>
 
@@ -513,10 +758,22 @@
                             Gợi ý nhập hàng
                         </div>
 
-                        <div class="text-secondary small">
+                        <div class="text-secondary small" th:if="${!dualSubmit}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Số lô luôn bắt buộc; hạn dùng bắt buộc trừ khi tích "Không có hạn sử dụng" — lô hàng được tạo ngay khi lưu phiếu.</p>
+                            <p class="mb-2">2. Tên lô được tự động tạo theo dạng LOT-xxxxxx; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm — lô hàng được tạo ngay khi lưu phiếu.</p>
                             <p class="mb-2">3. Mỗi dòng nhập luôn tạo một lô hàng mới — nhập đúng số lô, ngày SX, hạn dùng theo phiếu giao hàng của nhà cung cấp.</p>
+                            <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
+                        </div>
+                        <div class="text-secondary small" th:if="${dualSubmit and selfApprove}">
+                            <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
+                            <p class="mb-2">2. Tên lô được tự động tạo theo dạng LOT-xxxxxx; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
+                            <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi tạo phiếu (hoặc duyệt lại phiếu nháp), mỗi dòng nhập mới tạo một lô hàng mới.</p>
+                            <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
+                        </div>
+                        <div class="text-secondary small" th:if="${dualSubmit and !selfApprove}">
+                            <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
+                            <p class="mb-2">2. Tên lô được tự động tạo theo dạng LOT-xxxxxx; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
+                            <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi Chủ nhà thuốc duyệt, mỗi dòng nhập mới tạo một lô hàng mới.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
                     </div>
@@ -527,6 +784,55 @@
     </div>
 </main>
 
+<!-- Quick "add supplier" modal -->
+<div class="pm-modal-backdrop" id="addSupplierModal">
+    <div class="pm-modal">
+        <div class="pm-modal-header">
+            <div class="pm-modal-title">Thêm nhà cung cấp mới</div>
+            <button type="button" class="pm-modal-close" id="addSupplierCloseBtn" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="pm-modal-body">
+            <div id="addSupplierError" class="alert alert-danger py-2 px-3 small d-none" role="alert"></div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Tên nhà cung cấp <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierName" placeholder="Tên nhà cung cấp" maxlength="255">
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="newSupplierTaxCode">Mã số thuế <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierTaxCode"
+                       inputmode="numeric" autocomplete="off" data-digits="-" maxlength="13"
+                       pattern="[0-9]{10}(-[0-9]{3})?" required
+                       aria-describedby="newSupplierTaxCodeFeedback">
+                <div class="invalid-feedback" id="newSupplierTaxCodeFeedback"></div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="newSupplierPhone">Số điện thoại <span class="text-danger">*</span></label>
+                <input type="tel" class="form-control" id="newSupplierPhone"
+                       inputmode="numeric" autocomplete="tel" data-digits maxlength="10"
+                       pattern="0(2|3|5|7|8|9)[0-9]{8}" required
+                       aria-describedby="newSupplierPhoneFeedback">
+                <div class="invalid-feedback" id="newSupplierPhoneFeedback"></div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="newSupplierEmail">Email <span class="text-danger">*</span></label>
+                <input type="email" class="form-control" id="newSupplierEmail"
+                       inputmode="email" autocomplete="email" maxlength="100"
+                       pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
+                       required aria-describedby="newSupplierEmailFeedback">
+                <div class="invalid-feedback" id="newSupplierEmailFeedback"></div>
+            </div>
+            <div class="mb-0">
+                <label class="form-label small mb-1">Địa chỉ <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newSupplierAddress" placeholder="Địa chỉ nhà cung cấp">
+            </div>
+        </div>
+        <div class="pm-modal-footer">
+            <button type="button" class="btn btn-outline-secondary" id="addSupplierCancelBtn">Hủy</button>
+            <button type="button" class="btn btn-purchase-primary" id="addSupplierSaveBtn">Lưu</button>
+        </div>
+    </div>
+</div>
+
 <script th:inline="javascript">
     const basePath = /*[[${basePath}]]*/ '/owner/purchase-invoices';
     const products = /*[[${products}]]*/ [];
@@ -534,8 +840,15 @@
     const costPriceBySupplierAndProduct = /*[[${costPriceBySupplierAndProduct}]]*/ {};
     const vatRateByProduct = /*[[${vatRateByProduct}]]*/ {};
     const importUnitByProduct = /*[[${importUnitByProduct}]]*/ {};
+    const sellPriceByProduct = /*[[${sellPriceByProduct}]]*/ {};
+    const noExpirationProductIds = /*[[${noExpirationProductIds}]]*/ [];
+    const noExpirationProductIdSet = new Set((noExpirationProductIds || []).map(String));
 
-    // "Giá nhập" gợi ý = SupplierProduct.costPrice gần nhất của cặp (NCC đang chọn, sản phẩm của dòng này).
+    // "Đơn giá" gợi ý = SupplierProduct.costPrice gần nhất của cặp (NCC đang chọn, sản phẩm của
+    // dòng này) — luôn LÀ giá đã gồm thuế, giống mọi costPrice lưu trong hệ thống. Chỉ chính xác
+    // như một gợi ý điền sẵn khi "Đơn giá đã bao gồm VAT" đang bật (mặc định); nếu người dùng tắt
+    // toggle để nhập giá trước thuế, con số gợi ý này KHÔNG được tự quy đổi lại — vẫn điền y hệt,
+    // người dùng tự nhận biết và sửa nếu cần.
     function suggestedCostPrice(supplierId, productId) {
         if (!supplierId || !productId) return null;
 
@@ -552,7 +865,7 @@
         const priceInput = row.querySelector('.price-input');
         if (!productInput || !priceInput) return;
 
-        const hasValue = priceInput.value !== '' && Number(priceInput.value) > 0;
+        const hasValue = moneyValue(priceInput) > 0;
         if (hasValue) return;
 
         const supplierSelect = document.getElementById('supplierId');
@@ -561,6 +874,7 @@
 
         if (price !== null) {
             priceInput.value = price;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
             calculateSummary();
         }
     }
@@ -577,7 +891,10 @@
         return (rate === undefined || rate === null) ? null : rate;
     }
 
-    // Luôn ghi đè theo Type khi đổi sản phẩm — ô readonly, không phải gợi ý mà là giá trị chốt.
+    // Luôn ghi đè theo Type khi đổi sản phẩm — chỉ để xem (chữ thường, không phải ô nhập), giá trị
+    // thật gửi lên form nằm trong input ẩn .vat-rate-input, không phải gợi ý mà là giá trị chốt.
+    // Nhãn hiển thị (vat-rate-display) do updateVatRateDisplay() quyết định — xem hàm đó để biết vì
+    // sao không chỉ là "X%" trơn.
     function applySuggestedVatRate(row) {
         const productInput = row.querySelector('.product-select');
         const vatRateInput = row.querySelector('.vat-rate-input');
@@ -585,6 +902,7 @@
 
         const rate = suggestedVatRate(productInput.value);
         vatRateInput.value = rate !== null ? rate : '';
+        updateVatRateDisplay(row);
         calculateSummary();
     }
 
@@ -607,31 +925,69 @@
         applyImportUnitDisplay(row);
     }
 
-    // "Không có hạn sử dụng" phải được tích chủ động — không suy ra từ việc để trống ô ngày, để
-    // tránh nhầm "quên điền" với "xác nhận không có hạn" (xem PurchaseinvoiceService.validateCreateRequest).
-    function applyNoExpirationToggle(row) {
-        const checkbox = row.querySelector('.no-expiration-checkbox');
-        const dateInput = row.querySelector('.expiration-date-input');
-        if (!checkbox || !dateInput) return;
+    // "Giá bán" chỉ là dòng tham chiếu hiển thị dưới tên sản phẩm — không sửa được ở đây, không ghi
+    // gì vào Productunit.sellPrice (đó vẫn là việc riêng của Thiết lập giá).
+    function applySuggestedSellPrice(row) {
+        const productInput = row.querySelector('.product-select');
+        const display = row.querySelector('.product-sell-price-display');
+        if (!productInput || !display) return;
 
-        function sync() {
-            if (checkbox.checked) {
-                dateInput.value = '';
-                dateInput.required = false;
-                dateInput.disabled = true;
-                dateInput.setCustomValidity('');
-            } else {
-                dateInput.disabled = false;
-                dateInput.required = true;
-            }
-        }
-
-        checkbox.addEventListener('change', sync);
-        sync();
+        const price = sellPriceByProduct[productInput.value];
+        display.textContent = (price === undefined || price === null)
+            ? 'Giá bán: —'
+            : 'Giá bán: ' + Number(price).toLocaleString('vi-VN') + 'đ';
     }
 
-    function wireNoExpirationToggle(row) {
-        applyNoExpirationToggle(row);
+    function wireSellPriceSuggestion(row) {
+        applySuggestedSellPrice(row);
+    }
+
+    // "Đơn giá lần trước" — dòng tham chiếu hiển thị dưới ô Đơn giá, ngang hàng với "Giá bán" bên
+    // cột Sản phẩm. Khác applySuggestedPrice (tự điền vào ô khi đang trống): dòng này CHỈ hiển
+    // thị, không bao giờ ghi vào ô Đơn giá, kể cả khi ô đó đã có giá trị. Phụ thuộc NCC đang
+    // chọn, giống applySuggestedPrice, nên phải được gọi lại mỗi khi đổi NCC (xem selectSupplier).
+    // Giá trị tham chiếu này luôn LÀ giá đã gồm thuế (SupplierProduct.costPrice, xem
+    // PurchaseinvoiceService.upsertSupplierProductCostPrice) — không phụ thuộc trạng thái bật/tắt
+    // VAT hiện tại của phiếu đang lập.
+    function applyPreviousCostPriceDisplay(row) {
+        const productInput = row.querySelector('.product-select');
+        const display = row.querySelector('.product-cost-price-display');
+        if (!productInput || !display) return;
+
+        const supplierSelect = document.getElementById('supplierId');
+        const supplierId = supplierSelect ? supplierSelect.value : '';
+        const price = suggestedCostPrice(supplierId, productInput.value);
+
+        display.textContent = (price === null)
+            ? 'Đơn giá lần trước: —'
+            : 'Đơn giá lần trước: ' + Number(price).toLocaleString('vi-VN') + 'đ';
+    }
+
+    function wirePreviousCostPriceDisplay(row) {
+        applyPreviousCostPriceDisplay(row);
+    }
+
+    // Thiết bị y tế (máy)/(không hạn) không theo dõi hạn sử dụng — ẩn hẳn ô "Hạn dùng", không có
+    // checkbox hay cách nào khác để người dùng tự quyết: đã xác định loại hàng không có hạn thì
+    // không còn gì để nhập/xác nhận (server áp lại đúng quy tắc này bất kể client gửi gì, xem
+    // PurchaseinvoiceService.requiresExpirationDate). Đổi sản phẩm sang loại có theo dõi hạn thì ô
+    // lại hiện ra và bắt buộc như thường.
+    function applyExpirationVisibility(row) {
+        const productInput = row.querySelector('.product-select');
+        const field = row.querySelector('.expiration-field');
+        const dateInput = row.querySelector('.expiration-date-input');
+        if (!productInput || !field || !dateInput) return;
+
+        const notApplicable = noExpirationProductIdSet.has(String(productInput.value));
+        field.classList.toggle('is-not-applicable', notApplicable);
+
+        if (notApplicable) {
+            dateInput.value = '';
+            dateInput.required = false;
+            dateInput.setCustomValidity('');
+        } else {
+            dateInput.required = true;
+        }
     }
 
     // Thay thông báo mặc định của trình duyệt ("Please fill out this field.") bằng tiếng Việt —
@@ -667,22 +1023,78 @@
         return Number(input.value);
     }
 
-    // "Giá nhập" đã bao gồm thuế VAT — tách ngược ra giá trước thuế/tiền thuế để hiển thị, khớp
-    // công thức PurchaseinvoiceService.calculateLinePreTaxAmount (chỉ để xem trước, server tự tính lại khi lưu).
+    function moneyValue(input) {
+        if (!input) return 0;
+        if (typeof window.pmMoneyValue === 'function') {
+            return window.pmMoneyValue(input);
+        }
+        return Number(String(input.value || '').replace(/\./g, '')) || 0;
+    }
+
+    // "Đơn giá" có thể đã gồm thuế VAT hoặc là giá trước thuế, tùy công tắc #priceIncludesVatToggle
+    // (mặc định đã gồm thuế — hành vi cũ). Khớp công thức PurchaseinvoiceService.prepareLine()/
+    // grossUpUnitPrice()/calculateLinePreTaxAmount (chỉ để xem trước, server tự tính lại khi lưu).
+    function priceAlreadyIncludesVat() {
+        const toggle = document.getElementById('priceIncludesVatToggle');
+        return !toggle || toggle.checked;
+    }
+
+    // Nhãn ô "Thuế suất VAT (%)" của một dòng — không chỉ hiện số % trơn, mà nói rõ đơn giá đã cộng
+    // thuế hay chưa, tránh hiểu lầm. Đọc từ .vat-rate-input (giá trị chốt thật sự gửi lên form), để
+    // luôn khớp với con số server sẽ dùng, không phải gọi lại suggestedVatRate().
+    function updateVatRateDisplay(row) {
+        const vatRateInput = row.querySelector('.vat-rate-input');
+        const vatRateDisplay = row.querySelector('.vat-rate-display');
+        if (!vatRateInput || !vatRateDisplay) return;
+
+        const rate = vatRateInput.value === '' ? null : Number(vatRateInput.value);
+        if (rate === null) {
+            vatRateDisplay.textContent = '—';
+            return;
+        }
+
+        const rateText = rate.toLocaleString('vi-VN') + '%';
+        vatRateDisplay.textContent = priceAlreadyIncludesVat()
+            ? rateText + ' (đã gồm)'
+            : rateText + ' (chưa gồm)';
+    }
+
+    // Gọi lại cho MỌI dòng mỗi khi công tắc đổi trạng thái (chưa chắc người dùng đụng lại ô sản
+    // phẩm để applySuggestedVatRate() tự chạy) — xem calculateSummary().
+    function refreshVatRateLabels() {
+        document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
+            updateVatRateDisplay(row);
+        });
+    }
+
     function calculateSummary() {
         let subtotal = 0;
+        const includesVat = priceAlreadyIncludesVat();
+        refreshVatRateLabels();
 
         document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
             const quantity = numberValue(row.querySelector('.quantity-input'));
-            const price = numberValue(row.querySelector('.price-input'));
+            const price = moneyValue(row.querySelector('.price-input'));
             const vatRate = numberValue(row.querySelector('.vat-rate-input'));
-            const lineTotal = quantity * price;
 
-            let preTaxAmount = lineTotal;
-            let taxAmount = 0;
-            if (vatRate > 0) {
-                preTaxAmount = lineTotal / (1 + vatRate / 100);
-                taxAmount = lineTotal - preTaxAmount;
+            let lineTotal;
+            let preTaxAmount;
+            let taxAmount;
+
+            if (includesVat) {
+                // "Đơn giá" đã gồm thuế — tách ngược ra giá trước thuế/tiền thuế để hiển thị.
+                lineTotal = quantity * price;
+                preTaxAmount = lineTotal;
+                taxAmount = 0;
+                if (vatRate > 0) {
+                    preTaxAmount = lineTotal / (1 + vatRate / 100);
+                    taxAmount = lineTotal - preTaxAmount;
+                }
+            } else {
+                // "Đơn giá" là giá TRƯỚC thuế — cộng thêm VAT ra giá đã gồm thuế (Thành tiền).
+                preTaxAmount = quantity * price;
+                taxAmount = preTaxAmount * (vatRate / 100);
+                lineTotal = preTaxAmount + taxAmount;
             }
 
             subtotal += lineTotal;
@@ -703,8 +1115,8 @@
             }
         });
 
-        const additionCost = numberValue(document.getElementById('additionCost'));
-        const discount = numberValue(document.getElementById('discount'));
+        const additionCost = moneyValue(document.getElementById('additionCost'));
+        const discount = moneyValue(document.getElementById('discount'));
 
         let totalAmount = subtotal + additionCost - discount;
         if (totalAmount < 0) {
@@ -780,8 +1192,11 @@
         hideProductSearchResults(row);
 
         applySuggestedPrice(row);
+        applyPreviousCostPriceDisplay(row);
         applySuggestedVatRate(row);
         applyImportUnitDisplay(row);
+        applySuggestedSellPrice(row);
+        applyExpirationVisibility(row);
     }
 
     function wireProductSearch(row) {
@@ -854,8 +1269,12 @@
         searchInput.value = supplierName;
         hideSupplierSearchResults();
 
-        // Đổi NCC có thể lộ ra giá gợi ý khác cho các dòng chưa có giá — áp lại cho toàn bộ.
-        document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => applySuggestedPrice(row));
+        // Đổi NCC có thể lộ ra giá gợi ý khác cho các dòng chưa có giá — áp lại cho toàn bộ, cùng
+        // với dòng tham chiếu "Đơn giá lần trước" (phụ thuộc NCC y hệt).
+        document.querySelectorAll('#detailTable tbody.detail-item').forEach(row => {
+            applySuggestedPrice(row);
+            applyPreviousCostPriceDisplay(row);
+        });
         maybeFetchProcurementPlanDetails();
     }
 
@@ -964,10 +1383,13 @@
             quantityInput.value = item.requestedQuantity;
         }
 
-        // unitPrice = estimatedPrice ÷ requestedQuantity, đã gồm VAT — khớp thẳng với "Giá nhập".
+        // unitPrice = estimatedPrice ÷ requestedQuantity, đã gồm VAT — khớp thẳng với "Đơn giá" khi
+        // toggle "Đơn giá đã bao gồm VAT" đang bật (mặc định). Nếu người dùng tắt toggle, con số
+        // này vẫn điền y hệt dù nay bị hiểu là giá trước thuế — không tự quy đổi lại.
         const priceInput = row.querySelector('.price-input');
         if (priceInput && item.unitPrice != null) {
             priceInput.value = item.unitPrice;
+            priceInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
@@ -1005,7 +1427,7 @@
         tbody.className = 'detail-item';
         tbody.innerHTML = `
             <tr>
-                <td>
+                <td data-label="Sản phẩm">
                     <div class="product-search-wrap">
                         <input type="text" class="form-control product-search-input" autocomplete="off" required
                                data-required-message="Vui lòng chọn sản phẩm"
@@ -1014,39 +1436,41 @@
                                name="details[${index}].productId">
                         <div class="product-search-results"></div>
                     </div>
+                    <div class="small text-secondary mt-1 product-sell-price-display">Giá bán: —</div>
                 </td>
 
-                <td>
+                <td data-label="Số lượng">
                     <input type="number" min="1" required data-required-message="Vui lòng nhập số lượng"
                            class="form-control quantity-input"
                            data-field="quantity" name="details[${index}].quantity"
                            oninput="calculateSummary()">
                 </td>
 
-                <td>
+                <td data-label="Đơn vị">
                     <input type="text" class="form-control import-unit-display" readonly placeholder="—">
                 </td>
 
-                <td>
-                    <input type="number" min="0" step="1" required data-required-message="Vui lòng nhập giá nhập"
+                <td data-label="Đơn giá">
+                    <input type="text" inputmode="numeric" data-money required data-required-message="Vui lòng nhập đơn giá"
                            class="form-control price-input"
                            data-field="importPrice" name="details[${index}].importPrice"
                            oninput="calculateSummary()">
+                    <div class="small text-secondary mt-1 product-cost-price-display">Đơn giá lần trước: —</div>
                 </td>
 
-                <td>
-                    <input type="number" min="0" max="100" step="0.01" class="form-control vat-rate-input"
-                           data-field="vatRate" name="details[${index}].vatRate"
-                           readonly>
+                <td class="readonly-line-cell text-secondary" data-label="Thuế suất VAT">
+                    <span class="vat-rate-display">0%</span>
+                    <input type="hidden" class="vat-rate-input"
+                           data-field="vatRate" name="details[${index}].vatRate">
                 </td>
 
-                <td class="pretax-display">0đ</td>
+                <td class="readonly-line-cell pretax-display" data-label="Giá trước thuế">0đ</td>
 
-                <td class="tax-display">0đ</td>
+                <td class="readonly-line-cell tax-display" data-label="Tiền thuế">0đ</td>
 
-                <td class="fw-semibold line-total">0đ</td>
+                <td class="readonly-line-cell fw-semibold line-total" data-label="Thành tiền">0đ</td>
 
-                <td class="text-end">
+                <td class="text-end" data-label="Xóa">
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeItemRow(this)">
                         <i class="ti ti-trash"></i>
                     </button>
@@ -1057,11 +1481,9 @@
                 <td colspan="9">
                     <div class="subrow-fields">
                         <div class="subrow-field">
-                            <label>Số lô <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control lot-number-input" required
-                                   data-required-message="Vui lòng nhập số lô"
-                                   data-field="lotNumber" name="details[${index}].lotNumber"
-                                   placeholder="VD: LOT-001">
+                            <label>Số lô</label>
+                            <input type="text" class="form-control lot-number-input" maxlength="50"
+                                   data-field="lotNumber" name="details[${index}].lotNumber">
                         </div>
 
                         <div class="subrow-field">
@@ -1070,16 +1492,11 @@
                                    data-field="productionDate" name="details[${index}].productionDate">
                         </div>
 
-                        <div class="subrow-field">
+                        <div class="subrow-field expiration-field">
                             <label>Hạn dùng <span class="text-danger">*</span></label>
                             <input type="date" class="form-control expiration-date-input" required
-                                   data-required-message="Vui lòng nhập hạn dùng hoặc tích &quot;Không có hạn sử dụng&quot;"
+                                   data-required-message="Vui lòng nhập hạn dùng"
                                    data-field="expirationDate" name="details[${index}].expirationDate">
-                            <label class="form-check-label small d-flex align-items-center gap-1 mt-1">
-                                <input type="checkbox" class="form-check-input no-expiration-checkbox"
-                                       data-field="noExpirationDate" name="details[${index}].noExpirationDate">
-                                Không có hạn sử dụng
-                            </label>
                         </div>
                     </div>
                 </td>
@@ -1087,12 +1504,17 @@
         `;
 
         table.appendChild(tbody);
+        if (typeof window.pmInitMoneyInputs === 'function') {
+            window.pmInitMoneyInputs(tbody);
+        }
         refreshRowIndexes();
         wireProductSearch(tbody);
         wirePriceSuggestion(tbody);
+        wirePreviousCostPriceDisplay(tbody);
         wireVatRateSuggestion(tbody);
         wireImportUnitDisplay(tbody);
-        wireNoExpirationToggle(tbody);
+        wireSellPriceSuggestion(tbody);
+        applyExpirationVisibility(tbody);
         wireVietnameseRequiredMessages(tbody);
         calculateSummary();
     }
@@ -1108,6 +1530,134 @@
         button.closest('tbody.detail-item').remove();
         refreshRowIndexes();
         calculateSummary();
+    }
+
+    // Quick "add supplier" modal — lets the user register a supplier that isn't in the system yet
+    // without leaving this form. Posts to SupplierController's JSON endpoint, then fills in both
+    // the visible search box and its hidden supplierId, same as picking an existing supplier would.
+    function wireAddSupplierModal() {
+        const modal = document.getElementById('addSupplierModal');
+        const errorBox = document.getElementById('addSupplierError');
+        const fields = {
+            name: document.getElementById('newSupplierName'),
+            taxCode: document.getElementById('newSupplierTaxCode'),
+            phone: document.getElementById('newSupplierPhone'),
+            email: document.getElementById('newSupplierEmail'),
+            address: document.getElementById('newSupplierAddress')
+        };
+        if (!modal || !fields.name) return;
+
+        const fieldMessages = {
+            taxCode: 'Mã số thuế phải gồm đúng 10 chữ số, hoặc 10 chữ số kèm 3 số chi nhánh (vd 0101234567-001)',
+            phone: 'Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09',
+            email: "Email chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
+        };
+
+        function clearFieldError(input) {
+            input.classList.remove('is-invalid');
+            input.setCustomValidity('');
+            const feedback = document.getElementById(input.getAttribute('aria-describedby'));
+            if (feedback) feedback.textContent = '';
+        }
+
+        function showFieldError(input, message) {
+            input.setCustomValidity(message);
+            input.classList.add('is-invalid');
+            const feedback = document.getElementById(input.getAttribute('aria-describedby'));
+            if (feedback) feedback.textContent = message;
+        }
+
+        function validateSupplierFields(payload) {
+            Object.values(fields).forEach(clearFieldError);
+
+            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
+                showError('Vui lòng điền đầy đủ các trường bắt buộc');
+                return false;
+            }
+            if (!/^[0-9]{10}(-[0-9]{3})?$/.test(payload.taxCode)) {
+                showFieldError(fields.taxCode, fieldMessages.taxCode);
+                fields.taxCode.focus();
+                return false;
+            }
+            if (!/^0(2|3|5|7|8|9)[0-9]{8}$/.test(payload.phone)) {
+                showFieldError(fields.phone, fieldMessages.phone);
+                fields.phone.focus();
+                return false;
+            }
+            if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(payload.email)) {
+                showFieldError(fields.email, fieldMessages.email);
+                fields.email.focus();
+                return false;
+            }
+            return true;
+        }
+
+        function openModal() {
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+            Object.values(fields).forEach(input => {
+                input.value = '';
+                clearFieldError(input);
+            });
+            modal.classList.add('open');
+            setTimeout(() => fields.name.focus(), 0);
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.classList.remove('d-none');
+        }
+
+        async function saveSupplier() {
+            const payload = {
+                name: fields.name.value.trim(),
+                taxCode: fields.taxCode.value.trim(),
+                phone: fields.phone.value.trim(),
+                email: fields.email.value.trim(),
+                address: fields.address.value.trim()
+            };
+            errorBox.classList.add('d-none');
+            errorBox.textContent = '';
+            if (!validateSupplierFields(payload)) {
+                return;
+            }
+            try {
+                // The form's own _csrf hidden input is auto-injected by Spring's
+                // RequestDataValueProcessor — a plain fetch() never picks it up automatically,
+                // must attach it by hand (same as every other quick-add modal in this app).
+                const csrfInput = document.querySelector('input[name="_csrf"]');
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfInput) headers['X-CSRF-TOKEN'] = csrfInput.value;
+                const response = await fetch('/supplier/quick-create', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    showError(data.message || 'Không thể tạo nhà cung cấp');
+                    return;
+                }
+                suppliers.push({ id: data.id, name: data.name });
+                selectSupplier(data.id, data.name);
+                closeModal();
+            } catch (err) {
+                showError('Không thể kết nối máy chủ, vui lòng thử lại');
+            }
+        }
+
+        document.getElementById('addSupplierBtn')?.addEventListener('click', openModal);
+        document.getElementById('addSupplierCloseBtn')?.addEventListener('click', closeModal);
+        document.getElementById('addSupplierCancelBtn')?.addEventListener('click', closeModal);
+        document.getElementById('addSupplierSaveBtn')?.addEventListener('click', saveSupplier);
+        Object.values(fields).forEach(input => {
+            input.addEventListener('input', () => clearFieldError(input));
+        });
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -1126,12 +1676,15 @@
 
             wireProductSearch(row);
             wirePriceSuggestion(row);
+            wirePreviousCostPriceDisplay(row);
             wireVatRateSuggestion(row);
             wireImportUnitDisplay(row);
-            wireNoExpirationToggle(row);
+            wireSellPriceSuggestion(row);
+            applyExpirationVisibility(row);
         });
 
         wireSupplierSearch();
+        wireAddSupplierModal();
         wireVietnameseRequiredMessages(document);
 
         const requisitionSelect = document.getElementById('requisitionId');
@@ -1147,7 +1700,10 @@
     });
 </script>
 
-<!-- Chặn 'e' / '+' / '-' trong các ô số (số lượng, giá nhập, chi phí phát sinh, chiết khấu). -->
+<!-- Định dạng các ô tiền và chuyển về số thuần trước khi submit. -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
+
+<!-- Chặn ký hiệu không hợp lệ trong ô số lượng; các trường tiền dùng money-input phía trên. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>

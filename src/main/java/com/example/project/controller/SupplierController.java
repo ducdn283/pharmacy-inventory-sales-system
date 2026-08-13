@@ -9,21 +9,25 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.Map;
 
 /**
- * Shared Supplier module: only the Owner may create/edit suppliers and their supplied products;
- * Pharmacist and Accountant are view-only (per the PHÂN QUYỀN MÀN HÌNH matrix — Supplier/
- * SupplierProduct = "Chỉ xem" for both non-owner roles, "Toàn quyền" for Owner). All 3 roles
- * share this one {@code /supplier/**} path, so the write restriction is enforced here with
- * {@link #requireOwner()} rather than at the route level.
+ * Shared Supplier module: the Owner has full permission; the Accountant may view the list/detail
+ * and create new suppliers (BA, 2026-08-11 — Kế toán is the one who actually deals with suppliers
+ * when raising a Purchase Invoice, so needs to add one on the spot); Pharmacist stays view-only.
+ * Editing an existing supplier and linking supplied products remain Owner-only. All 3 roles share
+ * this one {@code /supplier/**} path, so the write restrictions are enforced here with
+ * {@link #requireOwner()}/{@link #requireCanCreate()} rather than at the route level.
  */
 @Controller
 @RequestMapping("/supplier")
@@ -39,7 +43,15 @@ public class SupplierController {
 
     private void requireOwner() {
         if (!RoleConstants.OWNER.equals(currentUserContext.getCurrentRole())) {
-            throw new AccessDeniedException("Chỉ Chủ nhà thuốc được tạo/sửa nhà cung cấp");
+            throw new AccessDeniedException("Chỉ Chủ nhà thuốc được sửa nhà cung cấp");
+        }
+    }
+
+    /** Creating a new supplier: Owner or Accountant. Pharmacist stays view-only. */
+    private void requireCanCreate() {
+        String role = currentUserContext.getCurrentRole();
+        if (!RoleConstants.OWNER.equals(role) && !RoleConstants.ACCOUNTANT.equals(role)) {
+            throw new AccessDeniedException("Chỉ Chủ nhà thuốc hoặc Kế toán được tạo nhà cung cấp");
         }
     }
 
@@ -78,7 +90,7 @@ public class SupplierController {
 
     @GetMapping("/create")
     public String createForm(Model model) {
-        requireOwner();
+        requireCanCreate();
         if (!model.containsAttribute("form")) {
             model.addAttribute("form", new SupplierRequest());
         }
@@ -92,7 +104,7 @@ public class SupplierController {
                          @RequestParam(name = "action", defaultValue = "create") String action,
                          Model model,
                          RedirectAttributes redirectAttributes) {
-        requireOwner();
+        requireCanCreate();
         if (bindingResult.hasErrors()) {
             model.addAttribute("pageTitle", "Tạo nhà cung cấp");
             return "supplier/create";
@@ -115,6 +127,32 @@ public class SupplierController {
         return "redirect:/supplier";
     }
 
+    // Quick-add from the Purchase Invoice create form's "+" button (Owner or Accountant, whoever
+    // can create a supplier — see requireCanCreate()). Same JSON-in/JSON-out shape as the sale
+    // screen's "thêm khách hàng nhanh" endpoint (InvoiceController.createCustomerFromSelling) and
+    // the Product create form's "+" nhà sản xuất (ProducerController.quickCreateProducer).
+    @PostMapping(value = "/quick-create",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<?> quickCreate(@Valid @RequestBody SupplierRequest request,
+                                         BindingResult bindingResult) {
+        requireCanCreate();
+        if (bindingResult.hasErrors()) {
+            String message = bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("Dữ liệu không hợp lệ");
+            return ResponseEntity.badRequest().body(Map.of("message", message));
+        }
+        try {
+            Integer newId = supplierService.create(request);
+            return ResponseEntity.ok(supplierService.getById(newId));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
     // ------------------------------------------------------------------ kiểm trùng (AJAX)
 
     /**
@@ -130,7 +168,7 @@ public class SupplierController {
     public Map<String, Boolean> checkDuplicate(@RequestParam("field") String field,
                                                @RequestParam("value") String value,
                                                @RequestParam(name = "id", required = false) Integer id) {
-        requireOwner();
+        requireCanCreate();
         boolean duplicate = switch (field) {
             case "phone" -> supplierService.isPhoneTaken(value, id);
             case "email" -> supplierService.isEmailTaken(value, id);

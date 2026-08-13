@@ -22,13 +22,12 @@ public class FinancialsettingResponse {
     private String taxCode;
     private String locationCode;
     private String locationName;
+    private String address;
     private String phoneNumber;
     private String email;
     private String bankAccountNumber;
     private String bankName;
     private Integer revenueGroup;
-    private BigDecimal annualRevenueThreshold1;
-    private BigDecimal annualRevenueThreshold2;
     private Boolean autoOffsetDebtOnRefund;
     private Integer returnPolicyMaxDays;
     private BigDecimal bankAccountBalance;
@@ -47,13 +46,12 @@ public class FinancialsettingResponse {
                 financialsetting.getTaxCode(),
                 financialsetting.getLocationCode(),
                 financialsetting.getLocationName(),
+                financialsetting.getAddress(),
                 financialsetting.getPhoneNumber(),
                 financialsetting.getEmail(),
                 financialsetting.getBankAccountNumber(),
                 financialsetting.getBankName(),
                 financialsetting.getRevenueGroup(),
-                financialsetting.getAnnualRevenueThreshold1(),
-                financialsetting.getAnnualRevenueThreshold2(),
                 financialsetting.getAutoOffsetDebtOnRefund(),
                 financialsetting.getReturnPolicyMaxDays(),
                 financialsetting.getBankAccountBalance(),
