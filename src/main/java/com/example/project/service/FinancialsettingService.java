@@ -88,7 +88,11 @@ public class FinancialsettingService {
         entity.setRevenueGroup(revenueGroup);
         // annualRevenueThreshold1/2: KHÔNG còn đọc từ request nữa — đã ẩn khỏi UI, cố định vĩnh viễn
         // theo giá trị đã seed (V13). Không set lại ở đây để giữ nguyên giá trị đang lưu.
-        entity.setReturnProductOnInvoiceValueRate(request.getReturnProductOnInvoiceValueRate());
+        BigDecimal returnRate = request.getReturnProductOnInvoiceValueRate();
+        if (returnRate != null && returnRate.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException("Tỷ lệ phần trăm hàng trả phải là số nguyên");
+        }
+        entity.setReturnProductOnInvoiceValueRate(returnRate == null ? null : returnRate.setScale(0));
         entity.setAutoGenerateVATInvoice(Boolean.TRUE.equals(request.getAutoGenerateVATInvoice()));
         entity.setVatInvoiceSeries(request.getVatInvoiceSeries());
         entity.setOpeningCashDefault(request.getOpeningCashDefault());

@@ -150,7 +150,7 @@
                          th:field="*{returnProductOnInvoiceValueRate}"
                          th:classappend="${#fields.hasErrors('returnProductOnInvoiceValueRate')} ? ' is-invalid'"
                          th:disabled="${!editable}"
-                         min="0" max="100" step="0.01">
+                         min="0" max="100" step="1" inputmode="numeric">
                   <span class="input-group-text">%</span>
                 </div>
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('returnProductOnInvoiceValueRate')}" th:errors="*{returnProductOnInvoiceValueRate}"></div>
@@ -166,11 +166,6 @@
               </div>
             </div>
 
-            <div class="form-check mt-3">
-              <input class="form-check-input" type="checkbox" id="fsAutoVat"
-                     th:field="*{autoGenerateVATInvoice}" th:disabled="${!editable}">
-              <label class="form-check-label" for="fsAutoVat">Tự động ký hóa đơn VAT</label>
-            </div>
           </div>
         </div>
 
