@@ -65,6 +65,8 @@
       background: var(--sup-green-bg);
       color: var(--sup-green);
     }
+    .kpi-card.kpi-purple .kpi-icon { background: #f5f3ff; color: #7c3aed; }
+    .kpi-card.kpi-purple .kpi-sub { color: #7c3aed; }
 
     .main-card {
       background: #fff;
@@ -118,7 +120,24 @@
     }
     .btn-search.reset:hover { background: #f9fafb; color: #111827; }
 
-    .sup-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+    .btn-create {
+      height: 40px;
+      padding: 0 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--sup-green);
+      color: #fff;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn-create:hover { background: var(--sup-green-dark); color: #fff; }
+
+    .sup-table { width: 100%; border-collapse: collapse; min-width: 560px; }
     .sup-table th {
       padding: 10px 14px;
       text-align: left;
@@ -138,6 +157,7 @@
     }
     .sup-table tr:last-child td { border-bottom: none; }
     .sup-table tr:hover td { background: #fafafa; }
+
     .sup-code {
       font-size: 12px;
       font-weight: 600;
@@ -147,29 +167,23 @@
     .sup-name { font-weight: 600; color: #111827; }
 
     .update-link {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #a7f3d0;
+      border-radius: 8px;
+      background: #ecfdf5;
       color: var(--sup-green);
-      font-size: 13px;
-      font-weight: 500;
-      text-decoration: none;
-    }
-    .update-link:hover { color: var(--sup-green-dark); text-decoration: underline; }
-
-    .btn-create {
-      height: 40px;
-      padding: 0 20px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      background: var(--sup-green);
-      color: #fff;
-      border: none;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
       text-decoration: none;
-      white-space: nowrap;
+      font-size: 16px;
     }
-    .btn-create:hover { background: var(--sup-green-dark); color: #fff; }
+    .update-link:hover {
+      background: #d1fae5;
+      border-color: #6ee7b7;
+      color: var(--sup-green-dark);
+    }
 
     .pagination .page-link { color: var(--sup-green); border-color: var(--sup-border); font-size: 13px; }
     .pagination .page-item.active .page-link { background: var(--sup-green); border-color: var(--sup-green); color: #fff; }
@@ -192,18 +206,25 @@
   <div class="container-fluid">
 
     <div th:if="${success}" class="alert alert-success alert-dismissible fade show mb-4" role="alert">
-      <i class="ti ti-circle-check me-2"></i>
-      <span th:text="${success}"></span>
+      <i class="ti ti-circle-check me-2"></i><span th:text="${success}"></span>
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 
     <div class="row g-3 mb-4">
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-6">
         <div class="kpi-card">
           <span class="kpi-icon"><i class="ti ti-building-factory-2"></i></span>
           <div class="kpi-label">Tổng nhà sản xuất</div>
           <div class="kpi-number" th:text="${totalProducers}">0</div>
           <div class="kpi-sub">Tất cả nhà sản xuất</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="kpi-card kpi-purple">
+          <span class="kpi-icon"><i class="ti ti-filter"></i></span>
+          <div class="kpi-label">Kết quả lọc</div>
+          <div class="kpi-number" th:text="${totalItems}">0</div>
+          <div class="kpi-sub">Theo bộ lọc hiện tại</div>
         </div>
       </div>
     </div>
@@ -220,17 +241,10 @@
         <input type="hidden" name="page" value="0">
         <input type="hidden" name="size" th:value="${pageSize}">
         <div class="filter-row">
-          <input type="text"
-                 class="filter-input"
-                 name="search"
-                 th:value="${search}"
-                 placeholder="Tìm theo tên nhà sản xuất">
-          <button type="submit" class="btn-search primary">
-            <i class="ti ti-search"></i>Tìm kiếm
-          </button>
-          <a th:href="${basePath}" class="btn-search reset">
-            <i class="ti ti-refresh"></i>Đặt lại
-          </a>
+          <input type="text" class="filter-input" name="search" th:value="${search}"
+                 placeholder="Tìm theo mã NSX hoặc tên (bắt đầu bằng)">
+          <button type="submit" class="btn-search primary"><i class="ti ti-search"></i>Tìm kiếm</button>
+          <a th:href="${basePath}" class="btn-search reset"><i class="ti ti-refresh"></i>Đặt lại</a>
         </div>
       </form>
 
@@ -240,7 +254,7 @@
             <tr>
               <th>Mã NSX</th>
               <th>Tên nhà sản xuất</th>
-              <th style="text-align:center;">Cập nhật</th>
+              <th style="text-align:center;">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -249,17 +263,14 @@
               <td class="sup-name" th:text="${producer.name}">Công ty Dược phẩm ABC</td>
               <td style="text-align:center;">
                 <a th:if="${currentRole == 'OWNER'}" class="update-link"
-                   th:href="${basePath + '/update-producer/' + producer.id}">
-                  Cập nhật
+                   th:href="${basePath + '/update-producer/' + producer.id}" title="Sửa nhà sản xuất">
+                  <i class="ti ti-edit"></i>
                 </a>
-                <span th:unless="${currentRole == 'OWNER'}">—</span>
+                <span th:unless="${currentRole == 'OWNER'}" class="text-secondary">—</span>
               </td>
             </tr>
-
             <tr th:if="${#lists.isEmpty(producers)}" class="empty-row">
-              <td colspan="3" style="text-align:center;">
-                Không tìm thấy nhà sản xuất nào.
-              </td>
+              <td colspan="3" style="text-align:center;">Không tìm thấy nhà sản xuất nào.</td>
             </tr>
           </tbody>
         </table>
@@ -268,31 +279,23 @@
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-4"
            th:if="${totalItems > 0}">
         <div class="text-secondary" style="font-size:13px;">
-          Hiển thị
-          <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + producers.size()}">5</span>
+          Hiển thị <span th:text="${currentPage * pageSize + 1}">1</span>–<span th:text="${currentPage * pageSize + producers.size()}">5</span>
           trong tổng số <span th:text="${totalItems}" class="fw-semibold">0</span> nhà sản xuất
         </div>
         <nav th:if="${totalPages > 1}">
           <ul class="pagination mb-0">
             <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
-              <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
+              <a class="page-link" th:href="@{${basePath}(search=${search}, page=${currentPage - 1}, size=${pageSize})}">Trước</a>
             </li>
-            <li class="page-item"
-                th:each="p : ${#numbers.sequence(0, totalPages - 1)}"
-                th:classappend="${p == currentPage} ? ' active'">
-              <a class="page-link"
-                 th:text="${p + 1}"
-                 th:href="@{${basePath}(search=${search}, page=${p}, size=${pageSize})}">1</a>
+            <li class="page-item" th:each="p : ${#numbers.sequence(0, totalPages - 1)}" th:classappend="${p == currentPage} ? ' active'">
+              <a class="page-link" th:text="${p + 1}" th:href="@{${basePath}(search=${search}, page=${p}, size=${pageSize})}">1</a>
             </li>
             <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
-              <a class="page-link"
-                 th:href="@{${basePath}(search=${search}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
+              <a class="page-link" th:href="@{${basePath}(search=${search}, page=${currentPage + 1}, size=${pageSize})}">Sau</a>
             </li>
           </ul>
         </nav>
       </div>
-
     </div>
 
   </div>
