@@ -71,7 +71,7 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
 
     /**
      * Same filters as {@link #findInStockBatchesByProduct}, but FEFO for selling: dated lots first
-     * (soonest expiry), lots without HSD last — used on the create-invoice / selling screen only.
+     * (soonest expiry), lots without HSD last; within the same expiry, oldest import first (FIFO).
      */
     @Query("""
    select b
@@ -80,7 +80,7 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
    where b.productID.productID = :productId
      and b.storageQuantity > 0
      and b.status = true
-   order by case when b.expirationDate is null then 1 else 0 end, b.expirationDate asc, b.id asc
+   order by case when b.expirationDate is null then 1 else 0 end, b.expirationDate asc, b.importDate asc, b.id asc
    """)
     List<Batch> findInStockBatchesByProductForSale(@Param("productId") Integer productId);
 
