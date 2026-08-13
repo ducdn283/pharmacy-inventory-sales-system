@@ -1866,10 +1866,13 @@
         }
     }
 
-    function openInvoicePrintModal(printUrl) {
+    let invoicePrintAutoOpen = false;
+
+    function openInvoicePrintModal(printUrl, autoPrint) {
         const modal = document.getElementById('invoicePrintModal');
         const frame = document.getElementById('invoicePrintFrame');
         if (!modal || !frame) return;
+        invoicePrintAutoOpen = autoPrint === true;
         frame.style.height = '0';
         frame.src = printUrl;
         modal.classList.add('open');
@@ -1879,6 +1882,7 @@
         const modal = document.getElementById('invoicePrintModal');
         const frame = document.getElementById('invoicePrintFrame');
         if (!modal) return;
+        invoicePrintAutoOpen = false;
         modal.classList.remove('open');
         if (frame) {
             frame.style.height = '0';
@@ -1889,6 +1893,7 @@
     function printInvoicePreview() {
         const frame = document.getElementById('invoicePrintFrame');
         if (frame && frame.contentWindow) {
+            frame.contentWindow.focus();
             frame.contentWindow.print();
         }
     }
@@ -3374,6 +3379,10 @@
         if (invoicePrintFrame) {
             invoicePrintFrame.addEventListener('load', function () {
                 resizeEmbedFrame(invoicePrintFrame);
+                if (invoicePrintAutoOpen) {
+                    invoicePrintAutoOpen = false;
+                    window.setTimeout(printInvoicePreview, 150);
+                }
             });
         }
 
@@ -3439,7 +3448,7 @@
             const params = new URLSearchParams(window.location.search);
             const printId = params.get('printId');
             if (printId && printBasePath) {
-                openInvoicePrintModal(printBasePath + '/' + printId + '/print?embed=1');
+                openInvoicePrintModal(printBasePath + '/' + printId + '/print?embed=1', true);
                 params.delete('printId');
                 const query = params.toString();
                 window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
