@@ -29,14 +29,19 @@ public class ReturnPurchaseCreateRequest {
     private String note;
 
     /**
-     * Tỷ lệ % giá trị hàng trả mà NHÀ CUNG CẤP CHẤP NHẬN HOÀN — <b>SỐ NGUYÊN</b> {@code 0 < rate ≤ 100},
-     * áp cho mọi dòng của phiếu. Bỏ trống ⇒ lấy mặc định
-     * {@code Financialsetting.returnProductOnInvoiceValueRate}. Phần NCC không hoàn là khoản lỗ, tính
-     * động vào chi phí hợp lý TNCN nếu có chứng từ (mục 1.3 + 4.5).
+     * SỐ TIỀN nhà cung cấp chấp nhận hoàn cho cả phiếu, bằng đồng — người lập gõ thẳng con số NCC
+     * báo lại. Bắt buộc, phải {@code > 0} và không vượt quá giá trị hàng trả.
      *
-     * <p>Vì sao vẫn là {@code BigDecimal}: xem {@link ReturnCreateRequest#getRefundRate()}.</p>
+     * <p><b>Vì sao là số tiền chứ không còn là tỷ lệ %</b> (BA chốt 13/08/2026): tiền hoàn từng được
+     * tính bằng {@code giá nhập từng dòng × tỷ lệ %}, tức luôn đo trên giá niêm yết của phiếu nhập.
+     * Phiếu nhập có chiết khấu / phụ phí thì con số đó KHÔNG bằng số nhà thuốc đã thực trả, và đòi
+     * NCC hoàn theo nó là hoàn thừa. Bên NCC đã tự tính ra số họ chấp nhận hoàn (đã gồm mọi khoản
+     * điều chỉnh), nên nhà thuốc chỉ việc điền vào — hết chuyện phải suy ra từ chiết khấu.</p>
+     *
+     * <p>Chênh lệch giữa giá trị hàng trả và số này là khoản LỖ, tính động vào chi phí hợp lý TNCN
+     * nếu có chứng từ (mục 1.3 + 4.5) — cách hiểu không đổi so với thời còn tỷ lệ %.</p>
      */
-    private BigDecimal refundRate;
+    private BigDecimal refundAmount;
 
     /** One entry per candidate purchase line; blank/zero rows are dropped server-side. */
     private List<ReturnPurchaseLineRequest> items = new ArrayList<>();

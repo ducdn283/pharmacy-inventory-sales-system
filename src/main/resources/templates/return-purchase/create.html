@@ -51,6 +51,7 @@
         </div>
 
         <div th:replace="~{fragments/toast :: flash}"></div>
+        <div th:replace="~{fragments/confirm :: confirm}"></div>
 
         <form id="returnForm" th:action="${basePath + '/create'}" method="post" data-validate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -157,14 +158,19 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Tỷ lệ NCC chấp nhận hoàn <span class="text-danger">*</span></label>
+                                <label class="form-label">Số tiền NCC chấp nhận hoàn <span class="text-danger">*</span></label>
                                 <div class="input-group input-group-sm">
-                                    <!-- Số nguyên phần trăm — xem ghi chú cùng ô ở return/create.html. -->
-                                    <input type="number" class="form-control" id="refundRate" name="refundRate"
-                                           min="1" max="100" step="1" inputmode="numeric"
-                                           data-invalid-message="Tỷ lệ NCC hoàn phải là số nguyên từ 1 đến 100"
-                                           th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
-                                    <span class="input-group-text">%</span>
+                                    <!-- Số tiền thật do NCC báo lại, KHÔNG suy ra từ tỷ lệ % nữa (BA chốt
+                                         13/08/2026): phiếu nhập có chiết khấu thì tính theo giá niêm yết
+                                         là đòi hoàn thừa. Điền sẵn = giá trị hàng đang chọn, sửa xuống được. -->
+                                    <input type="text" class="form-control" id="refundAmount" name="refundAmount"
+                                           data-money inputmode="numeric"
+                                           data-required-message="Vui lòng nhập số tiền nhà cung cấp chấp nhận hoàn"
+                                           th:value="${form.refundAmount}" required>
+                                    <span class="input-group-text">đ</span>
+                                </div>
+                                <div class="form-text" id="refundAmountHint">
+                                    Tối đa bằng giá trị hàng trả.
                                 </div>
                             </div>
 
@@ -206,7 +212,12 @@
                                 phiếu trả NCC không phát sinh điều chỉnh thuế.
                             </div>
 
-                            <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit">
+                            <!-- data-confirm được JS ghi lại mỗi lần recalc() (fragment đọc thuộc tính
+                                 tại lúc bấm) để hộp xác nhận chiếu đúng các con số HỆ THỐNG tự tính —
+                                 xem buildConfirmMessage(). Nút "Lưu nháp" cố ý KHÔNG hỏi: nháp không
+                                 đụng tồn kho lẫn công nợ, sửa lại thoải mái. -->
+                            <button type="submit" class="btn btn-stock-primary w-100 mb-2" data-action="submit"
+                                    id="btnCreateApprove" data-confirm="Tạo và duyệt phiếu trả hàng nhà cung cấp?">
                                 <i class="ti ti-send me-1"></i>Tạo &amp; duyệt
                             </button>
                             <button type="submit" class="btn btn-outline-secondary w-100" data-action="draft">
@@ -300,7 +311,9 @@
         const lossRow = document.getElementById('lossRow');
         const summaryOffset = document.getElementById('summaryOffset');
         const summaryPayout = document.getElementById('summaryPayout');
-        const refundRateInput = document.getElementById('refundRate');
+        const refundAmountInput = document.getElementById('refundAmount');
+        const btnCreateApprove = document.getElementById('btnCreateApprove');
+        const refundAmountHint = document.getElementById('refundAmountHint');
         // Bù trừ chỉ hiển thị khi nhà thuốc bật autoOffsetDebtOnRefund.
         const autoOffsetDebt = /*[[${autoOffsetDebt}]]*/ true;
         // Nhà thuốc còn nợ NCC bao nhiêu trên phiếu nhập đang chọn — mốc tạm tính phần cấn trừ.
@@ -438,37 +451,66 @@
             recalc();
         }
 
-        /** Tỷ lệ NCC chấp nhận hoàn đang nhập, kẹp về (0;100]. */
-        function currentRate() {
-            const rate = parseFloat(refundRateInput ? refundRateInput.value : '');
-            if (!isFinite(rate) || rate <= 0) return 100;
-            return Math.min(rate, 100);
-        }
+        // Owner đã tự gõ số tiền hoàn hay chưa. Chưa gõ thì ô tiền bám theo giá trị hàng đang chọn
+        // (mặc định NCC hoàn đủ); gõ rồi thì thôi bám, đổi số lượng không được ghi đè số họ nhập.
+        let refundAmountTouched = false;
 
         function recalc() {
-            const rate = currentRate();
             let totalOriginal = 0;
-            let totalRefund = 0;
             let itemCount = 0;
+            const rows = [];
             lineBody.querySelectorAll('.qty-input').forEach(inp => {
                 let qty = parseInt(inp.value, 10) || 0;
                 const max = parseInt(inp.getAttribute('max'), 10) || 0;
                 if (qty < 0) qty = 0;
                 if (qty > max) { qty = max; inp.value = max; }
                 const price = parseFloat(inp.getAttribute('data-price')) || 0;
-                // originalLineValue = giá trị nhập gốc 100%; lineRefund = phần NCC chấp nhận hoàn.
                 const originalValue = qty * price;
-                const lineRefund = originalValue * rate / 100;
                 const row = inp.closest('tr');
                 row.querySelector('.line-original').textContent = formatMoney(originalValue);
-                row.querySelector('.line-refund').textContent = formatMoney(lineRefund);
                 if (qty > 0) itemCount++;
                 totalOriginal += originalValue;
-                totalRefund += lineRefund;
+                rows.push({ row: row, originalValue: originalValue });
             });
+
+            // Chưa đụng vào ô tiền thì điền sẵn = hoàn đủ.
+            if (!refundAmountTouched && refundAmountInput) {
+                refundAmountInput.value = Math.round(totalOriginal).toLocaleString('vi-VN');
+            }
+            // Tiền hoàn là số Owner gõ, kẹp về [0; giá trị hàng trả] — cùng luật với
+            // ReturnPurchaseService.resolveRefundAmount, ô này chỉ để xem trước.
+            let totalRefund = refundAmountInput ? (window.pmMoneyValue ? pmMoneyValue(refundAmountInput) : 0) : 0;
+            if (!isFinite(totalRefund) || totalRefund < 0) totalRefund = 0;
+            if (totalRefund > totalOriginal) totalRefund = totalOriginal;
+
+            // Chia tiền hoàn về từng dòng theo tỷ trọng giá trị gốc — khớp allocateRefund() ở server.
+            let allocated = 0;
+            rows.forEach((entry, index) => {
+                let lineRefund;
+                if (index === rows.length - 1) {
+                    lineRefund = Math.round(totalRefund) - allocated;
+                } else if (totalOriginal === 0) {
+                    lineRefund = 0;
+                } else {
+                    lineRefund = Math.round(entry.originalValue * totalRefund / totalOriginal);
+                    allocated += lineRefund;
+                }
+                entry.row.querySelector('.line-refund').textContent = formatMoney(lineRefund);
+            });
+
             summaryItems.textContent = itemCount;
             summaryOriginal.textContent = formatMoney(totalOriginal);
             summaryRefund.textContent = formatMoney(totalRefund);
+            if (refundAmountHint) {
+                refundAmountHint.textContent = 'Tối đa ' + formatMoney(totalOriginal)
+                    + ' (giá trị hàng trả).';
+            }
+
+            let offsetForConfirm = 0;
+            if (autoOffsetDebt) {
+                offsetForConfirm = Math.min(Math.round(totalRefund), Math.round(pickedDebt));
+            }
+            updateConfirmMessage(itemCount, totalOriginal, totalRefund, offsetForConfirm);
 
             const loss = Math.round(totalOriginal) - Math.round(totalRefund);
             lossRow.style.display = loss > 0 ? 'flex' : 'none';
@@ -482,8 +524,39 @@
             }
         }
 
-        if (refundRateInput) {
-            refundRateInput.addEventListener('input', recalc);
+        /**
+         * Viết lại câu xác nhận của nút "Tạo & duyệt" theo số liệu đang có trên màn.
+         *
+         * Chỉ liệt kê những con số NGƯỜI LẬP KHÔNG TỰ GÕ mà hệ thống suy ra (giá trị hàng trả, khoản
+         * lỗ, phần cấn trừ nợ, phần còn thu) — đó mới là thứ đáng chiếu lại trước khi trừ kho. Hỏi
+         * "Bạn có chắc?" suông thì người dùng bấm Đồng ý với đúng con số vừa gõ nhầm.
+         */
+        function updateConfirmMessage(itemCount, totalOriginal, totalRefund, offset) {
+            if (!btnCreateApprove) {
+                return;
+            }
+            const refund = Math.round(totalRefund);
+            const original = Math.round(totalOriginal);
+            const loss = original - refund;
+
+            const lines = ['Tạo và duyệt phiếu trả hàng nhà cung cấp?', ''];
+            lines.push('• Số mặt hàng: ' + itemCount);
+            lines.push('• Giá trị hàng trả: ' + formatMoney(original));
+            lines.push('• NCC chấp nhận hoàn: ' + formatMoney(refund));
+            if (loss > 0) {
+                lines.push('• Khoản lỗ (NCC không hoàn đủ): ' + formatMoney(loss));
+            }
+            if (autoOffsetDebt && offset > 0) {
+                lines.push('• Cấn trừ nợ phải trả NCC: ' + formatMoney(offset));
+                lines.push('• NCC còn phải hoàn (tiền thật): ' + formatMoney(refund - offset));
+            }
+            lines.push('', 'Tồn kho sẽ bị trừ ngay khi tạo.');
+            btnCreateApprove.setAttribute('data-confirm', lines.join('\n'));
+        }
+
+        if (refundAmountInput) {
+            // Gõ vào ô tiền = Owner tự quyết con số; từ đó thôi tự điền lại theo giá trị hàng.
+            refundAmountInput.addEventListener('input', () => { refundAmountTouched = true; recalc(); });
         }
 
         function escapeHtml(s) {
@@ -506,6 +579,8 @@
 
 <!-- Xem chú thích ở return/create.html — cùng lý do: ô số lượng trả và ô tỷ lệ NCC chấp nhận hoàn. -->
 <div th:replace="~{fragments/number-input :: numberInputs}"></div>
+<!-- Ô "Số tiền NCC chấp nhận hoàn" là ô tiền có phân cách nghìn (data-money). -->
+<div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 
 <!-- "Lý do trả hàng" bắt buộc (ReturnPurchaseService cũng chặn) — báo ngay dưới ô thay vì để người
      dùng bấm Tạo, chờ nạp lại cả trang mới thấy thông báo ở đầu trang. -->

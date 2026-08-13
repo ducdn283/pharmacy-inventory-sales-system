@@ -202,11 +202,9 @@
                             <span class="text-secondary">Tổng mặt hàng</span>
                             <strong th:text="${detail.itemCount}">2</strong>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Tỷ lệ NCC hoàn</span>
-                            <strong th:text="${detail.appliedRefundRate == null} ? '100%'
-                                    : ${#numbers.formatDecimal(detail.appliedRefundRate, 0, 'POINT', 0, 'COMMA') + '%'}">80%</strong>
-                        </div>
+                        <!-- Bỏ dòng "Tỷ lệ NCC hoàn" từ 13/08/2026: số NCC hoàn nay do người lập gõ
+                             thẳng bằng tiền, tỷ lệ chỉ còn là số suy ngược để đối chiếu dữ liệu cũ.
+                             Con số thật đã nằm ngay dưới ("Nhà cung cấp hoàn"). -->
                         <hr>
                         <div class="d-flex justify-content-between">
                             <span class="text-secondary">Giá trị hàng trả (100%)</span>

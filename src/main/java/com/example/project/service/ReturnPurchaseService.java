@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.Normalizer;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -63,6 +65,12 @@ public class ReturnPurchaseService {
 
     // Thời gian: lưu GIỜ VN gán lên UTC + đọc lại bằng UTC (cùng quy ước InvoiceService/purchase).
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    /**
+     * Khoảng thời gian coi hai phiếu trùng khít nội dung là MỘT lần bấm Tạo bị lặp — xem
+     * {@link #findRecentDuplicate}. Giữ bằng với bên trả khách để hai màn hành xử như nhau.
+     */
+    private static final Duration DUPLICATE_WINDOW = Duration.ofMinutes(2);
 
     private final ReturnRepository returnRepository;
     private final ReturndetailRepository returndetailRepository;
@@ -114,20 +122,9 @@ public class ReturnPurchaseService {
     // Không có hàm nào đọc nhóm doanh thu ở màn này: hộ kinh doanh KHÔNG khấu trừ GTGT đầu vào ở bất kỳ
     // nhóm nào, nên trả hàng NCC không có khoản thuế nào để đảo.
 
-    /**
-     * Tỷ lệ hoàn MẶC ĐỊNH, từ {@code Financialsetting.returnProductOnInvoiceValueRate}. Ở chiều NCC đây là
-     * tỷ lệ NCC CHẤP NHẬN hoàn — phần NCC không hoàn ({@code originalLineValue − lineRefund}) là khoản LỖ,
-     * được tính động vào chi phí hợp lý TNCN của kỳ đó nếu có chứng từ, KHÔNG sinh Expense riêng.
-     */
-    @Transactional(readOnly = true)
-    public BigDecimal getDefaultRefundRate() {
-        return financialsettingRepository.findFirstByOrderByIdAsc()
-                .map(Financialsetting::getReturnProductOnInvoiceValueRate)
-                .filter(rate -> rate.signum() > 0)
-                .map(rate -> rate.min(FULL_REFUND_RATE))
-                .orElse(FULL_REFUND_RATE)
-                .setScale(0, RoundingMode.HALF_UP);
-    }
+    // Không còn "tỷ lệ hoàn mặc định" ở chiều NCC: từ 13/08/2026 người lập gõ thẳng SỐ TIỀN nhà cung
+    // cấp chấp nhận hoàn, và màn tạo điền sẵn đúng giá trị hàng đang chọn (hoàn đủ) để sửa xuống.
+    // Thiết lập `Financialsetting.returnProductOnInvoiceValueRate` nay chỉ còn chiều KHÁCH dùng.
 
     /** Có tự động cấn trừ tiền NCC hoàn vào công nợ đang nợ NCC hay không ({@code autoOffsetDebtOnRefund}). */
     @Transactional(readOnly = true)
@@ -138,21 +135,69 @@ public class ReturnPurchaseService {
     }
 
     /**
-     * Tỷ lệ hoàn thực áp cho phiếu đang lập; bỏ trống thì lấy mặc định của hệ thống. Chỉ nhận SỐ NGUYÊN
-     * phần trăm — cùng luật với chiều khách hàng, xem {@code ReturnService.resolveRefundRate}.
+     * Số tiền NCC chấp nhận hoàn cho phiếu đang lập — người lập gõ thẳng, KHÔNG suy ra từ tỷ lệ %
+     * (BA chốt 13/08/2026, xem {@code ReturnPurchaseCreateRequest#getRefundAmount}).
+     *
+     * <p>Bắt buộc nhập: cố ý không mặc định về "hoàn đủ" khi bỏ trống. Đây là con số tiền thật do
+     * NCC báo lại, tự điền hộ một giá trị là ghi vào phiếu một khoản không ai xác nhận.</p>
+     *
+     * <p>Trần là giá trị hàng trả theo giá nhập. Cho vượt thì {@code originalLineValue − lineRefund}
+     * ra số ÂM, tức khoản "lỗ" âm — về nghiệp vụ là NCC hoàn nhiều hơn giá trị hàng, phần dôi ra là
+     * thu nhập khác chứ không phải tiền hàng, không thuộc phiếu trả này.</p>
      */
-    private BigDecimal resolveRefundRate(BigDecimal requested) {
+    private BigDecimal resolveRefundAmount(BigDecimal requested, BigDecimal originalTotal) {
         if (requested == null) {
-            return getDefaultRefundRate();
+            throw new IllegalArgumentException("Vui lòng nhập số tiền nhà cung cấp chấp nhận hoàn");
         }
-        if (requested.signum() <= 0 || requested.compareTo(FULL_REFUND_RATE) > 0) {
-            throw new IllegalArgumentException("Tỷ lệ NCC hoàn phải lớn hơn 0 và không vượt quá 100%");
+        if (requested.signum() <= 0) {
+            throw new IllegalArgumentException("Số tiền nhà cung cấp chấp nhận hoàn phải lớn hơn 0");
         }
-        if (requested.stripTrailingZeros().scale() > 0) {
-            throw new IllegalArgumentException(
-                    "Tỷ lệ NCC hoàn phải là số nguyên phần trăm (ví dụ 80), không nhập số lẻ");
+        if (requested.compareTo(originalTotal) > 0) {
+            throw new IllegalArgumentException("Số tiền nhà cung cấp chấp nhận hoàn ("
+                    + formatMoney(requested) + "đ) không được vượt quá giá trị hàng trả ("
+                    + formatMoney(originalTotal) + "đ)");
         }
-        return requested.setScale(0, RoundingMode.UNNECESSARY);
+        return requested.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Chia số tiền hoàn của cả phiếu về từng dòng, theo tỷ trọng giá trị gốc của dòng đó.
+     *
+     * <p>Phần dư do làm tròn dồn vào dòng CUỐI để giữ bất biến {@code Σ lineRefund = totalRefund}
+     * đúng đến từng đồng — lệch một đồng ở đây là màn chi tiết hiện tổng dòng khác tổng phiếu, và
+     * số thu được của NCC ({@code totalRefund − offsetDebtAmount}) không khớp với các dòng.</p>
+     */
+    private List<BigDecimal> allocateRefund(List<Chunk> chunks, BigDecimal totalRefund,
+                                            BigDecimal originalTotal) {
+        List<BigDecimal> allocated = new ArrayList<>();
+        BigDecimal running = BigDecimal.ZERO;
+        for (int i = 0; i < chunks.size(); i++) {
+            BigDecimal share;
+            if (i == chunks.size() - 1) {
+                share = totalRefund.subtract(running);
+            } else if (originalTotal.signum() == 0) {
+                share = BigDecimal.ZERO;
+            } else {
+                share = chunks.get(i).grossRefund()
+                        .multiply(totalRefund)
+                        .divide(originalTotal, 2, RoundingMode.HALF_UP);
+                running = running.add(share);
+            }
+            allocated.add(share.setScale(2, RoundingMode.HALF_UP));
+        }
+        return allocated;
+    }
+
+    /**
+     * Tỷ lệ hoàn suy ngược từ tiền hoàn, chỉ để LƯU LẠI cho khớp cột {@code appliedRefundRate} có sẵn.
+     * Không nơi nào tính tiền từ con số này nữa — tiền là số người lập gõ vào.
+     */
+    private BigDecimal deriveRefundRate(BigDecimal totalRefund, BigDecimal originalTotal) {
+        if (originalTotal == null || originalTotal.signum() == 0) {
+            return null;
+        }
+        return totalRefund.multiply(FULL_REFUND_RATE)
+                .divide(originalTotal, 2, RoundingMode.HALF_UP);
     }
 
     // ------------------------------------------------------------------ list / search
@@ -343,12 +388,16 @@ public class ReturnPurchaseService {
     /**
      * Creates one supplier-return slip from a chosen purchase invoice. Owner-only.
      *
+     * <p>Trước khi ghi, phiếu được đối chiếu với các phiếu vừa lập để không tạo bản sao khi người
+     * dùng bấm Tạo lần thứ hai — xem {@link #findRecentDuplicate}.</p>
+     *
      * @param asDraft when true the slip stays a draft; otherwise it is approved immediately, which
      *                deducts stock and updates the purchase's return status.
-     * @return the id of the created slip, for the redirect.
+     * @return id phiếu để chuyển hướng, kèm cờ cho biết đó là phiếu vừa tạo hay phiếu đã có.
      */
     @Transactional
-    public Integer createReturn(ReturnPurchaseCreateRequest request, Integer currentAccountId, boolean asDraft) {
+    public SlipCreateOutcome createReturn(ReturnPurchaseCreateRequest request, Integer currentAccountId,
+                                          boolean asDraft) {
         if (request.getPurchaseId() == null) {
             throw new IllegalArgumentException("Vui lòng chọn phiếu nhập cần trả");
         }
@@ -362,9 +411,6 @@ public class ReturnPurchaseService {
 
         Account creator = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
-
-        // Tỷ lệ NCC chấp nhận hoàn cho phiếu này (mục 1.3) — mặc định theo thiết lập tài chính, chỉnh được.
-        BigDecimal refundRate = resolveRefundRate(request.getRefundRate());
 
         Map<Integer, Purchasedetail> lineById = purchasedetailRepository.findByPurchaseIdWithProduct(purchase.getId())
                 .stream().collect(Collectors.toMap(Purchasedetail::getId, line -> line, (a, b) -> a));
@@ -400,7 +446,7 @@ public class ReturnPurchaseService {
                 if (take <= 0) {
                     continue;
                 }
-                chunks.add(new Chunk(line, batch, take, importPricePerBase(batch), refundRate));
+                chunks.add(new Chunk(line, batch, take, importPricePerBase(batch)));
                 remaining -= take;
             }
         }
@@ -409,11 +455,26 @@ public class ReturnPurchaseService {
             throw new IllegalArgumentException("Vui lòng chọn ít nhất một dòng hàng cần trả");
         }
 
-        // Tiền NCC hoàn = gross (chưa thuế + thuế) × tỷ lệ NCC chấp nhận hoàn, cho cả Nhóm 2 và 3.
-        BigDecimal totalRefund = chunks.stream()
-                .map(Chunk::lineRefund)
+        // Giá trị hàng trả theo giá nhập (100%) — trần của số NCC có thể hoàn.
+        BigDecimal originalTotal = chunks.stream()
+                .map(Chunk::grossRefund)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Tiền NCC hoàn nay do người lập GÕ THẲNG (số NCC báo lại), không suy ra từ tỷ lệ % nữa —
+        // xem ReturnPurchaseCreateRequest#getRefundAmount.
+        BigDecimal totalRefund = resolveRefundAmount(request.getRefundAmount(), originalTotal);
+        List<BigDecimal> lineRefunds = allocateRefund(chunks, totalRefund, originalTotal);
         String status = asDraft ? ReturnPurchaseStatus.DRAFT : ReturnPurchaseStatus.APPROVED;
+
+        String reason = request.getReason().trim();
+        Optional<Return> duplicate = findRecentDuplicate(purchase.getId(), currentAccountId, status,
+                totalRefund, reason, qtyByPurchaseLine(chunks));
+        if (duplicate.isPresent()) {
+            Return existing = duplicate.get();
+            return SlipCreateOutcome.duplicate(existing.getId(), "Phiếu trả hàng nhà cung cấp "
+                    + existing.getReturnCode() + " với đúng nội dung này đã được lập lúc "
+                    + formatInstant(existing.getReturnDate())
+                    + ". Hệ thống KHÔNG tạo thêm phiếu mới — đây là phiếu đã lưu.");
+        }
 
         Return ret = new Return();
         ret.setReturnCode(temporaryCode());
@@ -426,10 +487,12 @@ public class ReturnPurchaseService {
         // phiếu thu bên Kế toán. 3 cột refundCash/refundBanking/refundCredit đã bị bỏ khỏi
         // bảng `return` — phiếu trả chỉ còn lưu tổng NCC phải hoàn (totalRefund/offsetDebtAmount).
         ret.setTotalRefund(totalRefund);
-        ret.setAppliedRefundRate(refundRate);
+        // Tỷ lệ nay là số SUY RA từ tiền hoàn, chỉ để đối chiếu với dữ liệu cũ (thời còn nhập %) —
+        // không còn là dữ liệu người dùng nhập, và không màn nào tính tiền từ nó nữa.
+        ret.setAppliedRefundRate(deriveRefundRate(totalRefund, originalTotal));
         // Số dự kiến cấn trừ vào công nợ đang nợ NCC; chốt lại theo dư nợ tại thời điểm DUYỆT.
         ret.setOffsetDebtAmount(computeDebtOffset(purchase, totalRefund));
-        ret.setReason(request.getReason().trim());
+        ret.setReason(reason);
         ret.setNote(trimToNull(request.getNote()));
         ret.setStatus(status);
         if (ReturnPurchaseStatus.APPROVED.equals(status)) {
@@ -440,7 +503,8 @@ public class ReturnPurchaseService {
         // Mã thật = TNCC- + id do DB cấp, ghi ngay sau INSERT (cùng transaction).
         savedReturn.setReturnCode(formatCode(savedReturn.getId()));
 
-        for (Chunk chunk : chunks) {
+        for (int i = 0; i < chunks.size(); i++) {
+            Chunk chunk = chunks.get(i);
             Returndetail detail = new Returndetail();
             detail.setReturnID(savedReturn);
             detail.setInvoiceDetailID(null);
@@ -451,7 +515,7 @@ public class ReturnPurchaseService {
             detail.setReturnQty(chunk.qty());
             detail.setBaseQtyRestored(chunk.qty());
             detail.setUnitSellPrice(chunk.grossUnitPrice());
-            detail.setLineRefund(chunk.lineRefund());
+            detail.setLineRefund(lineRefunds.get(i));
             // originalLineValue = giá trị nhập GỐC 100% của phần trả; lineRefund = số NCC thực hoàn.
             // Chênh lệch giữa 2 cột = khoản LỖ khi NCC không hoàn đủ — tính động vào chi phí hợp lý TNCN
             // của kỳ, KHÔNG tạo Expense riêng.
@@ -466,7 +530,73 @@ public class ReturnPurchaseService {
             applyReturnEffect(savedReturn);
         }
 
-        return savedReturn.getId();
+        return SlipCreateOutcome.created(savedReturn.getId());
+    }
+
+    /**
+     * Tìm phiếu trả NCC vừa lập có nội dung TRÙNG KHÍT với phiếu sắp tạo — dấu hiệu của một cú bấm
+     * Tạo lặp lại chứ không phải một phiếu mới. Đối xứng với {@code ReturnService#findRecentDuplicate};
+     * lý do so khớp toàn bộ nội dung (thay vì chỉ "cùng phiếu nhập") xem javadoc bên đó.
+     *
+     * <p>Chữ ký dòng hàng gộp theo DÒNG NHẬP, cố ý bỏ lô ra ngoài: cùng một yêu cầu trả có thể được
+     * FIFO chia sang bộ lô khác nhau giữa hai lần bấm (lần đầu đã trừ kho nếu tạo-và-duyệt), lấy lô
+     * làm khoá thì lần gửi lại không còn khớp và vẫn lọt.</p>
+     *
+     * <p>Cửa sổ đo trên {@code returnDate} nên mốc phải lấy bằng {@link #nowVn()} — cột đó lưu giờ VN
+     * gắn nhãn UTC, so với {@code Instant.now()} là lệch 7 tiếng.</p>
+     */
+    private Optional<Return> findRecentDuplicate(Integer purchaseId,
+                                                 Integer creatorId,
+                                                 String status,
+                                                 BigDecimal totalRefund,
+                                                 String reason,
+                                                 Map<Integer, Integer> qtyByPurchaseLine) {
+        Instant since = nowVn().minus(DUPLICATE_WINDOW);
+        for (Return candidate : returnRepository.findByPurchaseID_IdOrderByReturnDateDesc(purchaseId)) {
+            if (candidate.getReturnDate() == null || candidate.getReturnDate().isBefore(since)) {
+                // Danh sách đã sắp giảm dần theo ngày nên gặp phiếu ngoài cửa sổ là dừng được.
+                break;
+            }
+            if (candidate.getReturnedBy() == null
+                    || !Objects.equals(candidate.getReturnedBy().getId(), creatorId)
+                    || !status.equals(candidate.getStatus())
+                    || !sameAmount(candidate.getTotalRefund(), totalRefund)
+                    || !reason.equals(candidate.getReason())) {
+                continue;
+            }
+            if (qtyByPurchaseLine.equals(savedQtyByPurchaseLine(candidate.getId()))) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Chữ ký dòng hàng của phiếu SẮP tạo: {@code purchaseDetailId -> tổng số lượng (đơn vị cơ sở)}. */
+    private Map<Integer, Integer> qtyByPurchaseLine(List<Chunk> chunks) {
+        Map<Integer, Integer> qtyByLine = new LinkedHashMap<>();
+        for (Chunk chunk : chunks) {
+            qtyByLine.merge(chunk.line().getId(), chunk.qty(), Integer::sum);
+        }
+        return qtyByLine;
+    }
+
+    /** Cùng chữ ký như trên, dựng lại từ một phiếu ĐÃ lưu. */
+    private Map<Integer, Integer> savedQtyByPurchaseLine(Integer returnId) {
+        Map<Integer, Integer> qtyByLine = new LinkedHashMap<>();
+        for (Returndetail detail : returndetailRepository.findByReturnIdWithRelations(returnId)) {
+            if (detail.getPurchaseDetailID() != null) {
+                qtyByLine.merge(detail.getPurchaseDetailID().getId(), orZero(detail.getReturnQty()), Integer::sum);
+            }
+        }
+        return qtyByLine;
+    }
+
+    /** So hai số tiền theo GIÁ TRỊ, không theo scale — {@code 80} và {@code 80.00} phải là một. */
+    private boolean sameAmount(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
     }
 
     // ------------------------------------------------------------------ approve / reject
@@ -872,6 +1002,15 @@ public class ReturnPurchaseService {
         return "";
     }
 
+    /** Số tiền dạng "3.088.000" để nhét vào câu thông báo (không kèm ký hiệu tiền). */
+    private String formatMoney(BigDecimal amount) {
+        if (amount == null) {
+            return "0";
+        }
+        return new DecimalFormat("#,##0", new DecimalFormatSymbols(Locale.forLanguageTag("vi-VN")))
+                .format(amount);
+    }
+
     private BigDecimal importPricePerBase(Batch batch) {
         if (batch != null && batch.getImportPricePerBase() != null) {
             return batch.getImportPricePerBase();
@@ -1062,20 +1201,14 @@ public class ReturnPurchaseService {
      * VAT lên trên). KHÔNG tách net/VAT: hộ kinh doanh không khấu trừ GTGT đầu vào nên không có gì để ghi
      * sổ đảo ngược.</p>
      */
-    private record Chunk(Purchasedetail line, Batch batch, int qty, BigDecimal unitImportPrice,
-                         BigDecimal refundRate) {
+    private record Chunk(Purchasedetail line, Batch batch, int qty, BigDecimal unitImportPrice) {
         /** Giá trị nhập GỐC 100% của chunk = importPricePerBase × qty (originalLineValue). */
         BigDecimal grossRefund() {
             return unitImportPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
         }
 
-        /** Số NCC THỰC hoàn = giá trị gốc × tỷ lệ NCC chấp nhận hoàn. */
-        BigDecimal lineRefund() {
-            if (refundRate == null || refundRate.compareTo(FULL_REFUND_RATE) >= 0) {
-                return grossRefund();
-            }
-            return grossRefund().multiply(refundRate).divide(FULL_REFUND_RATE, 2, RoundingMode.HALF_UP);
-        }
+        // Tiền hoàn của dòng KHÔNG còn tính ở đây: nó được chia ra từ số tiền cả phiếu mà người lập
+        // gõ vào — xem allocateRefund().
 
         /** Gross unit import price (per base) — đã gồm thuế, dùng làm đơn giá dòng chi tiết. */
         BigDecimal grossUnitPrice() {
