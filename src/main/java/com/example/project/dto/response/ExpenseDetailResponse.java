@@ -55,4 +55,13 @@ public class ExpenseDetailResponse {
      */
     private Integer shiftReportId;
     private String shiftReportCode;
+
+    /**
+     * Whether this slip's amount is under {@code ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT} — the
+     * threshold under which its own Pharmacist applicant may confirm payment themselves instead of
+     * waiting on the Owner (BA 2026-08-13). Independent of who is viewing the page; the detail route
+     * already restricts a Pharmacist to their own slips, so the template only needs to additionally
+     * check this flag.
+     */
+    private boolean pharmacistCanConfirmPayment;
 }

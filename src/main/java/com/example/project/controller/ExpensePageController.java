@@ -1,6 +1,7 @@
 package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
+import com.example.project.constant.ExpenseStatus;
 import com.example.project.constant.ExpenseType;
 import com.example.project.dto.request.ExpenseCreateRequest;
 import com.example.project.dto.response.ExpenseDetailResponse;
@@ -26,10 +27,14 @@ import java.util.Map;
 /**
  * Expense ("Phiếu chi") screens (list / detail / create / submit / approve / reject / confirm
  * payment / cancel). Owner and Accountant retain their full existing list scope. Pharmacists only
- * see their own slips and may create customer-return refund slips. Approve/reject/confirm-payment
- * are Owner-only, same as Stock Adjustment —
- * confirm-payment in particular is Owner-only even for a slip an Accountant raised or that was
- * approved on their behalf (BA 2026-08).
+ * see their own slips and may create customer-return refund slips under
+ * {@link ExpenseType#PHARMACIST_REFUND_LIMIT} — and, since one of those is always under
+ * {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} too, never actually hit {@code PENDING} (BA
+ * 2026-08-13, see {@code ExpenseService.pharmacistAutoApproves}). Approve/reject are Owner-only,
+ * same as Stock Adjustment. Confirm-payment is Owner-only for everyone else — even a slip an
+ * Accountant raised or that was approved on their behalf (BA 2026-08) — EXCEPT a Pharmacist may
+ * also confirm their own slip when it stayed under that same auto-approve threshold (BA 2026-08-13,
+ * mapped under {@code /pharmacist/**} too — {@code ExpenseService} re-checks ownership and amount).
  */
 @Controller
 public class ExpensePageController {
@@ -132,13 +137,15 @@ public class ExpensePageController {
                     currentUserContext.getCurrentAccountId(),
                     isOwner,
                     asDraft,
-                    isOwner || currentUserContext.isPharmacist(),
+                    currentUserContext.isPharmacist(),
                     currentUserContext.isPharmacist() ? ExpenseType.RETURN_REFUND_PAYOUT : null);
 
             String message;
             if (asDraft) {
                 message = "Đã lưu nháp phiếu chi";
-            } else if (isOwner) {
+            } else if (ExpenseStatus.AWAITING_PAYMENT.equals(expenseService.getDetail(expenseId).getStatusName())) {
+                // Owner tự duyệt, và dược sĩ dưới ngưỡng ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT
+                // cũng vậy (BA 2026-08-13) — cả hai đều nhảy thẳng qua Chờ duyệt.
                 message = "Tạo phiếu chi thành công (đã tự động duyệt, đang chờ thanh toán)";
             } else {
                 message = "Đã gửi phiếu chi, đang chờ duyệt";
@@ -184,10 +191,13 @@ public class ExpensePageController {
         model.addAttribute("purchaseInvoiceAmounts", expenseService.payablePurchaseInvoiceAmounts());
         model.addAttribute("purchaseLinkableTypes", expenseService.purchaseLinkableTypes());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        // Only the Owner pays out of the drawer; the Accountant settles by transfer and has no shift
-        // to reconcile cash against. Enforced server-side in ExpenseService.resolveSplit — this is
-        // just so the form does not offer a field the server will reject.
+        // Cash is Owner/Pharmacist-only; chuyển khoản is Owner/Accountant-only (BA 2026-08-13) — a
+        // Pharmacist's shift only ever opens with a fixed cash float, never a bank transfer, and an
+        // Accountant never opens the drawer at all. Enforced server-side in
+        // ExpenseService.resolveSplit — this is just so the form does not offer a field the server
+        // will reject.
         model.addAttribute("canPayCash", currentUserContext.isOwner() || currentUserContext.isPharmacist());
+        model.addAttribute("canPayBanking", !currentUserContext.isPharmacist());
         model.addAttribute("basePath", basePath);
 
         // Số dư quỹ hiện tại — chỉ để cảnh báo phía client TRƯỚC khi tạo phiếu nếu quỹ - số tiền chi
@@ -207,6 +217,8 @@ public class ExpensePageController {
                     expenseId,
                     currentUserContext.isPharmacist() ? currentUserContext.getCurrentAccountId() : null);
             model.addAttribute("detail", detail);
+            model.addAttribute("canCancel",
+                    expenseService.canCancel(expenseId, currentUserContext.getCurrentAccountId()));
             model.addAttribute("basePath", basePath);
             return "expense/detail";
         } catch (IllegalArgumentException exception) {
@@ -261,23 +273,32 @@ public class ExpensePageController {
     }
 
     /**
-     * The Owner confirms an {@link com.example.project.constant.ExpenseStatus#AWAITING_PAYMENT}
-     * slip's money actually left — Owner-only (mapped under {@code /owner/**} only, matching
+     * Confirms an {@link com.example.project.constant.ExpenseStatus#AWAITING_PAYMENT} slip's money
+     * actually left. Owner-only for most slips (mapped under {@code /owner/**}, matching
      * approve/reject), even for a slip an Accountant raised or that an Owner approved on their
-     * behalf. This is NOT the old, deleted "mark-paid" (that let a slip under-pay itself and be
-     * topped up later) — a phiếu chi is still one payment for its whole posted amount; this only
-     * confirms that amount really left.
+     * behalf — EXCEPT a Pharmacist may also confirm their own slip when it's under
+     * {@code ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT} (BA 2026-08-13, mapped under
+     * {@code /pharmacist/**} too; {@code ExpenseService} still re-checks both the ownership and the
+     * amount, this route mapping alone is not the real gate). This is NOT the old, deleted
+     * "mark-paid" (that let a slip under-pay itself and be topped up later) — a phiếu chi is still
+     * one payment for its whole posted amount; this only confirms that amount really left.
      */
-    @PostMapping(OWNER_BASE + "/{expenseId}/confirm-payment")
+    @PostMapping({OWNER_BASE + "/{expenseId}/confirm-payment", PHARMACIST_BASE + "/{expenseId}/confirm-payment"})
     public String confirmPayment(@PathVariable Integer expenseId,
+                                 HttpServletRequest request,
                                  RedirectAttributes redirectAttributes) {
+        String basePath = resolveBasePath(request);
         try {
-            expenseService.confirmPayment(expenseId);
+            if (currentUserContext.isPharmacist()) {
+                expenseService.confirmPayment(expenseId, currentUserContext.getCurrentAccountId());
+            } else {
+                expenseService.confirmPayment(expenseId);
+            }
             redirectAttributes.addFlashAttribute("successMessage", "Đã xác nhận thanh toán, phiếu chi hoàn thành");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
-        return "redirect:" + OWNER_BASE + "/" + expenseId;
+        return "redirect:" + basePath + "/" + expenseId;
     }
 
     @PostMapping({OWNER_BASE + "/{expenseId}/cancel", ACCOUNTANT_BASE + "/{expenseId}/cancel",
@@ -288,8 +309,7 @@ public class ExpensePageController {
                           RedirectAttributes redirectAttributes) {
         String basePath = resolveBasePath(request);
         try {
-            expenseService.cancel(expenseId, reason,
-                    currentUserContext.isPharmacist() ? currentUserContext.getCurrentAccountId() : null);
+            expenseService.cancel(expenseId, reason, currentUserContext.getCurrentAccountId());
             redirectAttributes.addFlashAttribute("successMessage", "Đã hủy phiếu chi");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());

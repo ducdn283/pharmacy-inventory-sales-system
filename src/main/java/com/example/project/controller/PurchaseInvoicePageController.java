@@ -356,19 +356,23 @@ public class PurchaseInvoicePageController {
         model.addAttribute("canReject", isPending && RoleConstants.OWNER.equals(role));
         model.addAttribute("canEditDraft", isDraft && canManageDraft);
         model.addAttribute("canDeleteDraft", isDraft && canManageDraft);
+        model.addAttribute("canCancel",
+                purchaseinvoiceService.canCancel(purchaseId, currentUserContext.getCurrentAccountId()));
 
         return "purchase-invoice/detail";
     }
 
     @PostMapping({
-            "/owner/purchase-invoices/{purchaseId}/cancel"
+            "/owner/purchase-invoices/{purchaseId}/cancel",
+            "/accountant/purchase-invoices/{purchaseId}/cancel"
     })
     public String cancelPurchaseInvoice(@PathVariable Integer purchaseId,
                                         @RequestParam(name = "reason", required = false) String reason,
                                         HttpServletRequest request,
                                         RedirectAttributes redirectAttributes) {
         try {
-            purchaseinvoiceService.cancelPurchaseInvoice(purchaseId, reason);
+            purchaseinvoiceService.cancelPurchaseInvoice(
+                    purchaseId, reason, currentUserContext.getCurrentAccountId());
             redirectAttributes.addFlashAttribute("successMessage", "Đã hủy phiếu nhập");
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());

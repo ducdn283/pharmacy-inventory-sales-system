@@ -2,6 +2,7 @@ package com.example.project.dto.request;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -40,6 +41,7 @@ public class FinancialSettingUpdateRequest {
     @NotNull(message = "Tỷ lệ phần trăm hàng trả không được để trống")
     @DecimalMin(value = "0", message = "Tỷ lệ phần trăm hàng trả không được nhỏ hơn 0")
     @DecimalMax(value = "100", message = "Tỷ lệ phần trăm hàng trả không được vượt quá 100")
+    @Digits(integer = 3, fraction = 0, message = "Tỷ lệ phần trăm hàng trả phải là số nguyên")
     private BigDecimal returnProductOnInvoiceValueRate;
 
     private Boolean autoGenerateVATInvoice;

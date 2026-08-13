@@ -13,7 +13,9 @@ import java.util.List;
  * real, reachable state now, not legacy display-only:
  * <ul>
  *   <li>{@link #DRAFT} — a work-in-progress slip the creator has not sent yet.</li>
- *   <li>{@link #PENDING} — submitted by a non-Owner creator, awaiting the Owner's approval.</li>
+ *   <li>{@link #PENDING} — submitted by a non-Owner creator, awaiting the Owner's approval. A
+*       Pharmacist's slip under {@code ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} skips this state
+*       entirely and lands straight on {@link #AWAITING_PAYMENT} (BA 2026-08-13).</li>
  *   <li>{@link #REJECTED} — the Owner declined a pending slip.</li>
  *   <li>{@link #AWAITING_PAYMENT} — approved (by Owner directly, or Owner approving an
  *       Accountant's pending slip), but the money has not actually left yet. Not editable, but can

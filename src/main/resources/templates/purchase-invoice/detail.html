@@ -546,7 +546,7 @@
                     </button>
 
                     <button type="button" class="btn btn-outline-danger w-100 mb-3"
-                            th:if="${basePath != '/accountant/purchase-invoices' && !canApprove && !canReject && !canEditDraft && !canDeleteDraft && detail.paymentStatus != 'Đã hủy'}"
+                            th:if="${canCancel}"
                             data-bs-toggle="modal" data-bs-target="#cancelPurchaseInvoiceModal">
                         <i class="ti ti-ban me-1"></i>
                         Hủy phiếu nhập
@@ -565,7 +565,7 @@
 </main>
 
 <div class="modal fade" id="cancelPurchaseInvoiceModal" tabindex="-1" aria-hidden="true"
-     th:if="${basePath != '/accountant/purchase-invoices' && !canApprove && !canReject && !canEditDraft && !canDeleteDraft && detail.paymentStatus != 'Đã hủy'}">
+     th:if="${canCancel}">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:16px;">
             <form th:action="${basePath + '/' + detail.id + '/cancel'}" method="post">

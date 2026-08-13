@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -73,7 +74,10 @@ public class FinancialSettingPageController {
         FinancialSettingUpdateRequest form = new FinancialSettingUpdateRequest();
         form.setTaxCalculationMethod(response.getTaxCalculationMethod());
         form.setRevenueGroup(response.getRevenueGroup());
-        form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate());
+        // Dữ liệu cũ dùng DECIMAL(5,2); đưa về số nguyên khi mở form để không hiện "50.00".
+        form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate() == null
+                ? null
+                : response.getReturnProductOnInvoiceValueRate().setScale(0, RoundingMode.HALF_UP));
         form.setAutoGenerateVATInvoice(response.getAutoGenerateVATInvoice());
         form.setVatInvoiceSeries(response.getVatInvoiceSeries());
         form.setOpeningCashDefault(response.getOpeningCashDefault());
