@@ -47,6 +47,74 @@
             color: #fff;
         }
 
+        .product-header-actions {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+        }
+
+        .btn-restock-plan {
+            min-height: 48px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px 7px 8px;
+            border: 1px solid #f59e0b;
+            border-radius: 12px;
+            background: #fffbeb;
+            color: #92400e;
+            box-shadow: 0 1px 2px rgba(146, 64, 14, .08);
+            text-align: left;
+            transition: background-color .15s ease, border-color .15s ease,
+                        box-shadow .15s ease, transform .15s ease;
+        }
+
+        .btn-restock-plan:hover {
+            border-color: #d97706;
+            background: #fef3c7;
+            color: #78350f;
+            box-shadow: 0 4px 12px rgba(217, 119, 6, .16);
+            transform: translateY(-1px);
+        }
+
+        .btn-restock-plan:focus-visible {
+            outline: 0;
+            box-shadow: 0 0 0 .2rem rgba(245, 158, 11, .24);
+        }
+
+        .restock-plan-icon {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            background: #f59e0b;
+            color: #fff;
+            font-size: 18px;
+        }
+
+        .restock-plan-copy {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.15;
+        }
+
+        .restock-plan-title {
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .restock-plan-meta {
+            margin-top: 3px;
+            color: #b45309;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -106,6 +174,20 @@
         @media (max-width: 991.98px) {
             .product-page-content {
                 padding-top: 84px !important;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .product-header-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+
+            .btn-restock-plan,
+            .product-create-button {
+                width: 100%;
+                justify-content: center;
             }
         }
 
@@ -194,18 +276,25 @@
                 <h1 class="fs-4 mb-1">Danh sách hàng hóa</h1>
                 <p class="text-secondary mb-0">Quản lý thông tin và tồn kho hàng hóa của nhà thuốc</p>
             </div>
-            <div th:if="${basePath == '/owner/products'}" class="d-flex gap-2">
+            <div th:if="${basePath == '/owner/products'}" class="product-header-actions">
                 <button th:if="${!#lists.isEmpty(restockProducts)}"
                         type="button"
                         id="openRestockModalBtn"
-                        class="btn btn-outline-warning"
+                        class="btn-restock-plan"
                         title="Chọn sản phẩm sắp hết/hết hàng để thêm vào dự trù">
-                    <i class="ti ti-shopping-cart me-1"></i>
-                    Tạo dự trù hàng cần nhập
-                    <span class="badge bg-warning text-dark ms-1"
-                          th:text="${#lists.size(restockProducts)}">0</span>
+                    <span class="restock-plan-icon" aria-hidden="true">
+                        <i class="ti ti-clipboard-list"></i>
+                    </span>
+                    <span class="restock-plan-copy">
+                        <span class="restock-plan-title">Lập phiếu dự trù</span>
+                        <span class="restock-plan-meta"
+                              th:text="${#lists.size(restockProducts) + ' mặt hàng cần nhập'}">
+                            0 mặt hàng cần nhập
+                        </span>
+                    </span>
                 </button>
-                <a th:href="@{/owner/products/create}" class="btn btn-stock-primary">
+                <a th:href="@{/owner/products/create}"
+                   class="btn btn-stock-primary product-create-button d-inline-flex align-items-center justify-content-center px-3">
                     <i class="ti ti-plus me-1"></i> Tạo hàng hóa
                 </a>
             </div>
@@ -278,15 +367,18 @@
                 <input type="hidden" name="page" value="0">
                 <input type="hidden" name="size" th:value="${pageSize}">
 
-                <div class="row g-3">
-                    <div class="col-12 col-xl-6">
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-xl-4">
+                        <label class="form-label small text-secondary" for="productKeyword">Tìm kiếm</label>
                         <input type="search" class="form-control" name="keyword" th:value="${keyword}"
+                               id="productKeyword"
                                placeholder="Tìm theo mã, tên sản phẩm, mã vạch hoặc nhà sản xuất"
                                aria-label="Tìm kiếm sản phẩm">
                     </div>
 
                     <div class="col-12 col-md-6 col-xl-2">
-                        <select class="form-select" name="typeId">
+                        <label class="form-label small text-secondary" for="productTypeFilter">Loại hàng</label>
+                        <select class="form-select" name="typeId" id="productTypeFilter">
                             <option value="">Tất cả loại hàng</option>
                             <option th:each="type : ${types}"
                                     th:value="${type.id}"
@@ -297,32 +389,48 @@
                     </div>
 
                     <div class="col-12 col-md-6 col-xl-2">
-                        <select class="form-select" name="stockStatus">
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="IN_STOCK" th:selected="${filterStockStatus == 'IN_STOCK'}">Còn hàng</option>
-                            <option value="LOW" th:selected="${filterStockStatus == 'LOW'}">Sắp hết</option>
-                            <option value="OUT" th:selected="${filterStockStatus == 'OUT'}">Hết hàng</option>
+                        <label class="form-label small text-secondary" for="productStatusFilter">Trạng thái</label>
+                        <select class="form-select" name="status" id="productStatusFilter">
+                            <option value="" th:selected="${filterStatus == null or filterStatus.isBlank()}">Tất cả hàng</option>
+                            <optgroup label="Tồn kho">
+                                <option value="IN_STOCK" th:selected="${filterStatus == 'IN_STOCK'}">Còn hàng</option>
+                                <option value="OUT" th:selected="${filterStatus == 'OUT'}">Hết hàng</option>
+                            </optgroup>
+                            <optgroup label="Kinh doanh" th:if="${canFilterBusinessStatus}">
+                                <option value="ACTIVE" th:selected="${filterStatus == 'ACTIVE'}">Đang kinh doanh</option>
+                                <option value="INACTIVE" th:selected="${filterStatus == 'INACTIVE'}">Ngừng kinh doanh</option>
+                            </optgroup>
                         </select>
                     </div>
 
-                    <div class="col-6 col-xl-1">
-                        <button type="submit" class="btn btn-stock-primary w-100">
-                            <i class="ti ti-search"></i>
-                        </button>
+                    <div class="col-12 col-md-6 col-xl-2">
+                        <label class="form-label small text-secondary" for="productSortOrder">Sắp xếp</label>
+                        <select class="form-select" name="sortOrder" id="productSortOrder" aria-label="Sắp xếp sản phẩm">
+                            <option value="">Sắp xếp mặc định</option>
+                            <option value="NAME_ASC" th:selected="${sortOrder == 'NAME_ASC'}">Tên: A → Z</option>
+                            <option value="NAME_DESC" th:selected="${sortOrder == 'NAME_DESC'}">Tên: Z → A</option>
+                            <option value="STOCK_ASC" th:selected="${sortOrder == 'STOCK_ASC'}">Tồn kho: tăng dần</option>
+                            <option value="STOCK_DESC" th:selected="${sortOrder == 'STOCK_DESC'}">Tồn kho: giảm dần</option>
+                        </select>
                     </div>
 
-                    <div class="col-6 col-xl-1">
-                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100">
-                            <i class="ti ti-refresh"></i>
-                        </a>
+                    <div class="col-12 col-md-6 col-xl-2">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-stock-primary flex-grow-1">
+                                <i class="ti ti-search me-1"></i>Lọc
+                            </button>
+                            <a th:href="${basePath}" class="btn btn-outline-secondary" title="Đặt lại bộ lọc">
+                                <i class="ti ti-refresh"></i>
+                            </a>
+                        </div>
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-12 border-top pt-3 mt-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="nearExpiryOnly" value="true"
                                    id="nearExpiryOnly" th:checked="${nearExpiryOnly}">
                             <label class="form-check-label" for="nearExpiryOnly">
-                                Chỉ hiện hàng hóa có lô sắp hết hạn (trong 90 ngày tới)
+                                Hàng hóa có lô sắp hết hạn (trong 90 ngày tới)
                             </label>
                         </div>
                     </div>
@@ -372,7 +480,12 @@
                         <td class="text-end" th:text="${item.stock}">25</td>
                         <td th:text="${item.prescriptionDisplay}">—</td>
                         <td>
-                            <span class="status-badge"
+                            <span th:if="${filterStatus == 'INACTIVE'}"
+                                  class="status-badge status-out">
+                                Ngừng kinh doanh
+                            </span>
+                            <span th:unless="${filterStatus == 'INACTIVE'}"
+                                  class="status-badge"
                                   th:classappend="${' ' + item.stockStatusCss}"
                                   th:text="${item.stockStatusLabel}">
                                 Còn hàng
@@ -415,7 +528,7 @@
                     <ul class="pagination mb-0">
                         <li class="page-item" th:classappend="${currentPage == 0} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage - 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, status=${filterStatus}, sortOrder=${sortOrder}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage - 1}, size=${pageSize})}">
                                 Trước
                             </a>
                         </li>
@@ -425,14 +538,14 @@
                             th:classappend="${pageNumber == currentPage} ? ' active'">
                             <a class="page-link"
                                th:text="${pageNumber + 1}"
-                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${pageNumber}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, status=${filterStatus}, sortOrder=${sortOrder}, nearExpiryOnly=${nearExpiryOnly}, page=${pageNumber}, size=${pageSize})}">
                                 1
                             </a>
                         </li>
 
                         <li class="page-item" th:classappend="${currentPage + 1 >= totalPages} ? ' disabled'">
                             <a class="page-link"
-                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, stockStatus=${filterStockStatus}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage + 1}, size=${pageSize})}">
+                               th:href="@{${basePath}(keyword=${keyword}, typeId=${filterTypeId}, status=${filterStatus}, sortOrder=${sortOrder}, nearExpiryOnly=${nearExpiryOnly}, page=${currentPage + 1}, size=${pageSize})}">
                                 Sau
                             </a>
                         </li>
