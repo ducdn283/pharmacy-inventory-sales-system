@@ -243,7 +243,8 @@ public class PurchaseinvoiceService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập"));
 
         List<Purchasedetail> details = purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId);
-        Map<Integer, String> unitNameByDetailId = importUnitNameByPurchaseDetailId(details);
+        PurchaseBatchDisplayMaps batchDisplayMaps = purchaseBatchDisplayMaps(details);
+        Map<Integer, String> unitNameByDetailId = batchDisplayMaps.unitNames();
         Map<Integer, BigDecimal> sellPriceByProduct = getSellPriceByProduct();
 
         BigDecimal subtotal = calculateSubtotal(details);
@@ -259,7 +260,8 @@ public class PurchaseinvoiceService {
         }
 
         List<PurchaseInvoiceDetailItemResponse> items = details.stream()
-                .map(detail -> toDetailItem(detail, unitNameByDetailId.get(detail.getId()), sellPriceByProduct))
+                .map(detail -> toDetailItem(detail, unitNameByDetailId.get(detail.getId()),
+                        batchDisplayMaps.batchNames().get(detail.getId()), sellPriceByProduct))
                 .toList();
 
         int totalQuantity = details.stream()
@@ -371,25 +373,40 @@ public class PurchaseinvoiceService {
      * .importUnitID} (mỗi Purchasedetail luôn có đúng 1 Batch được tạo cùng transaction, xem
      * {@link #createBatchForDetail}), không suy đoán lại từ Product như gợi ý trên trang tạo phiếu.
      */
-    private Map<Integer, String> importUnitNameByPurchaseDetailId(List<Purchasedetail> details) {
+    private record PurchaseBatchDisplayMaps(Map<Integer, String> unitNames,
+                                            Map<Integer, String> batchNames) {}
+
+    private PurchaseBatchDisplayMaps purchaseBatchDisplayMaps(List<Purchasedetail> details) {
         List<Integer> detailIds = details.stream()
                 .map(Purchasedetail::getId)
                 .filter(Objects::nonNull)
                 .toList();
 
         if (detailIds.isEmpty()) {
-            return Map.of();
+            return new PurchaseBatchDisplayMaps(Map.of(), Map.of());
         }
 
-        Map<Integer, String> result = new HashMap<>();
+        Map<Integer, String> unitNames = new HashMap<>();
+        Map<Integer, String> batchNames = new HashMap<>();
 
         for (Batch batch : batchRepository.findByPurchaseDetailIds(detailIds)) {
-            if (batch.getPurchaseDetailID() != null && batch.getImportUnitID() != null) {
-                result.put(batch.getPurchaseDetailID().getId(), batch.getImportUnitID().getUnitName());
+            if (batch.getPurchaseDetailID() == null) {
+                continue;
+            }
+            Integer detailId = batch.getPurchaseDetailID().getId();
+            if (batch.getImportUnitID() != null) {
+                unitNames.put(detailId, batch.getImportUnitID().getUnitName());
+            }
+            if (batch.getBatchName() != null && !batch.getBatchName().isBlank()) {
+                batchNames.put(detailId, batch.getBatchName());
             }
         }
 
-        return result;
+        return new PurchaseBatchDisplayMaps(unitNames, batchNames);
+    }
+
+    private Map<Integer, String> importUnitNameByPurchaseDetailId(List<Purchasedetail> details) {
+        return purchaseBatchDisplayMaps(details).unitNames();
     }
 
     /**
@@ -512,19 +529,10 @@ public class PurchaseinvoiceService {
      * called for a Nháp/Chờ duyệt row — see the class javadoc.
      */
     private void receiveStockForInvoice(Purchaseinvoice invoice, List<Purchasedetail> details) {
-        receiveStockForInvoice(invoice, details, List.of());
-    }
-
-    private void receiveStockForInvoice(Purchaseinvoice invoice, List<Purchasedetail> details,
-                                        List<PreparedPurchaseLine> sourceLines) {
         Supplier supplier = invoice.getSupplierID();
-        for (int index = 0; index < details.size(); index++) {
-            Purchasedetail detail = details.get(index);
+        for (Purchasedetail detail : details) {
             Product product = detail.getProductID();
-            String batchName = index < sourceLines.size()
-                    ? sourceLines.get(index).item().getBatchName().trim()
-                    : generateBatchName(product, detail);
-            createBatchForDetail(invoice, detail, product, batchName);
+            createBatchForDetail(invoice, detail, product);
             upsertSupplierProductCostPrice(supplier, product, detail.getImportPrice());
         }
     }
@@ -547,7 +555,7 @@ public class PurchaseinvoiceService {
         Purchaseinvoice savedInvoice = savePurchaseInvoiceGuardingConcurrentEdit(invoice);
 
         List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
-        receiveStockForInvoice(savedInvoice, savedDetails, header.lines());
+        receiveStockForInvoice(savedInvoice, savedDetails);
 
         return savedInvoice.getId();
     }
@@ -671,7 +679,7 @@ public class PurchaseinvoiceService {
 
         purchasedetailRepository.deleteAll(purchasedetailRepository.findByPurchaseIdWithProduct(purchaseId));
         List<Purchasedetail> savedDetails = persistDetailLines(savedInvoice, header.lines());
-        receiveStockForInvoice(savedInvoice, savedDetails, header.lines());
+        receiveStockForInvoice(savedInvoice, savedDetails);
 
         return savedInvoice.getId();
     }
@@ -774,7 +782,6 @@ public class PurchaseinvoiceService {
             item.setImportPrice(detail.getImportPrice());
             item.setProductionDate(detail.getProductionDate());
             item.setExpirationDate(detail.getExpirationDate());
-            item.setBatchName(generateBatchName(detail.getProductID(), detail));
             item.setLotNumber(detail.getLotNumber());
             item.setVatRate(detail.getVatRate());
             details.add(item);
@@ -1072,8 +1079,7 @@ public class PurchaseinvoiceService {
     }
 
     /** Creates the Batch (stock) row for one just-saved Purchasedetail — see class javadoc. */
-    private void createBatchForDetail(Purchaseinvoice invoice, Purchasedetail detail, Product product,
-                                      String batchName) {
+    private void createBatchForDetail(Purchaseinvoice invoice, Purchasedetail detail, Product product) {
         Productunit importUnit = resolveImportUnit(product);
 
         BigDecimal importPrice = safe(detail.getImportPrice());
@@ -1082,7 +1088,7 @@ public class PurchaseinvoiceService {
 
         Batch batch = new Batch();
         batch.setBatchCode(generateBatchCode(invoice.getId(), detail.getId()));
-        batch.setBatchName(batchName);
+        batch.setBatchName(generateBatchName(detail));
         batch.setProductID(product);
         batch.setPurchaseDetailID(detail);
         batch.setStorageQuantity(storageQuantity);
@@ -1201,15 +1207,8 @@ public class PurchaseinvoiceService {
                 + "-" + String.format("%03d", purchaseDetailId == null ? 0 : purchaseDetailId);
     }
 
-    private String generateBatchName(Product product, Purchasedetail detail) {
-        String productName = product != null && product.getName() != null
-                ? product.getName()
-                : "Sản phẩm";
-        String lot = detail.getLotNumber() != null && !detail.getLotNumber().isBlank()
-                ? detail.getLotNumber()
-                : "Không số lô";
-        String name = productName + " - " + lot;
-        return name.length() > 50 ? name.substring(0, 50) : name;
+    private String generateBatchName(Purchasedetail detail) {
+        return "LOT-" + String.format("%06d", detail.getId() == null ? 0 : detail.getId());
     }
 
     /**
@@ -1363,14 +1362,6 @@ public class PurchaseinvoiceService {
                 throw new IllegalArgumentException("Đơn giá phải lớn hơn 0");
             }
 
-            if (detail.getBatchName() == null || detail.getBatchName().isBlank()) {
-                throw new IllegalArgumentException("Vui lòng nhập tên lô cho tất cả sản phẩm");
-            }
-
-            if (detail.getBatchName().trim().length() > 50) {
-                throw new IllegalArgumentException("Tên lô không được vượt quá 50 ký tự");
-            }
-
             // The type-aware expiration-date rule needs the resolved Product (see
             // requiresExpirationDate) — checked per-line in prepareLine() instead of here, right
             // after each line's Product is looked up, to avoid fetching it twice.
@@ -1405,7 +1396,7 @@ public class PurchaseinvoiceService {
         );
     }
 
-    private PurchaseInvoiceDetailItemResponse toDetailItem(Purchasedetail detail, String unitName,
+    private PurchaseInvoiceDetailItemResponse toDetailItem(Purchasedetail detail, String unitName, String batchName,
                                                            Map<Integer, BigDecimal> sellPriceByProduct) {
         Product product = detail.getProductID();
         BigDecimal lineTotal = safe(detail.getImportPrice())
@@ -1414,6 +1405,7 @@ public class PurchaseinvoiceService {
         return new PurchaseInvoiceDetailItemResponse(
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
+                batchName,
                 detail.getLotNumber(),
                 detail.getProductionDate(),
                 formatLocalDate(detail.getProductionDate()),

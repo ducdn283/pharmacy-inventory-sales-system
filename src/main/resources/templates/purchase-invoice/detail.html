@@ -90,17 +90,122 @@
             color: #ffffff;
         }
 
-        .table thead th {
-            font-size: 12px;
-            color: #6b7280;
-            background: #f9fafb;
+        /* Mỗi lô hàng là một card riêng — header (sản phẩm + tên lô + thành tiền) rồi tới lưới
+           auto-fit cho các trường còn lại. auto-fit tự tính số cột vừa khít bề rộng cột nội dung
+           (9/12 màn hình desktop) và tự xuống hàng khi hết chỗ, nên KHÔNG BAO GIỜ sinh thanh cuộn
+           ngang, kể cả khi thu nhỏ cửa sổ hay có nhiều trường — không cần media query riêng cho
+           việc này (khác với cách làm bảng cũ ép 4 cột cố định rồi phải viết lại ở mỗi breakpoint). */
+        .batch-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .batch-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px 18px;
+            background: #fff;
+        }
+
+        .batch-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px dashed #e5e7eb;
+        }
+
+        .batch-item-product {
             font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 6px;
+            overflow-wrap: anywhere;
+        }
+
+        .batch-item-lot-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #059669;
+            background: #ecfdf5;
+            padding: 3px 9px;
+            border-radius: 999px;
+        }
+
+        .batch-item-total {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .batch-item-total-label {
+            font-size: 11px;
+            color: #6b7280;
+            margin-bottom: 2px;
+        }
+
+        .batch-item-total-value {
+            font-weight: 700;
+            font-size: 16px;
+            color: #059669;
             white-space: nowrap;
         }
 
-        .table tbody td {
+        /* Cố định 5 cột (đúng 2 hàng cho 10 trường: hàng 1 = số lô/ngày SX/hạn dùng/số lượng/đơn
+           vị, hàng 2 = giá nhập/giá bán/thuế suất/giá trước thuế/tiền thuế) — auto-fit trước đây
+           tính SỐ CỘT DÙNG CHUNG cho cả lưới dựa trên bề rộng, nên khi 10 trường không chia hết
+           cho số cột đó, hàng cuối bị thiếu ô và để trống lệch hẳn sang phải, nhìn rời rạc. Cố
+           định 5 (rồi 2 ở màn hẹp) luôn chia hết 10, không bao giờ còn hàng lẻ. */
+        .batch-item-fields {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        @media (max-width: 991.98px) {
+            .batch-item-fields {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 14px 20px;
+            }
+        }
+
+        .batch-field {
+            min-width: 0;
+        }
+
+        .batch-field label {
+            display: block;
+            font-size: 11px;
+            color: #6b7280;
+            margin-bottom: 3px;
+        }
+
+        .batch-field .batch-field-value {
             font-size: 13px;
-            vertical-align: middle;
+            font-weight: 500;
+            overflow-wrap: anywhere;
+        }
+
+        .batch-field .money-value,
+        .batch-field .date-value,
+        .batch-field .quantity-value {
+            white-space: nowrap;
+        }
+
+        .batch-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #f8fafc;
+            font-weight: 700;
+            font-size: 14px;
         }
 
         @media (max-width: 991.98px) {
@@ -231,78 +336,96 @@
                     <div class="p-4 border-bottom">
                         <div class="section-title">
                             <i class="ti ti-package text-success me-1"></i>
-                            Hàng hóa nhập
+                            Thông tin lô hàng nhập
                         </div>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead>
-                            <tr>
-                                <th>Mã hàng</th>
-                                <th>Tên hàng hóa</th>
-                                <th>Số lô</th>
-                                <th>Ngày sản xuất</th>
-                                <th>Hạn dùng</th>
-                                <th>Số lượng</th>
-                                <th>Đơn vị</th>
-                                <th>Giá nhập</th>
-                                <th>Giá bán (đơn vị nhập)</th>
-                                <th>Thuế suất (%)</th>
-                                <th>Giá trước thuế</th>
-                                <th>Tiền thuế</th>
-                                <th>Thành tiền</th>
-                            </tr>
-                            </thead>
+                    <div class="p-4">
+                        <div class="batch-list">
+                            <div class="batch-item" th:each="item : ${detail.items}">
+                                <div class="batch-item-header">
+                                    <div>
+                                        <div class="batch-item-product" th:text="${item.productName}">Paracetamol 500mg</div>
+                                        <span class="batch-item-lot-badge"
+                                              th:text="${item.batchName == null || item.batchName.isBlank() ? '-' : item.batchName}">LOT-000001</span>
+                                    </div>
+                                    <div class="batch-item-total">
+                                        <div class="batch-item-total-label">Thành tiền</div>
+                                        <div class="batch-item-total-value"
+                                             th:text="${#numbers.formatDecimal(item.lineTotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                            0đ
+                                        </div>
+                                    </div>
+                                </div>
 
-                            <tbody>
-                            <tr th:each="item : ${detail.items}">
-                                <td class="fw-semibold text-success" th:text="${item.productId}">PARA500</td>
-                                <td th:text="${item.productName}">Paracetamol 500mg</td>
-                                <td>
-                                    <span class="badge bg-secondary-subtle text-secondary"
-                                          th:text="${item.lotNumber == null || item.lotNumber.isBlank() ? 'Không có' : item.lotNumber}">
-                                        LOT-001
-                                    </span>
-                                </td>
-                                <td th:text="${item.productionDateDisplay}">01/06/2026</td>
-                                <td th:text="${item.expirationDateDisplay}">01/06/2028</td>
-                                <td th:text="${item.quantity}">10</td>
-                                <td th:text="${item.unitName}">Hộp</td>
-                                <td th:text="${#numbers.formatDecimal(item.importPrice, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    0đ
-                                </td>
-                                <td th:text="${item.sellPrice != null ? #numbers.formatDecimal(item.sellPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">
-                                    —
-                                </td>
-                                <td th:text="${item.vatRate}">5</td>
-                                <td th:text="${#numbers.formatDecimal(item.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    0đ
-                                </td>
-                                <td th:text="${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    0đ
-                                </td>
-                                <td class="fw-semibold"
-                                    th:text="${#numbers.formatDecimal(item.lineTotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    0đ
-                                </td>
-                            </tr>
+                                <div class="batch-item-fields">
+                                    <div class="batch-field">
+                                        <label>Số lô</label>
+                                        <span class="badge bg-secondary-subtle text-secondary batch-field-value"
+                                              th:text="${item.lotNumber == null || item.lotNumber.isBlank() ? '-' : item.lotNumber}">
+                                            LOT-001
+                                        </span>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Ngày sản xuất</label>
+                                        <div class="batch-field-value date-value"
+                                             th:text="${item.productionDateDisplay == null || item.productionDateDisplay.isBlank() ? '-' : item.productionDateDisplay}">01/06/2026</div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Hạn dùng</label>
+                                        <div class="batch-field-value date-value" th:text="${item.expirationDateDisplay}">01/06/2028</div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Số lượng</label>
+                                        <div class="batch-field-value quantity-value" th:text="${item.quantity}">10</div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Đơn vị</label>
+                                        <div class="batch-field-value" th:text="${item.unitName}">Hộp</div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Giá nhập</label>
+                                        <div class="batch-field-value money-value"
+                                             th:text="${#numbers.formatDecimal(item.importPrice, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                            0đ
+                                        </div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Giá bán (đơn vị nhập)</label>
+                                        <div class="batch-field-value money-value"
+                                             th:text="${item.sellPrice != null ? #numbers.formatDecimal(item.sellPrice, 0, 'POINT', 0, 'COMMA') + 'đ' : '—'}">
+                                            —
+                                        </div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Thuế suất (%)</label>
+                                        <div class="batch-field-value" th:text="${item.vatRate}">5</div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Giá trước thuế</label>
+                                        <div class="batch-field-value money-value"
+                                             th:text="${#numbers.formatDecimal(item.preTaxAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                            0đ
+                                        </div>
+                                    </div>
+                                    <div class="batch-field">
+                                        <label>Tiền thuế</label>
+                                        <div class="batch-field-value money-value"
+                                             th:text="${#numbers.formatDecimal(item.vatAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                            0đ
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                            <tr class="fw-semibold">
-                                <td colspan="5">Tổng cộng</td>
-                                <td th:text="${detail.totalQuantity}">0</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td class="text-success"
-                                    th:text="${#numbers.formatDecimal(detail.subtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                            <div class="batch-summary-row">
+                                <span th:text="${'Tổng cộng — ' + detail.totalQuantity + ' sản phẩm'}">Tổng cộng — 0 sản phẩm</span>
+                                <span class="text-success"
+                                      th:text="${#numbers.formatDecimal(detail.subtotal, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                     0đ
-                                </td>
-                            </tr>
-                            </tbody>
-                        </table>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

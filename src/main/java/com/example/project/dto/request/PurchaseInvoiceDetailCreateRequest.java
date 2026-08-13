@@ -2,7 +2,6 @@ package com.example.project.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -37,8 +36,8 @@ public class PurchaseInvoiceDetailCreateRequest {
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate expirationDate;
 
-    @NotBlank(message = "Tên lô không được để trống")
-    @Size(max = 50, message = "Tên lô không được vượt quá 50 ký tự")
+    // Kept only for backward-compatible request binding. The purchase-invoice form no longer
+    // displays/submits this field and PurchaseinvoiceService always generates the stored name.
     private String batchName;
 
     @Size(max = 50, message = "Số lô không được vượt quá 50 ký tự")

@@ -99,7 +99,7 @@
 
         #detailTable {
             width: 100%;
-            table-layout: auto;
+            table-layout: fixed;
         }
 
         #detailTable th,
@@ -109,15 +109,20 @@
         }
 
         /* Dành nhiều chỗ hơn cho sản phẩm và đơn giá thay vì chia đều 9 cột khiến dòng hàng bị bó. */
-        #detailTable th:nth-child(1) { width: 22%; }
+        #detailTable th:nth-child(1) { width: 24%; }
         #detailTable th:nth-child(2) { width: 8%; }
-        #detailTable th:nth-child(3) { width: 9%; }
-        #detailTable th:nth-child(4) { width: 14%; }
-        #detailTable th:nth-child(5) { width: 7%; }
-        #detailTable th:nth-child(6) { width: 12%; }
-        #detailTable th:nth-child(7) { width: 10%; }
-        #detailTable th:nth-child(8) { width: 13%; }
-        #detailTable th:nth-child(9) { width: 5%; }
+        #detailTable th:nth-child(3) { width: 10%; }
+        #detailTable th:nth-child(4) { width: 13%; }
+        #detailTable th:nth-child(5) { width: 12%; }
+        #detailTable th:nth-child(6) { width: 9%; }
+        #detailTable th:nth-child(7) { width: 8%; }
+        #detailTable th:nth-child(8) { width: 12%; }
+        #detailTable th:nth-child(9) { width: 4%; }
+
+        .vat-rate-display {
+            white-space: nowrap;
+            font-size: 12px;
+        }
 
         .product-search-results {
             position: absolute;
@@ -159,10 +164,13 @@
             border-top: none;
         }
 
+        /* auto-fit + 1fr: khi ô "Hạn dùng" bị ẩn (display:none, xem .expiration-field.is-not-
+           applicable) thì track lưới của nó không còn tồn tại — 2 ô còn lại tự giãn lấp đầy hàng
+           thay vì giữ nguyên width cố định và để lại khoảng trống. */
         .subrow-fields {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            column-gap: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            column-gap: 16px;
             row-gap: 16px;
         }
 
@@ -510,9 +518,7 @@
                                 </label>
                             </div>
                             <div class="form-text small mb-0">
-                                Tắt nếu nhà cung cấp báo đơn giá TRƯỚC thuế — hệ thống sẽ tự cộng thêm
-                                VAT theo thuế suất của từng sản phẩm trước khi lưu (số tiền lưu lại
-                                luôn là giá đã gồm thuế, bất kể bật/tắt ở đây).
+                                Tắt nếu nhà cung cấp báo đơn giá TRƯỚC thuế.
                             </div>
                         </div>
 
@@ -618,20 +624,6 @@
                                 <tr class="detail-subrow">
                                     <td colspan="9">
                                         <div class="subrow-fields">
-                                            <div class="subrow-field">
-                                                <label>Tên lô <span class="text-danger">*</span></label>
-                                                <input type="text"
-                                                       class="form-control batch-name-input"
-                                                       th:field="*{details[__${iterStat.index}__].batchName}"
-                                                       maxlength="50"
-                                                       required
-                                                       data-required-message="Vui lòng nhập tên lô">
-                                                <div class="text-danger small mt-1"
-                                                     th:if="${#fields.hasErrors('details[__${iterStat.index}__].batchName')}"
-                                                     th:errors="*{details[__${iterStat.index}__].batchName}">
-                                                </div>
-                                            </div>
-
                                             <div class="subrow-field">
                                                 <label>Số lô</label>
                                                 <input type="text"
@@ -768,19 +760,19 @@
 
                         <div class="text-secondary small" th:if="${!dualSubmit}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Tên lô luôn bắt buộc; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm — lô hàng được tạo ngay khi lưu phiếu.</p>
+                            <p class="mb-2">2. Tên lô được tự động tạo theo dạng LOT-xxxxxx; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm — lô hàng được tạo ngay khi lưu phiếu.</p>
                             <p class="mb-2">3. Mỗi dòng nhập luôn tạo một lô hàng mới — nhập đúng số lô, ngày SX, hạn dùng theo phiếu giao hàng của nhà cung cấp.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
                         <div class="text-secondary small" th:if="${dualSubmit and selfApprove}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Tên lô luôn bắt buộc; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
+                            <p class="mb-2">2. Tên lô được tự động tạo theo dạng LOT-xxxxxx; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
                             <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi tạo phiếu (hoặc duyệt lại phiếu nháp), mỗi dòng nhập mới tạo một lô hàng mới.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
                         <div class="text-secondary small" th:if="${dualSubmit and !selfApprove}">
                             <p class="mb-2">1. Chọn đúng nhà cung cấp và dự trù mua hàng liên quan.</p>
-                            <p class="mb-2">2. Tên lô luôn bắt buộc; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
+                            <p class="mb-2">2. Tên lô được tự động tạo theo dạng LOT-xxxxxx; số lô không bắt buộc. Hạn dùng phụ thuộc loại sản phẩm.</p>
                             <p class="mb-2">3. Lưu Nháp không tạo lô hàng — chỉ khi Chủ nhà thuốc duyệt, mỗi dòng nhập mới tạo một lô hàng mới.</p>
                             <p class="mb-0">4. Hạn dùng không được trước ngày sản xuất, và phải sau ngày hiện tại.</p>
                         </div>
@@ -1488,13 +1480,6 @@
             <tr class="detail-subrow">
                 <td colspan="9">
                     <div class="subrow-fields">
-                        <div class="subrow-field">
-                            <label>Tên lô <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control batch-name-input" required maxlength="50"
-                                   data-required-message="Vui lòng nhập tên lô"
-                                   data-field="batchName" name="details[${index}].batchName">
-                        </div>
-
                         <div class="subrow-field">
                             <label>Số lô</label>
                             <input type="text" class="form-control lot-number-input" maxlength="50"
