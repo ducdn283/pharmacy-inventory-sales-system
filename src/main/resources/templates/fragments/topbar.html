@@ -733,17 +733,43 @@
             }
 
             /**
+             * Mốc THAO TÁC THẬT gần nhất của người dùng.
+             *
+             * Chỉ kiểm tab có hiển thị hay không là CHƯA ĐỦ: máy ở
+             * quầy thường để nguyên trình duyệt mở, tab vẫn "visible"
+             * suốt đêm dù không ai đụng vào. Khi đó vòng poll và SSE
+             * vẫn chạy ⇒ phiên vẫn bất tử, đúng cái lỗi đang muốn
+             * chữa. Nên phải đo bằng thao tác thật.
+             *
+             * CỐ Ý KHÔNG nghe 'mousemove': chuột bị va nhẹ khi lau
+             * bàn không phải là người dùng đang làm việc.
+             *
+             * 5 phút < 30 phút (hạn phiên) nên sau khi rời máy, lần
+             * ping cuối cùng cách lúc rời đi tối đa 5 phút — phiên
+             * chắc chắn hết hạn, chỉ muộn hơn đúng khoảng đó.
+             */
+            var IDLE_MS = 5 * 60 * 1000;
+
+            var lastActivityAt = Date.now();
+
+            function isUserActive() {
+                return document.visibilityState === 'visible'
+                    && (Date.now() - lastActivityAt) <= IDLE_MS;
+            }
+
+            /**
              * Mở kết nối SSE.
              *
              * EventSource tự kết nối lại nếu kết nối bị timeout
              * hoặc mất mạng tạm thời.
              *
-             * ĐÓNG LẠI KHI TAB BỊ ẨN — xem khối "kiểm tra phiên"
-             * bên dưới để biết lý do. SseEmitter đặt timeout đúng
-             * 30 phút, bằng luôn thời hạn phiên: mỗi lần nó tự kết
-             * nối lại là một request mới làm mới phiên ngay tại
-             * thời điểm phiên đáng lẽ hết hạn, nên chỉ cần một tab
-             * bỏ quên là tài khoản không bao giờ được nhả ra.
+             * ĐÓNG LẠI KHI TAB BỊ ẨN HOẶC NGƯỜI DÙNG BỎ MÁY ĐI —
+             * xem khối "kiểm tra phiên" bên dưới để biết lý do.
+             * SseEmitter đặt timeout đúng 30 phút, bằng luôn thời hạn
+             * phiên: mỗi lần nó tự kết nối lại là một request mới làm
+             * mới phiên ngay tại thời điểm phiên đáng lẽ hết hạn, nên
+             * chỉ cần một tab bỏ quên là tài khoản không bao giờ được
+             * nhả ra.
              */
             var notificationStream = null;
 
@@ -779,18 +805,53 @@
                 closeNotificationStream
             );
 
+            /**
+             * Người dùng thao tác trở lại sau một quãng nghỉ dài:
+             * mở lại SSE và nạp bù phần thông báo đã bỏ lỡ.
+             */
+            function markUserActivity() {
+                lastActivityAt = Date.now();
+
+                /*
+                 * Điều kiện là "SSE đang đóng", KHÔNG phải "vừa mới
+                 * nghỉ đủ lâu": tab bị ẩn 10 giây cũng đã đóng SSE
+                 * rồi, mà quãng nghỉ đó chưa tới ngưỡng nghỉ dài —
+                 * đo theo ngưỡng thì quay lại tab sẽ không có thông
+                 * báo realtime nữa.
+                 */
+                if (document.visibilityState === 'visible'
+                    && !notificationStream) {
+                    openNotificationStream();
+                    refreshNotificationTopbar();
+                }
+            }
+
+            [
+                'pointerdown',
+                'keydown',
+                'scroll',
+                'wheel',
+                'touchstart'
+            ].forEach(
+                function (eventName) {
+                    window.addEventListener(
+                        eventName,
+                        markUserActivity,
+                        { passive: true }
+                    );
+                }
+            );
+
             document.addEventListener(
                 'visibilitychange',
                 function () {
                     if (document.visibilityState
                         === 'visible') {
-                        openNotificationStream();
-
                         /*
-                         * Nạp lại một lần để bù phần thông báo
-                         * phát sinh trong lúc tab bị ẩn.
+                         * Chuyển sang tab này CŨNG là một thao tác
+                         * thật của người dùng.
                          */
-                        refreshNotificationTopbar();
+                        markUserActivity();
                     } else {
                         closeNotificationStream();
                     }
@@ -805,7 +866,8 @@
             setInterval(
                 function () {
                     /*
-                     * CHỈ hỏi khi tab đang hiển thị.
+                     * CHỈ hỏi khi người dùng ĐANG THẬT SỰ LÀM VIỆC
+                     * (tab hiển thị VÀ có thao tác trong IDLE_MS).
                      *
                      * Mọi request đều làm mới lastAccessedTime của
                      * HttpSession, nên vòng lặp 30 giây này giữ
@@ -818,10 +880,13 @@
                      * nhập sau, mà SessionRegistry nằm trong RAM
                      * nên chỉ restart app mới gỡ được.
                      *
-                     * Tab bị ẩn = người dùng không thao tác thật,
-                     * đúng nghĩa "không hoạt động" của F-01.
+                     * Đóng luôn SSE ở đây: đó là chỗ DUY NHẤT phát
+                     * hiện được "đang mở màn hình nhưng đã bỏ đi" —
+                     * trình duyệt không bắn sự kiện nào khi người
+                     * dùng ngừng thao tác.
                      */
-                    if (document.visibilityState !== 'visible') {
+                    if (!isUserActive()) {
+                        closeNotificationStream();
                         return;
                     }
 
