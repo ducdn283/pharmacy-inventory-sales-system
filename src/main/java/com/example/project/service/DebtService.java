@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -750,7 +751,8 @@ public class DebtService {
         if (amount == null) {
             return "0đ";
         }
-        return amount.stripTrailingZeros().toPlainString() + "đ";
+        long vnd = amount.setScale(0, RoundingMode.HALF_UP).longValue();
+        return String.format(Locale.forLanguageTag("vi-VN"), "%,dđ", vnd);
     }
 
     private static final class PartyBalance {

@@ -594,7 +594,8 @@ public class DebtOffsetService {
         if (amount == null) {
             return "0đ";
         }
-        return amount.stripTrailingZeros().toPlainString() + "đ";
+        long vnd = amount.setScale(0, RoundingMode.HALF_UP).longValue();
+        return String.format(Locale.forLanguageTag("vi-VN"), "%,dđ", vnd);
     }
 
     private String trimToNull(String value) {
