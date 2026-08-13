@@ -68,28 +68,16 @@ public class NotificationPageController {
             @RequestParam(name = "status", required = false)
             String status,
 
-            @RequestParam(
-                    name = "unreadOnly",
-                    defaultValue = "false"
-            )
+            @RequestParam(name = "unreadOnly", defaultValue = "false")
             boolean unreadOnly,
 
-            @RequestParam(
-                    name = "selectedId",
-                    required = false
-            )
+            @RequestParam(name = "selectedId", required = false)
             Integer selectedId,
 
-            @RequestParam(
-                    name = "page",
-                    defaultValue = "0"
-            )
+            @RequestParam(name = "page", defaultValue = "0")
             int page,
 
-            @RequestParam(
-                    name = "size",
-                    defaultValue = "10"
-            )
+            @RequestParam(name = "size", defaultValue = "10")
             int size,
 
             HttpServletRequest request,
@@ -109,15 +97,12 @@ public class NotificationPageController {
                         severity,
                         status,
                         unreadOnly,
-                        PageRequest.of(
-                                safePage,
-                                safeSize
-                        )
+                        PageRequest.of(safePage, safeSize)
                 );
 
         /*
-         * Nếu người dùng truy cập trang vượt quá tổng số trang,
-         * tự động chuyển về trang cuối cùng.
+         * Nếu số trang trên URL lớn hơn tổng số trang,
+         * tự động quay về trang cuối cùng.
          */
         if (notificationPage.getTotalPages() > 0
                 && safePage >= notificationPage.getTotalPages()) {
@@ -152,16 +137,12 @@ public class NotificationPageController {
         /*
          * Nếu chưa chọn thông báo cụ thể thì hiển thị
          * thông báo đầu tiên của trang hiện tại.
-         *
-         * Thông báo đầu tiên không tự động được đánh dấu đã đọc
-         * cho đến khi người dùng thực sự bấm vào thông báo.
          */
         if (selected.isEmpty()
                 && !notifications.isEmpty()) {
 
-            selected = Optional.of(
-                    notifications.get(0)
-            );
+            selected =
+                    Optional.of(notifications.get(0));
         }
 
         String basePath =
@@ -284,58 +265,14 @@ public class NotificationPageController {
         return "notification/list";
     }
 
-    /**
-     * Được gọi bằng JavaScript khi người dùng bấm vào
-     * một thông báo trong danh sách.
-     *
-     * Endpoint vừa lấy thông báo, vừa đánh dấu đã đọc
-     * và trả dữ liệu JSON để cập nhật giao diện mà
-     * không phải tải lại toàn bộ trang.
-     */
-    @PostMapping({
-            "/owner/notifications/{notificationId}/open",
-            "/accountant/notifications/{notificationId}/open",
-            "/pharmacist/notifications/{notificationId}/open"
-    })
-    @ResponseBody
-    public OpenNotificationResponse openNotification(
-            @PathVariable
-            Integer notificationId
-    ) {
-        Integer accountId =
-                currentUserContext.getCurrentAccountId();
-
-        NotificationResponse notification =
-                notificationService.openAndMarkAsRead(
-                        accountId,
-                        notificationId
-                );
-
-        return new OpenNotificationResponse(
-                ClientNotificationResponse.from(
-                        notification
-                ),
-                notificationService.unreadCount(
-                        accountId
-                )
-        );
-    }
-
-    /*
-     * Giữ endpoint cũ để không ảnh hưởng những vị trí
-     * khác đang gọi thao tác đánh dấu đã đọc.
-     */
     @PostMapping({
             "/owner/notifications/{notificationId}/read",
             "/accountant/notifications/{notificationId}/read",
             "/pharmacist/notifications/{notificationId}/read"
     })
     public String markAsRead(
-            @PathVariable
-            Integer notificationId,
-
+            @PathVariable Integer notificationId,
             HttpServletRequest request,
-
             RedirectAttributes redirectAttributes
     ) {
         try {
@@ -370,6 +307,45 @@ public class NotificationPageController {
                 + resolveBasePath(request);
     }
 
+    /**
+     * Được topbar gọi khi người dùng bấm vào một
+     * thông báo.
+     *
+     * Thông báo được đánh dấu đã đọc trước khi
+     * trình duyệt chuyển đến actionUrl.
+     *
+     * NotificationService cũng kiểm tra thông báo
+     * có thuộc tài khoản hiện tại hay không.
+     */
+    @PostMapping({
+            "/owner/notifications/{notificationId}/open",
+            "/accountant/notifications/{notificationId}/open",
+            "/pharmacist/notifications/{notificationId}/open"
+    })
+    @ResponseBody
+    public NotificationResponse open(
+            @PathVariable Integer notificationId
+    ) {
+        Integer accountId =
+                currentUserContext.getCurrentAccountId();
+
+        notificationService.markAsRead(
+                accountId,
+                notificationId
+        );
+
+        return notificationService
+                .findForAccount(
+                        accountId,
+                        notificationId
+                )
+                .orElseThrow(
+                        () -> new IllegalArgumentException(
+                                "Không tìm thấy thông báo"
+                        )
+                );
+    }
+
     @PostMapping({
             "/owner/notifications/read-all",
             "/accountant/notifications/read-all",
@@ -380,8 +356,7 @@ public class NotificationPageController {
             RedirectAttributes redirectAttributes
     ) {
         notificationService.markAllAsRead(
-                currentUserContext
-                        .getCurrentAccountId()
+                currentUserContext.getCurrentAccountId()
         );
 
         redirectAttributes.addFlashAttribute(
@@ -404,11 +379,8 @@ public class NotificationPageController {
             "/pharmacist/notifications/{notificationId}/dismiss"
     })
     public String dismiss(
-            @PathVariable
-            Integer notificationId,
-
+            @PathVariable Integer notificationId,
             HttpServletRequest request,
-
             RedirectAttributes redirectAttributes
     ) {
         try {
@@ -438,9 +410,7 @@ public class NotificationPageController {
                 + resolveBasePath(request);
     }
 
-    private int normalizePageSize(
-            int size
-    ) {
+    private int normalizePageSize(int size) {
         if (size <= 0) {
             return DEFAULT_PAGE_SIZE;
         }
@@ -523,63 +493,14 @@ public class NotificationPageController {
         String role =
                 currentUserContext.getCurrentRole();
 
-        if (RoleConstants.ACCOUNTANT.equals(
-                role
-        )) {
+        if (RoleConstants.ACCOUNTANT.equals(role)) {
             return "/accountant/notifications";
         }
 
-        if (RoleConstants.PHARMACIST.equals(
-                role
-        )) {
+        if (RoleConstants.PHARMACIST.equals(role)) {
             return "/pharmacist/notifications";
         }
 
         return "/owner/notifications";
-    }
-
-    /**
-     * Response của thao tác mở thông báo.
-     */
-    public record OpenNotificationResponse(
-            ClientNotificationResponse notification,
-            long unreadCount
-    ) {
-    }
-
-    /**
-     * Chỉ trả các trường thực sự cần hiển thị cho client.
-     *
-     * Không trả notificationType, referenceType,
-     * referenceId hoặc dedupeKey ra trình duyệt.
-     */
-    public record ClientNotificationResponse(
-            Integer id,
-            String title,
-            String message,
-            String createdAtDisplay,
-            String severityDisplay,
-            String severityCssClass,
-            String categoryDisplay,
-            String categoryCssClass,
-            String statusDisplay,
-            String actionUrl
-    ) {
-        private static ClientNotificationResponse from(
-                NotificationResponse value
-        ) {
-            return new ClientNotificationResponse(
-                    value.getId(),
-                    value.getTitle(),
-                    value.getMessage(),
-                    value.getCreatedAtDisplay(),
-                    value.getSeverityDisplay(),
-                    value.getSeverityCssClass(),
-                    value.getCategoryDisplay(),
-                    value.getCategoryCssClass(),
-                    value.getStatusDisplay(),
-                    value.getActionUrl()
-            );
-        }
     }
 }
