@@ -31,6 +31,15 @@ public final class ExpenseType {
     public static final BigDecimal PHARMACIST_REFUND_LIMIT = BigDecimal.valueOf(500_000);
 
     /**
+     * Phiếu chi do dược sĩ lập với giá trị dưới ngưỡng này thì không cần Chủ nhà thuốc duyệt — tự
+     * động sang thẳng {@code ExpenseStatus#AWAITING_PAYMENT} (BA 2026-08-13), cùng cách Owner tự
+     * duyệt phiếu của chính mình. Một hằng số riêng với {@link #PHARMACIST_REFUND_LIMIT} dù cùng giá
+     * trị: đây là quy tắc về DUYỆT, còn hằng kia là trần SỐ TIỀN được tạo — hai quyết định BA độc
+     * lập, tình cờ trùng ngưỡng hôm nay.
+     */
+    public static final BigDecimal PHARMACIST_AUTO_APPROVE_LIMIT = BigDecimal.valueOf(500_000);
+
+    /**
      * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #GOODS_PAYMENT}
      * only</strong>. {@link #OPERATIONAL} deliberately does NOT link a purchase invoice — gộp tiền
      * hàng vào đó từng làm "Chi phí vận hành" phình to và không còn trả lời được câu "tháng này tốn

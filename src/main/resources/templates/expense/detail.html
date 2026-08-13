@@ -297,7 +297,10 @@
 
                 <div class="expense-card p-4 mb-4">
 
-                    <!-- Draft: the creator sends it forward (Owner -> approved, Accountant -> pending). -->
+                    <!-- Draft: the creator sends it forward. Owner -> auto-approved. Dược sĩ -> cũng
+                         auto-approved khi dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT, tức luôn
+                         luôn (họ chỉ tạo được phiếu hoàn tiền dưới PHARMACIST_REFUND_LIMIT, cùng
+                         ngưỡng — BA 2026-08-13). Kế toán -> Chờ duyệt như cũ. -->
                     <form th:if="${detail.statusName == 'Nháp'}"
                           th:action="${basePath + '/' + detail.id + '/submit'}"
                           method="post"
@@ -306,7 +309,7 @@
                         <button type="submit" class="btn btn-expense-primary w-100"
                                 data-confirm="Gửi duyệt phiếu này?">
                             <i class="ti ti-send me-1"></i>
-                            <span th:text="${#strings.startsWith(basePath, '/owner')} ? 'Duyệt phiếu (từ nháp)' : 'Gửi duyệt'">Gửi duyệt</span>
+                            <span th:text="${#strings.startsWith(basePath, '/owner') or #strings.startsWith(basePath, '/pharmacist')} ? 'Duyệt phiếu (từ nháp)' : 'Gửi duyệt'">Gửi duyệt</span>
                         </button>
                     </form>
 
@@ -334,11 +337,17 @@
                         </form>
                     </th:block>
 
-                    <!-- Xác nhận thanh toán: bước chi tiền THẬT, tách khỏi duyệt (BA 2026-08). Chỉ
-                         Chủ nhà thuốc mới bấm được, kể cả với phiếu Kế toán lập/được duyệt hộ — màn
-                         Kế toán không có nút này. Đây mới là lúc phiếu nhập/phiếu trả hàng được cập
-                         nhật, quỹ bị trừ và ca làm việc được gắn (xem ExpenseService.confirmPayment). -->
-                    <form th:if="${#strings.startsWith(basePath, '/owner') and detail.statusName == 'Chờ thanh toán'}"
+                    <!-- Xác nhận thanh toán: bước chi tiền THẬT, tách khỏi duyệt (BA 2026-08). Chủ
+                         nhà thuốc luôn bấm được, kể cả với phiếu Kế toán lập/được duyệt hộ — màn Kế
+                         toán không có nút này. Dược sĩ cũng bấm được, nhưng chỉ với phiếu CỦA CHÍNH
+                         MÌNH và dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT (BA 2026-08-13,
+                         detail.pharmacistCanConfirmPayment — trang chi tiết đã tự giới hạn dược sĩ
+                         chỉ xem được phiếu của mình nên ở đây chỉ cần kiểm thêm số tiền).
+                         Đây mới là lúc phiếu nhập/phiếu trả hàng được cập nhật, quỹ bị trừ và ca làm
+                         việc được gắn (xem ExpenseService.confirmPayment). -->
+                    <form th:if="${(#strings.startsWith(basePath, '/owner')
+                                    or (#strings.startsWith(basePath, '/pharmacist') and detail.pharmacistCanConfirmPayment))
+                                   and detail.statusName == 'Chờ thanh toán'}"
                           th:action="${basePath + '/' + detail.id + '/confirm-payment'}"
                           method="post"
                           class="mb-3">
@@ -350,12 +359,10 @@
                         </button>
                     </form>
 
-                    <!-- Hủy: sửa lỗi nội bộ. Chỉ hủy được TRƯỚC khi tiền thực chi (Nháp/Chờ duyệt/Chờ
-                         thanh toán) — chưa phiếu nào trong số đó từng đụng tới phiếu nhập/quỹ nên
-                         không có gì phải đảo ngược. Phiếu đã hoàn thành (tiền đã thực chi qua "Xác
-                         nhận đã thanh toán") không hủy được nữa — lập phiếu mới để ghi nhận đúng
-                         thực tế thay vì hủy. -->
-                    <form th:if="${detail.statusName != 'Đã hủy' and detail.statusName != 'Đã hoàn thành'}"
+                    <!-- Hủy: chỉ tài khoản đã tạo phiếu mới được hủy, không có ngoại lệ theo chức vụ.
+                         Ngoài ra vẫn chỉ hủy được trước khi tiền thực chi; service kiểm lại cả quyền
+                         sở hữu lẫn trạng thái nên không thể lách bằng cách gọi thẳng endpoint. -->
+                    <form th:if="${canCancel}"
                           th:action="${basePath + '/' + detail.id + '/cancel'}"
                           method="post"
                           class="mb-3"

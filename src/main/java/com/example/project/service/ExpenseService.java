@@ -87,10 +87,28 @@ import java.util.stream.Collectors;
  * mirrors {@code StockadjustmentService}'s draft/submit/approve/reject shape, plus a real payment
  * step: {@link #createExpense}/{@link #submit}/{@link #approve} only ever move a slip as far as
  * {@link ExpenseStatus#AWAITING_PAYMENT} — approved, but nothing has left the drawer/bank account
- * yet. Only {@link #confirmPayment}, Owner-only regardless of who raised or approved the slip, moves
- * it the rest of the way to {@link ExpenseStatus#COMPLETED} and triggers the money-moving side
- * effects above. {@link ExpenseStatus#CANCELLED} is reachable right up until real payment — see
- * {@link #cancel} — but not after, since by then there is real money to un-ring the bell on.</p>
+ * yet. Only {@link #confirmPayment} moves it the rest of the way to {@link ExpenseStatus#COMPLETED}
+ * and triggers the money-moving side effects above — Owner-only for most slips, see the next
+ * paragraph for the one exception. {@link ExpenseStatus#CANCELLED} is reachable right up until real
+ * payment — see {@link #cancel} — but not after, since by then there is real money to un-ring the
+ * bell on.</p>
+ *
+ * <p><strong>A Pharmacist's small slip is self-service end to end (BA 2026-08-13).</strong> Same
+ * self-approval treatment the Owner already gets, but capped by amount: a Pharmacist-raised slip
+ * under {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} goes straight to
+ * {@link ExpenseStatus#AWAITING_PAYMENT} at creation (no Owner sign-off needed), and the SAME
+ * Pharmacist may then also {@link #confirmPayment(Integer, Integer) confirm the payment} on their
+ * own slip — they raised it and they're the one physically handing over the cash, so there is no
+ * reason to make them wait on the Owner for either step. At or above the limit both steps still need
+ * the Owner: creation/submission lands on {@link ExpenseStatus#PENDING} like any other non-Owner
+ * slip, and only the Owner's unrestricted {@link #confirmPayment(Integer)} overload can move it to
+ * {@link ExpenseStatus#COMPLETED}.</p>
+ *
+ * <p><strong>Cash vs. chuyển khoản is role-locked, not just Owner-vs-everyone (BA 2026-08-13).</strong>
+ * Owner may split freely between both. Pharmacist may only pay cash — a shift only ever opens with
+ * a fixed float, never a bank transfer, so there is nothing to reconcile a banking leg against.
+ * Accountant may only pay by chuyển khoản — never present in person to hand over cash and holds no
+ * float/shift to reconcile one against. See {@link #resolveSplit}.</p>
  */
 @Service
 public class ExpenseService {
@@ -376,6 +394,20 @@ public class ExpenseService {
         return toDetail(expense);
     }
 
+    /**
+     * The cancel action belongs to the account that created the slip, independent of that account's
+     * role. This method is used by the detail page only; {@link #cancel} repeats the same ownership
+     * check as the authoritative server-side gate.
+     */
+    @Transactional(readOnly = true)
+    public boolean canCancel(Integer expenseId, Integer currentAccountId) {
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
+        return isApplicant(expense, currentAccountId)
+                && !ExpenseStatus.CANCELLED.equals(expense.getStatus())
+                && !ExpenseStatus.COMPLETED.equals(expense.getStatus());
+    }
+
     // ------------------------------------------------------------------ create
 
     /**
@@ -383,17 +415,23 @@ public class ExpenseService {
      * {@link ExpenseStatus#DRAFT} regardless of role. Otherwise: the Owner's slip is auto-approved
      * straight to {@link ExpenseStatus#AWAITING_PAYMENT} (money has not left yet — see
      * {@link #confirmPayment}); anyone else's goes to {@link ExpenseStatus#PENDING} for the Owner to
-     * approve.
+     * approve. This overload always passes {@code isPharmacist = false} — callers that need the
+     * Pharmacist-specific auto-approve/payment-method rules must use the 6-arg overload.
      */
     @Transactional
     public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
                                   boolean asDraft) {
-        return createExpense(request, currentAccountId, isOwner, asDraft, isOwner, null);
+        return createExpense(request, currentAccountId, isOwner, asDraft, false, null);
     }
 
+    /**
+     * @param isPharmacist whether the creator is a Pharmacist — drives both the auto-approve
+     *                     threshold ({@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT}) and the
+     *                     cash-only payment restriction (see {@link #resolveSplit}).
+     */
     @Transactional
     public Integer createExpense(ExpenseCreateRequest request, Integer currentAccountId, boolean isOwner,
-                                  boolean asDraft, boolean canPayCash, String requiredExpenseType) {
+                                  boolean asDraft, boolean isPharmacist, String requiredExpenseType) {
         String expenseType = resolveExpenseType(request.getExpenseType());
         if (requiredExpenseType != null && !requiredExpenseType.equals(expenseType)) {
             throw new IllegalArgumentException("Tài khoản này chỉ được tạo phiếu chi hoàn tiền trả hàng");
@@ -440,7 +478,9 @@ public class ExpenseService {
 
         // Một phiếu là một lần chi: tiền đã chi luôn đúng bằng số tiền của phiếu, không có phiếu
         // "chi thiếu so với chính nó". Chi thiếu so với CHỨNG TỪ thì nằm ở chỗ khác — chứng từ còn nợ.
-        BigDecimal[] split = resolveSplit(request, amount, canPayCash);
+        boolean canPayCash = isOwner || isPharmacist;
+        boolean canPayBanking = !isPharmacist;
+        BigDecimal[] split = resolveSplit(request, amount, canPayCash, canPayBanking);
         expense.setPaid(amount);
         expense.setPaidByCash(split[0]);
         expense.setPaidByBanking(split[1]);
@@ -451,7 +491,7 @@ public class ExpenseService {
 
         if (asDraft) {
             expense.setStatus(ExpenseStatus.DRAFT);
-        } else if (isOwner) {
+        } else if (isOwner || pharmacistAutoApproves(isPharmacist, amount)) {
             applyApproval(expense, applicant);
         } else {
             expense.setStatus(ExpenseStatus.PENDING);
@@ -478,12 +518,18 @@ public class ExpenseService {
         submit(expenseId, currentAccountId, isOwner, false);
     }
 
+    /**
+     * @param isPharmacist restricts submission to the slip's own applicant (a Pharmacist may only
+     *                      submit their own draft) AND, per {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT},
+     *                      lets a small-enough slip skip {@link ExpenseStatus#PENDING} the same way
+     *                      {@link #createExpense} does.
+     */
     @Transactional
     public void submit(Integer expenseId, Integer currentAccountId, boolean isOwner,
-                       boolean restrictToApplicant) {
+                       boolean isPharmacist) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
-        if (restrictToApplicant) {
+        if (isPharmacist) {
             ensureApplicantAccess(expense, currentAccountId);
         }
 
@@ -494,14 +540,15 @@ public class ExpenseService {
         Account actor = accountRepository.findById(currentAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản hiện tại"));
 
-        if (isOwner) {
+        boolean autoApproved = isOwner || pharmacistAutoApproves(isPharmacist, expense.getAmount());
+        if (autoApproved) {
             applyApproval(expense, actor);
         } else {
             expense.setStatus(ExpenseStatus.PENDING);
         }
 
         expenseRepository.save(expense);
-        if (!isOwner) {
+        if (!autoApproved) {
             workflowNotificationService
                     .expensePending(expense);
         }
@@ -558,15 +605,10 @@ public class ExpenseService {
      * instead to record what actually happened.</p>
      */
     @Transactional
-    public void cancel(Integer expenseId, String reason) {
-        cancel(expenseId, reason, null);
-    }
-
-    @Transactional
-    public void cancel(Integer expenseId, String reason, Integer requiredApplicantAccountId) {
+    public void cancel(Integer expenseId, String reason, Integer currentAccountId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
-        ensureApplicantAccess(expense, requiredApplicantAccountId);
+        ensureCancelCreator(expense, currentAccountId);
 
         if (ExpenseStatus.CANCELLED.equals(expense.getStatus())) {
             throw new IllegalArgumentException("Phiếu chi này đã bị hủy trước đó");
@@ -616,6 +658,18 @@ public class ExpenseService {
         return applicantAccountId == null
                 || expense.getApplicantID() != null
                 && applicantAccountId.equals(expense.getApplicantID().getId());
+    }
+
+    private boolean isApplicant(Expense expense, Integer accountId) {
+        return accountId != null
+                && expense.getApplicantID() != null
+                && accountId.equals(expense.getApplicantID().getId());
+    }
+
+    private void ensureCancelCreator(Expense expense, Integer currentAccountId) {
+        if (!isApplicant(expense, currentAccountId)) {
+            throw new IllegalArgumentException("Chỉ tài khoản đã tạo phiếu chi này mới có thể hủy phiếu");
+        }
     }
 
     private void ensureApplicantAccess(Expense expense, Integer requiredApplicantAccountId) {
@@ -710,7 +764,8 @@ public class ExpenseService {
                 linkedPurchase != null ? linkedPurchase.getPurchaseInvoiceCode() : null,
                 supplier != null ? supplier.getName() : null,
                 shift != null ? shift.getId() : null,
-                shift != null ? shift.getShiftReportCode() : null
+                shift != null ? shift.getShiftReportCode() : null,
+                underPharmacistAutoApproveLimit(expense.getAmount())
         );
     }
 
@@ -733,6 +788,26 @@ public class ExpenseService {
     }
 
     /**
+     * Whether a Pharmacist-raised slip of this amount qualifies for the self-service treatment (BA
+     * 2026-08-13): skipping Owner approval at creation ({@link #pharmacistAutoApproves}), and
+     * skipping the Owner at {@link #confirmPayment} too — same {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT}
+     * threshold governs both.
+     */
+    private boolean underPharmacistAutoApproveLimit(BigDecimal amount) {
+        return amount != null && amount.compareTo(ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT) < 0;
+    }
+
+    /**
+     * Whether a Pharmacist-raised slip is small enough to skip {@link ExpenseStatus#PENDING}
+     * entirely (BA 2026-08-13) — same self-approval treatment the Owner always gets, just capped by
+     * {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT}. Always {@code false} for anyone else; the
+     * caller is expected to OR this with its own {@code isOwner} check.
+     */
+    private boolean pharmacistAutoApproves(boolean isPharmacist, BigDecimal amount) {
+        return isPharmacist && underPharmacistAutoApproveLimit(amount);
+    }
+
+    /**
      * The Owner confirms that an {@link ExpenseStatus#AWAITING_PAYMENT} slip's money has actually
      * left — the real payment leg. Owner-only regardless of who raised or approved the slip
      * (Accountant included): {@code ExpensePageController} only maps this route under
@@ -741,17 +816,48 @@ public class ExpenseService {
      * of that happens at approval any more. For a {@link ExpenseType#RETURN_REFUND_PAYOUT} slip, this
      * is also the point that syncs the linked {@code Return}'s status back —
      * see {@link ReturnService#syncStatusAfterRefundPayment(Integer)}.
+     *
+     * <p>Unrestricted overload — no applicant/amount check. Kept for the Owner's own route, which is
+     * allowed to confirm ANY slip, not just small self-raised ones (see the 2-arg overload below).</p>
      */
     @Transactional
     public void confirmPayment(Integer expenseId) {
+        applyConfirmedPayment(loadForConfirmPayment(expenseId));
+    }
+
+    /**
+     * A Pharmacist may also confirm payment for their OWN slip, but only when it was small enough to
+     * have skipped Owner approval in the first place ({@link #underPharmacistAutoApproveLimit}, BA
+     * 2026-08-13) — same self-service threshold end to end: they raised it, it auto-approved, and
+     * since they're the one physically handing over the cash, they confirm it themselves instead of
+     * waiting on the Owner. A slip at or above the limit — or one that merely happens to belong to
+     * someone else — still needs the Owner's unrestricted overload above.
+     */
+    @Transactional
+    public void confirmPayment(Integer expenseId, Integer currentAccountId) {
+        Expense expense = loadForConfirmPayment(expenseId);
+        ensureApplicantAccess(expense, currentAccountId);
+        if (!underPharmacistAutoApproveLimit(expense.getAmount())) {
+            throw new IllegalArgumentException(
+                    "Phiếu từ " + String.format(Locale.forLanguageTag("vi-VN"), "%,.0fđ",
+                            ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT)
+                            + " trở lên phải do Chủ nhà thuốc xác nhận thanh toán");
+        }
+        applyConfirmedPayment(expense);
+    }
+
+    private Expense loadForConfirmPayment(Integer expenseId) {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu chi"));
-
         if (!ExpenseStatus.AWAITING_PAYMENT.equals(expense.getStatus())) {
             throw new IllegalArgumentException(
                     "Chỉ có thể xác nhận thanh toán cho phiếu đang ở trạng thái chờ thanh toán");
         }
+        return expense;
+    }
 
+    /** @see #confirmPayment(Integer) */
+    private void applyConfirmedPayment(Expense expense) {
         BigDecimal paid = nullToZero(expense.getPaid());
         expense.setStatus(ExpenseStatus.COMPLETED);
         settlePurchaseInvoice(expense, paid);
@@ -1074,13 +1180,17 @@ public class ExpenseService {
     /**
      * Returns {@code [paidByCash, paidByBanking]}.
      *
-     * <p><strong>Only roles operating the register may pay in cash</strong>: Owner and Pharmacist
-     * have shifts; Accountant settles by transfer and never opens the drawer. Enforcing it here is
-     * what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe. The default is
-     * therefore all cash for a register role and all banking for Accountant.</p>
-     *
+     * <p><strong>Cash is Owner/Pharmacist-only; chuyển khoản is Owner/Accountant-only (BA
+     * 2026-08-13).</strong> Owner and Pharmacist run the register and may pay cash — Accountant
+     * settles by transfer and never opens the drawer, so it never touches cash. Conversely a
+     * Pharmacist's shift only ever opens with a fixed float (không có chuyển khoản mở ca), so a
+     * Pharmacist may only pay cash, never chuyển khoản — only Owner and Accountant may. Enforcing
+     * this here is what makes {@link #attachOpenShift}'s "stamp the creator's shift" rule safe. The
+     * default when neither is posted is therefore all cash when cash is allowed, all banking
+     * otherwise — an Owner (who can do both) defaults to cash.</p>
      */
-    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount, boolean canPayCash) {
+    private BigDecimal[] resolveSplit(ExpenseCreateRequest request, BigDecimal amount,
+                                       boolean canPayCash, boolean canPayBanking) {
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
         }
@@ -1094,6 +1204,7 @@ public class ExpenseService {
         cash = nullToZero(cash);
         banking = nullToZero(banking);
         assertCashAllowed(cash, canPayCash);
+        assertBankingAllowed(banking, canPayBanking);
         if (cash.add(banking).setScale(2, RoundingMode.HALF_UP)
                 .compareTo(amount.setScale(2, RoundingMode.HALF_UP)) != 0) {
             throw new IllegalArgumentException("Tiền mặt + chuyển khoản phải bằng số tiền chi");
@@ -1106,6 +1217,14 @@ public class ExpenseService {
         if (!canPayCash && nullToZero(cash).compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException(
                     "Kế toán chỉ được chi qua chuyển khoản; phần tiền mặt phải do Chủ nhà thuốc chi");
+        }
+    }
+
+    /** @see #resolveSplit */
+    private void assertBankingAllowed(BigDecimal banking, boolean canPayBanking) {
+        if (!canPayBanking && nullToZero(banking).compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException(
+                    "Dược sĩ chỉ được chi bằng tiền mặt; phần chuyển khoản phải do Chủ nhà thuốc hoặc Kế toán chi");
         }
     }
 
