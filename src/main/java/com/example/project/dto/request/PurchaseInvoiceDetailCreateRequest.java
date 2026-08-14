@@ -36,17 +36,17 @@ public class PurchaseInvoiceDetailCreateRequest {
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate expirationDate;
 
-    // Kept only for backward-compatible request binding. The purchase-invoice form no longer
-    // displays/submits this field and PurchaseinvoiceService always generates the stored name.
+    // Giữ lại chỉ để bind request tương thích ngược — form không còn hiển thị/gửi field này,
+    // tên lô luôn do PurchaseinvoiceService tự sinh.
     private String batchName;
 
     @Size(max = 50, message = "Số lô không được vượt quá 50 ký tự")
     private String lotNumber;
 
     /**
-     * Not a validated/trusted input — the server always resolves the real VAT rate from the
-     * product's {@code Type.defaultVATRate} (see {@code PurchaseinvoiceService.resolvePurchaseVatRate}).
-     * Kept only so a validation-error re-render can echo back the read-only field's displayed value.
+     * Không phải input tin cậy — server luôn lấy thuế suất thật từ Type.defaultVATRate
+     * (PurchaseinvoiceService.resolvePurchaseVatRate). Giữ field này chỉ để render lại giá trị
+     * hiển thị (readonly) khi validate lỗi.
      */
     private BigDecimal vatRate;
 }

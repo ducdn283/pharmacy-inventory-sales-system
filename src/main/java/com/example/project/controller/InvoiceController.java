@@ -38,6 +38,10 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Màn quản lý hóa đơn bán hàng (danh sách / chi tiết / in / bán hàng).
+ * Chủ nhà thuốc: toàn quyền; Dược sĩ: bán hàng, xem danh sách/chi tiết/in; Kế toán: xem danh sách, chi tiết và in.
+ */
 @Controller
 public class InvoiceController {
     private final InvoiceService invoiceService;
@@ -52,13 +56,14 @@ public class InvoiceController {
         this.currentUserContext = currentUserContext;
     }
 
-    //chuyển dữ liệu từ form (String) sang kiểu dữ liệu Java.
+    /** Chuyển giá trị form ({@code String}) sang {@link BigDecimal} / {@link Integer} khi binding. */
     @InitBinder
     public void initBinder(WebDataBinder binder) {
         binder.registerCustomEditor(BigDecimal.class, new CustomNumberEditor(BigDecimal.class, true));
         binder.registerCustomEditor(Integer.class, new CustomNumberEditor(Integer.class, true));
     }
 
+    /** Danh sách hóa đơn có phân trang, tìm kiếm theo mã và lọc theo ngày/hình thức thanh toán/trạng thái/người bán. */
     @GetMapping({"/owner/invoices", "/pharmacist/invoices", "/accountant/invoices"})
     public String invoiceList(@RequestParam(name = "search", required = false) String search,
                               @RequestParam(name = "fromDate", required = false) String fromDate,
@@ -107,6 +112,7 @@ public class InvoiceController {
         return "invoice/invoice-list";
     }
 
+    /** Lấy dòng hàng của hóa đơn — dùng cho hộp thoại xem nhanh trên danh sách. */
     @GetMapping(value = {"/owner/invoices/{invoiceId}/lines",
             "/pharmacist/invoices/{invoiceId}/lines",
             "/accountant/invoices/{invoiceId}/lines"},
@@ -116,6 +122,7 @@ public class InvoiceController {
         return invoiceService.loadLines(invoiceId);
     }
 
+    /** Trang chi tiết hóa đơn — Chủ nhà thuốc thấy thêm thông tin tài chính so với Dược sĩ/Kế toán. */
     @GetMapping({"/owner/invoices/{invoiceId}",
             "/pharmacist/invoices/{invoiceId}",
             "/accountant/invoices/{invoiceId}"})
@@ -131,6 +138,10 @@ public class InvoiceController {
         return "invoice/invoice-detail";
     }
 
+    /**
+     * Trang in hóa đơn — Chủ nhà thuốc, Dược sĩ và Kế toán.
+     * {@code embed}: in phiếu thu nhỏ thay vì hóa đơn đầy đủ.
+     */
     @GetMapping({"/owner/invoices/{invoiceId}/print",
             "/pharmacist/invoices/{invoiceId}/print",
             "/accountant/invoices/{invoiceId}/print"})
@@ -145,6 +156,7 @@ public class InvoiceController {
         return receiptPrint ? "invoice/print-receipt" : "invoice/print";
     }
 
+    /** Form bán hàng — giữ {@code form} nếu redirect sau lỗi validate. */
     @GetMapping({"/owner/selling", "/pharmacist/selling"})
     public String sellingPage(HttpServletRequest request, Model model) {
         if (!model.containsAttribute("form")) {
@@ -154,6 +166,10 @@ public class InvoiceController {
         return "invoice/create-invoice";
     }
 
+    /**
+     * Xử lý submit bán hàng — tạo hóa đơn rồi quay về form bán.
+     * {@code printAfterSave}: mở in ngay sau khi lưu thành công.
+     */
     @PostMapping({"/owner/selling", "/pharmacist/selling"})
     public String createSale(@ModelAttribute("form") InvoiceCreateRequest form,
                              @RequestParam(name = "printAfterSave", defaultValue = "false") boolean printAfterSave,
@@ -176,6 +192,7 @@ public class InvoiceController {
         }
     }
 
+    /** Tạo khách hàng nhanh từ form bán hàng — trả về dạng JSON. */
     @PostMapping(value = {"/owner/selling/customers", "/pharmacist/selling/customers"},
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -201,6 +218,7 @@ public class InvoiceController {
         }
     }
 
+    /** Nạp sản phẩm, khách hàng và cấu hình trang bán hàng. */
     private void addSellingPageData(HttpServletRequest request, Model model) {
         model.addAttribute("products", invoiceService.listSellableProducts());
         model.addAttribute("customers", invoiceService.listCustomers());
@@ -213,16 +231,19 @@ public class InvoiceController {
         model.addAttribute("invoicePrintBasePath", invoiceListBasePath(request));
     }
 
+    /** Đường dẫn gốc form bán hàng theo vai trò: Chủ nhà thuốc hoặc Dược sĩ. */
     private String resolveSellingBasePath(HttpServletRequest request) {
         return request.getRequestURI().startsWith("/pharmacist/selling")
                 ? "/pharmacist/selling" : "/owner/selling";
     }
 
+    /** Đường dẫn gốc danh sách hóa đơn theo vai trò: Chủ nhà thuốc hoặc Dược sĩ. */
     private String invoiceListBasePath(HttpServletRequest request) {
         return request.getRequestURI().startsWith("/pharmacist")
                 ? "/pharmacist/invoices" : "/owner/invoices";
     }
 
+    /** Đường dẫn gốc danh sách/chi tiết/in hóa đơn theo vai trò: Chủ nhà thuốc, Dược sĩ hoặc Kế toán. */
     private String resolveBasePath(HttpServletRequest request) {
         String uri = request.getRequestURI();
 
@@ -236,6 +257,7 @@ public class InvoiceController {
         return "/owner/invoices";
     }
 
+    /** Đường dẫn gốc tạo trả hàng từ chi tiết hóa đơn — null nếu Kế toán (không có quyền trả). */
     private String resolveReturnBasePath(HttpServletRequest request) {
         String uri = request.getRequestURI();
 
@@ -249,6 +271,7 @@ public class InvoiceController {
         return null;
     }
 
+    /** Ghép URL redirect về danh sách, giữ lại bộ lọc và phân trang hiện tại. */
     private String listRedirectUrl(String basePath,
                                    String search,
                                    String fromDate,

@@ -35,33 +35,29 @@ public class ExpenseDetailResponse {
 
     private String note;
 
-    /** Linked customer return, or {@code null} when this slip is not a refund payout. */
+    /** Phiếu trả hàng liên kết, {@code null} nếu phiếu chi này không phải hoàn tiền. */
     private Integer returnId;
     private String returnCode;
 
-    /** Customer of the linked return's original invoice; {@code null} for a walk-in sale. */
+    /** Khách hàng của hóa đơn gốc thuộc phiếu trả hàng liên kết; {@code null} nếu là khách lẻ. */
     private String customerName;
 
-    /** Linked purchase invoice, or {@code null} when this slip does not settle one. */
+    /** Phiếu nhập liên kết, {@code null} nếu phiếu chi này không tất toán phiếu nhập nào. */
     private Integer purchaseId;
     private String purchaseCode;
 
-    /** Supplier of the linked purchase invoice. */
+    /** Nhà cung cấp của phiếu nhập liên kết. */
     private String supplierName;
 
-    /**
-     * Shift the payout was stamped against, or {@code null} when no shift was open at the time —
-     * always the case for an Accountant, who never has one.
-     */
+    /** Ca làm việc được đóng dấu, {@code null} nếu lúc đó không có ca mở (luôn vậy với Kế toán). */
     private Integer shiftReportId;
     private String shiftReportCode;
 
     /**
-     * Whether this slip's amount is under {@code ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT} — the
-     * threshold under which its own Pharmacist applicant may confirm payment themselves instead of
-     * waiting on the Owner (BA 2026-08-13). Independent of who is viewing the page; the detail route
-     * already restricts a Pharmacist to their own slips, so the template only needs to additionally
-     * check this flag.
+     * Số tiền phiếu có dưới ngưỡng {@code ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT} hay không —
+     * ngưỡng mà chính Dược sĩ lập phiếu được tự xác nhận thanh toán thay vì chờ Chủ nhà thuốc.
+     * Route chi tiết đã tự giới hạn Dược sĩ chỉ xem phiếu của mình, nên template chỉ cần kiểm thêm
+     * cờ này.
      */
     private boolean pharmacistCanConfirmPayment;
 }

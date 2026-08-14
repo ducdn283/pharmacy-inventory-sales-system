@@ -375,19 +375,22 @@
                     return;
                 }
 
+                // Đệm số về 2 chữ số (VD 5 -> "05") để ghép chuỗi ngày yyyy-MM-dd.
                 function pad(n) {
                     return String(n).padStart(2, '0');
                 }
 
+                // Định dạng 1 Date thành chuỗi yyyy-MM-dd cho input type="date".
                 function fmt(d) {
                     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
                 }
 
+                // Hiện/ẩn popover chọn khoảng ngày tùy chỉnh.
                 function showPopover(show) {
                     popover.classList.toggle('open', show);
                 }
 
-                /** First/last day of the calendar month that is `monthsAgo` months before today. */
+                /** Ngày đầu/cuối của tháng cách hôm nay `monthsAgo` tháng. */
                 function fullMonthRange(today, monthsAgo) {
                     return {
                         from: new Date(today.getFullYear(), today.getMonth() - monthsAgo, 1),
@@ -395,11 +398,12 @@
                     };
                 }
 
+                // Tính khoảng ngày (from/to) tương ứng với tùy chọn nhanh đã chọn (hôm qua, tuần này, tháng trước...) rồi điền vào 2 ô ngày.
                 function applyPreset(value) {
                     const today = new Date();
                     let from = today;
                     let to = today;
-                    const dow = (today.getDay() + 6) % 7; // Monday = 0
+                    const dow = (today.getDay() + 6) % 7; // Thứ 2 = 0
                     if (value === 'yesterday') {
                         from = new Date(today);
                         from.setDate(today.getDate() - 1);

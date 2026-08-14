@@ -6,30 +6,20 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * "Nếu bán 1 đơn vị cơ bản với giá hiện tại thì thuế ra sao" — the tax side of the Price Settings
- * detail modal, worked out for <strong>one base unit</strong> under the revenue group the pharmacy
- * is on <em>right now</em> ({@code TaxperiodsnapshotService.currentRevenueGroup()}, i.e. the last
- * snapshot's {@code nextPeriodTaxType}, not the raw {@code Financialsetting.revenueGroup}).
- *
- * <p>The two branches deliberately mirror {@code TaxperiodsnapshotService.computePeriod()} so a
- * price decision and the quarterly declaration cannot tell the Owner different stories:</p>
+ * "Nếu bán 1 đơn vị cơ bản với giá hiện tại thì thuế ra sao" — tính cho <strong>một đơn vị cơ
+ * bản</strong>, theo nhóm doanh thu hiện tại của nhà thuốc
+ * ({@code TaxperiodsnapshotService.currentRevenueGroup()}). Công thức phải khớp với
+ * {@code TaxperiodsnapshotService.computePeriod()} để không mâu thuẫn với số liệu kỳ thuế.
  *
  * <table>
- *   <tr><th>Group</th><th>GTGT</th><th>TNCN</th></tr>
+ *   <tr><th>Nhóm</th><th>GTGT</th><th>TNCN</th></tr>
  *   <tr><td>1 — miễn thuế</td><td>—</td><td>—</td></tr>
  *   <tr><td>2/3 — trực tiếp</td><td>{@code giá bán × 1%}</td><td>{@code giá bán × 0,5%}</td></tr>
  * </table>
  *
- * <p><strong>BA quyết định trực tiếp (chưa có tài liệu):</strong> group 3 no longer offsets input
- * VAT against output VAT — it now projects identically to group 2 (see {@code
- * TaxRevenueGroup.DEDUCTION}'s javadoc). This panel does not yet reflect group 2's optional
- * profit-based TNCN ({@code Financialsetting.taxCalculationMethod}) — it always shows the flat
- * revenue-based figure.</p>
- *
- * <p>The product's own VAT rate is <strong>irrelevant to every group now</strong> — the percentage
- * method taxes revenue flat, so an 8% product and a 0% product are charged identically. That
- * surprises people, so {@link #productVatApplies} (always {@code false} now) lets the screen say it
- * out loud unconditionally.</p>
+ * <p>Panel này luôn hiển thị công thức TNCN theo doanh thu (chưa hỗ trợ phương án TNCN theo lợi
+ * nhuận của nhóm 2, {@code Financialsetting.taxCalculationMethod}). Thuế suất GTGT riêng của sản
+ * phẩm không ảnh hưởng tới số thuế ở mọi nhóm — GTGT tính trực tiếp theo % doanh thu.</p>
  */
 @Getter
 @AllArgsConstructor
@@ -37,57 +27,51 @@ public class PriceSettingTaxProjectionResponse {
 
     private Integer group;
     private String groupLabel;
-    /** Group 1 — declares nothing at all. */
+    /** Nhóm 1 — không kê khai gì cả. */
     private boolean exempt;
-    /**
-     * {@code group == 3} on its own terms — <strong>always {@code false}</strong> now for the
-     * purpose this field used to serve (no group offsets input VAT against output VAT any more), so
-     * the per-batch "GTGT đầu vào" column it used to gate in {@code price-settings.html} never shows.
-     */
+    /** Luôn {@code false} — không nhóm nào còn khấu trừ GTGT đầu vào/đầu ra nữa. */
     private boolean deduction;
-    /** Not exempt — a flat percentage of revenue, for groups 2 and 3 alike. */
+    /** Không miễn thuế — tính trực tiếp theo % doanh thu, áp dụng cho cả nhóm 2 và 3. */
     private boolean direct;
 
-    /** The product's own VAT rate as a percentage ({@code 8.00}), from override or type. */
+    /** Thuế suất GTGT riêng của sản phẩm ({@code 8.00}), lấy từ override hoặc từ loại hàng. */
     private BigDecimal productVatRatePercent;
-    /** Where that rate came from, for the "vì sao lại là số này" line. */
+    /** Nguồn của thuế suất trên, để hiển thị "vì sao lại là số này". */
     private String productVatRateSource;
-    /** Whether the product's VAT rate affects the numbers below at all — false for groups 1 and 2. */
+    /** Thuế suất riêng của sản phẩm có ảnh hưởng tới số thuế bên dưới không — false ở mọi nhóm. */
     private boolean productVatApplies;
 
     /**
-     * Whether a cost basis exists at all, i.e. the product has at least one in-stock lot.
-     *
-     * <p>When false, every figure that needs the cost side stays <strong>{@code null}</strong> and
-     * the screen shows {@code —}. Defaulting an unknown cost to zero would report the whole sell
-     * price as profit, which is the most damaging thing a pricing screen could get wrong.</p>
+     * Có xác định được giá vốn không (sản phẩm có ít nhất một lô còn tồn). Nếu false thì mọi số
+     * liên quan tới giá vốn giữ {@code null} và màn hình hiện {@code —} — không mặc định về 0 vì
+     * sẽ hiểu nhầm cả giá bán là lợi nhuận.
      */
     private boolean costKnown;
 
-    /** Base-unit sell price used as the revenue side (GROSS). */
+    /** Giá bán đơn vị cơ bản dùng làm doanh thu (GROSS). */
     private BigDecimal sellPricePerBase;
-    /** Average in-stock import price used as the cost side (GROSS); {@code null} with no stock. */
+    /** Giá nhập trung bình các lô còn tồn dùng làm giá vốn (GROSS); {@code null} nếu hết tồn kho. */
     private BigDecimal importPricePerBase;
 
     private BigDecimal outputVat;
     private BigDecimal inputVat;
-    /** {@code outputVat − inputVat}. Negative means credit carried to the next period, not a refund. */
+    /** {@code outputVat − inputVat}. Âm nghĩa là được chuyển tiếp kỳ sau, không phải được hoàn. */
     private BigDecimal vatPayable;
 
     private BigDecimal incomeTaxBase;
     private BigDecimal incomeTaxRatePercent;
     private BigDecimal incomeTax;
 
-    /** {@code vatPayable + incomeTax} — the whole tax bite on this one unit. */
+    /** {@code vatPayable + incomeTax} — tổng thuế phải nộp cho một đơn vị. */
     private BigDecimal totalTax;
 
-    /** {@code sellPrice − importPrice}, before tax. Negative when the lot cost more than it sells for. */
+    /** {@code sellPrice − importPrice}, trước thuế. Âm nếu giá nhập cao hơn giá bán. */
     private BigDecimal grossMargin;
-    /** {@code grossMargin − totalTax}. What the unit is actually worth to the pharmacy. */
+    /** {@code grossMargin − totalTax}. Lợi nhuận thực tế trên một đơn vị. */
     private BigDecimal netProfit;
 
-    /** Vietnamese one-liner naming the formula actually applied. */
+    /** Câu mô tả công thức đã áp dụng, tiếng Việt. */
     private String formula;
-    /** Vietnamese caveat, or {@code null} when the projection is exact. */
+    /** Lưu ý thêm bằng tiếng Việt, hoặc {@code null} nếu số liệu đã chính xác. */
     private String caveat;
 }

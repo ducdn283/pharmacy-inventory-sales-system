@@ -6,13 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Central definition of the valid {@code Expense.expenseType} values — the docx's own table was
- * ambiguous, so this is the authoritative list. {@code SALARY} is not its own type: regular payroll
- * falls under {@link #OPERATIONAL}. {@code RETURN_TO_SUPPLIER_LOSS} is not a real type, despite
- * appearing in an earlier docx draft.
- *
- * <p>{@link #GOODS_PAYMENT} splits tiền hàng out of {@link #OPERATIONAL} — see
- * {@link #PURCHASE_LINKABLE} for why.</p>
+ * Danh sách hợp lệ của {@code Expense.expenseType}. {@code SALARY} không phải một loại riêng —
+ * lương thông thường nằm trong {@link #OPERATIONAL}.
  */
 public final class ExpenseType {
 
@@ -23,7 +18,7 @@ public final class ExpenseType {
     public static final String EMPLOYEE_ADVANCE_REPAYMENT = "EMPLOYEE_ADVANCE_REPAYMENT";
     public static final String OTHER = "OTHER";
 
-    /** All valid types, in display order. */
+    /** Toàn bộ loại hợp lệ, theo thứ tự hiển thị. */
     public static final List<String> ALL = List.of(
             GOODS_PAYMENT, OPERATIONAL, RETURN_REFUND_PAYOUT, EMPLOYEE_ADVANCE_REPAYMENT, OTHER);
 
@@ -31,34 +26,22 @@ public final class ExpenseType {
     public static final BigDecimal PHARMACIST_REFUND_LIMIT = BigDecimal.valueOf(500_000);
 
     /**
-     * Phiếu chi do dược sĩ lập với giá trị dưới ngưỡng này thì không cần Chủ nhà thuốc duyệt — tự
-     * động sang thẳng {@code ExpenseStatus#AWAITING_PAYMENT} (BA 2026-08-13), cùng cách Owner tự
-     * duyệt phiếu của chính mình. Một hằng số riêng với {@link #PHARMACIST_REFUND_LIMIT} dù cùng giá
-     * trị: đây là quy tắc về DUYỆT, còn hằng kia là trần SỐ TIỀN được tạo — hai quyết định BA độc
-     * lập, tình cờ trùng ngưỡng hôm nay.
+     * Phiếu chi do Dược sĩ lập với giá trị dưới ngưỡng này thì không cần Chủ nhà thuốc duyệt — tự
+     * động sang thẳng {@code ExpenseStatus#AWAITING_PAYMENT}, cùng cách Owner tự duyệt phiếu của
+     * chính mình. Tách riêng với {@link #PHARMACIST_REFUND_LIMIT} dù cùng giá trị: đây là ngưỡng
+     * DUYỆT, còn hằng kia là trần SỐ TIỀN được tạo.
      */
     public static final BigDecimal PHARMACIST_AUTO_APPROVE_LIMIT = BigDecimal.valueOf(500_000);
 
     /**
-     * Types whose slip may settle a {@code PurchaseInvoice}. <strong>{@link #GOODS_PAYMENT}
-     * only</strong>. {@link #OPERATIONAL} deliberately does NOT link a purchase invoice — gộp tiền
-     * hàng vào đó từng làm "Chi phí vận hành" phình to và không còn trả lời được câu "tháng này tốn
-     * bao nhiêu cho điện, nước, lương", nên tiền hàng được tách hẳn:
+     * Các loại phiếu được phép gắn và tất toán một {@code PurchaseInvoice} — <strong>chỉ
+     * {@link #GOODS_PAYMENT}</strong>. {@link #OPERATIONAL} (điện, nước, lương...) cố tình không
+     * gắn phiếu nhập, để tách riêng tiền hàng khỏi chi phí vận hành.
      *
-     * <ul>
-     *   <li>{@link #GOODS_PAYMENT} "Thanh toán hàng" — tiền trả cho hàng nhập, luôn gắn phiếu nhập;</li>
-     *   <li>{@link #OPERATIONAL} "Chi phí vận hành" — <em>chỉ</em> điện, nước, lương và những khoản
-     *       vận hành tương tự, không gắn phiếu nhập. Các khoản này không được mô hình hoá thành loại
-     *       con: người dùng tự viết vào {@code reason}.</li>
-     * </ul>
-     *
-     * <p>Việc tách còn ảnh hưởng tới tính thuế: {@code TaxperiodsnapshotService.DEDUCTIBLE_EXPENSE_TYPES}
-     * lọc thêm điều kiện "không gắn phiếu nhập" để loại tiền hàng ra khỏi chi phí được trừ (tiền hàng
-     * đã nằm trong giá vốn) — điều kiện đó chỉ còn cần cho các phiếu cũ lưu trước khi tách loại.
+     * <p>Việc tách này còn ảnh hưởng tính thuế: {@code TaxperiodsnapshotService
+     * .DEDUCTIBLE_EXPENSE_TYPES} lọc thêm điều kiện "không gắn phiếu nhập" để loại tiền hàng ra
+     * khỏi chi phí được trừ (tiền hàng đã nằm trong giá vốn).
      * <strong>Đừng thêm {@link #GOODS_PAYMENT} vào danh sách được trừ.</strong></p>
-     *
-     * <p>Các phiếu cũ mang {@code OPERATIONAL} kèm {@code purchaseID} vẫn còn trong DB và vẫn hiển thị
-     * bình thường — theo lệ "màn hình đọc đúng cột trong DB".</p>
      */
     public static final List<String> PURCHASE_LINKABLE = List.of(GOODS_PAYMENT);
 
@@ -69,12 +52,12 @@ public final class ExpenseType {
         return type != null && ALL.contains(type);
     }
 
-    /** Whether a slip of this type may point at a purchase invoice. Never required, only allowed. */
+    /** Loại phiếu này có được phép trỏ tới một phiếu nhập hay không (không bắt buộc, chỉ cho phép). */
     public static boolean supportsPurchaseInvoiceLink(String type) {
         return type != null && PURCHASE_LINKABLE.contains(type);
     }
 
-    /** Vietnamese display label, e.g. {@code OPERATIONAL -> "Chi phí vận hành"}. */
+    /** Nhãn hiển thị tiếng Việt, ví dụ {@code OPERATIONAL -> "Chi phí vận hành"}. */
     public static String vietnameseName(String type) {
         if (type == null) {
             return "";
@@ -89,7 +72,7 @@ public final class ExpenseType {
         };
     }
 
-    /** Ordered map of type code -> Vietnamese label, for building the type dropdown. */
+    /** Map có thứ tự loại -> nhãn tiếng Việt, dùng để dựng dropdown chọn loại. */
     public static Map<String, String> vietnameseLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
         for (String type : ALL) {

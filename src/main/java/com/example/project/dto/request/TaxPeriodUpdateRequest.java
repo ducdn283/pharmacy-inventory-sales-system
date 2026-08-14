@@ -6,18 +6,13 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * Correcting the most recently closed period — the escape hatch for a period closed with the wrong
- * numbers, chosen (2026-07-27) over a destructive "hủy chốt" that would delete the snapshot.
+ * Điều chỉnh kỳ thuế mới nhất đã chốt — dùng khi chốt sai số, thay vì hủy chốt (xóa snapshot).
  *
- * <p>The three VAT inputs are editable because a snapshot is a filed declaration, and a filed
- * declaration gets amended, not recomputed: input-VAT deductibility is time dependent (an unpaid
- * invoice stops being deductible once its due date passes), so silently re-running the calculation
- * would rewrite history every time somebody opened the screen. To see what the books say <em>now</em>,
- * the preview screen already computes any quarter on demand.</p>
+ * <p>Đây là điều chỉnh một bản khai đã nộp, không phải tính lại — các số GTGT/TNCN được lưu đúng như
+ * người dùng nhập. Muốn xem sổ sách hiện tại ra số bao nhiêu thì dùng màn xem trước.</p>
  *
- * <p>{@code vatCarryforwardOut} is deliberately absent: it is re-derived from the three fields below
- * so that "còn phải nộp" and "chuyển kỳ sau" stay two sides of one subtraction. Letting both be typed
- * would allow a period that simultaneously owes tax and carries credit forward.</p>
+ * <p>{@code vatCarryforwardOut} không có trong form — được suy ra từ 3 trường bên dưới để "còn phải
+ * nộp" và "chuyển kỳ sau" luôn là hai vế của cùng một phép trừ.</p>
  */
 @Getter
 @Setter
@@ -29,10 +24,10 @@ public class TaxPeriodUpdateRequest {
 
     private BigDecimal vatCarryforwardIn;
 
-    /** Thuế TNCN của kỳ — typed as-is, like the VAT lines above. */
+    /** Thuế TNCN của kỳ. */
     private BigDecimal incomeTax;
 
-    /** Reference figure only — the docx calls it "tham chiếu, không phải theo dõi liên tục". */
+    /** Chỉ mang tính tham chiếu, không dùng để tính thuế. */
     private BigDecimal cashBalanceAtPeriodEnd;
 
     private String note;

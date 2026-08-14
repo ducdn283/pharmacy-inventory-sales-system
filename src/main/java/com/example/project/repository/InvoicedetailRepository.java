@@ -10,9 +10,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Truy vấn chi tiết dòng hàng trên hóa đơn bán ({@link Invoicedetail}).
+ */
 public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, Integer> {
 
-    /** Most recent sale lines of one product, for the Product Detail history preview. */
+    /** Các dòng bán gần nhất của một sản phẩm — lịch sử trên màn chi tiết hàng hóa. */
     @Query("""
        select d
        from Invoicedetail d
@@ -25,6 +28,7 @@ public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, In
     List<Invoicedetail> findRecentSalesByProduct(@Param("productId") Integer productId,
                                                  Pageable pageable);
 
+    /** Các dòng hàng kèm sản phẩm, đơn vị bán và lô — chi tiết/in hóa đơn. */
     @Query("""
        select d
        from Invoicedetail d
@@ -37,6 +41,7 @@ public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, In
        """)
     List<Invoicedetail> findByInvoiceIdWithRelations(@Param("invoiceId") Integer invoiceId);
 
+    /** Tổng số lượng bán và đã trả theo từng hóa đơn — badge trạng thái trả hàng trên danh sách. */
     @Query("""
        select d.invoiceID.id, sum(d.quantity), sum(coalesce(d.returnedQty, 0))
        from Invoicedetail d
@@ -62,29 +67,25 @@ public interface InvoicedetailRepository extends JpaRepository<Invoicedetail, In
                                   @Param("after") LocalDateTime after);
 
     /**
-     * Cost of the goods sold in {@code [from, to)}, valued at what each batch actually cost to buy:
-     * {@code baseQtyDeducted × Batch.importPricePerBase}. Feeds the profit-based personal income tax
-     * (group 3 always; group 2 when it opts into the profit method).
+     * Giá vốn hàng bán trong {@code [from, to)}, tính theo giá nhập thực tế từng lô:
+     * {@code baseQtyDeducted × Batch.importPricePerBase}. Phục vụ thuế TNCN theo lợi nhuận
+     * (nhóm 3 luôn; nhóm 2 khi chọn phương pháp lợi nhuận).
      *
-     * <p>Bounds are VN wall-clock {@code LocalDateTime}s because they filter on
-     * {@code Invoice.date} — see {@code TaxperiodsnapshotService}'s boundary helpers.</p>
+     * <p>Mốc thời gian là {@code LocalDateTime} giờ tường VN vì lọc theo {@code Invoice.date} —
+     * xem helper biên trong {@code TaxperiodsnapshotService}.</p>
      *
-     * <p>Only counts lines on an invoice that is <strong>"còn hiệu lực"</strong> — same predicate as
-     * {@code InvoiceRepository.findValidInPeriod}, duplicated here (JPQL has no shared fragments)
-     * rather than reusing that query's result set, since this needs to join down to
-     * {@code Invoicedetail}/{@code Batch} in one aggregate query instead of walking lines in Java.
-     * Without this filter a superseded original's lines and its replacement's lines would both be
-     * summed, double-counting giá vốn the same way revenue used to double-count doanh thu.</p>
+     * <p>Chỉ cộng dòng thuộc hóa đơn <strong>còn hiệu lực</strong> — cùng điều kiện với
+     * {@code InvoiceRepository.findValidInPeriod}, lặp lại ở đây (JPQL không chia sẻ fragment)
+     * vì cần join xuống {@code Invoicedetail}/{@code Batch} gom một query thay vì duyệt dòng trong
+     * Java. Không lọc sẽ cộng trùng dòng hóa đơn gốc và hóa đơn thay thế, kép giá vốn giống lỗi
+     * cộng trùng doanh thu trước đây.</p>
      *
-     * <p><strong>2026-08-06 fix — kept in lockstep with {@code InvoiceRepository.findValidInPeriod}:
-     * </strong> dropped the {@code invoiceType = 'Điều chỉnh'} branch (nothing writes that value any
-     * more — confirmed by grep, the only remaining references were this filter and a read-only
-     * display fallback) and dropped the {@code status <> 'Đã ký'} condition gating the
-     * fully-refunded-with-no-replacement exclusion (a leftover from the pre-04/08/2026 signed/unsigned
-     * split; {@code ReturnService} no longer branches on it, every return goes through the same
-     * {@code createReplacementInvoice()} path). Before this fix, a <em>signed</em> original fully
-     * refunded with no replacement created was left in "còn hiệu lực" by mistake, double-counting its
-     * already-void giá vốn.</p>
+     * <p><strong>Sửa 2026-08-06 — đồng bộ với {@code InvoiceRepository.findValidInPeriod}:</strong>
+     * bỏ nhánh {@code invoiceType = 'Điều chỉnh'} (không còn code ghi giá trị này) và bỏ điều kiện
+     * {@code status <> 'Đã ký'} khi loại hóa đơn trả toàn bộ không tạo thay thế (di sản tách
+     * ký/chưa ký trước 04/08/2026; {@code ReturnService} giờ mọi phiếu trả đều qua
+     * {@code createReplacementInvoice()}). Trước sửa, hóa đơn gốc đã ký, trả toàn bộ không có thay
+     * thế vẫn bị tính còn hiệu lực, cộng trùng giá vốn đã vô hiệu.</p>
      */
     @Query("""
        select coalesce(sum(d.baseQtyDeducted * b.importPricePerBase), 0)

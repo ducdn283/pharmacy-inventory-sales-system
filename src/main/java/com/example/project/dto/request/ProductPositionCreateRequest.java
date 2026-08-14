@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** One storage-location row of the Create Product form (persisted as a Position). */
+/** Một dòng vị trí lưu kho trong form tạo hàng hóa (lưu thành Position). */
 @Getter
 @Setter
 @NoArgsConstructor

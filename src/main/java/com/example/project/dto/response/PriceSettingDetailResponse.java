@@ -7,17 +7,13 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Payload of the Price Settings detail modal — fetched per product from
- * {@code GET /owner/price-settings/{productId}/detail}, not rendered with the list, so opening the
- * screen costs nothing extra and only the product the Owner actually clicks is loaded.
+ * Dữ liệu cho modal chi tiết giá của một sản phẩm — lấy từ
+ * {@code GET /owner/price-settings/{productId}/detail}. Trả lời hai câu hỏi: giá vốn lô hàng còn
+ * tồn so với giá đang bán ({@link #batches} với {@link #sellPricePerBase}), và thuế theo nhóm
+ * doanh thu hiện tại ảnh hưởng thế nào tới lợi nhuận ({@link #taxProjection}).
  *
- * <p>It answers two questions on one panel: <em>what did the stock on hand cost me versus what am I
- * selling it for</em> ({@link #batches} against {@link #sellPricePerBase}, drawn as the chart), and
- * <em>what does the tax regime I am on do to that margin</em> ({@link #taxProjection}).</p>
- *
- * <p>{@link #batches} holds only <strong>in-stock, active</strong> lots — a sold-out lot says
- * nothing about the cost of what is left to price, which is the same rule the list column's
- * average already follows.</p>
+ * <p>{@link #batches} chỉ gồm lô <strong>còn tồn kho, đang hoạt động</strong> — lô đã bán hết
+ * không phản ánh giá vốn của hàng còn lại.</p>
  */
 @Getter
 @AllArgsConstructor
@@ -28,28 +24,25 @@ public class PriceSettingDetailResponse {
     private String productName;
     private String typeName;
 
-    /** Name of the base unit every money figure on this panel is expressed in ("Viên"). */
+    /** Tên đơn vị cơ bản — đơn vị mà mọi số tiền trên panel này quy về. */
     private String baseUnitName;
-    /** Current base-unit sell price (GROSS); {@code null} when no base unit is priced. */
+    /** Giá bán hiện tại của đơn vị cơ bản (GROSS); {@code null} nếu chưa có giá. */
     private BigDecimal sellPricePerBase;
 
-    /** Arithmetic mean of {@link #batches}' import prices; {@code null} when there is no stock. */
+    /** Trung bình cộng giá nhập của {@link #batches}; {@code null} nếu không còn tồn kho. */
     private BigDecimal averageImportPricePerBase;
-    /** Cheapest in-stock lot, for the chart's reference band; {@code null} when there is no stock. */
+    /** Giá nhập thấp nhất trong các lô còn tồn; {@code null} nếu không còn tồn kho. */
     private BigDecimal minImportPricePerBase;
-    /** Dearest in-stock lot; {@code null} when there is no stock. */
+    /** Giá nhập cao nhất trong các lô còn tồn; {@code null} nếu không còn tồn kho. */
     private BigDecimal maxImportPricePerBase;
-    /** Total remaining quantity across {@link #batches}, in base units. */
+    /** Tổng số lượng còn tồn của {@link #batches}, tính theo đơn vị cơ bản. */
     private long totalStock;
 
     private List<PriceSettingBatchPointResponse> batches;
 
     private PriceSettingTaxProjectionResponse taxProjection;
 
-    /**
-     * True when at least one in-stock lot cost more than the product currently sells for — the
-     * chart highlights those bars, because it is the case a price screen exists to catch.
-     */
+    /** True nếu có ít nhất một lô tồn kho có giá nhập cao hơn giá bán hiện tại (bán ra là lỗ). */
     public boolean isHasLossMakingBatch() {
         return batches != null && batches.stream()
                 .anyMatch(batch -> batch.getGrossMargin() != null

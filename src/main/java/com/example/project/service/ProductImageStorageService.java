@@ -13,15 +13,14 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Uploads/removes product photos on Cloudinary. The {@code public_id} is always
- * {@code "pharmacy-products/" + product.code} — {@code Product.code} is unique and immutable once
- * assigned (see {@code ProductService.generateNextProductCode()}), so it doubles as a stable asset
- * key without needing a separate column to remember Cloudinary's own identifier.
+ * Upload/xoá ảnh sản phẩm trên Cloudinary. {@code public_id} luôn là
+ * {@code "pharmacy-products/" + product.code} — {@code Product.code} là duy nhất và không đổi sau
+ * khi gán, nên dùng luôn làm khóa asset ổn định, không cần thêm cột lưu id riêng của Cloudinary.
  *
- * <p>Folder/public_id are deliberately flat (not per-{@code Type}) because {@code Type.name} and a
- * Product's {@code typeId} can both change after the image already exists, which would otherwise
- * orphan/duplicate assets. Instead, every asset also gets a {@code "type-{slug}"} Cloudinary tag so
- * images can still be filtered/managed by category — see {@link #typeTag(String)} and
+ * <p>Folder/public_id cố tình để phẳng (không chia theo {@code Type}) vì {@code Type.name} và
+ * {@code typeId} của sản phẩm đều có thể đổi sau khi ảnh đã tồn tại, nếu chia theo Type sẽ dễ tạo
+ * asset mồ côi/trùng lặp. Thay vào đó mỗi ảnh được gắn thêm tag Cloudinary {@code "type-{slug}"}
+ * để vẫn lọc/quản lý được theo danh mục — xem {@link #typeTag(String)} và
  * {@link #retag(String, String, String)}.</p>
  */
 @Service
@@ -41,13 +40,12 @@ public class ProductImageStorageService {
     }
 
     /**
-     * Uploads (or overwrites, if one already exists for this product code) and returns the public
-     * HTTPS URL. {@code public_id} is passed as the bare product code (not pre-joined with
-     * {@link #FOLDER}) — Cloudinary prepends the {@code folder} option to it itself; passing an
-     * already-prefixed public_id together with {@code folder} would double up the path (e.g.
-     * {@code pharmacy-products/pharmacy-products/SP000002}). The resulting effective public_id is
-     * still {@code "pharmacy-products/" + productCode}, matching {@link #publicId(String)} used by
-     * {@link #retag} / {@link #delete}.
+     * Upload (hoặc ghi đè nếu sản phẩm đã có ảnh) và trả về URL HTTPS công khai. {@code public_id}
+     * truyền vào chỉ là mã sản phẩm thô (không ghép sẵn {@link #FOLDER}) vì Cloudinary tự thêm
+     * tiền tố {@code folder} — nếu ghép sẵn sẽ bị lặp đường dẫn (vd.
+     * {@code pharmacy-products/pharmacy-products/SP000002}). Public_id thực tế vẫn là
+     * {@code "pharmacy-products/" + productCode}, khớp với {@link #publicId(String)} mà
+     * {@link #retag}/{@link #delete} dùng.
      */
     public String upload(MultipartFile file, String productCode, String typeName) {
         try {
@@ -65,9 +63,8 @@ public class ProductImageStorageService {
     }
 
     /**
-     * Swaps the category tag on an already-uploaded asset without re-uploading the file — used when
-     * a product's Type changes but its photo doesn't. Only the two tags involved are touched; any
-     * other tags the asset may carry are left alone.
+     * Đổi tag danh mục của ảnh đã upload mà không cần upload lại — dùng khi đổi Loại hàng nhưng
+     * ảnh giữ nguyên. Chỉ đụng vào 2 tag liên quan, các tag khác của ảnh không bị ảnh hưởng.
      */
     public void retag(String productCode, String oldTag, String newTag) {
         try {
@@ -81,7 +78,7 @@ public class ProductImageStorageService {
         }
     }
 
-    /** Removes the asset for this product code, if any. */
+    /** Xoá ảnh của mã sản phẩm này nếu có. */
     public void delete(String productCode) {
         try {
             cloudinary.uploader().destroy(publicId(productCode), ObjectUtils.emptyMap());
@@ -90,12 +87,13 @@ public class ProductImageStorageService {
         }
     }
 
-    /** {@code "type-{slug}"} for the given Type name, or the fallback tag when null/blank/unslug-able. */
+    /** Trả về {@code "type-{slug}"} cho tên Loại hàng, hoặc tag mặc định nếu null/rỗng/không slug được. */
     public String typeTag(String typeName) {
         String slug = slugify(typeName);
         return slug.isEmpty() ? TYPE_TAG_FALLBACK : "type-" + slug;
     }
 
+    // Chuẩn hoá tên Loại hàng thành slug không dấu, chữ thường, nối bằng dấu gạch ngang.
     private String slugify(String input) {
         if (input == null) {
             return "";
@@ -112,6 +110,7 @@ public class ProductImageStorageService {
         return EDGE_HYPHENS.matcher(hyphenated).replaceAll("");
     }
 
+    // Dựng public_id Cloudinary đầy đủ (folder + mã sản phẩm) từ mã sản phẩm.
     private String publicId(String productCode) {
         return FOLDER + "/" + productCode;
     }

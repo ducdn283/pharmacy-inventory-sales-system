@@ -30,6 +30,7 @@ public interface ExpenseRepository
            left join fetch e.accountID
            order by e.date desc
            """)
+    // Lấy toàn bộ phiếu chi kèm sẵn các quan hệ liên quan (fetch join), tránh N+1 query khi hiển thị danh sách.
     List<Expense> findAllWithRelations();
 
     @Query("""
@@ -41,6 +42,7 @@ public interface ExpenseRepository
              and e.date >= :from
              and e.date < :to
            """)
+    // Tổng chi phí vận hành (không gắn phiếu nhập) trong một kỳ, theo loại phiếu và trạng thái đã duyệt.
     BigDecimal sumOperatingCostInPeriod(
             @Param("from") Instant from,
             @Param("to") Instant to,

@@ -3,10 +3,8 @@ package com.example.project.constant;
 import java.util.List;
 
 /**
- * Central definition of the valid {@code Purchaseinvoice.status} values, per
- * {@code docs/context/Pharmacy-Database-Description.docx}. The column is a plain
- * {@code varchar(50)} (no {@code Status} table, see CLAUDE.md) — these constants exist so the
- * vocabulary is written in exactly one place and never drifts between the service and templates.
+ * Định nghĩa các giá trị hợp lệ của Purchaseinvoice.status (cột varchar tự do, không có bảng
+ * Status riêng) — dùng chung để tránh lệch chuỗi giữa service và template.
  */
 public final class PurchaseInvoiceStatus {
 
@@ -22,15 +20,14 @@ public final class PurchaseInvoiceStatus {
      */
     public static final String CANCELLED = "Đã hủy";
 
-    /** All valid statuses, in workflow order. */
+    /** Tất cả trạng thái hợp lệ, theo đúng thứ tự luồng nghiệp vụ. */
     public static final List<String> ALL =
             List.of(DRAFT, PENDING_APPROVAL, DEBT, PARTIAL_DEBT, COMPLETED, CANCELLED);
 
     /**
-     * Whether a stored {@code Purchaseinvoice.status} is one this app actually knows about. The
-     * column is a free-form {@code varchar(50)}, so a value edited straight into the DB (or written
-     * by an older/other tool) can be anything at all — screens use this to render such a row as
-     * visibly unrecognised instead of dressing it up as a valid status.
+     * Kiểm tra status lưu trong DB có nằm trong danh sách hợp lệ không — vì cột là varchar tự do,
+     * giá trị sửa tay trong DB có thể bất kỳ; dùng để hiển thị badge "không xác định" thay vì
+     * coi như trạng thái hợp lệ.
      */
     public static boolean isKnown(String status) {
         return status != null && ALL.contains(status.trim());

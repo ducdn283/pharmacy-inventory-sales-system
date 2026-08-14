@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
 @Service
 public class ProductService {
 
-    // Stock-status filter values exchanged with the screen.
+    // Các giá trị filter trạng thái tồn kho trao đổi với màn hình.
     public static final String STOCK_STATUS_IN = "IN_STOCK";
     public static final String STOCK_STATUS_LOW = "LOW";
     public static final String STOCK_STATUS_OUT = "OUT";
@@ -79,25 +79,25 @@ public class ProductService {
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final int RECENT_HISTORY_LIMIT = 10;
-    // Stockadjustmentdetail.direction values (see StockadjustmentService) — a COUNT slip carries
-    // both, so "Lịch sử tồn kho" can no longer assume every adjustment line is a stock-out.
+    // Giá trị Stockadjustmentdetail.direction (xem StockadjustmentService) — một phiếu COUNT có cả
+    // 2 chiều, nên "Lịch sử tồn kho" không được mặc định mọi dòng điều chỉnh đều là xuất kho.
     private static final String DIRECTION_IN = "IN";
     private static final String DIRECTION_OUT = "OUT";
-    // Return.returnType (see ReturnService/ReturnPurchaseService) — a SUPPLIER return deducts stock,
-    // not adds it; the `return`/`returndetail` tables carry both kinds, undistinguished otherwise.
+    // Return.returnType (xem ReturnService/ReturnPurchaseService) — trả hàng cho NCC (SUPPLIER) thì
+    // trừ tồn chứ không cộng; bảng return/returndetail chứa cả 2 loại, không phân biệt sẵn.
     private static final String TYPE_SUPPLIER_RETURN = "SUPPLIER";
     private static final String INVOICE_TYPE_REPLACEMENT = "Thay thế";
-    // Used by toInstantForSort() below.
+    // Dùng bởi toInstantForSort() bên dưới.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    // normalize("Thuốc kê đơn") — there is no boolean column for this, only the Type's name.
+    // normalize("Thuốc kê đơn") — không có cột boolean riêng, chỉ dựa vào tên Type.
     private static final String PRESCRIPTION_TYPE_NAME = "thuoc ke don";
-    // MedicineAPI/hoạt chất only applies to products whose Type.sortType is the medicine group.
+    // MedicineAPI/hoạt chất chỉ áp dụng cho sản phẩm có Type.sortType thuộc nhóm thuốc.
     private static final String SORT_MEDICINE = "thuoc";
-    // Medical-device subtypes that do not track an expiration date on their batches.
+    // Các loại thiết bị y tế không theo dõi hạn dùng trên lô hàng.
     private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
     private static final String DEVICE_MACHINE_MARK = "may";
     private static final String DEVICE_NO_EXPIRY_MARK = "khong han";
-    // Same threshold StockadjustmentService uses for its own "sắp hết hạn" checks.
+    // Cùng ngưỡng mà StockadjustmentService dùng để xác định "sắp hết hạn".
     private static final int NEAR_EXPIRY_DAYS = 90;
 
     private final ProductRepository productRepository;
@@ -113,16 +113,13 @@ public class ProductService {
     private final CurrentUserContext currentUserContext;
     private final ProductImageStorageService productImageStorageService;
     /*
-     * Setter injection (not constructor) so the existing git-ignored ProductServiceTest, which
-     * constructs ProductService directly, doesn't need a matching new argument — same pattern
-     * already used for InventoryAlertEventService/NotificationRealtimeService elsewhere in this
-     * codebase. Only used to look up the canonical Vietnamese label for a Stockadjustment's
-     * adjustmentType (adjustmentTypeLabels()) so "Lịch sử tồn kho gần đây" never drifts from the
-     * labels Stock Adjustment itself shows — falls back to the raw type code if unset (unit tests).
+     * Inject qua setter (không qua constructor) để test cũ không cần sửa theo. Chỉ dùng để tra
+     * nhãn tiếng Việt chuẩn của một adjustmentType (adjustmentTypeLabels()), đảm bảo "Lịch sử tồn
+     * kho gần đây" luôn khớp nhãn với màn Stock Adjustment — nếu chưa gán thì dùng luôn mã gốc.
      */
     private StockadjustmentService stockadjustmentService;
 
-    /** Country names for the "Xuất xứ" autocomplete — sourced from the JDK's ISO-3166 locale data instead of a hardcoded DB table. */
+    /** Danh sách tên quốc gia cho autocomplete "Xuất xứ" — lấy từ dữ liệu ISO-3166 của JDK, không cần bảng DB riêng. */
     private static final List<String> COUNTRY_NAMES = Arrays.stream(Locale.getISOCountries())
             .map(code -> new Locale("", code).getDisplayCountry(new Locale("vi")))
             .distinct()
@@ -155,16 +152,13 @@ public class ProductService {
         this.productImageStorageService = productImageStorageService;
     }
 
+    // Inject qua setter để phá vòng phụ thuộc vòng tròn với StockadjustmentService (xem javadoc field ở trên).
     @org.springframework.beans.factory.annotation.Autowired
     public void setStockadjustmentService(StockadjustmentService stockadjustmentService) {
         this.stockadjustmentService = stockadjustmentService;
     }
 
-    /**
-     * Product List search: keyword over code/name/barcode plus type / producer / stock-status
-     * filters, then in-memory pagination. Mirrors the load-all + filter approach already used by
-     * {@code StockoutService} for consistency across listing screens.
-     */
+    /** Tìm kiếm Danh sách hàng hóa: keyword trên mã/tên/barcode kèm filter loại/nhà sản xuất/trạng thái tồn, phân trang in-memory. */
     @Transactional(readOnly = true)
     public Page<ProductRowResponse> searchProducts(String keyword,
                                                    Integer typeId,
@@ -175,11 +169,9 @@ public class ProductService {
     }
 
     /**
-     * Product List search: either the single combined {@code keyword} (legacy) or the four
-     * expandable-search fields (mã sản phẩm / tên / mã vạch / nhà sản xuất — ANDed when more than
-     * one is filled), plus type / stock-status / near-expiry filters, then in-memory pagination.
-     * Mirrors the load-all + filter approach already used by {@code StockoutService} for
-     * consistency across listing screens.
+     * Tìm kiếm Danh sách hàng hóa: dùng {@code keyword} gộp (kiểu cũ) hoặc 4 ô tìm kiếm mở rộng
+     * (mã sản phẩm / tên / mã vạch / nhà sản xuất — AND với nhau nếu điền nhiều ô), kèm filter
+     * loại hàng / trạng thái tồn / sắp hết hạn, rồi phân trang in-memory.
      */
     @Transactional(readOnly = true)
     public Page<ProductRowResponse> searchProducts(String keyword,
@@ -196,10 +188,10 @@ public class ProductService {
     }
 
     /**
-     * Full Product List query including business-status and display sorting. Business status is an
-     * Owner-only field: even if another role crafts {@code ?businessStatus=...} manually, the
-     * filter is ignored here based on the authenticated role. Sorting is applied after filtering
-     * and before pagination so it is stable across the complete result set.
+     * Bản đầy đủ của tìm kiếm Danh sách hàng hóa, có thêm filter trạng thái kinh doanh và sắp xếp.
+     * Trạng thái kinh doanh chỉ Owner được lọc — role khác có tự chế {@code ?businessStatus=...}
+     * cũng bị bỏ qua ở đây. Sắp xếp áp dụng sau khi lọc và trước khi phân trang để ổn định trên
+     * toàn bộ tập kết quả.
      */
     @Transactional(readOnly = true)
     public Page<ProductRowResponse> searchProducts(String keyword,
@@ -218,9 +210,8 @@ public class ProductService {
         final String normalizedName = normalize(nameQuery);
         final String normalizedBarcode = normalize(barcodeQuery);
         final String normalizedProducer = normalize(producerQuery);
-        // Inactive products are hidden from the Product screen by default. The sole exception is
-        // an Owner explicitly choosing the INACTIVE filter; hand-crafted parameters from any other
-        // role still resolve to ACTIVE here.
+        // Mặc định ẩn sản phẩm ngừng kinh doanh. Chỉ Owner chủ động chọn filter INACTIVE mới thấy;
+        // tham số tự chế từ role khác vẫn bị ép về ACTIVE ở đây.
         final String requestedBusinessStatus = validBusinessStatus(businessStatus);
         final String effectiveBusinessStatus = RoleConstants.OWNER.equals(currentUserContext.getCurrentRole())
                 && BUSINESS_STATUS_INACTIVE.equals(requestedBusinessStatus)
@@ -260,6 +251,7 @@ public class ProductService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
+    /** Thống kê tổng quan cho các thẻ trên đầu Danh sách hàng hóa: tổng số SP còn kinh doanh, số còn hàng/sắp hết/hết hàng. */
     @Transactional(readOnly = true)
     public ProductListStatsResponse getStats() {
         Map<Integer, Long> stockByProduct = loadStockByProduct();
@@ -285,11 +277,7 @@ public class ProductService {
         return new ProductListStatsResponse(total, inStock, low, out);
     }
 
-    /**
-     * Full Product Detail payload. The store is single, so stock is one system-wide total (no
-     * per-branch breakdown). Returns {@link Optional#empty()} when the product does not exist, so
-     * the controller can 404 / redirect.
-     */
+    /** Toàn bộ payload cho màn Chi tiết hàng hóa. Trả về rỗng nếu sản phẩm không tồn tại (để controller redirect). */
     @Transactional(readOnly = true)
     public Optional<ProductDetailResponse> getProductDetail(Integer productId) {
         Optional<Product> productOpt = productRepository.findDetailById(productId);
@@ -353,15 +341,13 @@ public class ProductService {
         return Optional.of(response);
     }
 
-    /**
-     * Whether the current user may see the "recent inventory history" block. Only Owner may;
-     * Pharmacist may not.
-     */
+    /** Người dùng hiện tại có được xem khối "lịch sử tồn kho gần đây" không — chỉ Owner. */
     public boolean canViewRecentHistory() {
         String role = currentUserContext.getCurrentRole();
         return RoleConstants.OWNER.equals(role);
     }
 
+    /** Danh sách Loại hàng, sắp xếp theo tên — dùng cho dropdown lọc/tạo hàng hóa. */
     @Transactional(readOnly = true)
     public List<Type> listTypes() {
         return typeRepository.findAll()
@@ -370,6 +356,7 @@ public class ProductService {
                 .toList();
     }
 
+    /** Danh sách Nhà sản xuất, sắp xếp theo tên — dùng cho dropdown tạo/sửa hàng hóa. */
     @Transactional(readOnly = true)
     public List<Producer> listProducers() {
         return producerRepository.findAll()
@@ -378,31 +365,32 @@ public class ProductService {
                 .toList();
     }
 
+    /** Danh sách tên quốc gia cho autocomplete "Xuất xứ". */
     public List<String> listOrigins() {
         return COUNTRY_NAMES;
     }
 
-    /** Existing ingredient names, for the Create Product autocomplete (reuse instead of retyping). */
+    /** Danh sách tên hoạt chất đã có, cho autocomplete ở form tạo hàng hóa. */
     @Transactional(readOnly = true)
     public List<String> listIngredientNames() {
         return medicineapiRepository.findDistinctApiNames();
     }
 
-    /** Existing ingredient strengths, for the Create Product autocomplete. */
+    /** Danh sách hàm lượng đã có, cho autocomplete ở form tạo hàng hóa. */
     @Transactional(readOnly = true)
     public List<String> listIngredientStrengths() {
         return medicineapiRepository.findDistinctStrengths();
     }
 
-    /** Preview of the next auto-generated internal product code, shown read-only on the create form. */
+    /** Xem trước mã sản phẩm tiếp theo sẽ tự sinh, hiển thị read-only trên form tạo. */
     @Transactional(readOnly = true)
     public String previewNextProductCode() {
         return formatProductCode(productRepository.findMaxProductCodeSequence() + 1);
     }
 
     /**
-     * Next free internal product code: "SP" + the highest existing sequence + 1, skipping any code
-     * already taken (defensive against gaps/races; the unique constraint is the final backstop).
+     * Mã sản phẩm tiếp theo còn trống: "SP" + số thứ tự lớn nhất hiện có + 1, bỏ qua mã đã bị
+     * chiếm (phòng trường hợp lệch số/đụng độ; ràng buộc UNIQUE là chốt chặn cuối cùng).
      */
     private String generateNextProductCode() {
         long seq = productRepository.findMaxProductCodeSequence();
@@ -418,16 +406,15 @@ public class ProductService {
         return "SP" + String.format("%06d", sequence);
     }
 
-    // --- Create Product ------------------------------------------------------
+    // --- Tạo hàng hóa ----------------------------------------------------------
 
     /**
-     * Creates a product master in one transaction: {@code Product} + its {@code ProductUnit}s,
-     * plus optional {@code MedicineAPI} ingredients and {@code Position}s. It does NOT create any
-     * stock ({@code Batch}) or purchase/invoice data — stock arises only from goods-receipt later.
+     * Tạo sản phẩm gốc trong 1 transaction: {@code Product} + các {@code ProductUnit}, kèm
+     * {@code MedicineAPI} và {@code Position} tuỳ chọn. KHÔNG tạo tồn kho ({@code Batch}) hay
+     * chứng từ nhập/bán — tồn kho chỉ phát sinh khi nhập hàng sau này.
      *
-     * @return the new product id
-     * @throws ProductValidationException when validation fails; the transaction rolls back so
-     *                                    nothing is persisted.
+     * @return id sản phẩm vừa tạo
+     * @throws ProductValidationException khi validate thất bại; transaction rollback, không lưu gì.
      */
     @Transactional
     public Integer createProduct(ProductCreateRequest request) {
@@ -439,7 +426,7 @@ public class ProductService {
         if (name == null) {
             errors.add("Tên hàng hóa không được để trống");
         }
-        // Mã hàng is an internal code — auto-generated ("SP" + sequence), not entered by the user.
+        // Mã hàng là mã nội bộ tự sinh ("SP" + số thứ tự), người dùng không tự nhập.
         validateUniqueness(name, barcode, trimToNull(request.getRegistrationNumber()), null, errors);
         validateStockBounds(request, errors);
         validateRequiredFields(request, errors);
@@ -524,13 +511,12 @@ public class ProductService {
         return saved.getProductID();
     }
 
-    // --- Edit Product ----------------------------------------------------------
+    // --- Sửa hàng hóa ------------------------------------------------------------
 
     /**
-     * Builds the Edit Product form, prefilled from the existing {@code Product} + its units,
-     * ingredients and storage positions. Units are listed smallest-to-largest (matching the Create
-     * form's convention) so {@code quantityRelativeToPrevious} can be reconstructed from the stored
-     * cumulative ratios. Returns {@link Optional#empty()} when the product does not exist.
+     * Dựng form Sửa hàng hóa, điền sẵn từ {@code Product} hiện có + đơn vị/hoạt chất/vị trí. Đơn vị
+     * liệt kê từ nhỏ đến lớn (giống form Tạo) để dựng lại {@code quantityRelativeToPrevious} từ
+     * ratio tích luỹ đã lưu. Trả về rỗng nếu sản phẩm không tồn tại.
      */
     @Transactional(readOnly = true)
     public Optional<ProductCreateRequest> getEditForm(Integer productId) {
@@ -592,19 +578,16 @@ public class ProductService {
     }
 
     /**
-     * Saves edits to an existing product. Scope is deliberately narrower than
-     * {@link #createProduct}: existing {@code ProductUnit} rows can only be edited in place (name /
-     * ratio / sell price / flags) and new rows may be appended, but an existing row can never be
-     * removed here, because {@code Batch}, {@code InvoiceDetail}, {@code StockOutDetail} and
-     * {@code ReturnDetail} all hold FK references to a specific {@code ProductUnit} row, so shrinking
-     * the row count would risk orphaning that history. Adding a row carries no such risk — it's a
-     * brand new row with no existing FK pointing at it. Ingredients and storage positions carry no
-     * such references, so both lists are simply replaced wholesale (delete-all-then-recreate), same
-     * as on create.
+     * Lưu chỉnh sửa cho sản phẩm đã có. Phạm vi hẹp hơn {@link #createProduct}: các dòng
+     * {@code ProductUnit} cũ chỉ được sửa tại chỗ (tên/ratio/giá/cờ), có thể thêm dòng mới nhưng
+     * KHÔNG được xoá dòng cũ — vì {@code Batch}, {@code InvoiceDetail}, {@code StockOutDetail},
+     * {@code ReturnDetail} đều tham chiếu FK tới từng {@code ProductUnit} cụ thể, xoá đi sẽ làm mồ
+     * côi dữ liệu lịch sử. Thêm dòng mới thì an toàn vì chưa có FK nào trỏ tới. Hoạt chất và vị trí
+     * lưu kho không bị ràng buộc FK như vậy nên được thay thế toàn bộ (xoá hết rồi tạo lại), giống
+     * lúc tạo mới.
      *
-     * @throws ProductValidationException when validation fails (including removing an existing unit
-     *                                    row); the transaction rolls back so nothing is persisted.
-     * @throws IllegalArgumentException   when {@code productId} does not refer to an existing product
+     * @throws ProductValidationException khi validate thất bại (kể cả trường hợp xoá dòng đơn vị cũ)
+     * @throws IllegalArgumentException   khi {@code productId} không tồn tại
      */
     @Transactional
     public void updateProduct(Integer productId, ProductCreateRequest request) {
@@ -687,8 +670,8 @@ public class ProductService {
             unit.setIsActive(resolved.active());
             productunitRepository.save(unit);
         }
-        // Any rows beyond the existing count are brand new (appended via "+ Thêm đơn vị" on the
-        // Edit screen) — no existing FK can point at them yet, so they're safe to insert outright.
+        // Các dòng vượt quá số dòng cũ là dòng mới thêm (qua "+ Thêm đơn vị") — chưa có FK nào trỏ
+        // tới nên chèn thẳng là an toàn.
         for (int i = existingUnits.size(); i < resolvedUnits.size(); i++) {
             ResolvedUnit resolved = resolvedUnits.get(i);
             Productunit unit = new Productunit();
@@ -733,9 +716,9 @@ public class ProductService {
     }
 
     /**
-     * Validates the unit rows and resolves each to a cumulative ratio (relative to the smallest
-     * unit) and a final sell price (actual if given, else base price × ratio). Any problem is added
-     * to {@code errors}; the returned list is only meaningful when {@code errors} stays empty.
+     * Validate các dòng đơn vị và quy đổi mỗi dòng thành ratio tích luỹ (so với đơn vị nhỏ nhất) +
+     * giá bán cuối (giá thật nếu có, không thì giá cơ bản × ratio). Lỗi được thêm vào
+     * {@code errors}; kết quả trả về chỉ có ý nghĩa khi {@code errors} vẫn rỗng.
      */
     private List<ResolvedUnit> validateAndResolveUnits(List<ProductUnitCreateRequest> units, List<String> errors) {
         List<ResolvedUnit> resolved = new ArrayList<>();
@@ -769,7 +752,7 @@ public class ProductService {
             }
         }
 
-        // The base unit is the smallest unit → must be the first row (ratio = 1).
+        // Đơn vị cơ bản là đơn vị nhỏ nhất → phải là dòng đầu tiên (ratio = 1).
         if (baseCount == 1 && !rows.get(0).isBaseUnit()) {
             errors.add("Đơn vị cơ bản phải là đơn vị nhỏ nhất (dòng đầu tiên)");
         }
@@ -803,7 +786,7 @@ public class ProductService {
             if (actual != null && actual.signum() > 0) {
                 finalPrice = actual;
             } else if (basePrice != null && basePrice.signum() > 0) {
-                finalPrice = basePrice.multiply(BigDecimal.valueOf(ratios[i]));   // suggested price
+                finalPrice = basePrice.multiply(BigDecimal.valueOf(ratios[i]));   // giá đề xuất
             } else {
                 finalPrice = null;
             }
@@ -856,7 +839,7 @@ public class ProductService {
         }
     }
 
-    /** Create checks every row; edit checks every row but the one being edited. */
+    /** Tạo mới: kiểm tất cả các dòng. Sửa: kiểm mọi dòng trừ chính dòng đang sửa. */
     private boolean isTaken(Integer productId, BooleanSupplier onCreate, BooleanSupplier onUpdate) {
         return productId == null ? onCreate.getAsBoolean() : onUpdate.getAsBoolean();
     }
@@ -901,14 +884,14 @@ public class ProductService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /** A unit row resolved to its cumulative ratio and final price, ready to persist. */
+    /** Một dòng đơn vị đã quy đổi ratio tích luỹ và giá cuối, sẵn sàng lưu DB. */
     private record ResolvedUnit(String name, long ratio, BigDecimal sellPrice,
                                 boolean baseUnit, boolean defaultUnit, boolean active) {
     }
 
     // --- helpers -------------------------------------------------------------
 
-    /** On-hand stock per product = SUM(Batch.storageQuantity) (single store — no branch scoping). */
+    /** Tồn kho theo từng sản phẩm = SUM(Batch.storageQuantity) (1 cửa hàng, không chia chi nhánh). */
     private Map<Integer, Long> loadStockByProduct() {
         List<Object[]> rows = batchRepository.sumStorageGroupedByProduct();
 
@@ -920,6 +903,7 @@ public class ProductService {
                 ));
     }
 
+    // Gom đơn vị tính theo sản phẩm rồi chọn ra "đơn vị bán chính" cho mỗi sản phẩm (xem pickMainUnit).
     private Map<Integer, Productunit> loadMainUnitByProduct() {
         return productunitRepository.findAllWithProduct().stream()
                 .filter(unit -> unit.getProductID() != null)
@@ -929,7 +913,7 @@ public class ProductService {
                 ));
     }
 
-    /** Default unit first, then base unit, then the lowest-id unit. */
+    /** Ưu tiên đơn vị mặc định, rồi đến đơn vị cơ bản, cuối cùng là đơn vị có id nhỏ nhất. */
     private Productunit pickMainUnit(List<Productunit> units) {
         return units.stream()
                 .filter(unit -> Boolean.TRUE.equals(unit.getIsDefault()) && !Boolean.FALSE.equals(unit.getIsActive()))
@@ -940,6 +924,7 @@ public class ProductService {
                         .orElse(null));
     }
 
+    // Gom hoạt chất theo sản phẩm thành 1 chuỗi hiển thị (nối bằng dấu phẩy) cho mỗi sản phẩm.
     private Map<Integer, String> loadIngredientByProduct() {
         return medicineapiRepository.findAllWithProduct().stream()
                 .filter(api -> api.getProductID() != null)
@@ -958,7 +943,7 @@ public class ProductService {
         return api.getApiName() + " " + api.getStrength();
     }
 
-    // --- Product Detail mappers ---------------------------------------------
+    // --- Mapper cho màn Chi tiết hàng hóa -------------------------------------
 
     private ProductUnitDetailResponse toUnitDetail(Productunit unit) {
         return new ProductUnitDetailResponse(
@@ -987,24 +972,25 @@ public class ProductService {
         );
     }
 
-    // --- recent stock-movement preview (union of 4 sources) ------------------
+    // --- Xem trước biến động tồn kho gần đây (gộp từ 4 nguồn) -----------------
 
     /**
-     * One candidate row before it's cut down to {@link #RECENT_HISTORY_LIMIT} and before the
-     * running product-wide balance is computed — carries {@code baseUnitDelta} alongside the
-     * display fields so the two stay in lockstep through the sort/limit step (a plain
-     * {@code List<ProductRecentHistoryResponse>} would lose that correlation).
+     * Một dòng ứng viên, trước khi cắt còn {@link #RECENT_HISTORY_LIMIT} dòng và trước khi tính số
+     * dư tồn kho tích luỹ — mang thêm {@code baseUnitDelta} đi kèm field hiển thị để 2 giá trị này
+     * luôn khớp nhau qua bước sort/limit.
      */
     private record HistoryRow(Instant occurredAt, String timeDisplay, String changeType, String reference,
                               String lotNumber, int displayQuantity, String unitName, String note,
                               int baseUnitDelta) {
     }
 
+    // Gộp top-N sự kiện gần đây từ 4 nguồn (nhập/bán/điều chỉnh kho/trả hàng), sắp xếp mới→cũ và
+    // dựng lại số dư tồn kho tích luỹ sau mỗi dòng (xem ghi chú thuật toán ở dưới).
     private List<ProductRecentHistoryResponse> loadRecentHistory(Integer productId, long currentTotalStock) {
         Pageable top = PageRequest.of(0, RECENT_HISTORY_LIMIT);
         List<HistoryRow> rows = new ArrayList<>();
-        // Sales/stock-outs/returns all report base-unit counts (baseQtyDeducted/baseQtyRestored) —
-        // resolve once per call and reuse, since loadRecentHistory is scoped to a single product.
+        // Bán hàng/xuất kho/trả hàng đều tính theo đơn vị cơ bản (baseQtyDeducted/baseQtyRestored)
+        // — tra 1 lần và tái sử dụng, vì loadRecentHistory chỉ chạy cho 1 sản phẩm.
         String baseUnit = baseUnitName(productId);
 
         for (Batch batch : batchRepository.findRecentImportsByProduct(productId, top)) {
@@ -1018,8 +1004,8 @@ public class ProductService {
 
         for (Invoicedetail detail : invoicedetailRepository.findRecentSalesByProduct(productId, top)) {
             Invoice invoice = detail.getInvoiceID();
-            // A replacement invoice describes the goods the customer still keeps; creating it does
-            // not deduct stock again. The original sale and the return are the two real movements.
+            // Hóa đơn thay thế chỉ mô tả lại hàng khách còn giữ, không trừ tồn thêm lần nữa — hóa
+            // đơn gốc và phiếu trả hàng mới là 2 biến động tồn kho thật.
             if (invoice != null && INVOICE_TYPE_REPLACEMENT.equalsIgnoreCase(invoice.getInvoiceType())) {
                 continue;
             }
@@ -1042,10 +1028,8 @@ public class ProductService {
 
         for (Returndetail detail : returndetailRepository.findRecentReturnsByProduct(productId, top)) {
             // Return.returnType — CUSTOMER (khách trả hàng về kho, cộng tồn) vs SUPPLIER (mình trả
-            // hàng lại NCC, trừ tồn — ReturnPurchaseService.applyReturnEffect() does
-            // batch.setStorageQuantity(available - qty)). baseQtyRestored is always a positive
-            // magnitude on both, never pre-signed — treating every return as an addition here was
-            // the actual bug behind the "Tổng tồn sau thay đổi" numbers not matching reality.
+            // lại NCC, trừ tồn). baseQtyRestored luôn là số dương, không tự mang dấu, nên phải xác
+            // định dấu dựa vào returnType ở đây.
             boolean isSupplierReturn = TYPE_SUPPLIER_RETURN.equals(detail.getReturnID().getReturnType());
             int magnitude = nullSafe(detail.getBaseQtyRestored());
             int delta = isSupplierReturn ? -magnitude : magnitude;
@@ -1067,14 +1051,11 @@ public class ProductService {
                 .limit(RECENT_HISTORY_LIMIT)
                 .toList();
 
-        // Walk newest → oldest: the newest row's "after" is the PRODUCT's real current total stock
-        // (all batches combined — the batch table above the history already shows each individual
-        // batch's own current total, so this column is deliberately product-wide instead of
-        // repeating that). Each older row then derives its own "after" from the next-more-recent
-        // row's "after" minus that row's delta. Best-effort by nature — this preview only ever sees
-        // the top N rows per source table, so an event outside that window breaks the chain for
-        // anything older than it; a reconstructed value going negative is the tell (stock can't
-        // really be negative), so that row shows "—" instead of a wrong number.
+        // Duyệt từ mới → cũ: "tồn sau" của dòng mới nhất chính là tổng tồn thật hiện tại của sản
+        // phẩm (gộp mọi lô). Mỗi dòng cũ hơn suy ra "tồn sau" của mình từ "tồn sau" của dòng gần
+        // hơn trừ đi delta của dòng đó. Đây là ước lượng tốt nhất có thể — preview chỉ lấy top N
+        // dòng mỗi nguồn, nên một sự kiện nằm ngoài phạm vi đó sẽ làm đứt chuỗi cho các dòng cũ
+        // hơn nó; khi kết quả dựng lại bị âm (không hợp lý) thì hiển thị "—" thay vì số sai.
         long running = currentTotalStock;
         List<ProductRecentHistoryResponse> result = new ArrayList<>(limited.size());
         for (HistoryRow row : limited) {
@@ -1106,9 +1087,7 @@ public class ProductService {
         return typeLabel;
     }
 
-    /** {@code Stockadjustmentdetail.baseQtyDeducted} is always a positive magnitude regardless of
-     *  direction (see StockadjustmentService) — sign it here from the line's own direction instead
-     *  of assuming every line is a deduction. */
+    /** {@code baseQtyDeducted} luôn là số dương bất kể chiều — gán dấu ở đây dựa vào direction của dòng. */
     private int signedAdjustmentQuantity(Stockadjustmentdetail detail) {
         int qty = nullSafe(detail.getBaseQtyDeducted());
         if (DIRECTION_IN.equals(detail.getDirection())) {
@@ -1120,9 +1099,8 @@ public class ProductService {
         return 0;
     }
 
-    /** Base-unit equivalent of a batch's import quantity (importQtyInUnit × import unit's ratio) —
-     *  used only to keep the running-balance math correct; the displayed "SL thay đổi" for a "Nhập
-     *  kho" row still shows the import unit as-is (e.g. "+10 Hộp"), unchanged. */
+    /** Quy đổi số lượng nhập của lô hàng về đơn vị cơ bản (importQtyInUnit × ratio) — chỉ dùng để
+     *  tính đúng số dư tích luỹ; cột "SL thay đổi" hiển thị vẫn giữ nguyên đơn vị nhập (vd. "+10 Hộp"). */
     private int importBaseQuantity(Batch batch) {
         if (batch.getImportUnitID() != null && batch.getImportQtyInUnit() != null
                 && batch.getImportUnitID().getRatio() != null) {
@@ -1134,7 +1112,7 @@ public class ProductService {
         return batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0;
     }
 
-    /** The product's single base ProductUnit's name, or "" if the product has none set up yet. */
+    /** Tên đơn vị cơ bản của sản phẩm, hoặc "" nếu chưa cấu hình. */
     private String baseUnitName(Integer productId) {
         return productunitRepository.findByProductId(productId).stream()
                 .filter(unit -> Boolean.TRUE.equals(unit.getIsBaseUnit()))
@@ -1143,6 +1121,7 @@ public class ProductService {
                 .orElse("");
     }
 
+    // Số lượng nhập hiển thị theo đúng đơn vị nhập gốc (không quy đổi ra đơn vị cơ bản).
     private int importQuantity(Batch batch) {
         if (batch.getImportQtyInUnit() != null) {
             return batch.getImportQtyInUnit();
@@ -1170,9 +1149,9 @@ public class ProductService {
     }
 
     /**
-     * Purchase batches carry a genuine UTC import timestamp, while customer-return batches created
-     * by ReturnService use its legacy VN-wall-clock-as-UTC convention. Return batches have the
-     * stable RT-{returnId}-L{originalBatchId} code, so only those timestamps need normalizing.
+     * Lô hàng nhập mua có mốc thời gian UTC thật, còn lô do ReturnService tạo (từ trả hàng) lưu
+     * theo kiểu cũ "giờ VN nhưng ghi như UTC". Lô trả hàng có mã cố định RT-{returnId}-L{batchId},
+     * nên chỉ cần chuẩn hoá đúng nhóm này.
      */
     private String formatBatchImportDate(Batch batch) {
         if (batch == null) {
@@ -1186,16 +1165,12 @@ public class ProductService {
         return formatInstant(importDate);
     }
 
-    /**
-     * ReturnService stores Vietnam wall-clock digits as a UTC Instant. Convert that legacy storage
-     * convention back to a real instant before sorting it together with genuine UTC timestamps
-     * from purchases and stock adjustments.
-     */
+    /** Đổi mốc giờ kiểu cũ của ReturnService (giờ VN lưu nhầm thành UTC) về Instant thật để sort chung với dữ liệu khác. */
     private Instant normalizeVnEncoded(Instant vnEncoded) {
         return vnEncoded == null ? null : vnEncoded.minus(Duration.ofHours(7));
     }
 
-    /** Invoice.date is stored as a VN wall-clock LocalDateTime — format directly, no zone conversion. */
+    /** Invoice.date lưu sẵn theo giờ VN (LocalDateTime) — format thẳng, không cần đổi múi giờ. */
     private String formatLocalDateTime(LocalDateTime dateTime) {
         if (dateTime == null) {
             return "";
@@ -1203,7 +1178,7 @@ public class ProductService {
         return DATE_TIME.format(dateTime);
     }
 
-    /** Converts Invoice.date (VN wall-clock LocalDateTime) to a real Instant, only for cross-source sorting. */
+    /** Đổi Invoice.date (giờ VN) sang Instant thật, chỉ để sort chung với các nguồn dữ liệu khác. */
     private Instant toInstantForSort(LocalDateTime dateTime) {
         return dateTime == null ? null : dateTime.atZone(VN_ZONE).toInstant();
     }
@@ -1212,6 +1187,7 @@ public class ProductService {
         return date != null ? date.format(DATE) : "—";
     }
 
+    // Dựng 1 dòng của Danh sách hàng hóa từ Product + các Map tra cứu tồn/đơn vị chính/hoạt chất đã nạp sẵn.
     private ProductRowResponse toRow(Product product,
                                      Map<Integer, Long> stockByProduct,
                                      Map<Integer, Productunit> mainUnitByProduct,
@@ -1237,7 +1213,7 @@ public class ProductService {
         );
     }
 
-    /** "Có" when the product's Type is "Thuốc kê đơn", "Không" for any other declared type, "—" if none. */
+    /** "Có" nếu Loại hàng là "Thuốc kê đơn", "Không" nếu là loại khác, "—" nếu chưa gán loại. */
     private String prescriptionDisplay(Product product) {
         if (product.getTypeID() == null) {
             return "—";
@@ -1245,6 +1221,7 @@ public class ProductService {
         return PRESCRIPTION_TYPE_NAME.equals(normalize(product.getTypeID().getName())) ? "Có" : "Không";
     }
 
+    // Xác định trạng thái tồn kho: hết hàng (<=0) / sắp hết (<= minStock) / còn hàng.
     private String stockStatusCode(Product product, long stock) {
         if (stock <= 0) {
             return STOCK_STATUS_OUT;
@@ -1272,6 +1249,7 @@ public class ProductService {
         };
     }
 
+    // Ô tìm kiếm gộp (kiểu cũ): khớp nếu keyword xuất hiện ở mã/tên/barcode/nhà sản xuất/id.
     private boolean matchesKeyword(Product product, String normalizedKeyword) {
         if (normalizedKeyword.isBlank()) {
             return true;
@@ -1284,7 +1262,7 @@ public class ProductService {
                 || containsNormalized(String.valueOf(product.getProductID()), normalizedKeyword);
     }
 
-    // --- expandable search fields (Mã sản phẩm / Tên sản phẩm / Mã vạch) — ANDed when combined ---
+    // --- các ô tìm kiếm mở rộng (Mã sản phẩm / Tên sản phẩm / Mã vạch) — AND với nhau khi kết hợp ---
 
     private boolean matchesCode(Product product, String normalizedCode) {
         return normalizedCode.isBlank() || containsNormalized(product.getCode(), normalizedCode);
@@ -1303,7 +1281,7 @@ public class ProductService {
                 || (product.getProducerID() != null && containsNormalized(product.getProducerID().getName(), normalizedProducer));
     }
 
-    /** Products carrying at least one in-stock batch expiring within {@link #NEAR_EXPIRY_DAYS} days. */
+    /** Các sản phẩm có ít nhất 1 lô còn tồn sắp hết hạn trong {@link #NEAR_EXPIRY_DAYS} ngày. */
     private Set<Integer> loadNearExpiryProductIds() {
         LocalDate today = LocalDate.now();
         return new HashSet<>(batchRepository.findProductIdsNearExpiry(today, today.plusDays(NEAR_EXPIRY_DAYS)));
@@ -1316,6 +1294,7 @@ public class ProductService {
         return product.getTypeID() != null && typeId.equals(product.getTypeID().getId());
     }
 
+    // Lọc theo trạng thái tồn kho đã chọn trên bộ lọc; không lọc gì nếu không truyền tham số.
     private boolean stockStatusMatches(ProductRowResponse row, String stockStatus) {
         if (stockStatus == null || stockStatus.isBlank()) {
             return true;
@@ -1343,6 +1322,7 @@ public class ProductService {
         return BUSINESS_STATUS_ACTIVE.equals(businessStatus) ? active : !active;
     }
 
+    // Dựng Comparator theo lựa chọn sắp xếp (tên/tồn kho, tăng/giảm); tên luôn là tiêu chí phụ để ổn định thứ tự.
     private Comparator<ProductRowResponse> productSortComparator(String sortOrder) {
         if (sortOrder == null || sortOrder.isBlank()) {
             return null;
@@ -1377,6 +1357,7 @@ public class ProductService {
         return value != null && normalize(value).contains(normalizedKeyword);
     }
 
+    // Chuẩn hoá chuỗi để so sánh/tìm kiếm không phân biệt dấu, hoa/thường: bỏ dấu, đổi đ/Đ, viết thường.
     private String normalize(String value) {
         if (value == null) {
             return "";
@@ -1387,12 +1368,12 @@ public class ProductService {
         return normalized.toLowerCase(Locale.ROOT).trim();
     }
 
-    /** Only the medicine Type group can own MedicineAPI/active-ingredient rows. */
+    /** Chỉ nhóm Loại hàng "thuốc" mới có hoạt chất (MedicineAPI). */
     private boolean supportsIngredients(Type type) {
         return type != null && SORT_MEDICINE.equals(normalize(type.getSortType()));
     }
 
-    /** Same batch-expiration rule used by purchase-invoice creation. */
+    /** Cùng quy tắc theo dõi hạn dùng mà màn tạo Phiếu nhập đang dùng. */
     private boolean tracksExpirationDate(Type type) {
         if (type == null || !SORT_MEDICAL_DEVICE.equals(normalize(type.getSortType()))) {
             return true;

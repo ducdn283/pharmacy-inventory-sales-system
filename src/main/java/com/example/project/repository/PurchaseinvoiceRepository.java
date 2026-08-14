@@ -11,6 +11,7 @@ import java.util.Optional;
 
 public interface PurchaseinvoiceRepository extends JpaRepository<Purchaseinvoice, Integer> {
 
+    // Lấy toàn bộ phiếu nhập kèm nhà cung cấp/nhân viên/dự trù mua hàng, mới nhất trước — dùng cho màn danh sách.
     @Query("""
            select p
            from Purchaseinvoice p
@@ -21,6 +22,7 @@ public interface PurchaseinvoiceRepository extends JpaRepository<Purchaseinvoice
            """)
     List<Purchaseinvoice> findAllWithRelations();
 
+    // Lấy 1 phiếu nhập theo id kèm đầy đủ quan hệ — dùng cho màn chi tiết/in phiếu.
     @Query("""
            select p
            from Purchaseinvoice p
@@ -32,12 +34,9 @@ public interface PurchaseinvoiceRepository extends JpaRepository<Purchaseinvoice
     Optional<Purchaseinvoice> findByIdWithRelations(Integer id);
 
     /**
-     * Import invoices received in the half-open interval {@code [from, to)}, for input-VAT
-     * aggregation. {@code Purchaseinvoice.date} is a real {@code Instant}, so the bounds are the
-     * instants of the VN-wall-clock period edges — unlike {@link InvoiceRepository#findInPeriod},
-     * which takes local date-times. Deductibility is <em>not</em> filtered here: it is recomputed in
-     * Java on every read (see {@code PurchaseinvoiceService.isDeductible}) and the stored
-     * {@code isValidForDeduction} column is not trusted.
+     * Lấy phiếu nhập trong khoảng [from, to) để tổng hợp thuế. date là Instant thật nên cận là
+     * thời điểm quy đổi từ giờ VN. Không lọc điều kiện khấu trừ ở đây — việc đó tính lại ở Java
+     * (PurchaseinvoiceService.isDeductible), không tin cột isValidForDeduction lưu sẵn.
      */
     @Query("""
            select p
