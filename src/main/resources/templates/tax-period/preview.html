@@ -416,6 +416,61 @@
                         </tbody>
                     </table>
 
+                    <!-- Chỉ có ý nghĩa khi tính TNCN theo lợi nhuận (pitCostMethod) — nhóm theo
+                         doanh thu (Cách 1) không bóc lợi nhuận ra khỏi doanh thu để tính thuế, nên
+                         không có "lợi nhuận sau thuế" nào để hiển thị ở đây cho nhóm đó. -->
+                    <h2 class="fs-6 mt-4 mb-3" th:if="${computation.pitCostMethod}">
+                        Kết quả kinh doanh của kỳ (lợi nhuận)</h2>
+
+                    <table class="table vat-table mb-0" th:if="${computation.pitCostMethod}">
+                        <tbody>
+                        <tr class="component">
+                            <td>Doanh thu</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.periodRevenue, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr class="component"
+                            th:if="${computation.revenueDeduction.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+                            <td>Trừ: các khoản giảm trừ doanh thu (giảm giá, hàng bán trả lại)</td>
+                            <td class="amount"
+                                th:text="${'−' + #numbers.formatDecimal(computation.revenueDeduction, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                        </tr>
+                        <tr class="component"
+                            th:if="${computation.otherIncome.compareTo(T(java.math.BigDecimal).ZERO) != 0}">
+                            <td>Cộng: thu nhập khác (kể cả phần giữ lại khi hoàn tiền khách &lt;100%)</td>
+                            <td class="amount"
+                                th:text="${'+' + #numbers.formatDecimal(computation.otherIncome, 0, 'POINT', 0, 'COMMA') + 'đ'}">+0đ</td>
+                        </tr>
+                        <tr class="component">
+                            <td>Trừ: giá vốn hàng bán</td>
+                            <td class="amount"
+                                th:text="${'−' + #numbers.formatDecimal(computation.costOfGoodsSold, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                        </tr>
+                        <tr class="component">
+                            <td>Trừ: chi phí hoạt động<span
+                                    th:if="${computation.supplierReturnShortfall.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+                                    (đã gồm khoản lỗ NCC không hoàn đủ khi trả hàng)</span></td>
+                            <td class="amount"
+                                th:text="${'−' + #numbers.formatDecimal(computation.operatingCost.add(computation.supplierReturnShortfall), 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                        </tr>
+                        <tr class="row-subtotal">
+                            <td>Lợi nhuận trước thuế</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.profitBeforeTax, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        <tr class="component">
+                            <td>Trừ: thuế TNCN của kỳ (xem bảng trên)</td>
+                            <td class="amount"
+                                th:text="${'−' + #numbers.formatDecimal(computation.incomeTax, 0, 'POINT', 0, 'COMMA') + 'đ'}">−0đ</td>
+                        </tr>
+                        <tr class="row-total">
+                            <td>Lợi nhuận sau thuế</td>
+                            <td class="amount"
+                                th:text="${#numbers.formatDecimal(computation.netProfitAfterTax, 0, 'POINT', 0, 'COMMA') + 'đ'}">0đ</td>
+                        </tr>
+                        </tbody>
+                    </table>
+
                     <!-- vatPayable + incomeTax — xem TaxPeriodComputationResponse.totalTaxPayable.
                          Không lưu cột riêng, tính lại mỗi lần hiển thị. -->
                     <div class="total-tax-banner mt-3" th:unless="${computation.taxExempt}">
