@@ -12,8 +12,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class RoleDashboardController {
 
     private final DashboardService dashboardService;
-    private final AccountantDashboardService accountantDashboardService;
-    private final CurrentUserContext currentUserContext;
+
+    private final AccountantDashboardService
+            accountantDashboardService;
+
+    private final CurrentUserContext
+            currentUserContext;
 
     public RoleDashboardController(
             DashboardService dashboardService,
@@ -21,15 +25,24 @@ public class RoleDashboardController {
             CurrentUserContext currentUserContext
     ) {
         this.dashboardService = dashboardService;
-        this.accountantDashboardService = accountantDashboardService;
-        this.currentUserContext = currentUserContext;
+
+        this.accountantDashboardService =
+                accountantDashboardService;
+
+        this.currentUserContext =
+                currentUserContext;
     }
 
     /**
-     * Dashboard của Owner sử dụng chung dữ liệu tài chính và giao diện
-     * với dashboard của Accountant.
+     * Dashboard tổng dành cho Owner.
      *
-     * Mặc định hiển thị dữ liệu từng ngày trong tuần hiện tại.
+     * Mặc định hiển thị dữ liệu theo từng ngày
+     * trong tuần hiện tại.
+     *
+     * productKeyword được sử dụng để tìm:
+     *
+     * - Nhà cung cấp có giá nhập tốt nhất.
+     * - Lịch sử giá nhập của sản phẩm.
      */
     @GetMapping("/owner/dashboard")
     public String ownerDashboard(
@@ -45,21 +58,34 @@ public class RoleDashboardController {
             )
             String date,
 
+            @RequestParam(
+                    name = "productKeyword",
+                    required = false
+            )
+            String productKeyword,
+
             Model model
     ) {
         model.addAttribute(
                 "dashboard",
-                accountantDashboardService.getDashboard(
-                        currentUserContext.getCurrentAccountName(),
-                        period,
-                        date,
-                        "/owner"
-                )
+                accountantDashboardService
+                        .getDashboard(
+                                currentUserContext
+                                        .getCurrentAccountName(),
+
+                                period,
+
+                                date,
+
+                                "/owner",
+
+                                productKeyword
+                        )
         );
 
         /*
-         * Dùng để form bộ lọc gửi lại đúng dashboard của Owner,
-         * không chuyển nhầm sang đường dẫn của Accountant.
+         * Giúp các form bộ lọc gửi lại đúng
+         * đường dẫn dashboard của Owner.
          */
         model.addAttribute(
                 "dashboardPath",
@@ -80,10 +106,11 @@ public class RoleDashboardController {
     }
 
     /**
-     * Dashboard của Accountant.
+     * Dashboard dành cho Accountant.
      *
-     * Dùng chung nội dung tài chính với Owner nhưng các liên kết thao tác
-     * vẫn sử dụng đường dẫn /accountant tương ứng.
+     * Accountant sử dụng chung giao diện và dữ liệu
+     * phân tích tài chính với Owner nhưng các đường
+     * dẫn thao tác sử dụng prefix /accountant.
      */
     @GetMapping("/accountant/dashboard")
     public String accountantDashboard(
@@ -99,18 +126,35 @@ public class RoleDashboardController {
             )
             String date,
 
+            @RequestParam(
+                    name = "productKeyword",
+                    required = false
+            )
+            String productKeyword,
+
             Model model
     ) {
         model.addAttribute(
                 "dashboard",
-                accountantDashboardService.getDashboard(
-                        currentUserContext.getCurrentAccountName(),
-                        period,
-                        date,
-                        "/accountant"
-                )
+                accountantDashboardService
+                        .getDashboard(
+                                currentUserContext
+                                        .getCurrentAccountName(),
+
+                                period,
+
+                                date,
+
+                                "/accountant",
+
+                                productKeyword
+                        )
         );
 
+        /*
+         * Giúp các form bộ lọc gửi lại đúng
+         * dashboard của Accountant.
+         */
         model.addAttribute(
                 "dashboardPath",
                 "/accountant/dashboard"
@@ -130,8 +174,10 @@ public class RoleDashboardController {
     }
 
     /**
-     * Dashboard của Pharmacist vẫn giữ nguyên nghiệp vụ cũ,
-     * không sử dụng dashboard tài chính của Owner và Accountant.
+     * Dashboard bán hàng dành cho Pharmacist.
+     *
+     * Dashboard này sử dụng DashboardService riêng,
+     * không sử dụng các số liệu tổng của Owner.
      */
     @GetMapping("/pharmacist/dashboard")
     public String pharmacistDashboard(
@@ -139,10 +185,14 @@ public class RoleDashboardController {
     ) {
         model.addAttribute(
                 "dashboard",
-                dashboardService.pharmacistDashboard(
-                        currentUserContext.getCurrentAccountId(),
-                        currentUserContext.getCurrentAccountName()
-                )
+                dashboardService
+                        .pharmacistDashboard(
+                                currentUserContext
+                                        .getCurrentAccountId(),
+
+                                currentUserContext
+                                        .getCurrentAccountName()
+                        )
         );
 
         model.addAttribute(

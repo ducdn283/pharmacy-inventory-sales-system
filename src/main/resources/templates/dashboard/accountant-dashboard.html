@@ -362,92 +362,331 @@
             vertical-align: middle;
         }
 
-        .activity-table tbody tr:last-child td {
-            border-bottom: 0;
+        .activity-code {
+            color: #374151;
+            font-weight: 700;
+            text-decoration: none;
         }
 
-        .document-code {
-            color: #273143;
-            font-weight: 600;
+        .activity-code:hover {
+            color: #059669;
         }
 
-        .money-cell {
-            color: #273143;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .soft-badge {
+        .status-pill {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 23px;
-            padding: 4px 9px;
+            min-width: 78px;
+            padding: 5px 9px;
             border-radius: 999px;
             font-size: 9px;
             font-weight: 700;
-            white-space: nowrap;
         }
 
-        .badge-success-soft {
-            background: #e1f8f0;
-            color: #07966b;
+        .status-success {
+            background: #dff7ef;
+            color: #07956b;
         }
 
-        .badge-warning-soft {
-            background: #fff4dc;
-            color: #e79308;
+        .status-warning {
+            background: #fff2d6;
+            color: #d99000;
         }
 
-        .badge-danger-soft {
-            background: #fee8e8;
-            color: #e94848;
+        .status-danger {
+            background: #fee7e7;
+            color: #dc3535;
         }
 
-        .badge-secondary-soft {
-            background: #edf0f4;
-            color: #697386;
+        .status-secondary {
+            background: #eef1f5;
+            color: #687386;
         }
 
-        .view-link {
-            color: #059669;
+        .analytics-heading {
+            color: #111827;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .analytics-subtitle {
+            color: #8a94a3;
             font-size: 11px;
-            font-weight: 600;
-            text-decoration: none;
+        }
+
+        .analytics-section {
+            animation: dashboardFadeUp .48s ease both;
+        }
+
+        .analytics-section:nth-of-type(2) {
+            animation-delay: .04s;
+        }
+
+        .analytics-section:nth-of-type(3) {
+            animation-delay: .08s;
+        }
+
+        .analytics-section:nth-of-type(4) {
+            animation-delay: .12s;
+        }
+
+        .analytics-metric {
+            position: relative;
+            min-height: 126px;
+            padding: 18px;
+            overflow: hidden;
+            transition:
+                    transform .18s ease,
+                    box-shadow .18s ease,
+                    border-color .18s ease;
+        }
+
+        .analytics-metric::after {
+            position: absolute;
+            right: -24px;
+            bottom: -30px;
+            width: 86px;
+            height: 86px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, .08);
+            content: "";
+        }
+
+        .analytics-metric:hover {
+            transform: translateY(-3px);
+            border-color: #b8e7d5;
+            box-shadow: 0 12px 30px rgba(16, 24, 40, .08);
+        }
+
+        .analytics-value {
+            margin-top: 12px;
+            color: #111827;
+            font-size: 22px;
+            font-weight: 750;
+            overflow-wrap: anywhere;
+        }
+
+        .analytics-note {
+            margin-top: 8px;
+            color: #7b8494;
+            font-size: 10px;
+        }
+
+        .analytics-icon {
+            position: relative;
+            z-index: 1;
+            color: #059669;
+            font-size: 20px;
+        }
+
+        .analytics-chart {
+            min-height: 260px;
+        }
+
+        .mini-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            height: 180px;
+            padding: 10px 4px 26px;
+        }
+
+        .mini-bar-item {
+            position: relative;
+            display: flex;
+            flex: 1 1 0;
+            align-items: flex-end;
+            height: 100%;
+        }
+
+        .mini-bar {
+            width: 100%;
+            min-height: 3px;
+            border-radius: 7px 7px 2px 2px;
+            background: linear-gradient(
+                    180deg,
+                    #34d399,
+                    #059669
+            );
+            transition: height .6s ease;
+        }
+
+        .mini-bar-label {
+            position: absolute;
+            right: 0;
+            bottom: -22px;
+            left: 0;
+            color: #929aaa;
+            font-size: 9px;
+            text-align: center;
+            overflow: hidden;
             white-space: nowrap;
         }
 
-        .view-link:hover {
-            color: #047857;
+        .donut-visual {
+            width: 164px;
+            height: 164px;
+            margin: 12px auto;
+            border-radius: 50%;
+            background: conic-gradient(
+                    #059669 0 38%,
+                    #f59e0b 38% 64%,
+                    #ef4444 64% 82%,
+                    #3b82f6 82% 100%
+            );
+            animation: dashboardSpinIn .75s ease both;
         }
 
-        @media (max-width: 1199.98px) {
+        .donut-hole {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 98px;
+            height: 98px;
+            border-radius: 50%;
+            background: #ffffff;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .detail-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .detail-row {
+            display: grid;
+            grid-template-columns:
+                    minmax(0, 1.4fr)
+                    minmax(0, 1fr)
+                    auto;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f2f5;
+        }
+
+        .detail-row:last-child {
+            border-bottom: 0;
+        }
+
+        .detail-title {
+            color: #374151;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .detail-subtitle {
+            color: #929aaa;
+            font-size: 10px;
+        }
+
+        .detail-value {
+            color: #111827;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .search-inline {
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-inline input {
+            min-width: 0;
+            height: 36px;
+            border: 1px solid #dfe4ea;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .search-inline button {
+            border: 0;
+            border-radius: 8px;
+            background: #059669;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .empty-analytics {
+            padding: 28px 12px;
+            color: #929aaa;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        @keyframes dashboardFadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes dashboardSpinIn {
+            from {
+                opacity: 0;
+                transform: rotate(-30deg) scale(.88);
+            }
+
+            to {
+                opacity: 1;
+                transform: rotate(0) scale(1);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .analytics-section,
+            .donut-visual {
+                animation: none;
+            }
+
+            .analytics-metric,
+            .quick-action,
             .metric-card {
-                min-height: 120px;
+                transition: none;
             }
         }
 
         @media (max-width: 767.98px) {
             .accountant-dashboard {
-                padding-top: 76px !important;
+                padding-top: 70px !important;
             }
 
             .welcome-card,
             .section-card {
-                padding: 18px;
+                padding: 17px;
             }
 
-            .metric-value {
-                font-size: 21px;
+            .overview-filter {
+                width: 100%;
             }
 
-            .accounting-chart-svg {
-                height: 230px;
+            .overview-filter select,
+            .overview-filter input,
+            .overview-filter button {
+                flex: 1 1 100%;
+                width: 100%;
+            }
+
+            .detail-row {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-value {
+                text-align: left;
             }
         }
     </style>
 </head>
-
 <body>
 
 <div th:replace="~{fragments/topbar :: topbar}">
@@ -630,7 +869,555 @@
             </div>
         </div>
 
-        <section class="dashboard-card section-card">
+        <div th:if="${dashboard.analytics != null}">
+
+            <!-- Chỉ Owner xem đầy đủ khối bán hàng -->
+            <section class="analytics-section"
+                     th:if="${dashboard.analytics.ownerView}">
+
+                <div class="analytics-heading mb-3">
+                    <h2>Tổng quan bán hàng</h2>
+                    <span>
+                        Theo số liệu thực tế trong hệ thống
+                    </span>
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-sm-6 col-xl-3"
+                         th:each="metric : ${dashboard.analytics.salesMetrics}">
+
+                        <a class="metric-link"
+                           th:href="${metric.url}">
+
+                            <div class="dashboard-card metric-card h-100"
+                                 th:classappend="${' tone-' + metric.tone}">
+
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+
+                                    <div class="metric-heading"
+                                         th:text="${metric.title}">
+                                        Chỉ số
+                                    </div>
+
+                                    <div class="metric-icon">
+                                        <i th:class="${metric.icon}">
+                                        </i>
+                                    </div>
+                                </div>
+
+                                <div class="metric-value"
+                                     th:text="${metric.value}">
+                                    0
+                                </div>
+
+                                <div class="metric-helper"
+                                     th:text="${metric.helper}">
+                                    Mô tả
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-12 col-xl-4">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Cơ cấu lợi nhuận ròng
+                            </h3>
+
+                            <div id="netProfitChart"
+                                 class="analytics-chart">
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-4">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Doanh thu theo nhóm sản phẩm
+                            </h3>
+
+                            <div id="productCategoryChart"
+                                 class="analytics-chart">
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-4">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Top 10 sản phẩm bán chạy
+                            </h3>
+
+                            <div class="detail-list">
+
+                                <a class="detail-row"
+                                   th:each="row : ${dashboard.analytics.topSellingProducts}"
+                                   th:href="${row.url}">
+
+                                    <span>
+                                        <span class="detail-title d-block"
+                                              th:text="${row.primaryText}">
+                                            Sản phẩm
+                                        </span>
+
+                                        <span class="detail-subtitle d-block"
+                                              th:text="${row.secondaryText}">
+                                            Số lượng
+                                        </span>
+                                    </span>
+
+                                    <span class="detail-value"
+                                          th:text="${row.value}">
+                                        0đ
+                                    </span>
+
+                                    <span class="detail-subtitle"
+                                          th:text="${row.helper}">
+                                        Doanh thu
+                                    </span>
+                                </a>
+
+                                <div class="empty-analytics"
+                                     th:if="${#lists.isEmpty(dashboard.analytics.topSellingProducts)}">
+                                    Chưa có dữ liệu bán hàng trong
+                                    khoảng đã chọn.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Owner và Accountant đều xem được -->
+            <section class="analytics-section mt-3">
+
+                <div class="analytics-heading mb-3">
+                    <h2>Thuế và lợi nhuận</h2>
+                    <span>
+                        Thuế GTGT, TNCN theo quý và năm
+                    </span>
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-sm-6 col-xl-3"
+                         th:each="metric : ${dashboard.analytics.taxMetrics}">
+
+                        <a class="metric-link"
+                           th:href="${metric.url}">
+
+                            <div class="dashboard-card metric-card h-100"
+                                 th:classappend="${' tone-' + metric.tone}">
+
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+
+                                    <div class="metric-heading"
+                                         th:text="${metric.title}">
+                                        Thuế
+                                    </div>
+
+                                    <div class="metric-icon">
+                                        <i th:class="${metric.icon}">
+                                        </i>
+                                    </div>
+                                </div>
+
+                                <div class="metric-value"
+                                     th:text="${metric.value}">
+                                    0
+                                </div>
+
+                                <div class="metric-helper"
+                                     th:text="${metric.helper}">
+                                    Mô tả
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Accountant chưa có biểu đồ này ở khối bán hàng -->
+                <div class="row g-3 mt-1"
+                     th:if="${!dashboard.analytics.ownerView}">
+
+                    <div class="col-12 col-xl-6">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Cơ cấu lợi nhuận ròng
+                            </h3>
+
+                            <div id="netProfitChart"
+                                 class="analytics-chart">
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Owner và Accountant đều xem được -->
+            <section class="analytics-section mt-3">
+
+                <div class="analytics-heading mb-3">
+                    <h2>Tổng quan nhập hàng</h2>
+                    <span>
+                        Tháng hiện tại và công nợ nhà cung cấp
+                    </span>
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-sm-6 col-xl-3"
+                         th:each="metric : ${dashboard.analytics.purchaseMetrics}">
+
+                        <a class="metric-link"
+                           th:href="${metric.url}">
+
+                            <div class="dashboard-card metric-card h-100"
+                                 th:classappend="${' tone-' + metric.tone}">
+
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+
+                                    <div class="metric-heading"
+                                         th:text="${metric.title}">
+                                        Nhập hàng
+                                    </div>
+
+                                    <div class="metric-icon">
+                                        <i th:class="${metric.icon}">
+                                        </i>
+                                    </div>
+                                </div>
+
+                                <div class="metric-value"
+                                     th:text="${metric.value}">
+                                    0
+                                </div>
+
+                                <div class="metric-helper"
+                                     th:text="${metric.helper}">
+                                    Mô tả
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-12 col-xl-6">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Chi phí nhập hàng theo tháng
+                            </h3>
+
+                            <div id="monthlyPurchaseChart"
+                                 class="analytics-chart">
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-6">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Nhập hàng theo nhà cung cấp
+                            </h3>
+
+                            <div id="supplierPurchaseChart"
+                                 class="analytics-chart">
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+
+                    <div class="col-12 col-xl-4">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Đơn nhập đang chờ duyệt
+                            </h3>
+
+                            <div class="detail-list">
+
+                                <a class="detail-row"
+                                   th:each="row : ${dashboard.analytics.pendingPurchases}"
+                                   th:href="${row.url}">
+
+                                    <span>
+                                        <span class="detail-title d-block"
+                                              th:text="${row.primaryText}">
+                                            Mã phiếu
+                                        </span>
+
+                                        <span class="detail-subtitle d-block"
+                                              th:text="${row.secondaryText}">
+                                            Nhà cung cấp
+                                        </span>
+                                    </span>
+
+                                    <span class="detail-value"
+                                          th:text="${row.value}">
+                                        0đ
+                                    </span>
+
+                                    <span class="detail-subtitle"
+                                          th:text="${row.helper}">
+                                        Trạng thái
+                                    </span>
+                                </a>
+
+                                <div class="empty-analytics"
+                                     th:if="${#lists.isEmpty(dashboard.analytics.pendingPurchases)}">
+                                    Không có đơn nhập chờ duyệt.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-4">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Đơn nhập chưa hoàn tất
+                            </h3>
+
+                            <div class="detail-list">
+
+                                <a class="detail-row"
+                                   th:each="row : ${dashboard.analytics.incompletePurchases}"
+                                   th:href="${row.url}">
+
+                                    <span>
+                                        <span class="detail-title d-block"
+                                              th:text="${row.primaryText}">
+                                            Mã phiếu
+                                        </span>
+
+                                        <span class="detail-subtitle d-block"
+                                              th:text="${row.secondaryText}">
+                                            Nhà cung cấp
+                                        </span>
+                                    </span>
+
+                                    <span class="detail-value"
+                                          th:text="${row.value}">
+                                        0đ
+                                    </span>
+
+                                    <span class="detail-subtitle"
+                                          th:text="${row.helper}">
+                                        Trạng thái
+                                    </span>
+                                </a>
+
+                                <div class="empty-analytics"
+                                     th:if="${#lists.isEmpty(dashboard.analytics.incompletePurchases)}">
+                                    Không có đơn nhập chưa hoàn tất.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-4">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Sản phẩm nhập nhiều nhất
+                            </h3>
+
+                            <div class="detail-list">
+
+                                <a class="detail-row"
+                                   th:each="row : ${dashboard.analytics.mostImportedProducts}"
+                                   th:href="${row.url}">
+
+                                    <span>
+                                        <span class="detail-title d-block"
+                                              th:text="${row.primaryText}">
+                                            Sản phẩm
+                                        </span>
+
+                                        <span class="detail-subtitle d-block"
+                                              th:text="${row.secondaryText}">
+                                            Số lượng
+                                        </span>
+                                    </span>
+
+                                    <span class="detail-value"
+                                          th:text="${row.value}">
+                                        0đ
+                                    </span>
+
+                                    <span class="detail-subtitle"
+                                          th:text="${row.helper}">
+                                        Giá trị
+                                    </span>
+                                </a>
+
+                                <div class="empty-analytics"
+                                     th:if="${#lists.isEmpty(dashboard.analytics.mostImportedProducts)}">
+                                    Chưa có hàng nhập trong tháng.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+
+                    <div class="col-12">
+
+                        <section class="dashboard-card section-card">
+
+                            <h3 class="section-title mb-3">
+                                Tra cứu giá nhập theo sản phẩm
+                            </h3>
+
+                            <form class="search-inline"
+                                  method="get"
+                                  th:action="@{${dashboardPath}}">
+
+                                <input type="hidden"
+                                       name="period"
+                                       th:value="${dashboard.selectedPeriod}">
+
+                                <input type="hidden"
+                                       name="date"
+                                       th:value="${dashboard.selectedDate}">
+
+                                <input class="form-control"
+                                       type="search"
+                                       name="productKeyword"
+                                       th:value="${dashboard.analytics.productKeyword}"
+                                       placeholder="Nhập tên hoặc mã sản phẩm..."
+                                       aria-label="Tìm sản phẩm">
+
+                                <button class="px-3"
+                                        type="submit">
+
+                                    <i class="ti ti-search me-1">
+                                    </i>
+
+                                    Tra cứu
+                                </button>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-6">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Nhà cung cấp có giá tốt nhất
+                            </h3>
+
+                            <div class="detail-list">
+
+                                <a class="detail-row"
+                                   th:each="row : ${dashboard.analytics.bestSupplierPrices}"
+                                   th:href="${row.url}">
+
+                                    <span>
+                                        <span class="detail-title d-block"
+                                              th:text="${row.primaryText}">
+                                            Nhà cung cấp
+                                        </span>
+
+                                        <span class="detail-subtitle d-block"
+                                              th:text="${row.secondaryText}">
+                                            Sản phẩm
+                                        </span>
+                                    </span>
+
+                                    <span class="detail-value"
+                                          th:text="${row.value}">
+                                        0đ
+                                    </span>
+
+                                    <span class="detail-subtitle"
+                                          th:text="${row.helper}">
+                                        Giá tốt nhất
+                                    </span>
+                                </a>
+
+                                <div class="empty-analytics"
+                                     th:if="${#lists.isEmpty(dashboard.analytics.bestSupplierPrices)}">
+                                    Nhập tên hoặc mã sản phẩm để
+                                    so sánh giá.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="col-12 col-xl-6">
+
+                        <section class="dashboard-card section-card h-100">
+
+                            <h3 class="section-title">
+                                Lịch sử giá nhập
+                            </h3>
+
+                            <div class="detail-list">
+
+                                <a class="detail-row"
+                                   th:each="row : ${dashboard.analytics.purchasePriceHistory}"
+                                   th:href="${row.url}">
+
+                                    <span>
+                                        <span class="detail-title d-block"
+                                              th:text="${row.primaryText}">
+                                            Sản phẩm
+                                        </span>
+
+                                        <span class="detail-subtitle d-block"
+                                              th:text="${row.secondaryText}">
+                                            Nhà cung cấp
+                                        </span>
+                                    </span>
+
+                                    <span class="detail-value"
+                                          th:text="${row.value}">
+                                        0đ
+                                    </span>
+
+                                    <span class="detail-subtitle"
+                                          th:text="${row.helper}">
+                                        Ngày nhập
+                                    </span>
+                                </a>
+
+                                <div class="empty-analytics"
+                                     th:if="${#lists.isEmpty(dashboard.analytics.purchasePriceHistory)}">
+                                    Chưa có lịch sử phù hợp.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="dashboard-card section-card analytics-section mt-3">
 
             <h2 class="section-title mb-3">
                 Hoạt động gần đây
@@ -649,6 +1436,7 @@
                         <th>Số tiền</th>
                         <th>Phương thức</th>
                         <th>Trạng thái</th>
+
                         <th class="text-end">
                             Thao tác
                         </th>
@@ -659,9 +1447,12 @@
 
                     <tr th:each="activity : ${dashboard.recentActivities}">
 
-                        <td class="document-code"
-                            th:text="${activity.code}">
-                            INV-000001
+                        <td>
+                            <a class="activity-code"
+                               th:href="${activity.url}"
+                               th:text="${activity.code}">
+                                INV-000001
+                            </a>
                         </td>
 
                         <td th:text="${activity.type}">
@@ -676,8 +1467,7 @@
                             Khách hàng
                         </td>
 
-                        <td class="money-cell"
-                            th:text="${activity.amount}">
+                        <td th:text="${activity.amount}">
                             0đ
                         </td>
 
@@ -686,10 +1476,8 @@
                         </td>
 
                         <td>
-                            <span class="soft-badge"
-                                  th:classappend="${' badge-'
-                                          + activity.tone
-                                          + '-soft'}"
+                            <span class="status-pill"
+                                  th:classappend="${' status-' + activity.tone}"
                                   th:text="${activity.status}">
                                 Hoàn thành
                             </span>
@@ -697,7 +1485,7 @@
 
                         <td class="text-end">
 
-                            <a class="view-link"
+                            <a class="activity-code"
                                th:href="${activity.url}">
 
                                 <i class="ti ti-eye me-1">
@@ -728,8 +1516,12 @@
         /*[[${dashboard.overviewChart}]]*/
         null;
 
+    const dashboardAnalytics =
+        /*[[${dashboard.analytics}]]*/
+        null;
+
     /*
-     * Thứ tự màu tương ứng:
+     * Thứ tự màu:
      * 1. Doanh thu
      * 2. Giá vốn
      * 3. Lợi nhuận gộp
@@ -803,16 +1595,12 @@
     function normalizeChart(rawChart) {
         return {
             labels:
-                Array.isArray(
-                    rawChart?.labels
-                )
+                Array.isArray(rawChart?.labels)
                     ? rawChart.labels
                     : [],
 
             series:
-                Array.isArray(
-                    rawChart?.series
-                )
+                Array.isArray(rawChart?.series)
                     ? rawChart.series.map(
                         series => ({
                             name:
@@ -899,8 +1687,8 @@
             );
 
         /*
-         * Lợi nhuận có thể âm nên cần tính cả
-         * giá trị nhỏ nhất và lớn nhất của biểu đồ.
+         * Lợi nhuận có thể âm nên trục tung
+         * phải hỗ trợ cả số âm và số dương.
          */
         const rawMin =
             Math.min(
@@ -955,9 +1743,7 @@
         const stepX =
             chart.labels.length > 1
                 ? plotWidth
-                / (
-                    chart.labels.length - 1
-                )
+                / (chart.labels.length - 1)
                 : 0;
 
         let svg =
@@ -969,24 +1755,16 @@
             + '" preserveAspectRatio="none">';
 
         /*
-         * Vẽ 5 đường ngang và nhãn giá trị.
+         * Vẽ các đường lưới ngang và nhãn tiền.
          */
-        for (
-            let row = 0;
-            row <= 4;
-            row++
-        ) {
+        for (let row = 0; row <= 4; row++) {
             const y =
                 top
-                + (
-                    plotHeight / 4
-                ) * row;
+                + (plotHeight / 4) * row;
 
             const value =
                 maxValue
-                - (
-                    displayRange / 4
-                ) * row;
+                - (displayRange / 4) * row;
 
             svg +=
                 '<line class="chart-grid" '
@@ -995,9 +1773,7 @@
                 + '" y1="'
                 + y
                 + '" x2="'
-                + (
-                    width - right
-                )
+                + (width - right)
                 + '" y2="'
                 + y
                 + '"></line>';
@@ -1005,13 +1781,9 @@
             svg +=
                 '<text class="chart-axis-label" '
                 + 'x="'
-                + (
-                    left - 8
-                )
+                + (left - 8)
                 + '" y="'
-                + (
-                    y + 3
-                )
+                + (y + 3)
                 + '" text-anchor="end">'
                 + escapeHtml(
                     formatMoneyShort(value)
@@ -1020,8 +1792,8 @@
         }
 
         /*
-         * Nếu tháng có nhiều ngày, giảm bớt
-         * số nhãn trên trục ngang.
+         * Nếu có quá nhiều ngày, chỉ hiển thị
+         * một số nhãn đại diện trên trục ngang.
          */
         const labelInterval =
             chart.labels.length > 16
@@ -1032,26 +1804,21 @@
 
         chart.labels.forEach(
             (label, index) => {
-                if (
-                    index % labelInterval !== 0
+                if (index % labelInterval !== 0
                     && index
-                    !== chart.labels.length - 1
-                ) {
+                    !== chart.labels.length - 1) {
                     return;
                 }
 
                 const x =
-                    left
-                    + stepX * index;
+                    left + stepX * index;
 
                 svg +=
                     '<text class="chart-axis-label" '
                     + 'x="'
                     + x
                     + '" y="'
-                    + (
-                        height - 10
-                    )
+                    + (height - 10)
                     + '" text-anchor="middle">'
                     + escapeHtml(label)
                     + '</text>';
@@ -1059,10 +1826,7 @@
         );
 
         chart.series.forEach(
-            (
-                series,
-                seriesIndex
-            ) => {
+            (series, seriesIndex) => {
                 const color =
                     chartColors[
                     seriesIndex
@@ -1071,10 +1835,7 @@
 
                 const points =
                     chart.labels.map(
-                        (
-                            label,
-                            index
-                        ) => {
+                        (label, index) => {
                             const value =
                                 Number(
                                     series.data[index]
@@ -1090,10 +1851,7 @@
                                     top
                                     + plotHeight
                                     - (
-                                        (
-                                            value
-                                            - minValue
-                                        )
+                                        (value - minValue)
                                         / displayRange
                                     )
                                     * plotHeight,
@@ -1106,10 +1864,7 @@
 
                 const path =
                     points.map(
-                        (
-                            point,
-                            index
-                        ) =>
+                        (point, index) =>
                             (
                                 index === 0
                                     ? 'M '
@@ -1169,10 +1924,228 @@
                 chart.series
             );
     }
+    function renderMiniDashboardChart(
+        elementId,
+        rawChart
+    ) {
+        const container =
+            document.getElementById(elementId);
+
+        const chart =
+            normalizeChart(rawChart);
+
+        if (!container
+            || chart.labels.length === 0
+            || chart.series.length === 0) {
+
+            if (container) {
+                container.innerHTML =
+                    '<div class="empty-analytics">'
+                    + 'Chưa có dữ liệu phù hợp.'
+                    + '</div>';
+            }
+
+            return;
+        }
+
+        const values =
+            chart.series[0].data;
+
+        /*
+         * Biểu đồ tròn dùng cho cơ cấu
+         * lợi nhuận ròng.
+         */
+        if (rawChart?.type === 'donut') {
+            const positiveValues =
+                values.map(value ->
+                    Math.max(
+                        Number(value || 0),
+                        0
+                    )
+                );
+
+            const total =
+                positiveValues.reduce(
+                    (sum, value) =>
+                        sum + value,
+                    0
+                );
+
+            let cursor = 0;
+
+            const stops =
+                positiveValues.map(
+                    (value, index) => {
+                        const start =
+                            total > 0
+                                ? cursor / total * 100
+                                : 0;
+
+                        cursor += value;
+
+                        const end =
+                            total > 0
+                                ? cursor / total * 100
+                                : 0;
+
+                        return chartColors[
+                            index % chartColors.length
+                                ]
+                            + ' '
+                            + start
+                            + '% '
+                            + end
+                            + '%';
+                    }
+                );
+
+            const donutBackground =
+                total > 0
+                    ? 'conic-gradient('
+                    + stops.join(',')
+                    + ')'
+                    : '#eef1f5';
+
+            const legendSeries =
+                chart.labels.map(
+                    (label, index) => ({
+                        name:
+                            label
+                            + ': '
+                            + Number(
+                                values[index] || 0
+                            ).toLocaleString(
+                                'vi-VN'
+                            )
+                            + 'đ',
+                        data: []
+                    })
+                );
+
+            container.innerHTML =
+                '<div class="donut-visual" '
+                + 'style="display:flex;'
+                + 'align-items:center;'
+                + 'justify-content:center;'
+                + 'background:'
+                + donutBackground
+                + ';">'
+
+                + '<div class="donut-hole">'
+                + escapeHtml(
+                    formatMoneyShort(total)
+                )
+                + '</div>'
+
+                + '</div>'
+
+                + renderChartLegend(
+                    legendSeries
+                );
+
+            return;
+        }
+
+        /*
+         * Các biểu đồ còn lại được hiển thị
+         * dưới dạng cột nhỏ có hiệu ứng.
+         */
+        const maximum =
+            Math.max(
+                ...values.map(value ->
+                    Math.max(
+                        Number(value || 0),
+                        0
+                    )
+                ),
+                1
+            );
+
+        const bars =
+            chart.labels.map(
+                (label, index) => {
+                    const value =
+                        Number(
+                            values[index] || 0
+                        );
+
+                    const height =
+                        Math.max(
+                            Math.abs(value)
+                            / maximum
+                            * 100,
+                            value === 0 ? 2 : 5
+                        );
+
+                    const tooltip =
+                        label
+                        + ': '
+                        + value.toLocaleString(
+                            'vi-VN'
+                        )
+                        + 'đ';
+
+                    return '<div class="mini-bar-item" '
+                        + 'title="'
+                        + escapeHtml(tooltip)
+                        + '">'
+
+                        + '<div class="mini-bar" '
+                        + 'style="height:'
+                        + height
+                        + '%"></div>'
+
+                        + '<div class="mini-bar-label">'
+                        + escapeHtml(label)
+                        + '</div>'
+
+                        + '</div>';
+                }
+            ).join('');
+
+        container.innerHTML =
+            '<div class="mini-bars">'
+            + bars
+            + '</div>'
+
+            + renderChartLegend(
+                chart.series
+            );
+    }
+
+    function renderAnalyticsCharts() {
+        if (!dashboardAnalytics) {
+            return;
+        }
+
+        renderMiniDashboardChart(
+            'netProfitChart',
+            dashboardAnalytics.netProfitChart
+        );
+
+        renderMiniDashboardChart(
+            'productCategoryChart',
+            dashboardAnalytics
+                .productCategoryRevenueChart
+        );
+
+        renderMiniDashboardChart(
+            'monthlyPurchaseChart',
+            dashboardAnalytics.monthlyPurchaseChart
+        );
+
+        renderMiniDashboardChart(
+            'supplierPurchaseChart',
+            dashboardAnalytics.supplierPurchaseChart
+        );
+    }
 
     document.addEventListener(
         'DOMContentLoaded',
-        renderAccountantChart
+        function () {
+            renderAccountantChart();
+            renderAnalyticsCharts();
+        }
     );
 
 </script>
