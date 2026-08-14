@@ -52,6 +52,32 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Bù trừ công nợ thủ công (chỉ Owner) — cấn cho nợ với nợ của <em>cùng</em> đối tượng
+ * ({@code /owner/debts/offset/**}). Số dư đọc từ {@link DebtService}; service này ghi cặp
+ * phiếu thu/chi {@link Income}/{@link Expense} xử lý hai bên mà không qua tiền mặt / chuyển khoản.
+ *
+ * <p><strong>Hình thức thanh toán.</strong> Mọi phiếu bù trừ tạo thẳng ở
+ * {@code Hoàn thành} / {@link ExpenseStatus#COMPLETED}, toàn bộ trên {@code paidByCredit}, không
+ * tiền mặt/chuyển khoản ({@link #baseCreditIncome}, {@link #baseCreditExpense}).
+ * {@link #OFFSET_REASON} đánh dấu để không cho hủy — kiểm tra qua
+ * {@link #assertIncomeNotCancellable} và {@link SlipCancelInterceptor}.</p>
+ *
+ * <p><strong>Theo loại đối tượng.</strong></p>
+ * <ul>
+ *   <li><strong>Cho nợ KH</strong> — hóa đơn còn nợ; giảm {@code Invoice.debtAmount} qua
+ *       {@link #reduceInvoiceDebt}.</li>
+ *   <li><strong>Nợ KH</strong> — phiếu trả đã duyệt ({@link ReturnStatus#DEBT}); phiếu chi loại
+ *       {@link ExpenseType#RETURN_REFUND_PAYOUT}.</li>
+ *   <li><strong>Cho nợ NCC</strong> — phiếu trả NCC đã duyệt; phiếu thu gắn {@code Return}.</li>
+ *   <li><strong>Nợ NCC</strong> — nợ phiếu nhập; phiếu chi {@link ExpenseType#GOODS_PAYMENT} và
+ *       {@link PurchaseinvoiceService#applyPayment}.</li>
+ * </ul>
+ *
+ * <p><strong>Kiểm tra.</strong> Tổng phân bổ cho nợ phải bằng tổng phân bổ nợ
+ * ({@link #applyOffset}). Mỗi dòng không vượt số còn lại của chứng từ, trừ phần đã giữ chỗ trên
+ * phiếu chi còn hiệu lực ({@link #committedForPurchase}, {@link #disbursedForReturn}).</p>
+ */
 @Service
 @Import(DebtOffsetService.HibernateConfiguration.class)
 public class DebtOffsetService {
@@ -64,6 +90,7 @@ public class DebtOffsetService {
     private static final String STATUS_PROPERTY = "status";
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
+    /** Lý do ghi trên mọi phiếu bù trừ — dùng để nhận diện và chặn hủy. */
     static final String OFFSET_REASON = "Bù trừ công nợ";
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -106,6 +133,12 @@ public class DebtOffsetService {
         this.incomeService = incomeService;
     }
 
+    // ------------------------------------------------------------------ màn bù trừ (đọc)
+
+    /**
+     * Dựng form bù trừ cho Owner. Ném lỗi nếu đối tượng chỉ có một bên (chỉ cho nợ hoặc chỉ nợ)
+     * — bù trừ cần cả hai.
+     */
     @Transactional(readOnly = true)
     public DebtOffsetPageResponse getOffsetPage(String partyType, Integer entityId) {
         ReceivableDetailResponse receivable = debtService.getReceivableDetail(partyType, entityId);
@@ -136,6 +169,7 @@ public class DebtOffsetService {
         );
     }
 
+    /** Dòng nợ với {@code remainingCreatable} tính lại cho bù trừ (trừ phiếu đã giữ chỗ). */
     private List<PayableLineResponse> offsetPayableLines(PayableDetailResponse payable, String partyType) {
         return payable.getLines().stream()
                 .map(line -> new PayableLineResponse(
@@ -150,6 +184,7 @@ public class DebtOffsetService {
                 .toList();
     }
 
+    /** Tổng {@code remainingCreatable} trên các dòng nợ có thể bù trừ. */
     private BigDecimal sumOffsetablePayable(List<PayableLineResponse> lines) {
         return lines.stream()
                 .map(PayableLineResponse::getRemainingCreatable)
@@ -157,6 +192,7 @@ public class DebtOffsetService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Số còn lại trên một chứng từ có thể dùng trong lần bù trừ này. */
     private BigDecimal offsetablePayableAmount(Integer documentId, String partyType) {
         if (documentId == null) {
             return BigDecimal.ZERO;
@@ -182,10 +218,12 @@ public class DebtOffsetService {
         return BigDecimal.ZERO;
     }
 
+    // ------------------------------------------------------------------ thực hiện bù trừ (ghi)
+
     /**
-     * Offsets receivable against payable for the same party using paired Income/Expense slips
-     * with {@code paidByCredit} only (no cash/banking movement). Each slip is created in
-     * {@code Hoàn thành} / {@link ExpenseStatus#COMPLETED} and cannot be cancelled afterward.
+     * Cấn cho nợ với nợ cùng đối tượng bằng cặp phiếu thu/chi chỉ dùng {@code paidByCredit}
+     * (không tiền mặt/chuyển khoản). Mỗi phiếu tạo ở {@code Hoàn thành} /
+     * {@link ExpenseStatus#COMPLETED} và không thể hủy sau đó.
      */
     @Transactional
     public void applyOffset(DebtOffsetRequest request, Integer currentAccountId) {
@@ -264,6 +302,9 @@ public class DebtOffsetService {
         throw new IllegalArgumentException("Loại đối tượng không hợp lệ");
     }
 
+    // ------------------------------------------------------------------ tạo phiếu (từng nhánh)
+
+    /** Tạo phiếu thu bù trừ cho nợ hóa đơn KH và giảm {@code debtAmount}. */
     private void createCustomerReceivableOffset(Account applicant,
                                                 Customer customer,
                                                 Invoice invoice,
@@ -279,6 +320,7 @@ public class DebtOffsetService {
         reduceInvoiceDebt(invoice, amount);
     }
 
+    /** Tạo phiếu chi bù trừ nợ hoàn tiền phiếu trả KH. */
     private void createCustomerPayableOffset(Account applicant,
                                              Customer customer,
                                              Return ret,
@@ -292,6 +334,7 @@ public class DebtOffsetService {
         persistExpense(expense);
     }
 
+    /** Tạo phiếu thu bù trừ cho nợ phiếu trả NCC. */
     private void createSupplierReceivableOffset(Account applicant,
                                                 Supplier supplier,
                                                 Return ret,
@@ -306,6 +349,7 @@ public class DebtOffsetService {
         persistIncome(income);
     }
 
+    /** Tạo phiếu chi bù trừ nợ phiếu nhập và cập nhật {@code paid} qua {@link PurchaseinvoiceService}. */
     private void createSupplierPayableOffset(Account applicant,
                                              Supplier supplier,
                                              Purchaseinvoice purchase,
@@ -320,6 +364,7 @@ public class DebtOffsetService {
         purchaseinvoiceService.applyPayment(purchase.getId(), amount);
     }
 
+    /** Mẫu phiếu thu bù trừ — chỉ cấn trừ, hoàn thành ngay. */
     private Income baseCreditIncome(Account applicant,
                                     String incomeTypeLabel,
                                     BigDecimal amount,
@@ -338,6 +383,7 @@ public class DebtOffsetService {
         return income;
     }
 
+    /** Mẫu phiếu chi bù trừ — chỉ cấn trừ, hoàn thành ngay. */
     private Expense baseCreditExpense(Account applicant,
                                       String expenseType,
                                       BigDecimal amount,
@@ -358,6 +404,7 @@ public class DebtOffsetService {
         return expense;
     }
 
+    /** Lưu phiếu thu — sinh mã PT tạm rồi cập nhật mã chính thức sau khi có id. */
     private void persistIncome(Income income) {
         income.setIncomeCode(generateIncomeCode());
         Income saved = incomeRepository.save(income);
@@ -365,6 +412,7 @@ public class DebtOffsetService {
         incomeRepository.save(saved);
     }
 
+    /** Lưu phiếu chi — sinh mã PC tạm rồi cập nhật mã chính thức sau khi có id. */
     private void persistExpense(Expense expense) {
         expense.setExpenseCode(generateExpenseCode());
         Expense saved = expenseRepository.save(expense);
@@ -372,6 +420,7 @@ public class DebtOffsetService {
         expenseRepository.save(saved);
     }
 
+    /** Nhánh cho nợ KH — giảm {@code Invoice.debtAmount}, đổi trạng thái khi hết nợ. */
     private void reduceInvoiceDebt(Invoice invoice, BigDecimal amount) {
         BigDecimal payment = amount.setScale(2, RoundingMode.HALF_UP);
         BigDecimal currentDebt = nullToZero(invoice.getDebtAmount());
@@ -385,6 +434,9 @@ public class DebtOffsetService {
         invoiceService.persistInvoice(invoice);
     }
 
+    // ------------------------------------------------------------------ kiểm tra dữ liệu
+
+    /** Kiểm tra hóa đơn thuộc KH đang bù trừ và số tiền không vượt cho nợ. */
     private void validateCustomerInvoiceOffset(Invoice invoice, Customer customer, BigDecimal amount) {
         if (invoice == null || invoice.getId() == null) {
             throw new IllegalArgumentException("Hóa đơn không hợp lệ");
@@ -407,6 +459,7 @@ public class DebtOffsetService {
         }
     }
 
+    /** Kiểm tra phiếu trả KH đã duyệt và số tiền không vượt phần còn phải hoàn. */
     private void validateCustomerReturnOffset(Return ret, BigDecimal amount) {
         if (ret == null || ret.getInvoiceID() == null || ret.getPurchaseID() != null) {
             throw new IllegalArgumentException("Phiếu trả không hợp lệ để bù trừ nợ khách hàng");
@@ -421,6 +474,7 @@ public class DebtOffsetService {
         }
     }
 
+    /** Kiểm tra phiếu trả NCC đã duyệt thuộc NCC đang bù trừ và số tiền hợp lệ. */
     private void validateSupplierReturnOffset(Return ret, Supplier supplier, BigDecimal amount) {
         if (ret == null || ret.getPurchaseID() == null || ret.getInvoiceID() != null) {
             throw new IllegalArgumentException("Phiếu trả NCC không hợp lệ");
@@ -440,6 +494,7 @@ public class DebtOffsetService {
         }
     }
 
+    /** Kiểm tra phiếu nhập thuộc NCC đang bù trừ và số tiền không vượt nợ còn lại. */
     private void validateSupplierPurchaseOffset(Purchaseinvoice purchase, Supplier supplier, BigDecimal amount) {
         if (purchase == null || purchase.getSupplierID() == null
                 || !Objects.equals(supplier.getId(), purchase.getSupplierID().getId())) {
@@ -457,6 +512,9 @@ public class DebtOffsetService {
         }
     }
 
+    // ------------------------------------------------------------------ đã chi / đã giữ chỗ
+
+    /** Tổng tiền phiếu chi đã chi thực ({@link ExpenseStatus#COMPLETED}) cho một phiếu trả. */
     private BigDecimal disbursedForReturn(Integer returnId) {
         return expenseRepository.findAll().stream()
                 .filter(expense -> !ExpenseStatus.REJECTED.equals(expense.getStatus()))
@@ -467,6 +525,10 @@ public class DebtOffsetService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Phần phiếu chi còn hiệu lực chưa chi thực cho phiếu nhập — giữ chỗ đến khi
+     * {@link ExpenseStatus#COMPLETED}.
+     */
     private BigDecimal committedForPurchase(Integer purchaseId) {
         return expenseRepository.findAll().stream()
                 .filter(expense -> !ExpenseStatus.REJECTED.equals(expense.getStatus()))
@@ -477,28 +539,27 @@ public class DebtOffsetService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    /** Mirrors {@link ExpenseService}: only {@link ExpenseStatus#COMPLETED} is real disbursement. */
+    /** Giống {@link ExpenseService}: chỉ {@link ExpenseStatus#COMPLETED} mới tính là đã chi. */
     private BigDecimal disbursedAmount(Expense expense) {
         return ExpenseStatus.COMPLETED.equals(expense.getStatus())
                 ? nullToZero(expense.getPaid())
                 : BigDecimal.ZERO;
     }
 
+    /** Phần hoàn tiền mặt sau khi trừ số đã bù trừ công nợ lúc duyệt phiếu trả. */
     private BigDecimal cashRefundAmount(Return ret) {
         return nullToZero(ret.getTotalRefund())
                 .subtract(nullToZero(ret.getOffsetDebtAmount()))
                 .max(BigDecimal.ZERO);
     }
 
-    private BigDecimal supplierCashReceivable(Return ret) {
-        return cashRefundAmount(ret);
-    }
-
+    /** Lấy khách hàng từ hóa đơn gốc của phiếu trả — có thể null (khách lẻ). */
     private Customer customerOf(Return ret) {
         Invoice invoice = ret.getInvoiceID();
         return invoice != null ? invoice.getCustomerID() : null;
     }
 
+    /** {@code entityId == 0} là khách lẻ — không có dòng {@link Customer} trong DB. */
     private Customer resolveCustomer(Integer entityId) {
         if (entityId != null && entityId == 0) {
             return null;
@@ -507,11 +568,13 @@ public class DebtOffsetService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy khách hàng"));
     }
 
+    /** Nạp NCC từ id — ném lỗi nếu không tồn tại. */
     private Supplier resolveSupplier(Integer entityId) {
         return supplierRepository.findById(entityId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhà cung cấp"));
     }
 
+    /** Kiểm tra form POST có đủ {@code partyType} và {@code entityId}. */
     private void validateRequestShape(DebtOffsetRequest request) {
         if (request == null || request.getPartyType() == null || request.getPartyType().isBlank()) {
             throw new IllegalArgumentException("Thiếu loại đối tượng");
@@ -521,6 +584,10 @@ public class DebtOffsetService {
         }
     }
 
+    /**
+     * Lọc dòng phân bổ hợp lệ từ form — bỏ dòng trống, kiểm tra chứng từ thuộc đối tượng
+     * và số tiền không vượt số còn lại.
+     */
     private <T> List<DebtOffsetLineRequest> normalizeAllocations(List<DebtOffsetLineRequest> raw,
                                                                  Map<Integer, T> allowed,
                                                                  Function<T, BigDecimal> remainingFn) {
@@ -552,6 +619,7 @@ public class DebtOffsetService {
                 .toList();
     }
 
+    /** Cộng tổng số tiền trên các dòng phân bổ bù trừ. */
     private BigDecimal sumAllocations(List<DebtOffsetLineRequest> lines) {
         return lines.stream()
                 .map(DebtOffsetLineRequest::getAmount)
@@ -559,11 +627,13 @@ public class DebtOffsetService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Thời điểm hiện tại theo giờ VN, lưu dạng Instant UTC (giống {@link DebtService}). */
     private Instant nowVn() {
         LocalDateTime wallClock = LocalDateTime.now(VN_ZONE);
         return wallClock.toInstant(ZoneOffset.UTC);
     }
 
+    /** Mã phiếu thu tạm trước khi lưu — cập nhật lại sau khi có id thật. */
     private String generateIncomeCode() {
         Integer nextId = incomeRepository.findAll().stream()
                 .map(Income::getId)
@@ -573,10 +643,12 @@ public class DebtOffsetService {
         return formatIncomeCode(nextId);
     }
 
+    /** Sinh mã phiếu thu dạng PT-000001 từ id. */
     private String formatIncomeCode(Integer id) {
         return "PT-" + String.format(Locale.ROOT, "%06d", id);
     }
 
+    /** Mã phiếu chi tạm trước khi lưu — cập nhật lại sau khi có id thật. */
     private String generateExpenseCode() {
         Integer nextId = expenseRepository.findAll().stream()
                 .map(Expense::getId)
@@ -586,10 +658,12 @@ public class DebtOffsetService {
         return formatExpenseCode(nextId);
     }
 
+    /** Sinh mã phiếu chi dạng PC-000001 từ id. */
     private String formatExpenseCode(Integer id) {
         return "PC-" + String.format(Locale.ROOT, "%06d", id);
     }
 
+    /** Định dạng tiền VND trong thông báo lỗi. */
     private String formatMoney(BigDecimal amount) {
         if (amount == null) {
             return "0đ";
@@ -598,6 +672,7 @@ public class DebtOffsetService {
         return String.format(Locale.forLanguageTag("vi-VN"), "%,dđ", vnd);
     }
 
+    /** Trim chuỗi — trả null nếu rỗng. */
     private String trimToNull(String value) {
         if (value == null) {
             return null;
@@ -606,40 +681,49 @@ public class DebtOffsetService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /** Kiểm tra số dương (&gt; 0). */
     private boolean isPositive(BigDecimal value) {
         return isPositiveAmount(value);
     }
 
+    /** Null-safe — trả {@link BigDecimal#ZERO} nếu null. */
     private BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    // ------------------------------------------------------------------ chặn hủy phiếu bù trừ (Hibernate interceptor)
+
+    /** Đăng ký {@link SlipCancelInterceptor} với Hibernate — chặn hủy phiếu bù trừ ở tầng flush. */
     static HibernatePropertiesCustomizer slipCancelInterceptorCustomizer() {
         return hibernateProperties ->
                 hibernateProperties.put("hibernate.session_factory.interceptor", SlipCancelInterceptor.INSTANCE);
     }
 
-    /** Used by {@code IncomeService} to block cancel on offset slips created by {@link #applyOffset}. */
+    /** {@code IncomeService} gọi để chặn hủy phiếu thu bù trừ tạo bởi {@link #applyOffset}. */
     public static boolean isDebtOffsetIncome(Income income) {
         return isDebtOffsetSlip(income);
     }
 
+    /** {@code IncomeService} gọi trước hủy — ném lỗi nếu là phiếu thu bù trừ. */
     public static void assertIncomeNotCancellable(Income income) {
         if (isDebtOffsetSlip(income)) {
             throw new IllegalArgumentException("Phiếu thu bù trừ công nợ không thể hủy");
         }
     }
 
+    /** Nhận diện phiếu thu do {@link #applyOffset} tạo — lý do và chỉ thanh toán bằng cấn trừ. */
     private static boolean isDebtOffsetSlip(Income income) {
         return matchesOffsetPayment(income.getReason(),
                 income.getPaidByCash(), income.getPaidByBanking(), income.getPaidByCredit());
     }
 
+    /** Nhận diện phiếu chi do {@link #applyOffset} tạo — lý do và chỉ thanh toán bằng cấn trừ. */
     private static boolean isDebtOffsetSlip(Expense expense) {
         return matchesOffsetPayment(expense.getReason(),
                 expense.getPaidByCash(), expense.getPaidByBanking(), expense.getPaidByCredit());
     }
 
+    /** Khớp {@link #OFFSET_REASON} và toàn bộ số tiền nằm trên {@code paidByCredit}. */
     private static boolean matchesOffsetPayment(String reason,
                                                 BigDecimal paidByCash,
                                                 BigDecimal paidByBanking,
@@ -652,10 +736,12 @@ public class DebtOffsetService {
                 && !isPositiveAmount(paidByBanking);
     }
 
+    /** Kiểm tra số dương (&gt; 0) — dùng trong interceptor static. */
     private static boolean isPositiveAmount(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
 
+    /** Tìm vị trí tên thuộc tính trong mảng Hibernate flush — trả -1 nếu không có. */
     private static int indexOf(String[] propertyNames, String target) {
         for (int i = 0; i < propertyNames.length; i++) {
             if (target.equals(propertyNames[i])) {
@@ -666,8 +752,8 @@ public class DebtOffsetService {
     }
 
     /**
-     * Blocks cancellation of phiếu thu/chi created by {@link #applyOffset} without touching
-     * {@code IncomeService} / {@code ExpenseService}.
+     * Chặn hủy phiếu thu/chi do {@link #applyOffset} tạo — không sửa {@code IncomeService} /
+     * {@code ExpenseService}.
      */
     private static final class SlipCancelInterceptor implements Interceptor, Serializable {
 
@@ -676,6 +762,7 @@ public class DebtOffsetService {
         private SlipCancelInterceptor() {
         }
 
+        /** Hibernate callback — ném lỗi khi cố đổi trạng thái phiếu bù trừ sang hủy. */
         @Override
         public boolean onFlushDirty(Object entity,
                                     Object id,
@@ -711,6 +798,7 @@ public class DebtOffsetService {
     @Configuration
     static class HibernateConfiguration {
 
+        /** Bean đăng ký interceptor chặn hủy phiếu bù trừ khi khởi tạo Hibernate. */
         @Bean
         static HibernatePropertiesCustomizer debtOffsetSlipCancelInterceptorCustomizer() {
             return slipCancelInterceptorCustomizer();

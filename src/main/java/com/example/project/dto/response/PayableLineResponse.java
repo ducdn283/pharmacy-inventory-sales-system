@@ -6,19 +6,23 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.util.List;
 
-/** One document row on the payable (nợ) detail screen. */
+/** Một dòng chứng từ trên màn chi tiết nợ. */
 @Getter
 @AllArgsConstructor
 public class PayableLineResponse {
 
+    /** Id chứng từ gốc (phiếu trả KH hoặc phiếu nhập); với dòng phiếu chi chờ thì là id phiếu chi. */
     private Integer id;
+    /** Mã chứng từ hiển thị. */
     private String code;
+    /** Ngày đã định dạng cho giao diện. */
     private String dateDisplay;
-    /** Full debt still owed — unchanged by {@code Chờ thanh toán} slips until money actually leaves. */
+    /** Nợ thực còn lại — chưa giảm khi chỉ có phiếu chi {@code Chờ thanh toán}. */
     private BigDecimal payableAmount;
+    /** Mô tả phụ (tên KH, tổng phiếu nhập, …). */
     private String detail;
-    /** Portion not yet on a live {@code Chờ thanh toán} slip — drives Hoàn tiền / Chi trả. */
+    /** Phần chưa nằm trên phiếu chi {@code Chờ thanh toán} — dùng cho nút Hoàn tiền / Chi trả. */
     private BigDecimal remainingCreatable;
-    /** {@code Chờ thanh toán} slips linked to this document — {@code id} is expense id. */
+    /** Phiếu chi {@code Chờ thanh toán} gắn chứng từ — {@code id} là id phiếu chi. */
     private List<PayableLineResponse> awaitingExpenses;
 }
