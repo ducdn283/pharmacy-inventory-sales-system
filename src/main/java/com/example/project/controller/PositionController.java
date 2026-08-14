@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+/**
+ * Màn quản lý vị trí lưu kho (danh sách / tạo / sửa) — chỉ Owner.
+ */
 @Controller
 public class PositionController {
     private final PositionService positionService;
@@ -26,12 +29,11 @@ public class PositionController {
         this.positionService = positionService;
     }
 
-    // hiện danh sách vị trí — chỉ Owner
+    /** Danh sách vị trí có phân trang và tìm kiếm. */
     @GetMapping("/owner/positions")
-    //required = false nghĩa là ko bắt buộc phải có
     public String positionList(@RequestParam(name = "search", required = false) String search,
-                               @RequestParam(name = "page", defaultValue = "0") int page, //trang số mấy, nếu ko có page=0
-                               @RequestParam(name = "size", defaultValue = "5") int size, //số lượng bản ghi mỗi trang
+                               @RequestParam(name = "page", defaultValue = "0") int page,
+                               @RequestParam(name = "size", defaultValue = "5") int size,
                                Model model) {
         if (page < 0) {
             page = 0;
@@ -41,24 +43,22 @@ public class PositionController {
             size = 5;
         }
 
-        //Pageable là interface mô tả cách phân trang: trang số mấy, số lượng bản ghi mỗi trang, sắp xếp tăng dần theo id
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
-        //lấy danh sách vị trí
         Page<PositionResponse> positionPage = positionService.list(search, pageable);
 
-        model.addAttribute("positions", positionPage.getContent()); //gửi đi danh sách vị trí
-        model.addAttribute("totalPositions", positionService.countAll()); // đếm tổng vị trí
+        model.addAttribute("positions", positionPage.getContent());
+        model.addAttribute("totalPositions", positionService.countAll());
         model.addAttribute("search", search);
-        model.addAttribute("currentPage", positionPage.getNumber()); //trang hiện tại (1,2,3,...)
-        model.addAttribute("totalPages", positionPage.getTotalPages());  //tổng số trang
-        model.addAttribute("pageSize", size); //số lượng bản ghi mỗi trang
-        model.addAttribute("totalItems", positionPage.getTotalElements()); //tổng số vị trí
+        model.addAttribute("currentPage", positionPage.getNumber());
+        model.addAttribute("totalPages", positionPage.getTotalPages());
+        model.addAttribute("pageSize", size);
+        model.addAttribute("totalItems", positionPage.getTotalElements());
         model.addAttribute("pageTitle", "Danh sách vị trí");
         model.addAttribute("basePath", "/owner/positions");
         return "owner/position-list";
     }
 
-    // hiển thị trang tạo Position: chỉ hiển thị form
+    /** Form tạo vị trí — giữ {@code positionForm} nếu redirect sau lỗi validate. */
     @GetMapping("/owner/positions/create-position")
     public String createPositionForm(Model model) {
         if (!model.containsAttribute("positionForm")) {
@@ -68,7 +68,7 @@ public class PositionController {
         return "owner/create-position";
     }
 
-    // tạo vị trí
+    /** Xử lý submit tạo vị trí — validate rồi redirect về danh sách. */
     @PostMapping("/owner/positions/create-position")
     public String createPosition(@Valid @ModelAttribute("positionForm") PositionCreateRequest form,
                                  BindingResult bindingResult,
@@ -84,7 +84,7 @@ public class PositionController {
         return "redirect:/owner/positions";
     }
 
-    // hiển thị trang update Position: chỉ hiển thị form
+    /** Form sửa vị trí — điền sẵn {@code positionForm} từ dữ liệu hiện tại. */
     @GetMapping("/owner/positions/update-position/{id}")
     public String updatePositionForm(@PathVariable Integer id, Model model) {
         PositionResponse position = positionService.getById(id);
@@ -101,7 +101,7 @@ public class PositionController {
         return "owner/update-position";
     }
 
-    // chỉnh sửa vị trí
+    /** Xử lý submit cập nhật vị trí — validate rồi redirect về danh sách. */
     @PostMapping("/owner/positions/update-position/{id}")
     public String updatePosition(@PathVariable Integer id,
                                  @Valid @ModelAttribute("positionForm") PositionCreateRequest form,
@@ -119,12 +119,12 @@ public class PositionController {
         return "redirect:/owner/positions";
     }
 
-    //form tạo
+    /** Chuẩn bị model cho form tạo vị trí. */
     private void populateCreateForm(Model model) {
         populateForm(model, "Tạo vị trí");
     }
 
-    // thêm dữ liệu vào form
+    /** Nạp dropdown hàng hóa và metadata chung cho form tạo/sửa. */
     private void populateForm(Model model, String pageTitle) {
         model.addAttribute("products", positionService.listProducts());
         model.addAttribute("pageTitle", pageTitle);

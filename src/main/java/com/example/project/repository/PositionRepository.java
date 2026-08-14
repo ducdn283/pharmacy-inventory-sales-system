@@ -9,10 +9,12 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * Truy vấn dữ liệu vị trí lưu kho ({@link Position}) cho màn quản lý Owner và màn hàng hóa.
+ */
 public interface PositionRepository extends JpaRepository<Position, Integer> {
 
-    //của hoàng ko liên quan
-    /** Storage-location rows of a single product, for the Product Detail/Edit screens. */
+    /** Vị trí lưu kho của một hàng hóa — màn chi tiết / sửa hàng hóa. */
     @Query("""
             SELECT p FROM Position p
             WHERE p.productID.productID = :productId
@@ -20,6 +22,7 @@ public interface PositionRepository extends JpaRepository<Position, Integer> {
             """)
     List<Position> findByProductId(@Param("productId") Integer productId);
 
+    /** Toàn bộ vị trí kèm thông tin hàng hóa — danh sách Owner và màn bán hàng. */
     @Query("""
             SELECT p FROM Position p
             JOIN FETCH p.productID
@@ -27,7 +30,11 @@ public interface PositionRepository extends JpaRepository<Position, Integer> {
             """)
     List<Position> findAllWithProduct();
 
-    //tìm kiếm vị trí theo tên vị trí hoặc tên sản phẩm hoặc mã sản phẩm và hỗ trợ phân trang
+    /**
+     * Danh sách vị trí có lọc theo tên vị trí, tên hoặc mã hàng hóa.
+     * <p>Hiện chưa dùng trực tiếp — {@link com.example.project.service.PositionService#list}
+     * lọc trong bộ nhớ để hỗ trợ tìm không dấu.</p>
+     */
     @Query("""
             SELECT p FROM Position p
             JOIN p.productID prod
@@ -35,7 +42,5 @@ public interface PositionRepository extends JpaRepository<Position, Integer> {
                    OR LOWER(prod.name) LIKE LOWER(CONCAT(:keyword, '%'))
                    OR LOWER(prod.code) LIKE LOWER(CONCAT(:keyword, '%')))
             """)
-
-    //page là interface dùng để phân trang: pageable là cách phân trang, keywword là từ khóa tìm kiếm
     Page<Position> findFiltered(@Param("keyword") String keyword, Pageable pageable);
 }

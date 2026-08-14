@@ -9,6 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * Truy vấn dữ liệu loại hàng ({@link Type}) cho màn quản lý Owner.
+ */
 public interface TypeRepository extends JpaRepository<Type, Integer> {
 
     /**
