@@ -36,6 +36,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Màn quản lý phiếu thu (danh sách / chi tiết / tạo / hủy).
+ * Chủ nhà thuốc, Dược sĩ và Kế toán: xem danh sách và chi tiết; tạo/hủy theo quyền nghiệp vụ.
+ */
 @Controller
 public class IncomeController {
 
@@ -64,12 +68,14 @@ public class IncomeController {
         this.currentUserContext = currentUserContext;
     }
 
+    /** Chuyển giá trị form ({@code String}) sang {@link BigDecimal} / {@link Integer} khi binding. */
     @InitBinder
     public void initBinder(WebDataBinder binder) {
         binder.registerCustomEditor(BigDecimal.class, new CustomNumberEditor(BigDecimal.class, true));
         binder.registerCustomEditor(Integer.class, new CustomNumberEditor(Integer.class, true));
     }
 
+    /** Danh sách phiếu thu có phân trang, lọc theo mã, ngày, loại, trạng thái, hình thức thu và người lập. */
     @GetMapping({OWNER_BASE, PHARMACIST_BASE, ACCOUNTANT_BASE})
     public String incomeList(@RequestParam(name = "search", required = false) String search,
                              @RequestParam(name = "fromDate", required = false) String fromDate,
@@ -119,6 +125,7 @@ public class IncomeController {
         return "income/income-list";
     }
 
+    /** Trang chi tiết phiếu thu — kèm báo cáo ca nếu liên quan thất thoát quỹ. */
     @GetMapping({OWNER_BASE + "/{incomeId}", PHARMACIST_BASE + "/{incomeId}", ACCOUNTANT_BASE + "/{incomeId}"})
     public String detail(@PathVariable Integer incomeId, HttpServletRequest request, Model model) {
         IncomeDetailResponse detail = incomeService.getDetail(
@@ -139,6 +146,7 @@ public class IncomeController {
         return "income/income-detail";
     }
 
+    /** Danh sách hóa đơn còn nợ của khách — chọn chứng từ khi thu nợ khách hàng. */
     @GetMapping(value = {OWNER_BASE + "/references/debt-invoices", PHARMACIST_BASE + "/references/debt-invoices",
             ACCOUNTANT_BASE + "/references/debt-invoices"},
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -147,6 +155,7 @@ public class IncomeController {
         return incomeService.listDebtInvoices(customerId);
     }
 
+    /** Danh sách phiếu trả NCC còn tiền phải hoàn — chọn chứng từ khi thu nợ NCC. */
     @GetMapping(value = {OWNER_BASE + "/references/supplier-returns", PHARMACIST_BASE + "/references/supplier-returns",
             ACCOUNTANT_BASE + "/references/supplier-returns"},
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -155,6 +164,7 @@ public class IncomeController {
         return incomeService.listSupplierReturns(supplierId);
     }
 
+    /** Danh sách phiếu điều chỉnh kho nhân viên phải đền bù — chọn chứng từ thu đền bù. */
     @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments", PHARMACIST_BASE + "/references/stock-adjustments",
             ACCOUNTANT_BASE + "/references/stock-adjustments"},
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -163,6 +173,7 @@ public class IncomeController {
         return incomeService.listStockAdjustments(accountId);
     }
 
+    /** Danh sách báo cáo ca còn thiếu tiền mặt — chọn chứng từ thu thất thoát ca. */
     @GetMapping(value = {OWNER_BASE + "/references/shift-reports", PHARMACIST_BASE + "/references/shift-reports",
             ACCOUNTANT_BASE + "/references/shift-reports"},
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -172,6 +183,7 @@ public class IncomeController {
         return incomeService.listShiftReportsWithShortage(accountId);
     }
 
+    /** Chi tiết hóa đơn bán liên quan — xem trước trên form tạo phiếu thu. */
     @GetMapping(value = {OWNER_BASE + "/references/invoices/{id}/detail",
             PHARMACIST_BASE + "/references/invoices/{id}/detail",
             ACCOUNTANT_BASE + "/references/invoices/{id}/detail"},
@@ -181,6 +193,7 @@ public class IncomeController {
         return invoiceService.getDetail(id);
     }
 
+    /** Chi tiết phiếu trả NCC kèm số tiền còn thu được — form tạo phiếu thu. */
     @GetMapping(value = {OWNER_BASE + "/references/supplier-returns/{id}/detail",
             PHARMACIST_BASE + "/references/supplier-returns/{id}/detail",
             ACCOUNTANT_BASE + "/references/supplier-returns/{id}/detail"},
@@ -192,12 +205,14 @@ public class IncomeController {
                 incomeService.remainingCollectibleForSupplierReturn(id));
     }
 
-    /** JSON payload for supplier-return detail on the income create screen (flattened via {@link JsonUnwrapped}). */
+    /** Payload JSON chi tiết phiếu trả NCC trên form tạo phiếu thu — gộp qua {@link JsonUnwrapped}. */
     private record SupplierReturnReferenceDetailPayload(
             @JsonUnwrapped ReturnPurchaseDetailPageResponse detail,
+            /** Số tiền NCC còn phải hoàn sau các phiếu thu trước. */
             BigDecimal remainingCollectibleAmount) {
     }
 
+    /** Chi tiết phiếu điều chỉnh kho liên quan — xem trước trên form tạo phiếu thu. */
     @GetMapping(value = {OWNER_BASE + "/references/stock-adjustments/{id}/detail",
             PHARMACIST_BASE + "/references/stock-adjustments/{id}/detail",
             ACCOUNTANT_BASE + "/references/stock-adjustments/{id}/detail"},
@@ -207,6 +222,7 @@ public class IncomeController {
         return stockadjustmentService.getDetail(id);
     }
 
+    /** Chi tiết báo cáo ca liên quan — xem trước trên form tạo phiếu thu. */
     @GetMapping(value = {OWNER_BASE + "/references/shift-reports/{id}/detail",
             PHARMACIST_BASE + "/references/shift-reports/{id}/detail",
             ACCOUNTANT_BASE + "/references/shift-reports/{id}/detail"},
@@ -216,6 +232,10 @@ public class IncomeController {
         return shiftreportService.getDetail(id);
     }
 
+    /**
+     * Form tạo phiếu thu — giữ {@code form} nếu redirect sau lỗi validate.
+     * Tham số query điền sẵn khi mở từ màn khác (thu nợ, thất thoát ca, …).
+     */
     @GetMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
     public String createPage(@RequestParam(name = "incomeType", required = false) String incomeType,
                              @RequestParam(name = "customerId", required = false) Integer customerId,
@@ -246,6 +266,10 @@ public class IncomeController {
         return "income/create-income";
     }
 
+    /**
+     * Xử lý submit tạo phiếu thu.
+     * {@code action = draft}: lưu nháp; ngược lại hoàn thành ngay (không cần duyệt).
+     */
     @PostMapping({OWNER_BASE + "/create", PHARMACIST_BASE + "/create", ACCOUNTANT_BASE + "/create"})
     public String create(@ModelAttribute("form") IncomeCreateRequest form,
                          @RequestParam(name = "action", required = false) String action,
@@ -271,6 +295,7 @@ public class IncomeController {
         }
     }
 
+    /** Hủy phiếu thu — chỉ người lập, không hủy được phiếu bù trừ công nợ. */
     @PostMapping({OWNER_BASE + "/{incomeId}/cancel", PHARMACIST_BASE + "/{incomeId}/cancel",
             ACCOUNTANT_BASE + "/{incomeId}/cancel"})
     public String cancel(@PathVariable Integer incomeId,
@@ -287,6 +312,7 @@ public class IncomeController {
         return "redirect:" + basePath + "/" + incomeId;
     }
 
+    /** Nạp loại phiếu, đối tượng, chứng từ tham chiếu và cấu hình form tạo phiếu thu. */
     private void addCreatePageData(HttpServletRequest request, Model model) {
         IncomeCreateRequest form = (IncomeCreateRequest) model.getAttribute("form");
         model.addAttribute("incomeTypes", incomeService.listIncomeTypes());
@@ -310,6 +336,7 @@ public class IncomeController {
         model.addAttribute("pageTitle", "Tạo phiếu thu");
     }
 
+    /** Đường dẫn gốc theo vai trò: Chủ nhà thuốc, Dược sĩ hoặc Kế toán. */
     private String resolveBasePath(HttpServletRequest request) {
         String uri = request.getRequestURI();
         if (uri.startsWith(PHARMACIST_BASE)) {
@@ -321,6 +348,7 @@ public class IncomeController {
         return OWNER_BASE;
     }
 
+    /** Đường dẫn gốc hóa đơn bán — liên kết từ chi tiết phiếu thu. */
     private String resolveInvoiceBasePath(String basePath) {
         if (basePath.startsWith(PHARMACIST_BASE)) {
             return "/pharmacist/invoices";
@@ -331,6 +359,7 @@ public class IncomeController {
         return "/owner/invoices";
     }
 
+    /** Đường dẫn gốc phiếu điều chỉnh kho — liên kết từ chi tiết phiếu thu. */
     private String resolveStockAdjustmentBasePath(String basePath) {
         if (basePath.startsWith(PHARMACIST_BASE)) {
             return "/pharmacist/stock-adjustments";
@@ -338,6 +367,7 @@ public class IncomeController {
         return "/owner/stock-adjustments";
     }
 
+    /** Đường dẫn gốc báo cáo ca — liên kết từ chi tiết phiếu thu. */
     private String resolveShiftReportBasePath(String basePath) {
         if (basePath.startsWith(PHARMACIST_BASE)) {
             return "/pharmacist/shift-reports";

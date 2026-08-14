@@ -6,20 +6,28 @@ import lombok.Getter;
 import java.util.List;
 import java.util.Locale;
 
-/** One income-type option for dropdowns (code + Vietnamese label). */
+/** Một loại phiếu thu cho dropdown — mã nội bộ và nhãn tiếng Việt. */
 @Getter
 @AllArgsConstructor
 public class IncomeTypeOptionResponse {
 
+    /** Mã loại: thu nợ NCC. */
     public static final String SUPPLIER = "SUPPLIER";
+    /** Mã loại: thu đền bù nhân viên làm hỏng hàng. */
     public static final String EMPLOYEE = "EMPLOYEE";
+    /** Mã loại: thu thất thoát tiền mặt khi kết ca. */
     public static final String SHIFT_SHORTAGE = "SHIFT_SHORTAGE";
+    /** Mã loại: thu nợ khách hàng. */
     public static final String CUSTOMER = "CUSTOMER";
+    /** Mã loại: thu khác (nhập tay, không liên kết chứng từ). */
     public static final String OTHER = "OTHER";
 
+    /** Mã loại nội bộ (SUPPLIER, CUSTOMER, …). */
     private String code;
+    /** Nhãn hiển thị trên form và danh sách. */
     private String label;
 
+    /** Tất cả loại phiếu thu cho dropdown form tạo phiếu. */
     public static List<IncomeTypeOptionResponse> all() {
         return List.of(
                 new IncomeTypeOptionResponse(SUPPLIER, "Thu nợ nhà cung cấp"),
@@ -30,11 +38,12 @@ public class IncomeTypeOptionResponse {
         );
     }
 
-    /** Manual amount entry only — no linked party or reference document. */
+    /** Loại nhập tay — không bắt buộc đối tượng hay chứng từ liên quan. */
     public static boolean isSimpleManualType(String storedOrCode) {
         return OTHER.equals(codeOf(storedOrCode));
     }
 
+    /** Kiểm tra mã hoặc nhãn loại phiếu thu có hợp lệ. */
     public static boolean isValid(String type) {
         if (type == null || type.isBlank()) {
             return false;
@@ -43,7 +52,7 @@ public class IncomeTypeOptionResponse {
         return all().stream().anyMatch(option -> matches(option, trimmed));
     }
 
-    /** Normalizes a stored Vietnamese label or legacy English code to the internal code. */
+    /** Chuẩn hóa nhãn tiếng Việt hoặc mã legacy sang mã nội bộ. */
     public static String codeOf(String value) {
         if (value == null || value.isBlank()) {
             return "";
@@ -56,11 +65,12 @@ public class IncomeTypeOptionResponse {
                 .orElse(trimmed.toUpperCase(Locale.ROOT));
     }
 
-    /** Vietnamese label persisted in {@code Income.incomeType}. */
+    /** Nhãn tiếng Việt lưu vào cột {@code Income.incomeType}. */
     public static String storageLabelOf(String codeOrLabel) {
         return labelOf(codeOrLabel);
     }
 
+    /** Nhãn hiển thị từ mã hoặc nhãn đã lưu. */
     public static String labelOf(String type) {
         if (type == null) {
             return "";
@@ -73,17 +83,19 @@ public class IncomeTypeOptionResponse {
                 .orElse(trimmed);
     }
 
+    /** Có phải loại thu nợ khách hàng hay không. */
     public static boolean isCustomer(String storedOrCode) {
         return CUSTOMER.equals(codeOf(storedOrCode));
     }
 
+    /** So khớp mã, nhãn hiện tại hoặc nhãn legacy với giá trị đầu vào. */
     private static boolean matches(IncomeTypeOptionResponse option, String value) {
         return option.code.equalsIgnoreCase(value)
                 || option.label.equalsIgnoreCase(value)
                 || legacyLabelMatches(option, value);
     }
 
-    /** Recognizes Vietnamese labels persisted before the income-type rename. */
+    /** Nhận diện nhãn tiếng Việt cũ trước khi đổi tên loại phiếu thu. */
     private static boolean legacyLabelMatches(IncomeTypeOptionResponse option, String value) {
         return switch (option.code) {
             case CUSTOMER -> "Khách hàng".equalsIgnoreCase(value);
