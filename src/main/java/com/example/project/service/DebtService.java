@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.ExpenseStatus;
+import com.example.project.constant.ExpenseType;
 import com.example.project.constant.ReturnPurchaseStatus;
 import com.example.project.constant.ReturnStatus;
 import com.example.project.dto.response.DebtListItemResponse;
@@ -43,13 +44,47 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Tổng hợp số dư công nợ theo đối tượng cho màn danh sách ({@code /owner/debts},
+ * {@code /accountant/debts}). Service này <em>không</em> ghi nhận tiền — chỉ gom dữ liệu các
+ * module khác đã lưu.
+ *
+ * <p><strong>Cho nợ</strong> — đối tượng còn phải trả nhà thuốc:</p>
+ * <ul>
+ *   <li><strong>Khách hàng</strong> — hóa đơn bán có {@code debtAmount &gt; 0} hoặc trạng thái
+ *       {@code Còn nợ} ({@link #isDebtInvoice}). Thu tiền thực tế qua {@link IncomeService}.</li>
+ *   <li><strong>Nhà cung cấp</strong> — phiếu trả NCC đã duyệt ({@code purchaseID != null &&
+ *       invoiceID == null}) mà NCC còn phải hoàn tiền mặt
+ *       ({@link IncomeService#remainingCollectibleForSupplierReturn}).</li>
+ * </ul>
+ *
+ * <p><strong>Nợ</strong> — nhà thuốc còn phải trả đối tượng:</p>
+ * <ul>
+ *   <li><strong>Khách hàng</strong> — phiếu trả KH đã duyệt ({@link ReturnStatus#DEBT}). Dòng
+ *       {@code Return} chỉ lưu nghĩa vụ hoàn tiền; chi thực tế theo phiếu chi
+ *       {@link ExpenseType#RETURN_REFUND_PAYOUT} ({@link ExpenseService}). Chỉ phiếu chi
+ *       {@link ExpenseStatus#COMPLETED} mới làm giảm số hiển thị ({@link #disbursedAmount}).</li>
+ *   <li><strong>Nhà cung cấp</strong> — phiếu nhập còn nợ
+ *       ({@link PurchaseinvoiceService#remainingDebt}). Chi qua phiếu {@link ExpenseType#GOODS_PAYMENT};
+ *       phiếu {@link ExpenseStatus#AWAITING_PAYMENT} giữ chỗ nhưng chưa tính là đã trả.</li>
+ * </ul>
+ *
+ * <p><strong>Khách lẻ.</strong> Hóa đơn không có {@code customerID} gom vào khóa
+ * {@link #WALK_IN_CUSTOMER_KEY}, hiển thị {@code Khách lẻ}.</p>
+ *
+ * <p><strong>Bù trừ.</strong> Bù trừ thủ công (Owner) nằm ở {@link DebtOffsetService}. Bù trừ tự
+ * động khi duyệt trả NCC ghi qua {@link #recordPurchaseDebtOffset}.</p>
+ *
+ * <p><strong>Phân trang.</strong> {@link #list} lọc toàn bộ dòng trong memory — phù hợp quy mô
+ * nhà thuốc; không phải query phân trang ở DB.</p>
+ */
 @Service
 public class DebtService {
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String PARTY_CUSTOMER = "CUSTOMER";
     private static final String PARTY_SUPPLIER = "SUPPLIER";
-    /** Synthetic key for walk-in sales whose invoice has no {@code customerID}. */
+    /** Khóa giả cho khách lẻ — hóa đơn không gắn {@code customerID}. */
     private static final Integer WALK_IN_CUSTOMER_KEY = 0;
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -80,6 +115,9 @@ public class DebtService {
         this.supplierRepository = supplierRepository;
     }
 
+    // ------------------------------------------------------------------ nhãn / hook ghi nhận
+
+    /** Nhãn tiếng Việt loại đối tượng — dùng trên bộ lọc và cột danh sách. */
     public Map<String, String> partyTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put(PARTY_CUSTOMER, "Khách hàng");
@@ -101,6 +139,9 @@ public class DebtService {
         purchaseinvoiceService.applyPayment(purchaseId, offset);
     }
 
+    // ------------------------------------------------------------------ danh sách / tổng hợp KPI
+
+    /** Danh sách công nợ có phân trang — mỗi dòng một đối tượng còn cho nợ và/hoặc nợ. */
     @Transactional(readOnly = true)
     public Page<DebtListItemResponse> list(String search, String partyType, Pageable pageable) {
         String normalizedKeyword = normalize(search);
@@ -123,6 +164,7 @@ public class DebtService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
+    /** Tổng KPI trên màn danh sách — tách theo loại đối tượng (KH / NCC). */
     @Transactional(readOnly = true)
     public DebtSummaryResponse summarize() {
         List<DebtListItemResponse> rows = buildAllRows().stream()
@@ -160,6 +202,13 @@ public class DebtService {
         );
     }
 
+    // ------------------------------------------------------------------ màn chi tiết
+
+    /**
+     * Chi tiết cho nợ — từng chứng từ đối tượng còn nợ nhà thuốc.
+     * {@code partyType}: {@code CUSTOMER} hoặc {@code SUPPLIER}; {@code entityId}: id KH/NCC
+     * (khách lẻ dùng {@link #WALK_IN_CUSTOMER_KEY}).
+     */
     @Transactional(readOnly = true)
     public ReceivableDetailResponse getReceivableDetail(String partyType, Integer entityId) {
         if (entityId == null) {
@@ -175,6 +224,10 @@ public class DebtService {
         throw new IllegalArgumentException("Loại đối tượng không hợp lệ");
     }
 
+    /**
+     * Chi tiết nợ — từng chứng từ nhà thuốc còn phải trả, kèm phiếu chi
+     * {@link ExpenseStatus#AWAITING_PAYMENT} đã tạo cho từng chứng từ.
+     */
     @Transactional(readOnly = true)
     public PayableDetailResponse getPayableDetail(String partyType, Integer entityId) {
         if (entityId == null) {
@@ -190,6 +243,7 @@ public class DebtService {
         throw new IllegalArgumentException("Loại đối tượng không hợp lệ");
     }
 
+    /** Cho nợ KH — từng hóa đơn bán còn {@link #isDebtInvoice}. */
     private ReceivableDetailResponse getCustomerReceivableDetail(Integer customerId) {
         String name = customerRepository.findById(customerId)
                 .map(customer -> customer.getName())
@@ -223,6 +277,7 @@ public class DebtService {
         );
     }
 
+    /** Cho nợ NCC — từng phiếu trả NCC đã duyệt còn phải hoàn tiền mặt. */
     private ReceivableDetailResponse getSupplierReceivableDetail(Integer supplierId) {
         String name = supplierRepository.findById(supplierId)
                 .map(supplier -> supplier.getName())
@@ -273,6 +328,7 @@ public class DebtService {
         );
     }
 
+    /** Nợ KH — từng phiếu trả đã duyệt còn phải hoàn, kèm phiếu chi chờ thanh toán. */
     private PayableDetailResponse getCustomerPayableDetail(Integer customerId) {
         String name = WALK_IN_CUSTOMER_KEY.equals(customerId)
                 ? "Khách lẻ"
@@ -322,6 +378,7 @@ public class DebtService {
         );
     }
 
+    /** Nợ NCC — từng phiếu nhập còn nợ, kèm phiếu chi chờ thanh toán. */
     private PayableDetailResponse getSupplierPayableDetail(Integer supplierId) {
         String name = supplierRepository.findById(supplierId)
                 .map(supplier -> supplier.getName())
@@ -368,6 +425,9 @@ public class DebtService {
         );
     }
 
+    // ------------------------------------------------------------------ gom dòng danh sách
+
+    /** Gom dòng khách hàng và NCC trước khi lọc / phân trang. */
     private List<DebtListItemResponse> buildAllRows() {
         List<DebtListItemResponse> rows = new ArrayList<>();
         rows.addAll(buildCustomerRows());
@@ -375,6 +435,7 @@ public class DebtService {
         return rows;
     }
 
+    /** Cho nợ từ hóa đơn còn nợ; nợ từ phiếu trả KH đã duyệt còn phải hoàn. */
     private List<DebtListItemResponse> buildCustomerRows() {
         Map<Integer, PartyBalance> byCustomerId = new LinkedHashMap<>();
 
@@ -412,6 +473,7 @@ public class DebtService {
                 .collect(Collectors.toList());
     }
 
+    /** Cho nợ từ phiếu trả NCC đã duyệt; nợ từ phiếu nhập còn nợ. */
     private List<DebtListItemResponse> buildSupplierRows() {
         Map<Integer, Purchaseinvoice> purchasesById = purchaseinvoiceRepository.findAllWithRelations().stream()
                 .collect(Collectors.toMap(Purchaseinvoice::getId, purchase -> purchase, (a, b) -> a));
@@ -457,6 +519,7 @@ public class DebtService {
                 .collect(Collectors.toList());
     }
 
+    /** Map bộ cộng dồn {@link PartyBalance} sang một dòng danh sách. */
     private DebtListItemResponse toRow(Integer entityId, PartyBalance balance, String partyType) {
         return new DebtListItemResponse(
                 entityId,
@@ -468,6 +531,9 @@ public class DebtService {
         );
     }
 
+    // ------------------------------------------------------------------ phiếu chi chờ thanh toán (chi tiết nợ)
+
+    /** Phiếu chi {@link ExpenseStatus#AWAITING_PAYMENT} còn hiệu lực, gom theo id phiếu trả KH. */
     private Map<Integer, List<PayableLineResponse>> awaitingExpensesByReturnId(Integer customerId) {
         Map<Integer, List<Expense>> byReturnId = new LinkedHashMap<>();
         for (Expense expense : liveExpenses()) {
@@ -486,6 +552,7 @@ public class DebtService {
         return toAwaitingExpenseLinesByDocumentId(byReturnId);
     }
 
+    /** Phiếu chi {@link ExpenseStatus#AWAITING_PAYMENT} còn hiệu lực, gom theo id phiếu nhập. */
     private Map<Integer, List<PayableLineResponse>> awaitingExpensesByPurchaseId(Integer supplierId) {
         Map<Integer, List<Expense>> byPurchaseId = new LinkedHashMap<>();
         for (Expense expense : liveExpenses()) {
@@ -504,6 +571,7 @@ public class DebtService {
         return toAwaitingExpenseLinesByDocumentId(byPurchaseId);
     }
 
+    /** Chuyển map phiếu chi chờ thanh toán sang dòng hiển thị trên màn chi tiết nợ. */
     private Map<Integer, List<PayableLineResponse>> toAwaitingExpenseLinesByDocumentId(
             Map<Integer, List<Expense>> expensesByDocumentId) {
         Map<Integer, List<PayableLineResponse>> linesByDocumentId = new LinkedHashMap<>();
@@ -518,6 +586,7 @@ public class DebtService {
         return linesByDocumentId;
     }
 
+    /** Một phiếu chi {@link ExpenseStatus#AWAITING_PAYMENT} — hiển thị như dòng con của chứng từ gốc. */
     private PayableLineResponse toAwaitingExpenseLine(Expense expense) {
         Return ret = expense.getReturnID();
         Purchaseinvoice purchase = expense.getPurchaseID();
@@ -540,6 +609,10 @@ public class DebtService {
         );
     }
 
+    /**
+     * Số còn có thể tạo phiếu chi mới — nợ thực trừ các phiếu đang
+     * {@link ExpenseStatus#AWAITING_PAYMENT}.
+     */
     private BigDecimal displayCustomerReturnPayable(Return ret,
                                                     Map<Integer, BigDecimal> disbursed,
                                                     Map<Integer, BigDecimal> awaitingAmounts) {
@@ -548,6 +621,7 @@ public class DebtService {
                 .max(BigDecimal.ZERO);
     }
 
+    /** Giống {@link #displayCustomerReturnPayable} nhưng cho nợ phiếu nhập. */
     private BigDecimal displaySupplierPayable(Purchaseinvoice purchase,
                                               Map<Integer, BigDecimal> awaitingAmounts) {
         return purchaseinvoiceService.remainingDebt(purchase)
@@ -555,6 +629,7 @@ public class DebtService {
                 .max(BigDecimal.ZERO);
     }
 
+    /** Tổng tiền phiếu chi chờ thanh toán gom theo id phiếu trả KH. */
     private Map<Integer, BigDecimal> awaitingPaymentAmountByReturnId() {
         Map<Integer, BigDecimal> amounts = new LinkedHashMap<>();
         for (Expense expense : liveExpenses()) {
@@ -569,6 +644,7 @@ public class DebtService {
         return amounts;
     }
 
+    /** Tổng tiền phiếu chi chờ thanh toán gom theo id phiếu nhập. */
     private Map<Integer, BigDecimal> awaitingPaymentAmountByPurchaseId() {
         Map<Integer, BigDecimal> amounts = new LinkedHashMap<>();
         for (Expense expense : liveExpenses()) {
@@ -583,10 +659,12 @@ public class DebtService {
         return amounts;
     }
 
+    // ------------------------------------------------------------------ helper phiếu chi
+
     /**
-     * Money this slip has actually settled against its linked document. Only
-     * {@link ExpenseStatus#COMPLETED} counts — {@link ExpenseStatus#AWAITING_PAYMENT} authorises
-     * the slip but does not move money yet (see {@code ExpenseService.confirmPayment}).
+     * Tiền phiếu chi đã thực sự cấn vào chứng từ liên kết. Chỉ
+     * {@link ExpenseStatus#COMPLETED} mới tính — {@link ExpenseStatus#AWAITING_PAYMENT} mới duyệt
+     * chờ chi, chưa trừ tiền (xem {@code ExpenseService.confirmPayment}).
      */
     private BigDecimal disbursedAmount(Expense expense) {
         return isStatus(expense.getStatus(), ExpenseStatus.COMPLETED)
@@ -594,6 +672,7 @@ public class DebtService {
                 : BigDecimal.ZERO;
     }
 
+    /** Phiếu chi không bị từ chối / hủy — mới giữ chỗ hoặc cấn nợ. */
     private List<Expense> liveExpenses() {
         return expenseRepository.findAllWithRelations().stream()
                 .filter(expense -> !ExpenseStatus.REJECTED.equals(expense.getStatus()))
@@ -601,6 +680,10 @@ public class DebtService {
                 .toList();
     }
 
+    /**
+     * Nhận diện phiếu trả NCC — cùng quy tắc {@link ExpenseService} / {@link ReturnService}:
+     * {@code purchaseID != null && invoiceID == null}.
+     */
     private boolean isApprovedSupplierReturn(Return ret) {
         return ret != null
                 && ret.getPurchaseID() != null
@@ -608,6 +691,7 @@ public class DebtService {
                 && isStatus(ret.getStatus(), ReturnPurchaseStatus.APPROVED);
     }
 
+    /** Tổng tiền phiếu chi đã chi thực ({@link ExpenseStatus#COMPLETED}) gom theo id phiếu trả. */
     private Map<Integer, BigDecimal> disbursedByReturnId() {
         Map<Integer, BigDecimal> disbursed = new LinkedHashMap<>();
         for (Expense expense : liveExpenses()) {
@@ -624,9 +708,9 @@ public class DebtService {
     }
 
     /**
-     * Cash still owed back to the customer: the return's refund obligation minus what live expense
-     * slips have already paid out. Unlike purchase-invoice debt, the return entity itself never
-     * shrinks — only disbursements reduce what the debt screen should show.
+     * Tiền còn phải hoàn KH: nghĩa vụ hoàn trên phiếu trả trừ phiếu chi đã chi thực tế.
+     * Khác nợ phiếu nhập — bản thân {@code Return} không tự giảm; chỉ chi thực mới làm giảm số
+     * hiển thị trên màn công nợ.
      */
     private BigDecimal remainingCustomerReturnPayable(Return ret, Map<Integer, BigDecimal> disbursed) {
         return cashRefundAmount(ret)
@@ -634,6 +718,7 @@ public class DebtService {
                 .max(BigDecimal.ZERO);
     }
 
+    /** Nhận diện phiếu trả KH — {@code invoiceID != null && purchaseID == null}. */
     private boolean isApprovedCustomerReturn(Return ret) {
         return ret != null
                 && ret.getInvoiceID() != null
@@ -641,6 +726,7 @@ public class DebtService {
                 && isStatus(ret.getStatus(), ReturnStatus.DEBT);
     }
 
+    /** Khách null gom về {@link #WALK_IN_CUSTOMER_KEY} để công nợ khách lẻ thành một dòng. */
     private Integer customerKeyOf(Invoice invoice) {
         if (invoice == null || invoice.getCustomerID() == null || invoice.getCustomerID().getId() == null) {
             return WALK_IN_CUSTOMER_KEY;
@@ -648,6 +734,7 @@ public class DebtService {
         return invoice.getCustomerID().getId();
     }
 
+    /** Tên hiển thị trên dòng công nợ — khách null hoặc trống trả {@code Khách lẻ}. */
     private String customerNameOf(Invoice invoice) {
         if (invoice == null || invoice.getCustomerID() == null || invoice.getCustomerID().getName() == null
                 || invoice.getCustomerID().getName().isBlank()) {
@@ -656,16 +743,19 @@ public class DebtService {
         return invoice.getCustomerID().getName();
     }
 
+    /** So sánh hai chuỗi trạng thái sau khi chuẩn hóa. */
     private boolean isStatus(String actual, String expected) {
         return normalize(actual).equals(normalize(expected));
     }
 
+    /** Phần hoàn tiền mặt sau khi trừ số đã bù trừ công nợ lúc duyệt phiếu trả. */
     private BigDecimal cashRefundAmount(Return ret) {
         return nullToZero(ret.getTotalRefund())
                 .subtract(nullToZero(ret.getOffsetDebtAmount()))
                 .max(BigDecimal.ZERO);
     }
 
+    /** Mô tả phụ trên dòng phiếu trả KH — tên khách và số hóa đơn gốc. */
     private String customerReturnDetail(Return ret) {
         Invoice invoice = ret.getInvoiceID();
         Customer customer = invoice != null ? invoice.getCustomerID() : null;
@@ -678,10 +768,12 @@ public class DebtService {
         return customerName + " · HĐ " + invoiceNumber;
     }
 
+    /** Chỉ giữ dòng còn cho nợ hoặc nợ &gt; 0 trên danh sách. */
     private boolean hasOutstandingBalance(DebtListItemResponse row) {
         return isPositive(row.getReceivableAmount()) || isPositive(row.getPayableAmount());
     }
 
+    /** So khớp từ khóa tìm kiếm với tên đối tượng hoặc nhãn loại (đã chuẩn hóa). */
     private boolean matchesKeyword(DebtListItemResponse row, String normalizedKeyword) {
         if (normalizedKeyword.isEmpty()) {
             return true;
@@ -690,6 +782,7 @@ public class DebtService {
                 || normalize(row.getPartyTypeDisplay()).contains(normalizedKeyword);
     }
 
+    /** Hóa đơn còn cho nợ — trạng thái {@code Còn nợ} hoặc {@code debtAmount &gt; 0}. */
     private boolean isDebtInvoice(Invoice invoice) {
         if (invoice == null) {
             return false;
@@ -700,18 +793,24 @@ public class DebtService {
         return isPositive(invoice.getDebtAmount());
     }
 
+    // ------------------------------------------------------------------ định dạng / tìm kiếm
+
+    /** Kiểm tra số dương (&gt; 0). */
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
 
+    /** Null-safe — trả {@link BigDecimal#ZERO} nếu null. */
     private BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    /** Null-safe — trả {@code —} nếu null. */
     private String nullToEmpty(String value) {
         return value != null ? value : "—";
     }
 
+    /** Chuẩn hóa chuỗi tìm kiếm — bỏ dấu tiếng Việt, chữ thường. */
     private String normalize(String value) {
         if (value == null) {
             return "";
@@ -722,6 +821,7 @@ public class DebtService {
         return normalized.toLowerCase(Locale.ROOT).trim();
     }
 
+    /** Định dạng ngày hóa đơn bán ({@code dd/MM/yyyy HH:mm}). */
     private String formatInvoiceDate(LocalDateTime dateTime) {
         if (dateTime == null) {
             return "";
@@ -729,7 +829,7 @@ public class DebtService {
         return dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 
-    /** Return dates are stored via nowVn() — VN wall-clock digits on a UTC-labelled Instant. */
+    /** Ngày phiếu trả lưu kiểu nowVn() — số giờ VN gắn nhãn UTC trên {@link Instant}. */
     private String formatVnWallClockInstant(Instant instant) {
         if (instant == null) {
             return "";
@@ -739,7 +839,7 @@ public class DebtService {
                 .format(instant);
     }
 
-    /** Purchase invoice dates are genuine UTC instants (Instant.now()). */
+    /** Ngày phiếu nhập là {@link Instant} UTC thật ({@code Instant.now()}). */
     private String formatInstant(Instant instant) {
         if (instant == null) {
             return "";
@@ -747,6 +847,7 @@ public class DebtService {
         return instant.atZone(VN_ZONE).format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 
+    /** Định dạng tiền VND trên giao diện. */
     private String formatMoney(BigDecimal amount) {
         if (amount == null) {
             return "0đ";
@@ -755,21 +856,25 @@ public class DebtService {
         return String.format(Locale.forLanguageTag("vi-VN"), "%,dđ", vnd);
     }
 
+    /** Bộ cộng dồn cho nợ / nợ khi gom theo id khách hàng hoặc NCC. */
     private static final class PartyBalance {
         private String name;
         private BigDecimal receivableAmount = BigDecimal.ZERO;
         private BigDecimal payableAmount = BigDecimal.ZERO;
 
+        /** Cộng dồn cho nợ theo id đối tượng. */
         private void addReceivable(String name, BigDecimal amount) {
             receivableAmount = receivableAmount.add(amount);
             mergeName(name);
         }
 
+        /** Cộng dồn nợ theo id đối tượng. */
         private void addPayable(String name, BigDecimal amount) {
             payableAmount = payableAmount.add(amount);
             mergeName(name);
         }
 
+        /** Giữ tên đầu tiên không rỗng khi gom nhiều chứng từ cùng đối tượng. */
         private void mergeName(String candidate) {
             if (candidate != null && !candidate.isBlank()) {
                 if (name == null || name.isBlank()) {

@@ -28,9 +28,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 
 /**
- * Debt ("Công nợ") list for Owner and Accountant. Receivable (cho nợ) comes from customer debt
- * invoices and approved supplier-return offset debt; payable (nợ) from customer return refunds and
- * purchase-invoice debt. Manual debt offset (bù trừ) is Owner-only.
+ * Màn hình công nợ cho Chủ nhà thuốc ({@code /owner/debts/**}) và Kế toán
+ * ({@code /accountant/debts/**}). Đường đọc dùng chung; bù trừ thủ công chỉ Owner
+ * ({@code canOffsetDebt}). Nghiệp vụ cho nợ/nợ theo {@link DebtService}; form và POST bù trừ
+ * ủy quyền {@link DebtOffsetService}.
  */
 @Controller
 public class DebtController {
@@ -50,12 +51,14 @@ public class DebtController {
         this.currentUserContext = currentUserContext;
     }
 
+    /** Cho phép ô số trống trên form bù trừ bind thành {@code null} thay vì lỗi. */
     @InitBinder
     public void initBinder(WebDataBinder binder) {
         binder.registerCustomEditor(BigDecimal.class, new CustomNumberEditor(BigDecimal.class, true));
         binder.registerCustomEditor(Integer.class, new CustomNumberEditor(Integer.class, true));
     }
 
+    /** Danh sách công nợ + KPI — {@code debt/debt-list.html}. */
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
     public String list(@RequestParam(name = "search", required = false) String search,
                        @RequestParam(name = "partyType", required = false) String partyType,
@@ -89,6 +92,7 @@ public class DebtController {
         return "debt/debt-list";
     }
 
+    /** Chi tiết cho nợ — liên kết tạo phiếu thu ({@code debt/receivable-detail.html}). */
     @GetMapping({OWNER_BASE + "/receivable/{partyType}/{entityId}",
             ACCOUNTANT_BASE + "/receivable/{partyType}/{entityId}"})
     public String receivableDetail(@PathVariable String partyType,
@@ -108,6 +112,7 @@ public class DebtController {
         return "debt/receivable-detail";
     }
 
+    /** Chi tiết nợ — liên kết tạo phiếu chi ({@code debt/payable-detail.html}). */
     @GetMapping({OWNER_BASE + "/payable/{partyType}/{entityId}",
             ACCOUNTANT_BASE + "/payable/{partyType}/{entityId}"})
     public String payableDetail(@PathVariable String partyType,
@@ -129,6 +134,7 @@ public class DebtController {
         return "debt/payable-detail";
     }
 
+    /** Form bù trừ — chỉ Owner; đối tượng phải vừa có cho nợ vừa có nợ. */
     @GetMapping(OWNER_BASE + "/offset/{partyType}/{entityId}")
     public String offsetPage(@PathVariable String partyType,
                              @PathVariable Integer entityId,
@@ -150,6 +156,7 @@ public class DebtController {
         }
     }
 
+    /** POST bù trừ — chỉ Owner; tạo cặp phiếu thu/chi cấn trừ qua {@link DebtOffsetService}. */
     @PostMapping(OWNER_BASE + "/offset")
     public String applyOffset(@ModelAttribute("form") DebtOffsetRequest form,
                               HttpServletRequest request,
@@ -166,6 +173,7 @@ public class DebtController {
         }
     }
 
+    /** Phân biệt {@code /accountant/debts} và {@code /owner/debts} — link sidebar và redirect. */
     private String resolveBasePath(HttpServletRequest request) {
         if (request.getRequestURI().startsWith(ACCOUNTANT_BASE)) {
             return ACCOUNTANT_BASE;
@@ -173,6 +181,7 @@ public class DebtController {
         return OWNER_BASE;
     }
 
+    /** Base path tạo phiếu thu — khớp role Owner / Kế toán trên sidebar. */
     private String resolveIncomeBasePath(HttpServletRequest request) {
         if (request.getRequestURI().startsWith(ACCOUNTANT_BASE)) {
             return "/accountant/incomes";
@@ -180,6 +189,7 @@ public class DebtController {
         return "/owner/incomes";
     }
 
+    /** Base path tạo phiếu chi — khớp role Owner / Kế toán trên sidebar. */
     private String resolveExpenseBasePath(HttpServletRequest request) {
         if (request.getRequestURI().startsWith(ACCOUNTANT_BASE)) {
             return "/accountant/expenses";
