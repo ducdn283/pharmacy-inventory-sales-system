@@ -553,6 +553,10 @@ public class TaxperiodsnapshotService {
         BigDecimal customerReturnRetained = exempt ? BigDecimal.ZERO : customerReturnRetainedOf(period);
         BigDecimal taxableIncomeRevenue = exempt ? BigDecimal.ZERO
                 : taxableIncomeRevenueOf(revenue, customerReturnRetained, period);
+        // Line 3 of the P&L breakdown — see TaxPeriodComputationResponse.otherIncome. Always zero
+        // today (see TaxPeriodComputationResponse.revenueDeduction's javadoc for why).
+        BigDecimal otherIncome = taxableIncomeRevenue.subtract(revenue);
+        BigDecimal revenueDeduction = BigDecimal.ZERO;
 
         // --- GTGT: trực tiếp trên doanh thu cho cả nhóm 2 và nhóm 3, không nhóm nào còn khấu trừ.
         BigDecimal vatOutput = exempt ? BigDecimal.ZERO : revenue.multiply(TaxRevenueGroup.DIRECT_VAT_RATE);
@@ -574,6 +578,11 @@ public class TaxperiodsnapshotService {
         BigDecimal taxableIncome = BigDecimal.ZERO;
         BigDecimal incomeTax = BigDecimal.ZERO;
         BigDecimal incomeTaxRate = BigDecimal.ZERO;
+        // Lines 6/8 of the P&L breakdown (see TaxPeriodComputationResponse.profitBeforeTax/
+        // .netProfitAfterTax) — unfloored twins of taxableIncome/incomeTax, only meaningful under the
+        // profit method, same gate as costOfGoodsSold/operatingCost above.
+        BigDecimal profitBeforeTax = BigDecimal.ZERO;
+        BigDecimal netProfitAfterTax = BigDecimal.ZERO;
 
         if (pitCostMethod) {
             costOfGoodsSold = safe(invoicedetailRepository
@@ -585,11 +594,16 @@ public class TaxperiodsnapshotService {
             // the shortfall — a real cost, per Tax-Invoice.xlsx sheet "03_Cong_Thuc_TNCN".
             supplierReturnShortfall = safe(returndetailRepository.sumSupplierReturnShortfallInPeriod(
                     ReturnPurchaseStatus.APPROVED, instantStart(period), instantEndExclusive(period)));
+            // Line 6, unfloored — a real loss must show as negative, not disappear as 0đ.
+            profitBeforeTax = taxableIncomeRevenue.subtract(costOfGoodsSold).subtract(operatingCost)
+                    .subtract(supplierReturnShortfall);
             // A loss-making quarter owes nothing; it does not create a negative tax.
-            taxableIncome = taxableIncomeRevenue.subtract(costOfGoodsSold).subtract(operatingCost)
-                    .subtract(supplierReturnShortfall).max(BigDecimal.ZERO);
+            taxableIncome = profitBeforeTax.max(BigDecimal.ZERO);
             incomeTaxRate = group3 ? TaxRevenueGroup.GROUP3_PIT_RATE : TaxRevenueGroup.DEDUCTION_PIT_RATE;
             incomeTax = taxableIncome.multiply(incomeTaxRate);
+            // Line 8 = line 6 (unfloored) − line 7 (incomeTax, itself already floored via
+            // taxableIncome) — a loss quarter owes no tax, so its full loss carries straight through.
+            netProfitAfterTax = profitBeforeTax.subtract(incomeTax);
         } else if (!exempt) {
             // Nhóm 2, Cách 1 (theo doanh thu) — theo Tax-Invoice.xlsx, ngưỡng 1 (1 tỷ) được trừ
             // trước khi nhân tỷ lệ, khác với Cách 2 (theo lợi nhuận) không trừ ngưỡng nào. Sàn 0 vì
@@ -629,6 +643,10 @@ public class TaxperiodsnapshotService {
                 scaled(taxableIncome),
                 scaled(incomeTax),
                 percent(incomeTaxRate),
+                scaled(revenueDeduction),
+                scaled(otherIncome),
+                scaled(profitBeforeTax),
+                scaled(netProfitAfterTax),
                 scaled(vatPayable.add(incomeTax)),
                 invoices.size(),
                 customerReturns.size(),

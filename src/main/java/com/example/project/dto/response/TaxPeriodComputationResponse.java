@@ -103,6 +103,55 @@ public class TaxPeriodComputationResponse {
      */
     private BigDecimal incomeTaxRatePercent;
 
+    // --- P&L breakdown ("lợi nhuận sau thuế"), the 8-line framework the user handed over 2026-08-14:
+    //     1. Doanh thu = periodRevenue; 2. revenueDeduction; 3. otherIncome; 4. costOfGoodsSold;
+    //     5. operatingCost (+ supplierReturnShortfall, folded in — see profitBeforeTax's javadoc);
+    //     6. profitBeforeTax = 1-2+3-4-5; 7. incomeTax (already above, same figure, no new field);
+    //     8. netProfitAfterTax = 6-7. Only meaningful when pitCostMethod is true, same as
+    //     costOfGoodsSold/operatingCost above — a revenue-method period never breaks its tax out of
+    //     profit, so there is no "lợi nhuận sau thuế" to show for it either.
+
+    /**
+     * "Các khoản giảm trừ doanh thu" (line 2 of the framework) — always zero in this system: a
+     * discount is already netted straight into {@code Invoice.total} at the point of sale (no
+     * separate chiết khấu ledger), and a return is already excluded/netted at the source via the
+     * "hóa đơn còn hiệu lực" replacement-invoice mechanism ({@code InvoiceRepository
+     * .findValidInPeriod}) rather than tracked as a contra-revenue line — by the time {@link
+     * #periodRevenue} is computed, both are already gone from it structurally. Exposed as a real
+     * field (not omitted) so the 8-line shape stays intact on screen, even though it always renders
+     * {@code 0đ} today.
+     */
+    private BigDecimal revenueDeduction;
+
+    /**
+     * "Thu nhập khác" (line 3) = {@link #taxableIncomeRevenue} − {@link #periodRevenue} — the three
+     * TNCN-only add-ons {@code TaxperiodsnapshotService.taxableIncomeRevenueOf} folds in (tiền đền
+     * bù nhân viên, giá vốn hàng thừa kiểm kê không rõ nguồn gốc, và {@link #customerReturnRetained}
+     * — the one the user named explicitly: "từ hàng bán trả lại không hoàn 100% tiền"). The other two
+     * are not broken out on their own field, same as before this change.
+     */
+    private BigDecimal otherIncome;
+
+    /**
+     * "Lợi nhuận trước thuế" (line 6) = {@link #taxableIncomeRevenue} − {@link #costOfGoodsSold} −
+     * {@link #operatingCost} − {@link #supplierReturnShortfall} — the same subtraction {@link
+     * #taxableIncome} already does, <strong>except never floored at zero</strong>: {@link
+     * #taxableIncome} floors because a loss-making quarter owes no tax, but a P&L figure must be able
+     * to show a real loss as negative rather than hide it as {@code 0đ}. {@code
+     * supplierReturnShortfall} is folded into this line rather than kept as a 9th one the user did
+     * not ask for — it is a real operating loss (a supplier not refunding a return in full), so it
+     * reads naturally as part of "chi phí hoạt động". Zero whenever {@link #pitCostMethod} is false.
+     */
+    private BigDecimal profitBeforeTax;
+
+    /**
+     * "Lợi nhuận sau thuế" (line 8) = {@link #profitBeforeTax} − {@link #incomeTax} (line 7 is {@link
+     * #incomeTax} itself — already exactly {@code max(profitBeforeTax, 0) × incomeTaxRatePercent}
+     * when {@link #pitCostMethod} is true, so no separate "line 7" field was added). Zero whenever
+     * {@link #pitCostMethod} is false.
+     */
+    private BigDecimal netProfitAfterTax;
+
     /**
      * Tổng thuế phải nộp trong kỳ = {@code vatPayable + incomeTax} (cùng công thức
      * {@code PricesettingService.totalTax} đã dùng cho một sản phẩm, áp cho cả kỳ). Không có cột
