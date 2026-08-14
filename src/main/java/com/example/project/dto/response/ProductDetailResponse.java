@@ -24,6 +24,8 @@ public class ProductDetailResponse {
     private String barcode;
     private String imageUrl;
     private String typeName;
+    /** Whether batches of this product track and display an expiration date. */
+    private boolean tracksExpirationDate;
     private String producerName;
     private String originName;
     private String registrationNumber;

@@ -240,7 +240,7 @@
                 </div>
             </div>
 
-            <!-- 2. Hoạt chất / thành phần (Thuốc & TPCN) -->
+            <!-- 2. Hoạt chất / thành phần (chỉ áp dụng cho nhóm Thuốc) -->
             <div class="stock-card p-4 mb-4" id="ingredientSection">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h2 class="section-title mb-0">Hoạt chất / Thành phần</h2>
@@ -248,7 +248,7 @@
                         <i class="ti ti-plus me-1"></i> Thêm hoạt chất
                     </button>
                 </div>
-                <p class="text-secondary small" id="ingredientHint">Tuỳ chọn — có thể bỏ trống với mọi loại hàng hóa.</p>
+                <p class="text-secondary small" id="ingredientHint">Tuỳ chọn — chỉ áp dụng cho nhóm thuốc.</p>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
                         <thead>
@@ -573,6 +573,33 @@
         if (selected && selected.value && group !== '' && selected.dataset.group !== group) {
             typeSelect.value = '';   // reset a selection that no longer belongs to the group
         }
+        applyIngredientVisibility();
+    }
+
+    // MedicineAPI/hoạt chất chỉ có ý nghĩa với nhóm Thuốc. Dựa trên Type.sortType (dữ liệu từ
+    // migration) thay vì id cố định để quy tắc vẫn đúng khi bổ sung/chỉnh lại các Type sau này.
+    // Disable toàn bộ control lúc ẩn để trình duyệt không gửi các dòng hoạt chất đang còn trong DOM;
+    // server vẫn kiểm tra lại cùng quy tắc dựa trên typeId khi lưu.
+    function applyIngredientVisibility() {
+        const section = document.getElementById('ingredientSection');
+        if (!section) return;
+
+        const itemGroup = document.getElementById('itemGroup')?.value || '';
+        const selectedType = document.getElementById('typeSelect')?.selectedOptions[0];
+        const typeGroup = selectedType?.value ? selectedType.dataset.group : itemGroup;
+        const normalizedGroup = (typeGroup || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/Đ/g, 'D')
+            .toLowerCase()
+            .trim();
+        const visible = normalizedGroup === 'thuoc';
+
+        section.hidden = !visible;
+        section.querySelectorAll('input, button').forEach(control => {
+            control.disabled = !visible;
+        });
     }
 
     // --- Custom autocomplete (theme-consistent). Sources are arrays of {label, id}.
@@ -811,6 +838,7 @@
         wireImagePreview();
         wireAddProducerModal();
         document.getElementById('itemGroup')?.addEventListener('change', filterTypesByGroup);
+        document.getElementById('typeSelect')?.addEventListener('change', applyIngredientVisibility);
         document.getElementById('createForm')?.addEventListener('submit', () => {
             reindex('unitRows', 'units');
             reindex('ingredientRows', 'ingredients');
