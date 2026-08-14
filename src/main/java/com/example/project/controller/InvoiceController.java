@@ -122,7 +122,8 @@ public class InvoiceController {
     public String invoiceDetail(@PathVariable Integer invoiceId,
                                 HttpServletRequest request,
                                 Model model) {
-        InvoiceDetailPageResponse detail = invoiceService.getDetail(invoiceId);
+        InvoiceDetailPageResponse detail = invoiceService.getDetail(
+                invoiceId, currentUserContext.isOwner());
         model.addAttribute("detail", detail);
         model.addAttribute("basePath", resolveBasePath(request));
         model.addAttribute("returnBasePath", resolveReturnBasePath(request));
@@ -137,10 +138,11 @@ public class InvoiceController {
                             @RequestParam(name = "embed", required = false) String embed,
                             HttpServletRequest request,
                             Model model) {
-        InvoicePrintPageResponse printData = invoiceService.getPrintPage(invoiceId);
+        boolean receiptPrint = embed != null;
+        InvoicePrintPageResponse printData = invoiceService.getPrintPage(invoiceId, receiptPrint);
         model.addAttribute("printData", printData);
         model.addAttribute("basePath", resolveBasePath(request));
-        return embed != null ? "invoice/print-receipt" : "invoice/print";
+        return receiptPrint ? "invoice/print-receipt" : "invoice/print";
     }
 
     @GetMapping({"/owner/selling", "/pharmacist/selling"})
