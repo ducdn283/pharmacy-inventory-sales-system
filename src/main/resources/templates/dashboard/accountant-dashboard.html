@@ -656,7 +656,100 @@
             }
         }
 
+        .series-filter-panel {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 9px;
+            margin-top: 16px;
+            padding: 12px 14px;
+            border: 1px solid #e9edf2;
+            border-radius: 10px;
+            background: #f9fafb;
+        }
+
+        .series-filter-label {
+            margin-right: 4px;
+            color: #4b5563;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .series-filter-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border: 1px solid #e5e7eb;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #4b5563;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            transition:
+                    border-color .15s ease,
+                    background-color .15s ease,
+                    transform .15s ease;
+        }
+
+        .series-filter-option:hover {
+            border-color: #a7d9c8;
+            transform: translateY(-1px);
+        }
+
+        .series-filter-option:has(input:checked) {
+            border-color: #86d3b9;
+            background: #ecfdf5;
+            color: #047857;
+        }
+
+        .series-filter-option input {
+            width: 13px;
+            height: 13px;
+            margin: 0;
+            accent-color: #059669;
+        }
+
+        .series-filter-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .series-filter-all {
+            padding: 6px 10px;
+            border: 0;
+            border-radius: 8px;
+            background: #e5e7eb;
+            color: #374151;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .series-filter-all:hover {
+            background: #d1fae5;
+            color: #047857;
+        }
+
         @media (max-width: 767.98px) {
+            .series-filter-panel {
+                align-items: stretch;
+            }
+
+            .series-filter-label {
+                flex: 1 1 100%;
+            }
+
+            .series-filter-option {
+                flex: 1 1 calc(50% - 9px);
+                justify-content: flex-start;
+            }
+
+            .series-filter-all {
+                flex: 1 1 100%;
+            }
             .accountant-dashboard {
                 padding-top: 70px !important;
             }
@@ -829,6 +922,11 @@
                         </form>
                     </div>
 
+                    <div id="overviewSeriesFilters"
+                         class="series-filter-panel"
+                         aria-label="Chọn chỉ số hiển thị">
+                    </div>
+
                     <div id="accountantOverviewChart"
                          class="chart-container">
                     </div>
@@ -930,7 +1028,7 @@
                                 Cơ cấu lợi nhuận ròng
                             </h3>
 
-                            <div id="netProfitChart"
+                            <div id="ownerNetProfitChart"
                                  class="analytics-chart">
                             </div>
                         </section>
@@ -1058,7 +1156,7 @@
                                 Cơ cấu lợi nhuận ròng
                             </h3>
 
-                            <div id="netProfitChart"
+                            <div id="accountantNetProfitChart"
                                  class="analytics-chart">
                             </div>
                         </section>
@@ -1538,6 +1636,25 @@
         '#8b5cf6'
     ];
 
+    const overviewSeriesColors = {
+        'Doanh thu': '#10b981',
+        'Giá vốn': '#f59e0b',
+        'Lợi nhuận gộp': '#2563eb',
+        'Thu': '#14b8a6',
+        'Chi': '#ef4444',
+        'Công nợ phát sinh': '#8b5cf6'
+    };
+
+    function seriesColor(
+        seriesName,
+        fallbackIndex
+    ) {
+        return overviewSeriesColors[seriesName]
+            || chartColors[
+            fallbackIndex % chartColors.length
+                ];
+    }
+
     function escapeHtml(value) {
         return String(value ?? '')
             .replaceAll('&', '&amp;')
@@ -1628,16 +1745,167 @@
             + series.map(
                 (item, index) =>
                     '<span class="chart-legend-item">'
+
                     + '<span class="chart-legend-dot" '
                     + 'style="background:'
-                    + chartColors[
-                    index % chartColors.length
-                        ]
+                    + seriesColor(
+                        item.name,
+                        index
+                    )
                     + '"></span>'
+
                     + escapeHtml(item.name)
+
                     + '</span>'
             ).join('')
             + '</div>';
+    }
+
+    function defaultOverviewSeriesNames() {
+        /*
+         * Owner mặc định quan tâm đến kết quả bán hàng.
+         * Accountant mặc định quan tâm đến dòng tiền
+         * và công nợ.
+         */
+        if (dashboardAnalytics?.ownerView) {
+            return new Set([
+                'Doanh thu',
+                'Giá vốn',
+                'Lợi nhuận gộp'
+            ]);
+        }
+
+        return new Set([
+            'Thu',
+            'Chi',
+            'Công nợ phát sinh'
+        ]);
+    }
+
+    function selectedOverviewSeriesNames() {
+        const filterContainer =
+            document.getElementById(
+                'overviewSeriesFilters'
+            );
+
+        if (!filterContainer) {
+            return null;
+        }
+
+        const checkedInputs =
+            filterContainer.querySelectorAll(
+                'input[data-series-name]:checked'
+            );
+
+        return new Set(
+            Array.from(checkedInputs)
+                .map(input =>
+                    input.dataset.seriesName
+                )
+        );
+    }
+
+    function renderOverviewSeriesFilters() {
+        const filterContainer =
+            document.getElementById(
+                'overviewSeriesFilters'
+            );
+
+        const chart =
+            normalizeChart(overviewChart);
+
+        if (!filterContainer
+            || chart.series.length === 0) {
+            if (filterContainer) {
+                filterContainer.style.display =
+                    'none';
+            }
+
+            return;
+        }
+
+        const defaults =
+            defaultOverviewSeriesNames();
+
+        let html =
+            '<span class="series-filter-label">'
+            + 'Chỉ số hiển thị:'
+            + '</span>';
+
+        chart.series.forEach(
+            (series, index) => {
+                const checked =
+                    defaults.has(series.name);
+
+                html +=
+                    '<label class="series-filter-option">'
+
+                    + '<input type="checkbox" '
+                    + 'data-series-name="'
+                    + escapeHtml(series.name)
+                    + '" '
+                    + (
+                        checked
+                            ? 'checked'
+                            : ''
+                    )
+                    + '>'
+
+                    + '<span class="series-filter-color" '
+                    + 'style="background:'
+                    + seriesColor(
+                        series.name,
+                        index
+                    )
+                    + '"></span>'
+
+                    + '<span>'
+                    + escapeHtml(series.name)
+                    + '</span>'
+
+                    + '</label>';
+            }
+        );
+
+        html +=
+            '<button type="button" '
+            + 'id="showAllOverviewSeries" '
+            + 'class="series-filter-all">'
+            + 'Hiển thị tất cả'
+            + '</button>';
+
+        filterContainer.innerHTML = html;
+
+        filterContainer
+            .querySelectorAll(
+                'input[data-series-name]'
+            )
+            .forEach(input => {
+                input.addEventListener(
+                    'change',
+                    renderAccountantChart
+                );
+            });
+
+        const showAllButton =
+            document.getElementById(
+                'showAllOverviewSeries'
+            );
+
+        showAllButton?.addEventListener(
+            'click',
+            function () {
+                filterContainer
+                    .querySelectorAll(
+                        'input[data-series-name]'
+                    )
+                    .forEach(input => {
+                        input.checked = true;
+                    });
+
+                renderAccountantChart();
+            }
+        );
     }
 
     function renderAccountantChart() {
@@ -1651,16 +1919,38 @@
                 overviewChart
             );
 
+        const selectedSeries =
+            selectedOverviewSeriesNames();
+
+        if (selectedSeries !== null) {
+            chart.series =
+                chart.series.filter(
+                    series =>
+                        selectedSeries.has(
+                            series.name
+                        )
+                );
+        }
+
         if (!container
             || chart.labels.length === 0
             || chart.series.length === 0) {
 
             if (container) {
+                const noSeriesSelected =
+                    chart.labels.length > 0
+                    && chart.series.length === 0;
+
                 container.innerHTML =
                     '<div class="text-center '
                     + 'text-secondary py-5">'
-                    + 'Chưa có dữ liệu trong '
-                    + 'khoảng thời gian đã chọn.'
+                    + (
+                        noSeriesSelected
+                            ? 'Hãy chọn ít nhất một '
+                            + 'chỉ số để hiển thị.'
+                            : 'Chưa có dữ liệu trong '
+                            + 'khoảng thời gian đã chọn.'
+                    )
                     + '</div>';
             }
 
@@ -1828,10 +2118,10 @@
         chart.series.forEach(
             (series, seriesIndex) => {
                 const color =
-                    chartColors[
-                    seriesIndex
-                    % chartColors.length
-                        ];
+                    seriesColor(
+                        series.name,
+                        seriesIndex
+                    );
 
                 const points =
                     chart.labels.map(
@@ -1957,7 +2247,7 @@
          */
         if (rawChart?.type === 'donut') {
             const positiveValues =
-                values.map(value ->
+                values.map(value =>
                     Math.max(
                         Number(value || 0),
                         0
@@ -2052,7 +2342,7 @@
          */
         const maximum =
             Math.max(
-                ...values.map(value ->
+                ...values.map(value =>
                     Math.max(
                         Number(value || 0),
                         0
@@ -2118,8 +2408,17 @@
             return;
         }
 
+        /*
+         * Chỉ một trong hai container này tồn tại
+         * tùy dashboard hiện tại là Owner hay Accountant.
+         */
         renderMiniDashboardChart(
-            'netProfitChart',
+            'ownerNetProfitChart',
+            dashboardAnalytics.netProfitChart
+        );
+
+        renderMiniDashboardChart(
+            'accountantNetProfitChart',
             dashboardAnalytics.netProfitChart
         );
 
@@ -2143,6 +2442,7 @@
     document.addEventListener(
         'DOMContentLoaded',
         function () {
+            renderOverviewSeriesFilters();
             renderAccountantChart();
             renderAnalyticsCharts();
         }
