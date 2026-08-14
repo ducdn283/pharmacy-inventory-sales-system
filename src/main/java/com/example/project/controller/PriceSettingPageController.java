@@ -21,12 +21,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Owner-only "Cài đặt giá bán" screen — lets the Owner change any product's sell price directly
- * from one list instead of opening each product's own edit page (see
- * {@link PricesettingService} for the full framing). Same permission scope as Product
- * create/edit, which are also Owner-only. Every unit row of one product saves together, in one
- * action, via {@code /product} — a product with several units used to need one "Lưu" click per
- * row; now it's one click for the whole product.
+ * Màn "Cài đặt giá bán" (chỉ Chủ nhà thuốc). Cho phép sửa giá bán của sản phẩm ngay trên danh
+ * sách, không cần mở từng trang chi tiết. Mỗi sản phẩm lưu tất cả đơn vị cùng lúc qua {@code
+ * /product} (một nút "Lưu" cho cả sản phẩm, không phải từng đơn vị).
  */
 @Controller
 @RequestMapping("/owner/price-settings")
@@ -41,6 +38,7 @@ public class PriceSettingPageController {
         this.pricesettingService = pricesettingService;
     }
 
+    // Hiển thị danh sách sản phẩm có thể sửa giá bán, có tìm kiếm/lọc theo loại/sắp xếp và phân trang.
     @GetMapping
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                         @RequestParam(name = "typeId", required = false) Integer typeId,
@@ -67,8 +65,7 @@ public class PriceSettingPageController {
         model.addAttribute("keyword", keyword);
         model.addAttribute("filterTypeId", typeId);
         model.addAttribute("sort", sort);
-        // Set only right after a /cell save, so the product whose price just changed re-opens
-        // instead of collapsing back and hiding the result of the edit.
+        // Chỉ có giá trị ngay sau khi lưu, để sản phẩm vừa sửa tự mở lại thay vì đóng mất.
         model.addAttribute("expandProductId", expandProductId);
 
         model.addAttribute("currentPage", rowPage.getNumber());
@@ -80,14 +77,8 @@ public class PriceSettingPageController {
     }
 
     /**
-     * Data behind the "Chi tiết giá &amp; thuế" modal, for one product. Fetched on click rather than
-     * rendered with the list: the list shows 10 products a page and most visits never open the
-     * panel, so pre-loading each one's batches would be 10 wasted queries per page view.
-     *
-     * <p>Same {@code @ResponseBody}-on-the-page-controller shape as
-     * {@code PurchaseInvoicePageController.getProcurementPlanDetails} and
-     * {@code CustomerController.checkDuplicate} — the generated {@code @RestController}s stay
-     * untouched.</p>
+     * Dữ liệu cho modal "Chi tiết giá &amp; thuế" của một sản phẩm. Gọi khi bấm xem, không tải
+     * kèm danh sách để tránh tốn query cho các sản phẩm không ai xem chi tiết.
      */
     @GetMapping("/{productId}/detail")
     @ResponseBody
@@ -96,10 +87,9 @@ public class PriceSettingPageController {
     }
 
     /**
-     * Saves every unit row of one product at once — {@code productUnitId}/{@code sellPrice} are
-     * two same-length, position-matched lists (one pair per unit row rendered on the product's
-     * expanded panel), which Spring collects from the repeated same-name form fields in submission
-     * order. See {@link PricesettingService#updatePrices} for the save/cascade semantics.
+     * Lưu tất cả đơn vị của một sản phẩm cùng lúc. {@code productUnitId}/{@code sellPrice} là
+     * hai danh sách khớp vị trí (mỗi cặp ứng với một dòng đơn vị trên form). Xem
+     * {@link PricesettingService#updatePrices} để biết logic lưu/cascade giá.
      */
     @PostMapping("/product")
     public String saveProduct(@RequestParam Integer productId,
@@ -143,6 +133,7 @@ public class PriceSettingPageController {
         return "redirect:/owner/price-settings";
     }
 
+    // Dựng thông báo flash mô tả kết quả lưu giá (số đơn vị đã sửa trực tiếp và số đơn vị cascade theo).
     private String describeResult(PricesettingService.PriceUpdateResult result) {
         if (result.explicitCount() == 0) {
             return "Không có thay đổi nào để lưu";

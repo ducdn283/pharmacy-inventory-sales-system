@@ -113,9 +113,7 @@
                 </div>
               </div>
             </div>
-            <!-- Ngưỡng doanh thu (annualRevenueThreshold1/2): ẩn khỏi form kể từ đây — cố định vĩnh
-                 viễn theo giá trị đã seed (V13: 1 tỷ / 3 tỷ), FinancialsettingService.saveSettings()
-                 không còn đọc hai trường này từ request nữa. -->
+            <!-- Ngưỡng doanh thu (annualRevenueThreshold1/2) cố định trong code, không hiển thị ở đây. -->
 
             <!-- Phương thức tính thuế -->
             <div class="mb-3">
@@ -350,6 +348,7 @@
 </main>
 
 <script th:inline="javascript">
+  // Xử lý UI chọn phương thức tính thuế (theo doanh thu / theo lợi nhuận) và khoá lựa chọn theo nhóm doanh thu.
   (function () {
     var optRevenue = document.getElementById('optRevenue');
     var optProfit = document.getElementById('optProfit');
@@ -358,6 +357,7 @@
     var revenueRadio = document.querySelector('input[name="taxCalculationMethod"][value="1"]');
     var profitRadio = document.querySelector('input[name="taxCalculationMethod"][value="2"]');
 
+    // Tô sáng ô đang được chọn (theo doanh thu/theo lợi nhuận) dựa trên radio hiện tại.
     function applyActiveStyles() {
       var checked = document.querySelector('input[name="taxCalculationMethod"]:checked');
       var value = checked ? checked.value : '1';
@@ -365,9 +365,8 @@
       optProfit.classList.toggle('active', value === '2');
     }
 
-    // Nhóm 1 (miễn thuế) và nhóm 3 (bắt buộc lợi nhuận) khoá lựa chọn; nhóm 2 được chọn tự do.
-    // Server-side vẫn tự chuẩn hoá lại giá trị khi lưu (xem FinancialsettingService.saveSettings),
-    // JS này chỉ là UX — không phải cơ chế bảo vệ chính.
+    // Nhóm 1 (miễn thuế) và Nhóm 3 (bắt buộc lợi nhuận) khoá lựa chọn; Nhóm 2 chọn tự do.
+    // Chỉ là UX — server luôn tự chuẩn hoá lại giá trị khi lưu.
     function applyRevenueGroupLock() {
       if (!revenueGroupSelect) {
         return;
@@ -393,12 +392,8 @@
     applyRevenueGroupLock();
   })();
 
-  // Chốt thiết lập ban đầu: chừng nào setupConfirmed còn false, lần lưu HỢP LỆ (đủ nhóm doanh thu +
-  // cả hai quỹ) chính là hành động khoá vĩnh viễn hai quỹ (xem FinancialsettingService.saveSettings)
-  // — nhóm doanh thu KHÔNG bị khoá theo, vẫn sửa tay được sau này (chuyển Nhóm 2 → 3 cần cơ quan
-  // thuế chấp thuận trước). Hỏi lại một lần, liệt kê rõ phần sẽ bị khoá, trước khi submit thật. Sau
-  // khi đã chốt (setupConfirmed = true) thì không còn gì mới bị khoá nữa, nên không cần hỏi lại —
-  // mọi lần lưu sau chỉ còn là sửa các thiết lập khác.
+  // Khi chưa chốt thiết lập, lần lưu hợp lệ sẽ khoá vĩnh viễn 2 quỹ tiền — hỏi xác nhận trước khi
+  // submit thật. Sau khi đã chốt thì không cần hỏi lại nữa.
   (function () {
     var form = document.getElementById('financialSettingForm');
     var setupConfirmed = /*[[${setupConfirmed}]]*/ false;
@@ -408,6 +403,7 @@
       return;
     }
 
+    // Chặn submit đầu tiên để hỏi xác nhận, cho submit thật đi tiếp sau khi người dùng đồng ý.
     form.addEventListener('submit', function (event) {
       if (confirmed) {
         return;

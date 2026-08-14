@@ -10,6 +10,7 @@ import java.util.Optional;
 
 public interface AccountpermissionRepository extends JpaRepository<Accountpermission, Integer> {
 
+    // Lấy các bản ghi phân quyền của 1 tài khoản (kèm thông tin tài khoản).
     @Query("""
            select ap
            from Accountpermission ap
@@ -19,6 +20,7 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
            """)
     List<Accountpermission> findByAccountId(@Param("accountId") Integer accountId);
 
+    // Giống findByAccountId, dùng riêng cho màn hình hồ sơ cá nhân (profile).
     @Query("""
            select ap
            from Accountpermission ap
@@ -28,6 +30,7 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
            """)
     List<Accountpermission> findProfilePermissionsByAccountId(@Param("accountId") Integer accountId);
 
+    // Lấy toàn bộ bản ghi phân quyền kèm tài khoản, dùng để dựng Bảng phân quyền.
     @Query("""
            select ap
            from Accountpermission ap
@@ -36,9 +39,11 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
            """)
     List<Accountpermission> findAllWithAccount();
 
+    // Id lớn nhất hiện có, dùng để tự sinh id mới (findMaxId()+1) khi tạo bản ghi phân quyền.
     @Query("select coalesce(max(ap.id), 0) from Accountpermission ap")
     Integer findMaxId();
 
+    // Lấy các bản ghi đang giữ vai trò OWNER.
     @Query("""
            select ap
            from Accountpermission ap
@@ -48,10 +53,12 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
            """)
     List<Accountpermission> findOwnerAssignments();
 
+    // Bản ghi phân quyền của Owner đầu tiên tìm được, nếu có.
     default Optional<Accountpermission> findFirstOwnerPermission() {
         return findOwnerAssignments().stream().findFirst();
     }
 
+    // True nếu tài khoản này đang giữ đúng vai trò được truyền vào.
     @Query("""
            select count(ap) > 0
            from Accountpermission ap
@@ -61,12 +68,7 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
     boolean existsByAccountIdAndRole(@Param("accountId") Integer accountId,
                                      @Param("role") String role);
 
-    /**
-     * Whether anyone currently holds this role on an <em>enabled</em> account. Used by the tax
-     * period, where the BA's rule is that the Accountant closes a period and the Owner may only do
-     * so when the pharmacy has no accountant — a permission that depends on live data rather than
-     * on the signed-in user alone, so a disabled accountant account hands the job back to the Owner.
-     */
+    /** True nếu có tài khoản đang bật (enabled) nào đang giữ vai trò này. */
     @Query("""
            select count(ap) > 0
            from Accountpermission ap
@@ -75,6 +77,7 @@ public interface AccountpermissionRepository extends JpaRepository<Accountpermis
            """)
     boolean existsActiveByRole(@Param("role") String role);
 
+    // Danh sách tài khoản đang bật (status = true) đang giữ vai trò này.
     @Query("""
        select distinct a
        from Accountpermission ap

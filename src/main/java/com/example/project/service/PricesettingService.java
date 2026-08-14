@@ -32,30 +32,27 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * "Cài đặt giá bán" (Price Settings) — lets the Owner change any product's sell price directly
- * from one screen instead of opening each product's own edit page: "cho phép thay đổi giá bán của
- * các sản phẩm ... thay vì phải mở chi tiết của từng sản phẩm". Deliberately NOT a markup/cost-based
- * price calculator — it edits {@code Productunit.sellPrice} directly; the import price shown per
- * row is read-only reference info only, never written back or used in a formula. No schema change:
- * reuses the existing {@code Productunit}/{@code Product}/{@code Batch} tables.
+ * "Cài đặt giá bán" — cho Chủ nhà thuốc sửa giá bán sản phẩm ngay trên một màn hình, không cần mở
+ * từng trang chi tiết. Đây là công cụ sửa giá bán trực tiếp ({@code Productunit.sellPrice}),
+ * <strong>không phải</strong> máy tính markup — giá nhập hiển thị chỉ để tham khảo, không bao giờ
+ * ghi ngược lại hay dùng trong công thức tính giá bán.
  *
- * <p>The screen lists <strong>products</strong>, each expanding to its unit rows — the flat
- * one-row-per-unit table got long and repetitive once products carried several units, so paging
- * counts products, not units.</p>
+ * <p>Màn hình liệt kê theo <strong>sản phẩm</strong>, mở rộng ra mới thấy từng đơn vị — phân trang
+ * cũng tính theo số sản phẩm, không tính theo số đơn vị.</p>
  */
 @Service
 public class PricesettingService {
 
-    /** Product name A→Z (accent-insensitive). Default when no sort is supplied. */
+    /** Tên sản phẩm A→Z (không phân biệt dấu). Mặc định khi không truyền sort. */
     public static final String SORT_NAME_ASC = "name_asc";
-    /** Product name Z→A. */
+    /** Tên sản phẩm Z→A. */
     public static final String SORT_NAME_DESC = "name_desc";
-    /** Base-unit sell price ascending; products with no priced unit sink to the bottom. */
+    /** Giá bán đơn vị cơ bản tăng dần; sản phẩm chưa có giá xếp cuối. */
     public static final String SORT_PRICE_ASC = "price_asc";
-    /** Base-unit sell price descending; products with no priced unit sink to the bottom. */
+    /** Giá bán đơn vị cơ bản giảm dần; sản phẩm chưa có giá xếp cuối. */
     public static final String SORT_PRICE_DESC = "price_desc";
 
-    /** Batch expiry on the detail modal; a batch with no expiry renders {@link #NO_VALUE} instead. */
+    /** Định dạng hạn dùng trên modal chi tiết; lô không có hạn dùng hiện {@link #NO_VALUE}. */
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final String NO_VALUE = "—";
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -64,13 +61,7 @@ public class PricesettingService {
     private final ProductRepository productRepository;
     private final BatchRepository batchRepository;
     private final TypeRepository typeRepository;
-    /**
-     * Only for {@code currentRevenueGroup()}. The detail modal must show the group actually in
-     * force — the last snapshot's {@code nextPeriodTaxType} — not the raw
-     * {@code Financialsetting.revenueGroup}, which is merely the seed for the very first period.
-     * Reading the setting directly here would quietly disagree with the Kỳ thuế screen the moment
-     * anyone closes a period with a group change.
-     */
+    /** Dùng để lấy nhóm doanh thu đang áp dụng thực tế (không đọc thẳng {@code Financialsetting.revenueGroup}). */
     private final TaxperiodsnapshotService taxperiodsnapshotService;
 
     public PricesettingService(ProductunitRepository productunitRepository,
@@ -86,10 +77,11 @@ public class PricesettingService {
     }
 
     /**
-     * @param keyword matched against product code and product name only (accent-insensitive)
-     * @param typeId  optional "Loại hàng" filter
-     * @param sort    one of the {@code SORT_*} constants; anything unrecognised falls back to
-     *                {@link #SORT_NAME_ASC}
+     * Tìm/lọc/sắp xếp danh sách sản phẩm cho màn Cài đặt giá bán.
+     *
+     * @param keyword khớp theo mã sản phẩm và tên sản phẩm (không phân biệt dấu)
+     * @param typeId  lọc theo loại hàng (tuỳ chọn)
+     * @param sort    một trong các hằng số {@code SORT_*}; giá trị lạ dùng {@link #SORT_NAME_ASC}
      */
     @Transactional(readOnly = true)
     public Page<PriceSettingProductRowResponse> search(String keyword, Integer typeId, String sort,
@@ -124,6 +116,7 @@ public class PricesettingService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
+    // Danh sách loại hàng để đổ vào bộ lọc, sắp xếp theo tên.
     public List<Type> listTypes() {
         return typeRepository.findAll().stream()
                 .sorted(Comparator.comparing(Type::getName))
@@ -131,30 +124,24 @@ public class PricesettingService {
     }
 
     /**
-     * Updates a single {@code ProductUnit.sellPrice}. The screen itself now saves every unit of a
-     * product together in one action (see {@link #updatePrices}, which calls this once per changed
-     * unit) rather than posting one row at a time — this method is the single-unit primitive both
-     * that orchestration and its own dedicated tests build on.
+     * Cập nhật giá bán của một đơn vị sản phẩm ({@code ProductUnit.sellPrice}).
      *
-     * <p><strong>Base-unit cascade:</strong> when the edited row is the product's base unit, every
-     * sibling unit whose current price still exactly matches {@code oldBasePrice × ratio} is
-     * recomputed to {@code newBasePrice × ratio} too — those units were never manually customized,
-     * they were just following the base price. A sibling whose price does <em>not</em> match that
-     * formula has clearly been hand-adjusted at some point and is left untouched. There is no
-     * separate "manually overridden" flag in the schema; this is inferred purely from whether the
-     * stored value still agrees with the ratio formula, so it needs no migration. Editing a
-     * non-base unit never cascades to anything else.</p>
+     * <p><strong>Cascade từ đơn vị cơ bản:</strong> nếu đơn vị đang sửa là đơn vị cơ bản, mọi đơn
+     * vị khác đang có giá đúng bằng {@code giá cũ × tỷ lệ quy đổi} sẽ được cập nhật theo
+     * {@code giá mới × tỷ lệ quy đổi} — vì các đơn vị đó chưa từng bị sửa tay, vẫn đang bám theo
+     * giá cơ bản. Đơn vị nào có giá không khớp công thức coi như đã bị sửa tay riêng, giữ nguyên
+     * không đụng tới. Không có cờ "đã sửa tay" riêng trong DB — suy ra hoàn toàn từ việc giá còn
+     * khớp công thức tỷ lệ hay không. Sửa một đơn vị không phải đơn vị cơ bản thì không cascade.</p>
      *
-     * @return how many sibling units were cascaded (0 for a non-base-unit edit or when nothing
-     * qualified)
+     * @return số đơn vị khác được cascade theo (0 nếu không phải đơn vị cơ bản hoặc không có đơn
+     * vị nào khớp công thức)
      */
     @Transactional
     public int updatePrice(Integer productUnitId, BigDecimal sellPrice) {
         if (sellPrice == null) {
             throw new IllegalArgumentException("Giá bán phải lớn hơn 0");
         }
-        // Round first, then validate: an entry that rounds away to 0 must be rejected with the
-        // usual message rather than silently saved as a free product.
+        // Làm tròn trước rồi mới kiểm tra: giá trị làm tròn về 0 vẫn phải bị từ chối.
         BigDecimal roundedPrice = roundMoney(sellPrice);
         if (roundedPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Giá bán phải lớn hơn 0");
@@ -172,27 +159,23 @@ public class PricesettingService {
         return cascadeToSiblings(unit, oldBasePrice, roundedPrice);
     }
 
-    /** Result of a whole-product save — see {@link #updatePrices}. */
+    /** Kết quả lưu giá cho cả sản phẩm — xem {@link #updatePrices}. */
     public record PriceUpdateResult(int explicitCount, int cascadedCount) {
     }
 
     /**
-     * Saves every changed unit price for one product in a single action — the screen used to post a
-     * separate {@code /cell} request per unit row (one "Lưu" button each); this is the one-button
-     * replacement, called once per product with every row's price at once.
+     * Lưu giá của mọi đơn vị đã thay đổi trong một sản phẩm, chỉ một lần gọi (một nút "Lưu" cho
+     * cả sản phẩm thay vì từng đơn vị riêng).
      *
-     * <p>A row whose submitted price is unchanged from what's stored is skipped entirely — no
-     * wasted write, no wasted cascade check. Any base-unit edit in the batch is applied
-     * <strong>last</strong>, after every other changed unit in the same submission — so
-     * {@link #updatePrice}'s existing cascade-to-siblings rule (see its javadoc) still fires
-     * correctly, and a sibling the user ALSO typed an explicit new price for in this same
-     * submission keeps that explicit value: by the time the base unit's cascade runs, that
-     * sibling's stored price no longer matches the old ratio formula, so the cascade's own
-     * "still-following-the-formula" check naturally leaves it alone.</p>
+     * <p>Đơn vị nào giá gửi lên không đổi so với DB thì bỏ qua. Nếu trong lần lưu có sửa cả đơn vị
+     * cơ bản, đơn vị đó luôn được áp dụng <strong>sau cùng</strong> để cascade sang các đơn vị
+     * khác hoạt động đúng — nhờ vậy, nếu người dùng cũng gõ giá riêng cho một đơn vị khác trong
+     * cùng lần lưu, giá riêng đó vẫn được giữ (lúc cascade chạy, giá đơn vị đó đã không còn khớp
+     * công thức tỷ lệ cũ nữa nên cascade tự động bỏ qua).</p>
      *
-     * @param sellPriceByUnitId every row's posted price, keyed by {@code Productunit.id}; a unit
-     *                          with no entry (or a {@code null} value) is left untouched
-     * @return how many rows were explicitly changed, and how many more were cascaded as a side effect
+     * @param sellPriceByUnitId giá gửi lên của từng dòng, khoá theo {@code Productunit.id}; đơn vị
+     *                          không có trong map (hoặc giá trị {@code null}) thì giữ nguyên
+     * @return số đơn vị được sửa trực tiếp, và số đơn vị được cascade theo
      */
     @Transactional
     public PriceUpdateResult updatePrices(Integer productId, Map<Integer, BigDecimal> sellPriceByUnitId) {
@@ -203,7 +186,7 @@ public class PricesettingService {
 
         List<Productunit> changed = units.stream()
                 .filter(unit -> isPriceChanged(unit, sellPriceByUnitId.get(unit.getId())))
-                // false < true, so a base-unit row always sorts after every non-base row.
+                // false < true, nên dòng đơn vị cơ bản luôn xếp sau các dòng còn lại.
                 .sorted(Comparator.comparing(unit -> Boolean.TRUE.equals(unit.getIsBaseUnit())))
                 .toList();
 
@@ -217,6 +200,7 @@ public class PricesettingService {
         return new PriceUpdateResult(explicitCount, cascadedCount);
     }
 
+    // So sánh giá gửi lên với giá đang lưu để biết đơn vị này có thực sự cần cập nhật hay không.
     private boolean isPriceChanged(Productunit unit, BigDecimal submitted) {
         if (submitted == null) {
             return false;
@@ -225,6 +209,7 @@ public class PricesettingService {
         return current == null || roundMoney(current).compareTo(roundMoney(submitted)) != 0;
     }
 
+    // Cập nhật giá các đơn vị anh em còn bám theo công thức tỷ lệ cũ của đơn vị cơ bản; trả về số đơn vị đã cascade.
     private int cascadeToSiblings(Productunit baseUnit, BigDecimal oldBasePrice, BigDecimal newBasePrice) {
         List<Productunit> siblings = productunitRepository.findByProductId(baseUnit.getProductID().getProductID());
 
@@ -237,7 +222,7 @@ public class PricesettingService {
             BigDecimal expectedOldPrice = roundMoney(oldBasePrice.multiply(sibling.getRatio()));
             BigDecimal currentPrice = roundMoney(sibling.getSellPrice());
             if (currentPrice.compareTo(expectedOldPrice) != 0) {
-                continue; // hand-adjusted away from the ratio at some point — leave it alone
+                continue; // đã bị sửa tay khác công thức tỷ lệ — giữ nguyên
             }
             sibling.setSellPrice(roundMoney(newBasePrice.multiply(sibling.getRatio())));
             productunitRepository.save(sibling);
@@ -246,17 +231,13 @@ public class PricesettingService {
         return cascaded;
     }
 
-    // ------------------------------------------------------------------ detail modal
+    // ------------------------------------------------------------------ modal chi tiết
 
     /**
-     * Everything the "Chi tiết giá &amp; thuế" modal shows for one product: its in-stock lots'
-     * import prices against the current base-unit sell price, and what the revenue group in force
-     * does to that margin.
+     * Toàn bộ dữ liệu cho modal "Chi tiết giá &amp; thuế" của một sản phẩm: giá nhập các lô còn
+     * tồn so với giá bán đơn vị cơ bản hiện tại, và thuế theo nhóm doanh thu đang áp dụng.
      *
-     * <p>Fetched on demand (one product at a time) rather than rendered with the list — the list
-     * page would otherwise run a batch query per row for a panel most visits never open.</p>
-     *
-     * @throws IllegalArgumentException when the product does not exist
+     * @throws IllegalArgumentException nếu không tìm thấy sản phẩm
      */
     @Transactional(readOnly = true)
     public PriceSettingDetailResponse getDetail(Integer productId) {
@@ -301,28 +282,24 @@ public class PricesettingService {
     }
 
     /**
-     * Tax on <strong>one base unit</strong> under the group in force, branch for branch the same as
-     * {@code TaxperiodsnapshotService.computePeriod()} — see
-     * {@link PriceSettingTaxProjectionResponse} for the table and for the two caveats this cannot
-     * avoid (period-level operating costs, and per-invoice deductibility).
+     * Tính thuế cho <strong>một đơn vị cơ bản</strong> theo nhóm doanh thu đang áp dụng, cùng công
+     * thức với {@code TaxperiodsnapshotService.computePeriod()}. Xem
+     * {@link PriceSettingTaxProjectionResponse} để biết bảng công thức và các giới hạn của con số
+     * này (chưa tính chi phí vận hành theo kỳ, chưa xét điều kiện khấu trừ theo từng hóa đơn).
      *
-     * <p>Both {@code sellPrice} and {@code importPrice} are GROSS, which is exactly how the period
-     * computation treats revenue ({@code Invoice.total}) and cost of goods sold
-     * ({@code baseQtyDeducted × importPricePerBase}) — so the per-unit figures add up to the
-     * quarterly ones rather than merely resembling them.</p>
+     * <p>{@code sellPrice} và {@code importPrice} đều là giá GROSS, cùng cách tính doanh thu
+     * ({@code Invoice.total}) và giá vốn ({@code baseQtyDeducted × importPricePerBase}) mà kỳ thuế
+     * dùng, nên số của một đơn vị cộng dồn đúng vào số của cả kỳ.</p>
      */
     private PriceSettingTaxProjectionResponse projectTax(BigDecimal sellPrice, BigDecimal importPrice,
                                                          BigDecimal vatRatePercent, String vatRateSource) {
         Integer group = taxperiodsnapshotService.currentRevenueGroup();
         boolean exempt = TaxRevenueGroup.isTaxExempt(group);
-        // Group 3 now projects identically to group 2 — GTGT trực tiếp trên doanh thu cho cả hai
-        // (BA quyết định trực tiếp, xem TaxRevenueGroup.DEDUCTION javadoc) — so there is no longer a
-        // separate deduction-method branch here at all.
+        // Nhóm 2 và nhóm 3 đều tính GTGT trực tiếp trên doanh thu, không còn nhánh khấu trừ riêng.
         boolean direct = !exempt;
 
-        // An unknown figure stays null all the way to the screen and renders "—". Substituting zero
-        // would turn "chưa có lô tồn nên chưa biết giá vốn" into "giá vốn bằng 0", which reads as
-        // pure profit — the one wrong answer this panel must never give.
+        // Giá trị chưa biết giữ null tới tận màn hình, hiện "—" — không mặc định về 0 vì sẽ đọc
+        // nhầm thành lợi nhuận bằng cả giá bán.
         boolean priceKnown = sellPrice != null;
         boolean costKnown = importPrice != null;
         boolean marginKnown = priceKnown && costKnown;
@@ -336,7 +313,7 @@ public class PricesettingService {
         String caveat;
 
         if (exempt) {
-            // Nothing is declared, so these are genuine zeros rather than unknowns.
+            // Không kê khai gì cả nên đây là số 0 thật, không phải "chưa biết".
             outputVat = BigDecimal.ZERO;
             inputVat = BigDecimal.ZERO;
             incomeTaxBase = BigDecimal.ZERO;
@@ -345,8 +322,7 @@ public class PricesettingService {
             formula = "Nhóm 1 miễn thuế hoàn toàn — không kê khai GTGT lẫn TNCN.";
             caveat = null;
         } else {
-            // The percentage method never looks at cost, so an unknown cost does not make the tax
-            // unknown — only the margin below it. Applies to groups 2 and 3 alike now.
+            // Tính thuế theo % doanh thu nên không phụ thuộc giá vốn, áp dụng chung cho nhóm 2 và 3.
             outputVat = priceKnown ? sellPrice.multiply(TaxRevenueGroup.DIRECT_VAT_RATE) : null;
             inputVat = BigDecimal.ZERO;
             incomeTaxBase = priceKnown ? sellPrice : null;
@@ -355,9 +331,8 @@ public class PricesettingService {
             formula = "Tính trực tiếp trên doanh thu: GTGT = giá bán × 1%, TNCN = giá bán × 0,5%.";
             caveat = "Giá vốn không ảnh hưởng tới số thuế — lô nhập đắt hay rẻ vẫn nộp bằng nhau, "
                     + "nên chênh lệch giá nhập rơi hết vào lợi nhuận.";
-            // Biết trước: nhóm 2 có thể chọn tính TNCN theo lợi nhuận thay vì doanh thu
-            // (Financialsetting.taxCalculationMethod, xem TaxperiodsnapshotService.computePeriod) —
-            // panel một-đơn-vị này chưa đọc lựa chọn đó, luôn chiếu theo công thức doanh thu × 0,5%.
+            // Panel này luôn chiếu theo công thức doanh thu × 0,5%, chưa hỗ trợ phương án TNCN
+            // theo lợi nhuận của nhóm 2 (Financialsetting.taxCalculationMethod).
         }
 
         BigDecimal vatPayable = subtractIfKnown(outputVat, inputVat);
@@ -374,14 +349,12 @@ public class PricesettingService {
                 group,
                 TaxRevenueGroup.label(group),
                 exempt,
-                // Luôn false: không nhóm nào còn tách riêng GTGT đầu vào theo lô nữa, nên bảng lô
-                // hàng (batchTable() trong price-settings.html) không còn cột "GTGT đầu vào" cho ai.
+                // Luôn false: không nhóm nào còn tách riêng GTGT đầu vào theo lô.
                 false,
                 direct,
                 scale2(vatRatePercent),
                 vatRateSource,
-                // Không nhóm nào còn tính thuế dựa trên thuế suất GTGT riêng của sản phẩm nữa (nhóm 3
-                // bỏ khấu trừ, nên vatRatePercent giờ chỉ mang tính tham khảo cho mọi nhóm).
+                // Luôn false: thuế suất GTGT riêng của sản phẩm không ảnh hưởng số thuế ở mọi nhóm.
                 false,
                 costKnown,
                 nullableScale2(sellPrice),
@@ -399,16 +372,17 @@ public class PricesettingService {
                 caveat);
     }
 
-    /** {@code a − b}, or {@code null} when either side is unknown — "unknown" must not decay to 0. */
+    /** {@code a − b}, hoặc {@code null} nếu một trong hai chưa biết. */
     private BigDecimal subtractIfKnown(BigDecimal a, BigDecimal b) {
         return a == null || b == null ? null : a.subtract(b);
     }
 
-    /** {@code a + b}, or {@code null} when either side is unknown. */
+    /** {@code a + b}, hoặc {@code null} nếu một trong hai chưa biết. */
     private BigDecimal addIfKnown(BigDecimal a, BigDecimal b) {
         return a == null || b == null ? null : a.add(b);
     }
 
+    // Chuyển một lô hàng còn tồn thành một điểm dữ liệu (giá nhập, chênh lệch, thuế GTGT ẩn) cho biểu đồ chi tiết.
     private PriceSettingBatchPointResponse toBatchPoint(Batch batch, BigDecimal sellPricePerBase,
                                                         BigDecimal vatRatePercent) {
         BigDecimal importPrice = roundMoney(batch.getImportPricePerBase());
@@ -429,11 +403,7 @@ public class PricesettingService {
                 marginPercent);
     }
 
-    /**
-     * The VAT already inside a GROSS amount: {@code gross × rate / (100 + rate)}. The inverse of
-     * {@code InvoiceService.calculateSaleLinePreTaxAmount}, which divides by {@code 1 + rate/100} —
-     * both express the same convention, that stored prices include VAT.
-     */
+    /** Thuế GTGT đã nằm trong một số tiền GROSS: {@code gross × rate / (100 + rate)}. */
     private BigDecimal embeddedVat(BigDecimal gross, BigDecimal vatRatePercent) {
         BigDecimal rate = zeroIfNull(vatRatePercent);
         if (gross == null || gross.signum() <= 0 || rate.signum() <= 0) {
@@ -442,13 +412,7 @@ public class PricesettingService {
         return gross.multiply(rate).divide(HUNDRED.add(rate), 2, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Product VAT rate, mirroring {@code InvoiceService.resolveVatRateSnapshot} and
-     * {@code StockadjustmentService.resolveVatRateSnapshot}: the product's own override if set,
-     * otherwise its type's default, otherwise 0. <strong>The three must agree</strong> — this one
-     * only projects, but a projection that disagrees with what the sale will actually charge is
-     * worse than no projection.
-     */
+    /** Thuế suất GTGT của sản phẩm: ưu tiên override riêng, không thì lấy mặc định của loại hàng, không có thì 0. */
     private BigDecimal resolveVatRateSnapshot(Product product) {
         if (product.getVatRateOverride() != null) {
             return product.getVatRateOverride();
@@ -460,7 +424,7 @@ public class PricesettingService {
         return BigDecimal.ZERO;
     }
 
-    /** Why the rate is what it is — {@code Product.vatRateOverride} has no UI, so this is the only place it shows. */
+    /** Giải thích nguồn gốc thuế suất, hiển thị cho người dùng. */
     private String vatRateSource(Product product) {
         if (product.getVatRateOverride() != null) {
             return "Thuế suất riêng của sản phẩm";
@@ -472,11 +436,7 @@ public class PricesettingService {
         return "Chưa khai báo thuế suất — tạm tính 0%";
     }
 
-    /**
-     * The product's base unit: the row flagged {@code isBaseUnit}, falling back to the smallest
-     * ratio for the (data-error) case of a product with no base unit flagged — the same fallback
-     * shape {@link #representativePrice} already uses for the sort key.
-     */
+    /** Đơn vị cơ bản của sản phẩm (đơn vị có cờ {@code isBaseUnit}); nếu thiếu dữ liệu thì lấy đơn vị có tỷ lệ nhỏ nhất. */
     private Productunit resolveBaseUnit(Integer productId) {
         List<Productunit> units = productunitRepository.findByProductId(productId);
         return units.stream()
@@ -488,6 +448,7 @@ public class PricesettingService {
                         .orElse(null));
     }
 
+    // Trung bình cộng danh sách số tiền, làm tròn về đồng chẵn; trả về null nếu danh sách rỗng.
     private BigDecimal mean(List<BigDecimal> values) {
         if (values.isEmpty()) {
             return null;
@@ -496,41 +457,39 @@ public class PricesettingService {
         return sum.divide(BigDecimal.valueOf(values.size()), 0, RoundingMode.HALF_UP);
     }
 
+    // Trả về giá trị gốc, hoặc dấu "—" nếu chuỗi rỗng/null.
     private String blankToDash(String value) {
         return value == null || value.isBlank() ? NO_VALUE : value;
     }
 
+    // Trả về 0 nếu giá trị null, dùng để tránh NullPointerException khi tính toán.
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
 
-    /** Tax figures keep 2 decimals like every other module — only the editable price is whole đồng. */
+    /** Số liệu thuế giữ 2 số lẻ như các module khác — chỉ riêng giá bán trên màn này làm tròn đồng chẵn. */
     private BigDecimal scale2(BigDecimal value) {
         return zeroIfNull(value).setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** Like {@link #scale2} but keeps {@code null} as {@code null} — an unknown, not a zero. */
+    /** Giống {@link #scale2} nhưng giữ nguyên {@code null} — chưa biết chứ không phải bằng 0. */
     private BigDecimal nullableScale2(BigDecimal value) {
         return value == null ? null : value.setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** A stored rate ({@code 0.005}) as the number a screen shows ({@code 0.50}). */
+    /** Đổi tỷ lệ lưu trong DB ({@code 0.005}) thành số phần trăm hiển thị ({@code 0.50}). */
     private BigDecimal percent(BigDecimal rate) {
         return zeroIfNull(rate).multiply(HUNDRED).setScale(2, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Money on this screen carries no decimals — every amount is rounded to a whole đồng with
-     * HALF_UP (…,3 → down; …,5 → up). The DB columns stay {@code decimal(15,2)}; the fractional
-     * part is simply always zero from here on. Rows written before this rounding rule keep their
-     * stored decimals until the next save, but are displayed rounded.
-     */
+    /** Giá bán trên màn này không có phần thập phân — làm tròn về đồng chẵn theo HALF_UP. */
     private BigDecimal roundMoney(BigDecimal value) {
         return value.setScale(0, RoundingMode.HALF_UP);
     }
 
-    // ------------------------------------------------------------------ sorting
+    // ------------------------------------------------------------------ sắp xếp
 
+    // Chọn comparator theo tham số sort (tên/giá, tăng/giảm); giá trị lạ mặc định sắp theo tên.
     private Comparator<PriceSettingProductRowResponse> comparatorFor(String sort) {
         Comparator<PriceSettingProductRowResponse> byName =
                 Comparator.comparing(row -> normalize(row.getProductName()));
@@ -549,13 +508,12 @@ public class PricesettingService {
         };
     }
 
-    // ------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------ helper
 
     /**
-     * Arithmetic mean ("trung bình cộng") of {@code importPricePerBase} per product, over that
-     * product's <strong>in-stock</strong> batches only — a fully-sold-out lot no longer says
-     * anything about what the stock on hand cost. Products with no in-stock batch are simply absent
-     * from the map (the row then renders "Chưa có lô tồn").
+     * Trung bình cộng {@code importPricePerBase} theo từng sản phẩm, chỉ tính trên các lô
+     * <strong>còn tồn kho</strong>. Sản phẩm không còn lô tồn thì không có trong map (hiển thị
+     * "Chưa có lô tồn").
      */
     private Map<Integer, BigDecimal> averageInStockImportPricePerProduct() {
         Map<Integer, List<BigDecimal>> pricesByProduct = batchRepository.findAll().stream()
@@ -574,13 +532,14 @@ public class PricesettingService {
                 }));
     }
 
-    /** {@code status} is nullable in the schema and defaults to true, so only an explicit false deactivates. */
+    /** {@code status} có thể null trong DB (coi như true) — chỉ giá trị false rõ ràng mới coi là ngừng hoạt động. */
     private boolean isInStock(Batch batch) {
         return batch.getStorageQuantity() != null
                 && batch.getStorageQuantity() > 0
                 && !Boolean.FALSE.equals(batch.getStatus());
     }
 
+    // Kiểm tra sản phẩm có thuộc loại hàng đang lọc hay không (không lọc nếu typeId null).
     private boolean matchesType(Product product, Integer typeId) {
         if (typeId == null) {
             return true;
@@ -588,6 +547,7 @@ public class PricesettingService {
         return product.getTypeID() != null && typeId.equals(product.getTypeID().getId());
     }
 
+    // Kiểm tra sản phẩm có khớp từ khoá tìm kiếm (theo mã hoặc tên, không dấu) hay không.
     private boolean matchesKeyword(Product product, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
@@ -596,6 +556,7 @@ public class PricesettingService {
                 || containsNormalized(product.getName(), normalizedKeyword);
     }
 
+    // Dựng một dòng sản phẩm cho danh sách, kèm các đơn vị đã sắp xếp theo tỷ lệ quy đổi.
     private PriceSettingProductRowResponse toProductRow(Product product, List<Productunit> units,
                                                         BigDecimal averageImportPrice) {
         List<PriceSettingRowResponse> unitRows = units.stream()
@@ -606,7 +567,6 @@ public class PricesettingService {
                         unit.getUnitName(),
                         Boolean.TRUE.equals(unit.getIsBaseUnit()),
                         unit.getRatio(),
-                        // Displayed without decimals even for rows stored before the rounding rule.
                         unit.getSellPrice() == null ? null : roundMoney(unit.getSellPrice())))
                 .toList();
 
@@ -620,11 +580,7 @@ public class PricesettingService {
                 unitRows);
     }
 
-    /**
-     * Sort key for the price asc/desc options: the base unit's price, since every other unit is
-     * derived from it by ratio. Falls back to the first priced unit for the (data-error) case of a
-     * product with no base unit flagged.
-     */
+    /** Giá đại diện để sắp xếp theo giá: giá của đơn vị cơ bản, hoặc đơn vị đầu tiên có giá nếu thiếu dữ liệu. */
     private BigDecimal representativePrice(List<PriceSettingRowResponse> unitRows) {
         return unitRows.stream()
                 .filter(PriceSettingRowResponse::isBaseUnit)
@@ -638,10 +594,12 @@ public class PricesettingService {
                         .orElse(null));
     }
 
+    // Kiểm tra chuỗi (đã chuẩn hoá) có chứa từ khoá (đã chuẩn hoá) hay không.
     private boolean containsNormalized(String value, String normalizedKeyword) {
         return value != null && normalize(value).contains(normalizedKeyword);
     }
 
+    // Chuẩn hoá chuỗi để so khớp không phân biệt dấu/hoa-thường (bỏ dấu tiếng Việt, đổi "đ"→"d").
     private String normalize(String value) {
         if (value == null) {
             return "";

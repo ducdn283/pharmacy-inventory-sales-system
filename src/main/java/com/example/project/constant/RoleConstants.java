@@ -29,12 +29,10 @@ public final class RoleConstants {
     );
 
     /**
-     * Roles assignable from the single-store Permission Table ({@code /owner/permissions}), in
-     * display order. {@code OWNER} is deliberately excluded — the system has exactly one Owner,
-     * fixed at account creation ({@code OwnerUserService} already refuses to create a second one);
-     * the Permission Table can only move an account between {@code PHARMACIST}/{@code ACCOUNTANT}/
-     * unassigned, never promote anyone to Owner. The removed {@code CASHIER} role was never part
-     * of this set either.
+     * Các vai trò có thể gán qua Bảng phân quyền ({@code /owner/permissions}), theo thứ tự hiển thị.
+     * {@code OWNER} bị loại trừ có chủ đích — hệ thống chỉ có đúng một Owner duy nhất, Bảng phân
+     * quyền chỉ được chuyển tài khoản giữa {@code PHARMACIST}/{@code ACCOUNTANT}/Không quyền,
+     * không bao giờ được thăng cấp ai lên Owner.
      */
     public static final List<String> PERMISSION_TABLE_ROLES = List.of(PHARMACIST, ACCOUNTANT);
 
@@ -50,6 +48,7 @@ public final class RoleConstants {
     private RoleConstants() {
     }
 
+    /** True nếu chuỗi truyền vào là một vai trò hợp lệ (có trong {@link #ALL}). */
     public static boolean isValid(String role) {
         return role != null && ALL.contains(role);
     }
@@ -96,6 +95,7 @@ public final class RoleConstants {
         return labels;
     }
 
+    /** Map mã vai trò -> nhãn tiếng Việt, chỉ gồm các vai trò không phải Owner. */
     public static Map<String, String> nonOwnerVietnameseLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
         for (String role : NON_OWNER_ROLES) {
@@ -104,10 +104,7 @@ public final class RoleConstants {
         return labels;
     }
 
-    /**
-     * {@code ""} ("Không quyền") plus the three roles assignable from the flat, single-store
-     * Permission Table, in dropdown order: Không quyền / Dược sĩ / Kế toán / Chủ nhà thuốc.
-     */
+    /** {@code ""} ("Không quyền") cùng các vai trò có thể gán qua Bảng phân quyền, theo thứ tự dropdown. */
     public static Map<String, String> permissionTableRoleLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put("", "Không quyền");
@@ -117,7 +114,7 @@ public final class RoleConstants {
         return labels;
     }
 
-    /** True for the roles an account can be assigned to from the Permission Table (blank/NONE is handled separately). */
+    /** True nếu vai trò này có thể gán qua Bảng phân quyền (trường hợp rỗng/Không quyền xử lý riêng). */
     public static boolean isPermissionTableRole(String role) {
         return role != null && PERMISSION_TABLE_ROLES.contains(role);
     }

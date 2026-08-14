@@ -5,21 +5,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Summary cards shown above the Product List. All counts are derived from the real
- * product set and their current stock (SUM of Batch.storageQuantity vs minStock).
- */
+/** Các thẻ tổng hợp phía trên Danh sách hàng hóa. Số liệu tính từ tồn kho thật (SUM Batch.storageQuantity so với minStock). */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductListStatsResponse {
-    /** Total number of products. */
+    /** Tổng số sản phẩm. */
     private long totalProducts;
-    /** Products with stock above the minimum threshold. */
+    /** Số sản phẩm có tồn kho trên ngưỡng tối thiểu. */
     private long inStockCount;
-    /** Products with stock at/below the minimum threshold but still > 0. */
+    /** Số sản phẩm tồn kho ở/dưới ngưỡng tối thiểu nhưng vẫn > 0. */
     private long lowStockCount;
-    /** Products with no stock (stock <= 0). */
+    /** Số sản phẩm hết hàng (tồn <= 0). */
     private long outOfStockCount;
 }

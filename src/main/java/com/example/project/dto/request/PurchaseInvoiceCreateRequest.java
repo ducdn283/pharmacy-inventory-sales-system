@@ -21,7 +21,7 @@ public class PurchaseInvoiceCreateRequest {
     @NotNull(message = "Vui lòng chọn nhà cung cấp")
     private Integer supplierId;
 
-    /** Optional — purely a cross-reference link to a procurement plan, not a required field. */
+    /** Không bắt buộc — chỉ để liên kết tham chiếu tới dự trù mua hàng. */
     private Integer requisitionId;
 
     @DecimalMin(value = "0.0", message = "Chi phí phát sinh không được âm")
@@ -51,13 +51,9 @@ public class PurchaseInvoiceCreateRequest {
     private LocalDate dueDate;
 
     /**
-     * Whether every line's "Đơn giá" was typed as already including VAT (gross, mặc định — giữ
-     * nguyên hành vi cũ) or as a pre-tax amount (giá trước thuế) that the server must gross up
-     * before storing — some nhà cung cấp báo giá trước thuế, một số báo giá đã gồm thuế. Applies to
-     * the whole invoice at once, not per line — see {@code PurchaseinvoiceService#prepareLine}.
-     * Whatever gets stored is always gross either way (the schema-wide "importPrice is gross"
-     * convention never changes); this only controls how the typed number is interpreted on the way
-     * in.
+     * true = "Đơn giá" các dòng đã gồm VAT (mặc định); false = giá trước thuế, server sẽ gross up
+     * trước khi lưu (PurchaseinvoiceService#prepareLine). Áp dụng cho cả phiếu, không theo từng dòng.
+     * Dữ liệu lưu trong DB luôn là giá gross, cờ này chỉ ảnh hưởng cách hiểu số nhập vào.
      */
     private boolean priceIncludesVat = true;
 

@@ -695,6 +695,7 @@
 </div>
 
 <script th:inline="none">
+    // Nút in phiếu nhập: mở trang in trong iframe ẩn rồi gọi lệnh in trình duyệt, tự dọn iframe sau khi in xong.
     document.getElementById('printPurchaseInvoiceBtn').addEventListener('click', function () {
         var printUrl = this.dataset.printUrl;
 

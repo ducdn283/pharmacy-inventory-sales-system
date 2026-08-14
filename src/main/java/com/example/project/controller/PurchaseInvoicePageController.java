@@ -38,6 +38,7 @@ public class PurchaseInvoicePageController {
         this.currentUserContext = currentUserContext;
     }
 
+    // Màn danh sách phiếu nhập: tìm kiếm/lọc/phân trang, kèm số liệu thống kê tổng quan.
     @GetMapping({
             "/owner/purchase-invoices",
             "/accountant/purchase-invoices",
@@ -89,13 +90,12 @@ public class PurchaseInvoicePageController {
         return "purchase-invoice/list";
     }
 
-    // ------------------------------------------------------------------ Owner: direct create, with an optional Nháp
-    // Always reachable — the Owner has full permission regardless of whether an Accountant is
-    // active, see PurchaseinvoiceService class javadoc. Like the Accountant's create form, the Owner
-    // can either "Lưu Nháp" (come back later) or submit directly — but unlike the Accountant, the
-    // Owner's submit action approves immediately (selfApprove=true passed to the template), since
-    // the Owner never needs a separate approval step from themselves.
+    // ------------------------------------------------------------------ Chủ nhà thuốc: tạo trực tiếp, có thể lưu Nháp
+    // Chủ nhà thuốc luôn tạo được, không phụ thuộc có Kế toán hay không. Cũng có 2 nút Lưu Nháp/Nộp
+    // như form của Kế toán, nhưng nút submit của Chủ nhà thuốc tự duyệt luôn (selfApprove=true)
+    // vì không cần ai duyệt hộ mình.
 
+    // Hiển thị form tạo phiếu nhập mới cho Chủ nhà thuốc (mặc định có sẵn 1 dòng hàng trống).
     @GetMapping("/owner/purchase-invoices/create")
     public String createPage(HttpServletRequest request, Model model) {
         PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
@@ -108,6 +108,7 @@ public class PurchaseInvoicePageController {
         return "purchase-invoice/create";
     }
 
+    // Xử lý submit form tạo phiếu nhập của Chủ nhà thuốc: "draft" lưu nháp, còn lại tạo & tự duyệt luôn.
     @PostMapping("/owner/purchase-invoices/create")
     public String createPurchaseInvoice(@Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
                                         BindingResult bindingResult,
@@ -138,6 +139,7 @@ public class PurchaseInvoicePageController {
         }
     }
 
+    // Hiển thị form sửa phiếu nháp (Chủ nhà thuốc), điền sẵn dữ liệu bằng getDraftEditForm().
     @GetMapping("/owner/purchase-invoices/{purchaseId}/edit")
     public String ownerEditDraftPage(@PathVariable Integer purchaseId,
                                      HttpServletRequest request,
@@ -154,6 +156,7 @@ public class PurchaseInvoicePageController {
         }
     }
 
+    // Xử lý submit sửa phiếu nháp của Chủ nhà thuốc: "draft" lưu nháp lại, còn lại sửa & tự duyệt luôn.
     @PostMapping("/owner/purchase-invoices/{purchaseId}/edit")
     public String ownerEditDraft(@PathVariable Integer purchaseId,
                                  @Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
@@ -187,6 +190,7 @@ public class PurchaseInvoicePageController {
         }
     }
 
+    // Xóa hẳn phiếu nháp (Chủ nhà thuốc) — chỉ áp dụng khi phiếu đang ở trạng thái Nháp.
     @PostMapping("/owner/purchase-invoices/{purchaseId}/delete")
     public String ownerDeleteDraft(@PathVariable Integer purchaseId, RedirectAttributes redirectAttributes) {
         try {
@@ -199,8 +203,9 @@ public class PurchaseInvoicePageController {
         }
     }
 
-    // ------------------------------------------------------------------ Accountant: draft -> submit -> Owner duyệt
+    // ------------------------------------------------------------------ Kế toán: nháp -> nộp -> Chủ nhà thuốc duyệt
 
+    // Hiển thị form tạo phiếu nhập mới cho Kế toán (mặc định có sẵn 1 dòng hàng trống).
     @GetMapping("/accountant/purchase-invoices/create")
     public String accountantCreatePage(HttpServletRequest request, Model model) {
         PurchaseInvoiceCreateRequest form = new PurchaseInvoiceCreateRequest();
@@ -213,6 +218,7 @@ public class PurchaseInvoicePageController {
         return "purchase-invoice/create";
     }
 
+    // Xử lý submit form tạo phiếu nhập của Kế toán: "draft" lưu nháp, còn lại nộp lên chờ Chủ nhà thuốc duyệt.
     @PostMapping("/accountant/purchase-invoices/create")
     public String accountantCreatePurchaseInvoice(@Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
                                                    BindingResult bindingResult,
@@ -243,6 +249,7 @@ public class PurchaseInvoicePageController {
         }
     }
 
+    // Hiển thị form sửa phiếu nháp (Kế toán), điền sẵn dữ liệu bằng getDraftEditForm().
     @GetMapping("/accountant/purchase-invoices/{purchaseId}/edit")
     public String accountantEditDraftPage(@PathVariable Integer purchaseId,
                                           HttpServletRequest request,
@@ -259,6 +266,7 @@ public class PurchaseInvoicePageController {
         }
     }
 
+    // Xử lý submit sửa phiếu nháp của Kế toán: "draft" lưu nháp lại, còn lại nộp lên chờ Chủ nhà thuốc duyệt.
     @PostMapping("/accountant/purchase-invoices/{purchaseId}/edit")
     public String accountantEditDraft(@PathVariable Integer purchaseId,
                                       @Valid @ModelAttribute("form") PurchaseInvoiceCreateRequest form,
@@ -292,6 +300,7 @@ public class PurchaseInvoicePageController {
         }
     }
 
+    // Xóa hẳn phiếu nháp (Kế toán) — chỉ áp dụng khi phiếu đang ở trạng thái Nháp.
     @PostMapping("/accountant/purchase-invoices/{purchaseId}/delete")
     public String accountantDeleteDraft(@PathVariable Integer purchaseId, RedirectAttributes redirectAttributes) {
         try {
@@ -304,8 +313,9 @@ public class PurchaseInvoicePageController {
         }
     }
 
-    // ------------------------------------------------------------------ Owner: duyệt / từ chối
+    // ------------------------------------------------------------------ Chủ nhà thuốc: duyệt / từ chối
 
+    // Chủ nhà thuốc duyệt phiếu nhập đang Chờ duyệt — hàng được nhận vào kho ngay tại bước này.
     @PostMapping("/owner/purchase-invoices/{purchaseId}/approve")
     public String approvePurchaseInvoice(@PathVariable Integer purchaseId, RedirectAttributes redirectAttributes) {
         try {
@@ -318,6 +328,7 @@ public class PurchaseInvoicePageController {
         return "redirect:/owner/purchase-invoices/" + purchaseId;
     }
 
+    // Chủ nhà thuốc từ chối phiếu nhập đang Chờ duyệt — phiếu quay về Nháp kèm lý do từ chối.
     @PostMapping("/owner/purchase-invoices/{purchaseId}/reject")
     public String rejectPurchaseInvoice(@PathVariable Integer purchaseId,
                                         @RequestParam(name = "reason", required = false) String reason,
@@ -332,6 +343,7 @@ public class PurchaseInvoicePageController {
         return "redirect:/owner/purchase-invoices/" + purchaseId;
     }
 
+    // Màn chi tiết phiếu nhập: nạp dữ liệu + tính các quyền hành động (duyệt/từ chối/sửa/xóa/hủy) theo trạng thái và vai trò.
     @GetMapping({
             "/owner/purchase-invoices/{purchaseId}",
             "/accountant/purchase-invoices/{purchaseId}"
@@ -345,9 +357,7 @@ public class PurchaseInvoicePageController {
 
         boolean isPending = PurchaseInvoiceStatus.PENDING_APPROVAL.equals(detail.getPaymentStatus());
         boolean isDraft = PurchaseInvoiceStatus.DRAFT.equals(detail.getPaymentStatus());
-        // Owner has full permission regardless of who created the Nháp (see PurchaseinvoiceService
-        // class javadoc) — not restricted to the row's own creator, same convention as the
-        // Accountant's existing delete-any-draft access.
+        // Chủ nhà thuốc và Kế toán đều được sửa/xóa mọi bản Nháp, không giới hạn theo người tạo.
         boolean canManageDraft = RoleConstants.OWNER.equals(role) || RoleConstants.ACCOUNTANT.equals(role);
 
         model.addAttribute("detail", detail);
@@ -362,6 +372,7 @@ public class PurchaseInvoicePageController {
         return "purchase-invoice/detail";
     }
 
+    // Hủy phiếu nhập đã duyệt (không áp dụng cho Nháp/Chờ duyệt) kèm lý do hủy.
     @PostMapping({
             "/owner/purchase-invoices/{purchaseId}/cancel",
             "/accountant/purchase-invoices/{purchaseId}/cancel"
@@ -381,6 +392,7 @@ public class PurchaseInvoicePageController {
         return "redirect:" + resolveBasePath(request) + "/" + purchaseId;
     }
 
+    // Màn in phiếu nhập: nạp dữ liệu in (đầu phiếu + các dòng hàng).
     @GetMapping({
             "/owner/purchase-invoices/{purchaseId}/print",
             "/accountant/purchase-invoices/{purchaseId}/print"
@@ -396,6 +408,7 @@ public class PurchaseInvoicePageController {
         return "purchase-invoice/print";
     }
 
+    // API JSON: lấy các dòng chi tiết dự trù mua hàng theo nhà cung cấp, dùng để tự điền form tạo phiếu nhập.
     @GetMapping({
             "/owner/purchase-invoices/procurement-plan-details",
             "/accountant/purchase-invoices/procurement-plan-details"
@@ -407,6 +420,7 @@ public class PurchaseInvoicePageController {
         return purchaseinvoiceService.getProcurementPlanDetailsForSupplier(procurementId, supplierId);
     }
 
+    // Nạp toàn bộ dữ liệu dùng chung cho form tạo/sửa phiếu nhập (nhà cung cấp, sản phẩm, giá, đơn vị, cờ hiển thị...).
     private void addCreatePageData(HttpServletRequest request, Model model,
                                    String formAction, boolean editMode, boolean dualSubmit,
                                    boolean selfApprove) {
@@ -434,23 +448,22 @@ public class PurchaseInvoicePageController {
     }
 
     /**
-     * Plain (id -> name) lookup for re-hydrating the create form's product-search field on a
-     * validation-error re-render — the search input isn't itself a bound field, so its display text
-     * has to be looked up from the bound productId. A Thymeleaf selection expression
-     * (`products.?[productID == detail.productId]`) crashes here because its predicate can't see
-     * the outer `th:each` variable, so a plain map lookup is used instead.
+     * Map (id -> tên) để hiển thị lại ô tìm sản phẩm khi render lại form do lỗi validate — ô tìm
+     * kiếm không phải field bound trực tiếp nên phải tra tên từ productId. Không dùng selection
+     * expression Thymeleaf (`products.?[...]`) vì predicate không thấy được biến th:each ngoài.
      */
     private Map<Integer, String> toProductNameById(List<ProductOptionResponse> products) {
         return products.stream()
                 .collect(Collectors.toMap(ProductOptionResponse::getProductID, ProductOptionResponse::getName));
     }
 
-    /** Same re-hydration need as {@link #toProductNameById}, but for the supplier search field. */
+    /** Tương tự toProductNameById(), nhưng cho ô tìm nhà cung cấp. */
     private Map<Integer, String> toSupplierNameById(List<SupplierOptionResponse> suppliers) {
         return suppliers.stream()
                 .collect(Collectors.toMap(SupplierOptionResponse::getId, SupplierOptionResponse::getName));
     }
 
+    // Suy ra tiền tố URL (Chủ nhà thuốc/Kế toán) từ request hiện tại để dựng link điều hướng đúng vai trò.
     private String resolveBasePath(HttpServletRequest request) {
         String uri = request.getRequestURI();
 

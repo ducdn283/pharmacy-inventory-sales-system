@@ -27,6 +27,7 @@ public class FinancialSettingPageController {
         this.financialsettingService = financialsettingService;
     }
 
+    // Hiển thị trang Thiết lập tài chính: Owner được sửa, Accountant/Pharmacist chỉ xem.
     @GetMapping({"/owner/financial-setting", "/accountant/financial-setting", "/pharmacist/financial-setting"})
     public String view(HttpServletRequest request, Model model) {
         boolean editable = request.getRequestURI().startsWith("/owner/");
@@ -44,6 +45,7 @@ public class FinancialSettingPageController {
         return VIEW;
     }
 
+    // Lưu form thiết lập tài chính (Owner); nếu có lỗi validate hoặc nghiệp vụ thì render lại trang kèm thông báo lỗi.
     @PostMapping("/owner/financial-setting")
     public String save(@Valid @ModelAttribute("financialSettingForm") FinancialSettingUpdateRequest form,
                         BindingResult bindingResult,
@@ -70,11 +72,12 @@ public class FinancialSettingPageController {
         return "redirect:/owner/financial-setting";
     }
 
+    // Chuyển response hiện tại thành form để đổ dữ liệu sẵn có lên trang chỉnh sửa.
     private FinancialSettingUpdateRequest toForm(FinancialsettingResponse response) {
         FinancialSettingUpdateRequest form = new FinancialSettingUpdateRequest();
         form.setTaxCalculationMethod(response.getTaxCalculationMethod());
         form.setRevenueGroup(response.getRevenueGroup());
-        // Dữ liệu cũ dùng DECIMAL(5,2); đưa về số nguyên khi mở form để không hiện "50.00".
+        // Dữ liệu cũ lưu dạng thập phân (VD 50.00) — quy về số nguyên khi mở form.
         form.setReturnProductOnInvoiceValueRate(response.getReturnProductOnInvoiceValueRate() == null
                 ? null
                 : response.getReturnProductOnInvoiceValueRate().setScale(0, RoundingMode.HALF_UP));
@@ -96,6 +99,7 @@ public class FinancialSettingPageController {
         return form;
     }
 
+    // Định dạng thời điểm cập nhật số dư quỹ để hiển thị, trả về "Chưa cập nhật" nếu null.
     private String formatBalanceUpdatedAt(LocalDateTime balanceUpdatedAt) {
         if (balanceUpdatedAt == null) {
             return "Chưa cập nhật";

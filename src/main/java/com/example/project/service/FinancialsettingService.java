@@ -20,11 +20,9 @@ public class FinancialsettingService {
     }
 
     /**
-     * Đã "Chốt thiết lập ban đầu" chưa — cột {@code setupConfirmed}. Đây là nguồn khoá cho hai quỹ
-     * {@code cashSafeBalance}/{@code bankAccountBalance} MỘT LƯỢT (không còn khoá {@code
-     * revenueGroup} — xem {@code saveSettings}), và cũng là điều kiện
-     * {@link com.example.project.config.SetupConfirmedInterceptor} dùng để chặn mọi màn hình khác
-     * cho tới khi Owner hoàn tất thiết lập lần đầu.
+     * Owner đã hoàn tất thiết lập ban đầu chưa. Khi false, toàn bộ hệ thống bị chặn (xem
+     * SetupConfirmedInterceptor). Khi chuyển thành true, khoá vĩnh viễn 2 quỹ tiền
+     * (cashSafeBalance/bankAccountBalance) — không khoá nhóm doanh thu.
      */
     @Transactional(readOnly = true)
     public boolean isSetupConfirmed() {
@@ -33,12 +31,7 @@ public class FinancialsettingService {
                 .orElse(false);
     }
 
-    /**
-     * Số dư quỹ tiền mặt khoá khi ĐÃ chốt thiết lập ban đầu, hoặc (để tương thích với dữ liệu cũ từ
-     * trước khi có {@code setupConfirmed}) khi cột này đã khác {@code null} — từ lúc đó
-     * {@code ExpenseService} bắt đầu cộng trừ số dư này theo thời gian thực, cho sửa tay đè lên sẽ
-     * làm sai lệch dữ liệu đang được theo dõi tự động.
-     */
+    /** Quỹ tiền mặt bị khoá khi đã chốt thiết lập, hoặc khi đã có số dư (khác null) từ trước. */
     @Transactional(readOnly = true)
     public boolean isCashSafeBalanceLocked() {
         return isSetupConfirmed() || financialsettingRepository.findFirstByOrderByIdAsc()
@@ -46,7 +39,7 @@ public class FinancialsettingService {
                 .orElse(false);
     }
 
-    /** Tương tự {@link #isCashSafeBalanceLocked()} nhưng cho quỹ ngân hàng. */
+    /** Tương tự isCashSafeBalanceLocked() nhưng cho quỹ ngân hàng. */
     @Transactional(readOnly = true)
     public boolean isBankAccountBalanceLocked() {
         return isSetupConfirmed() || financialsettingRepository.findFirstByOrderByIdAsc()
@@ -54,6 +47,7 @@ public class FinancialsettingService {
                 .orElse(false);
     }
 
+    // Lấy cấu hình tài chính hiện tại; nếu chưa có bản ghi nào thì trả về giá trị mặc định.
     @Transactional(readOnly = true)
     public FinancialsettingResponse getSettings() {
         return financialsettingRepository.findFirstByOrderByIdAsc()
@@ -61,20 +55,17 @@ public class FinancialsettingService {
                 .orElseGet(FinancialsettingService::defaultSettings);
     }
 
+    // Lưu form thiết lập tài chính: cập nhật thông tin chung, khoá 2 quỹ tiền khi chốt thiết lập lần đầu.
     @Transactional
     public FinancialsettingResponse saveSettings(FinancialSettingUpdateRequest request) {
         Financialsetting entity = financialsettingRepository.findFirstByOrderByIdAsc()
                 .orElseGet(Financialsetting::new);
 
-        // Chốt sẵn trạng thái TRƯỚC khi sửa entity — cần để biết đây có phải chính là lần lưu hoàn
-        // tất thiết lập ban đầu hay không (xem khối kiểm tra cuối hàm).
+        // Lưu lại trạng thái trước khi sửa để biết đây có phải lần lưu chốt thiết lập ban đầu không.
         boolean wasSetupConfirmed = Boolean.TRUE.equals(entity.getSetupConfirmed());
-        // Nhóm doanh thu KHÔNG bị khoá lại sau khi chốt thiết lập / sau khi đã có kỳ thuế đóng —
-        // khác với hai quỹ tiền. Chuyển từ Nhóm 2 lên Nhóm 3 cần cơ quan thuế chấp thuận trước, nên
-        // form phải luôn cho sửa tay được để phản ánh đúng thời điểm được chấp thuận, thay vì chỉ
-        // đổi được một lần lúc thiết lập ban đầu. Việc tự động đồng bộ theo chuỗi kỳ thuế cho chiều
-        // 1 → 2 (xem TaxperiodsnapshotService.applyAutomaticGroupTransition/closePeriod) vẫn chạy
-        // song song không đổi — đây chỉ là bỏ khoá trên form, không đụng tới cơ chế tự động đó.
+        // Nhóm doanh thu không bị khoá (khác với 2 quỹ tiền) — chuyển Nhóm 2 lên 3 cần cơ quan thuế
+        // chấp thuận trước nên luôn phải sửa tay được. Việc tự chuyển Nhóm 1 → 2 vẫn chạy riêng ở
+        // TaxperiodsnapshotService, không liên quan tới field này.
         Integer revenueGroup = request.getRevenueGroup();
 
         // Nhóm 3 (>ngưỡng 2) bắt buộc tính theo lợi nhuận — client JS đã khoá UI, nhưng chốt lại ở
@@ -86,8 +77,7 @@ public class FinancialsettingService {
 
         entity.setTaxCalculationMethod(taxCalculationMethod);
         entity.setRevenueGroup(revenueGroup);
-        // annualRevenueThreshold1/2: KHÔNG còn đọc từ request nữa — đã ẩn khỏi UI, cố định vĩnh viễn
-        // theo giá trị đã seed (V13). Không set lại ở đây để giữ nguyên giá trị đang lưu.
+        // annualRevenueThreshold1/2: không còn đọc từ request — đã ẩn khỏi UI, giữ nguyên giá trị cũ.
         BigDecimal returnRate = request.getReturnProductOnInvoiceValueRate();
         if (returnRate != null && returnRate.stripTrailingZeros().scale() > 0) {
             throw new IllegalArgumentException("Tỷ lệ phần trăm hàng trả phải là số nguyên");
@@ -107,12 +97,8 @@ public class FinancialsettingService {
         entity.setAutoOffsetDebtOnRefund(Boolean.TRUE.equals(request.getAutoOffsetDebtOnRefund()));
         entity.setReturnPolicyMaxDays(request.getReturnPolicyMaxDays());
 
-        // Số dư khởi tạo chỉ được NHẬP MỘT LẦN. Một khi cột đã khác null (xem isCashSafeBalanceLocked/
-        // isBankAccountBalanceLocked), giá trị đăng lên bị bỏ qua hoàn toàn — kể cả khi ai đó lách
-        // control đã disable ở client để cố gửi lên một số khác — vì từ lúc khoá, ExpenseService là
-        // nơi DUY NHẤT còn được phép đổi số này (cộng trừ theo thời gian thực mỗi khi phiếu chi giải
-        // ngân/bị hủy). Hai quỹ khoá độc lập nhau ở CƠ CHẾ, nhưng cùng bị khoá một lượt bởi
-        // setupConfirmed bên dưới.
+        // Số dư khởi tạo chỉ nhập một lần: nếu cột đã có giá trị (đã khoá), giá trị gửi lên bị bỏ
+        // qua hoàn toàn — kể từ lúc đó chỉ ExpenseService được phép đổi số này (qua adjustFundBalances).
         boolean balanceChanged = false;
         if (entity.getCashSafeBalance() == null && request.getCashSafeBalance() != null) {
             entity.setCashSafeBalance(request.getCashSafeBalance());
@@ -126,10 +112,9 @@ public class FinancialsettingService {
             entity.setBalanceUpdatedAt(LocalDateTime.now());
         }
 
-        // Chốt thiết lập ban đầu: chừng nào chưa chốt, lần lưu NÀY phải để lại đủ nhóm doanh thu (đã
-        // được @NotNull chặn từ DTO) VÀ cả hai số dư quỹ — thiếu một trong hai thì từ chối toàn bộ
-        // (rollback nhờ @Transactional) thay vì chốt dở dang rồi không còn cách nào sửa lại. Đủ cả ba
-        // thì đánh dấu setupConfirmed = true, khoá luôn cả ba trường từ lần lưu kế tiếp.
+        // Chốt thiết lập ban đầu: chừng nào chưa chốt, lần lưu này phải có đủ cả 2 số dư quỹ, thiếu
+        // một trong hai thì từ chối toàn bộ (rollback). Đủ cả hai thì đánh dấu setupConfirmed = true,
+        // khoá 2 quỹ vĩnh viễn từ lần lưu kế tiếp (nhóm doanh thu không bị khoá theo).
         if (!wasSetupConfirmed) {
             if (entity.getCashSafeBalance() == null) {
                 throw new IllegalArgumentException(
@@ -146,11 +131,8 @@ public class FinancialsettingService {
     }
 
     /**
-     * Cộng dồn {@code cashDelta}/{@code bankDelta} (âm = trừ, dương = cộng lại) vào số dư quỹ —
-     * gọi bởi {@code ExpenseService} mỗi khi một phiếu chi thực sự giải ngân (trừ) hoặc bị hủy sau
-     * khi đã giải ngân (cộng lại). Chỉ quỹ ĐÃ ĐƯỢC THIẾT LẬP (khác null, tức đã khoá — xem
-     * {@link #isCashSafeBalanceLocked}) mới bị/được cộng trừ; quỹ còn "Chưa thiết lập" thì chưa có
-     * mốc nào để theo dõi real-time nên delta của quỹ đó bị bỏ qua lặng lẽ, không phải lỗi.
+     * Dùng riêng cho Expense: cộng/trừ số dư quỹ khi phiếu chi giải ngân hoặc bị hủy sau khi đã giải
+     * ngân. Chỉ tác động lên quỹ đã có số dư (đã khoá); quỹ "Chưa thiết lập" thì bỏ qua lặng lẽ.
      */
     @Transactional
     public void adjustFundBalances(BigDecimal cashDelta, BigDecimal bankDelta) {
@@ -201,10 +183,12 @@ public class FinancialsettingService {
         financialsettingRepository.save(entity);
     }
 
+    // Quy null về 0 để cộng/trừ số dư quỹ an toàn.
     private static BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    // Giá trị mặc định dùng khi hệ thống chưa từng lưu cấu hình tài chính nào.
     private static FinancialsettingResponse defaultSettings() {
         return new FinancialsettingResponse(
                 null,
