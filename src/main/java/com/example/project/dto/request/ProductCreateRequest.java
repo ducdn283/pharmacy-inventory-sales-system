@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * Payload of the Create Product form.
  *
- * <p>{@code itemGroup} (Thuốc / Hàng hóa / Thiết bị / TPCN) only drives which sections the form
+ * <p>{@code itemGroup} (Thuốc / Hàng hóa / Thiết bị y tế) only drives which sections the form
  * shows; it is NOT persisted as a new column — the persisted classification is {@code Type}
  * ({@code typeId}). This form creates only the product master: Product + ProductUnit + optional
  * MedicineAPI + optional Position. It does not touch Batch/stock or expiry — expiry lives on
@@ -23,7 +23,7 @@ import java.util.List;
 @NoArgsConstructor
 public class ProductCreateRequest {
 
-    /** Form-only selector (MEDICINE / GOODS / DEVICE / SUPPLEMENT); not persisted. */
+    /** Form-only selector derived from {@code Type.sortType}; not persisted. */
     private String itemGroup;
 
     private String name;

@@ -184,7 +184,7 @@
                         <th>Tên lô</th>
                         <th>Ngày nhập</th>
                         <th>Ngày SX</th>
-                        <th>Hạn SD</th>
+                        <th th:if="${product.tracksExpirationDate}">Hạn SD</th>
                         <th class="text-end">Tồn kho (đơn vị cơ bản)</th>
                         <th th:if="${basePath != '/pharmacist/products'}">Đơn vị nhập</th>
                         <th th:if="${basePath != '/pharmacist/products'}" class="text-end">Giá nhập</th>
@@ -197,7 +197,7 @@
                         <td class="fw-semibold" th:text="${b.batchName != null and !b.batchName.isEmpty() ? b.batchName : '—'}">Lô nhập tháng 08</td>
                         <td th:text="${b.importDateDisplay}">01/06/2026 09:00</td>
                         <td th:text="${b.productionDateDisplay}">01/01/2026</td>
-                        <td th:text="${b.expirationDateDisplay}">01/01/2028</td>
+                        <td th:if="${product.tracksExpirationDate}" th:text="${b.expirationDateDisplay}">01/01/2028</td>
                         <td class="text-end"
                             th:text="${b.storageQuantity + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName)}">0</td>
                         <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.importUnitName}">Hộp</td>
@@ -206,7 +206,10 @@
                         <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.note != null and !b.note.isEmpty()} ? ${b.note} : '—'">—</td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(product.batches)}">
-                        <td th:attr="colspan=${basePath == '/pharmacist/products'} ? 5 : 9" class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
+                        <td th:attr="colspan=${basePath == '/pharmacist/products'
+                                ? (product.tracksExpirationDate ? 5 : 4)
+                                : (product.tracksExpirationDate ? 9 : 8)}"
+                            class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
                     </tr>
                     </tbody>
                 </table>

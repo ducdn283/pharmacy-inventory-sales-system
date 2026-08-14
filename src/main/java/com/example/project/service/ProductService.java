@@ -91,6 +91,12 @@ public class ProductService {
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     // normalize("Thuốc kê đơn") — there is no boolean column for this, only the Type's name.
     private static final String PRESCRIPTION_TYPE_NAME = "thuoc ke don";
+    // MedicineAPI/hoạt chất only applies to products whose Type.sortType is the medicine group.
+    private static final String SORT_MEDICINE = "thuoc";
+    // Medical-device subtypes that do not track an expiration date on their batches.
+    private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
+    private static final String DEVICE_MACHINE_MARK = "may";
+    private static final String DEVICE_NO_EXPIRY_MARK = "khong han";
     // Same threshold StockadjustmentService uses for its own "sắp hết hạn" checks.
     private static final int NEAR_EXPIRY_DAYS = 90;
 
@@ -326,6 +332,7 @@ public class ProductService {
         response.setBarcode(product.getBarcode());
         response.setImageUrl(product.getImage());
         response.setTypeName(product.getTypeID() != null ? product.getTypeID().getName() : "—");
+        response.setTracksExpirationDate(tracksExpirationDate(product.getTypeID()));
         response.setProducerName(product.getProducerID() != null ? product.getProducerID().getName() : "—");
         response.setOriginName(product.getOrigin() != null ? product.getOrigin() : "—");
         response.setRegistrationNumber(product.getRegistrationNumber());
@@ -487,7 +494,7 @@ public class ProductService {
             productunitRepository.save(unit);
         }
 
-        if (request.getIngredients() != null) {
+        if (supportsIngredients(saved.getTypeID()) && request.getIngredients() != null) {
             for (ProductIngredientCreateRequest ingredient : request.getIngredients()) {
                 String apiName = trimToNull(ingredient.getApiName());
                 if (apiName == null) {
@@ -538,6 +545,7 @@ public class ProductService {
         form.setCode(product.getCode());
         form.setBarcode(product.getBarcode());
         form.setTypeId(product.getTypeID() != null ? product.getTypeID().getId() : null);
+        form.setItemGroup(product.getTypeID() != null ? product.getTypeID().getSortType() : null);
         form.setProducerId(product.getProducerID() != null ? product.getProducerID().getId() : null);
         form.setOrigin(product.getOrigin());
         form.setRegistrationNumber(product.getRegistrationNumber());
@@ -565,11 +573,13 @@ public class ProductService {
             form.getUnits().add(row);
         }
 
-        for (Medicineapi api : medicineapiRepository.findByProductId(productId)) {
-            ProductIngredientCreateRequest row = new ProductIngredientCreateRequest();
-            row.setApiName(api.getApiName());
-            row.setStrength(api.getStrength());
-            form.getIngredients().add(row);
+        if (supportsIngredients(product.getTypeID())) {
+            for (Medicineapi api : medicineapiRepository.findByProductId(productId)) {
+                ProductIngredientCreateRequest row = new ProductIngredientCreateRequest();
+                row.setApiName(api.getApiName());
+                row.setStrength(api.getStrength());
+                form.getIngredients().add(row);
+            }
         }
 
         for (Position position : positionRepository.findByProductId(productId)) {
@@ -693,7 +703,7 @@ public class ProductService {
         }
 
         medicineapiRepository.deleteAll(medicineapiRepository.findByProductId(productId));
-        if (request.getIngredients() != null) {
+        if (supportsIngredients(product.getTypeID()) && request.getIngredients() != null) {
             for (ProductIngredientCreateRequest ingredient : request.getIngredients()) {
                 String apiName = trimToNull(ingredient.getApiName());
                 if (apiName == null) {
@@ -1375,5 +1385,19 @@ public class ProductService {
         normalized = normalized.replaceAll("\\p{M}", "");
         normalized = normalized.replace("Đ", "D").replace("đ", "d");
         return normalized.toLowerCase(Locale.ROOT).trim();
+    }
+
+    /** Only the medicine Type group can own MedicineAPI/active-ingredient rows. */
+    private boolean supportsIngredients(Type type) {
+        return type != null && SORT_MEDICINE.equals(normalize(type.getSortType()));
+    }
+
+    /** Same batch-expiration rule used by purchase-invoice creation. */
+    private boolean tracksExpirationDate(Type type) {
+        if (type == null || !SORT_MEDICAL_DEVICE.equals(normalize(type.getSortType()))) {
+            return true;
+        }
+        String typeName = normalize(type.getName());
+        return !(typeName.contains(DEVICE_MACHINE_MARK) || typeName.contains(DEVICE_NO_EXPIRY_MARK));
     }
 }
