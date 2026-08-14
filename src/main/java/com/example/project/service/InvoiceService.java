@@ -856,6 +856,11 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public InvoicePrintPageResponse getPrintPage(Integer invoiceId) {
+        return getPrintPage(invoiceId, false);
+    }
+
+    @Transactional(readOnly = true)
+    public InvoicePrintPageResponse getPrintPage(Integer invoiceId, boolean aggregateLinesForReceipt) {
         Invoice invoice = invoiceRepository.findByIdWithRelations(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
 
@@ -877,6 +882,9 @@ public class InvoiceService {
         List<InvoicePrintLineResponse> printLines = lines.stream()
                 .map(line -> toPrintLine(invoice, line, retainedPercentDisplay))
                 .toList();
+        if (aggregateLinesForReceipt) {
+            printLines = aggregatePrintLinesForReceipt(printLines);
+        }
 
         String buyerCompanyName;
         String buyerTaxCode;
@@ -950,6 +958,65 @@ public class InvoiceService {
                 trimToNull(line.getNote()),
                 retainedMoneyLine,
                 retainedMoneyLine ? retainedPercentDisplay : null);
+    }
+
+    /**
+     * Gộp các dòng cùng sản phẩm/đơn vị/giá trên phiếu in bán hàng (khi trừ tồn nhiều lô tạo nhiều
+     * {@code Invoicedetail}).
+     */
+    private List<InvoicePrintLineResponse> aggregatePrintLinesForReceipt(
+            List<InvoicePrintLineResponse> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return List.of();
+        }
+
+        LinkedHashMap<String, InvoicePrintLineResponse> merged = new LinkedHashMap<>();
+        List<InvoicePrintLineResponse> retainedLines = new ArrayList<>();
+
+        for (InvoicePrintLineResponse line : lines) {
+            if (line.isRetainedMoneyLine()) {
+                retainedLines.add(line);
+                continue;
+            }
+            String key = printLineAggregateKey(line);
+            merged.merge(key, line, this::mergePrintLines);
+        }
+
+        List<InvoicePrintLineResponse> result = new ArrayList<>(merged.values());
+        result.addAll(retainedLines);
+        return result;
+    }
+
+    private String printLineAggregateKey(InvoicePrintLineResponse line) {
+        return nullToEmpty(line.getProductCode()) + "\0"
+                + nullToEmpty(line.getProductName()) + "\0"
+                + nullToEmpty(line.getUnitName()) + "\0"
+                + (line.getUnitSellPrice() != null ? line.getUnitSellPrice().toPlainString() : "") + "\0"
+                + nullToEmpty(line.getNote());
+    }
+
+    private InvoicePrintLineResponse mergePrintLines(InvoicePrintLineResponse left,
+                                                     InvoicePrintLineResponse right) {
+        int quantity = safeQuantity(left.getQuantity()) + safeQuantity(right.getQuantity());
+        BigDecimal subtotal = safeMoney(left.getLineSubtotal()).add(safeMoney(right.getLineSubtotal()));
+        return new InvoicePrintLineResponse(
+                left.getProductCode(),
+                left.getProductName(),
+                left.getUnitName(),
+                quantity,
+                left.getUnitSellPrice(),
+                subtotal,
+                left.getNote(),
+                false,
+                null);
+    }
+
+    private int safeQuantity(Integer quantity) {
+        return quantity != null ? quantity : 0;
+    }
+
+    private BigDecimal safeMoney(BigDecimal amount) {
+        return amount != null ? amount : BigDecimal.ZERO;
     }
 
     private boolean isReplacementInvoice(Invoice invoice) {

@@ -137,10 +137,11 @@ public class InvoiceController {
                             @RequestParam(name = "embed", required = false) String embed,
                             HttpServletRequest request,
                             Model model) {
-        InvoicePrintPageResponse printData = invoiceService.getPrintPage(invoiceId);
+        boolean receiptPrint = embed != null;
+        InvoicePrintPageResponse printData = invoiceService.getPrintPage(invoiceId, receiptPrint);
         model.addAttribute("printData", printData);
         model.addAttribute("basePath", resolveBasePath(request));
-        return embed != null ? "invoice/print-receipt" : "invoice/print";
+        return receiptPrint ? "invoice/print-receipt" : "invoice/print";
     }
 
     @GetMapping({"/owner/selling", "/pharmacist/selling"})
