@@ -3,15 +3,12 @@ package com.example.project.view;
 import lombok.Getter;
 
 /**
- * One row of the flat, single-store Permission Table: an account together with the single role it
- * holds system-wide. Built inside a transaction so the Thymeleaf view never touches lazy
- * associations.
+ * Một dòng trong Bảng phân quyền: tài khoản kèm vai trò hệ thống duy nhất của nó. Được dựng bên
+ * trong transaction để view Thymeleaf không đụng tới lazy association.
  *
- * <p>A {@code null}/blank {@link #role} means "Không quyền" (no {@code Accountpermission} row).</p>
- *
- * <p>{@link #lastOwner} is {@code true} only when this account currently holds an owner-like role
- * <em>and</em> is the only one left in the system; the screen renders such a row read-only so it
- * can never be demoted down to zero owners.</p>
+ * <p>{@link #role} null/rỗng nghĩa là "Không quyền". {@link #lastOwner} = {@code true} khi tài
+ * khoản này là Owner duy nhất còn lại trong hệ thống — dòng này sẽ hiển thị readonly để không
+ * thể hạ quyền xuống 0 Owner.</p>
  */
 @Getter
 public class PermissionAccountRow {
@@ -19,9 +16,9 @@ public class PermissionAccountRow {
     private final Integer accountId;
     private final String accountName;
     private final String usernameOrEmail;
-    private final String role;          // raw role code, e.g. "PHARMACIST"/"OWNER"; null when unassigned
-    private final String roleDisplay;   // Vietnamese label, or "Không quyền" when unassigned
-    private final boolean lastOwner;    // the only remaining owner-like account — protected from demotion
+    private final String role;          // mã vai trò, vd "PHARMACIST"/"OWNER"; null nếu chưa gán
+    private final String roleDisplay;   // nhãn tiếng Việt, hoặc "Không quyền" nếu chưa gán
+    private final boolean lastOwner;    // Owner duy nhất còn lại — không cho hạ quyền
 
     public PermissionAccountRow(Integer accountId, String accountName, String usernameOrEmail,
                                 String role, String roleDisplay, boolean lastOwner) {
@@ -33,7 +30,7 @@ public class PermissionAccountRow {
         this.lastOwner = lastOwner;
     }
 
-    /** True when this account currently holds a role. */
+    /** True khi tài khoản đang giữ một vai trò. */
     public boolean isAssigned() {
         return role != null && !role.isBlank();
     }

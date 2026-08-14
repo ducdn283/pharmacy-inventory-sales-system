@@ -12,8 +12,13 @@
 -->
 <th:block th:fragment="topbar">
     <div id="overlay" class="overlay"></div>
-    <!-- TOPBAR -->
-    <nav id="topbar" class="navbar bg-white border-bottom fixed-top topbar pm-topbar px-3">
+
+    <nav id="topbar"
+         class="navbar bg-white border-bottom fixed-top topbar pm-topbar px-3"
+         th:data-notifications-base="${currentNotificationsUrl != null ? currentNotificationsUrl : ''}"
+         th:data-csrf-header="${_csrf != null ? _csrf.headerName : ''}"
+         th:data-csrf-token="${_csrf != null ? _csrf.token : ''}">
+
         <div class="pm-topbar-inner">
             <div class="pm-topbar-left">
                 <button id="mobileBtn"
@@ -24,13 +29,16 @@
                 </button>
 
                 <h1 class="pm-topbar-title mb-0"
-                    th:text="${pageTitle != null ? pageTitle : (currentPageTitle != null ? currentPageTitle : 'Tổng quan')}">
+                    th:text="${pageTitle != null
+                        ? pageTitle
+                        : (currentPageTitle != null
+                            ? currentPageTitle
+                            : 'Tổng quan')}">
                     Tổng quan
                 </h1>
             </div>
 
             <div class="pm-topbar-actions">
-
                 <a th:if="${currentSellingUrl != null}"
                    class="pm-topbar-icon-btn pm-selling-btn"
                    th:href="${currentSellingUrl}"
@@ -38,10 +46,15 @@
                    role="button"
                    aria-label="Bán hàng"
                    title="Bán hàng">
+
                     <i class="ti ti-shopping-cart"></i>
-                    <span class="pm-selling-btn-label">Bán hàng</span>
+
+                    <span class="pm-selling-btn-label">
+                        Bán hàng
+                    </span>
                 </a>
 
+                <!-- Khu vực thông báo -->
                 <div class="dropdown">
                     <a class="position-relative pm-topbar-icon-btn"
                        data-bs-toggle="dropdown"
@@ -54,37 +67,42 @@
 
                         <span id="notificationDot"
                               th:if="${unreadNotificationCount != null
-                       and unreadNotificationCount > 0}"
+                                  and unreadNotificationCount > 0}"
                               class="pm-notification-dot"
                               aria-hidden="true">
-        </span>
+                        </span>
                     </a>
 
                     <div class="dropdown-menu dropdown-menu-end
-                dropdown-menu-md p-0 pm-notification-menu">
+                                dropdown-menu-md p-0
+                                pm-notification-menu">
 
                         <ul class="list-unstyled p-0 m-0">
+                            <li class="border-bottom">
+                                <a th:href="${currentNotificationsUrl != null
+            ? currentNotificationsUrl
+            : '#'}"
+                                   href="#"
+                                   class="pm-notification-header-link
+              px-3 py-3">
 
-                            <li class="px-3 py-3 border-bottom
-                       d-flex justify-content-between
-                       align-items-center">
+        <span class="fw-semibold small">
+            Thông báo mới
+        </span>
 
-                <span class="fw-semibold small">
-                    Thông báo mới
-                </span>
-
-                                <span id="notificationCountBadge"
-                                      class="badge bg-success"
-                                      th:if="${unreadNotificationCount != null
-                               and unreadNotificationCount > 0}"
-                                      th:text="${unreadNotificationCount}">
-                    0
-                </span>
+                                    <span id="notificationCountBadge"
+                                          class="badge bg-success"
+                                          th:if="${unreadNotificationCount != null
+                  and unreadNotificationCount > 0}"
+                                          th:text="${unreadNotificationCount}">
+            0
+        </span>
+                                </a>
                             </li>
 
                             <li id="notificationEmptyState"
                                 th:if="${latestNotifications == null
-                         or #lists.isEmpty(latestNotifications)}"
+                                    or #lists.isEmpty(latestNotifications)}"
                                 class="p-3 border-bottom">
 
                                 <div class="small text-secondary">
@@ -94,7 +112,12 @@
 
                             <li th:each="item : ${latestNotifications}"
                                 class="p-3 border-bottom
-                       realtime-notification-item">
+                                       realtime-notification-item
+                                       pm-notification-clickable"
+                                role="button"
+                                tabindex="0"
+                                th:data-notification-id="${item.id}"
+                                th:data-action-url="${item.actionUrl}">
 
                                 <div class="small">
                                     <p class="mb-1 fw-semibold"
@@ -109,8 +132,8 @@
 
                                     <span class="text-secondary"
                                           th:text="${item.createdAtDisplay}">
-                        28/07/2026 22:00
-                    </span>
+                                        28/07/2026 22:00
+                                    </span>
                                 </div>
                             </li>
 
@@ -118,11 +141,10 @@
                                 class="px-4 py-3 text-center">
 
                                 <a th:href="${currentNotificationsUrl != null
-                              ? currentNotificationsUrl
-                              : '#'}"
+                                    ? currentNotificationsUrl
+                                    : '#'}"
                                    href="#"
                                    class="pm-menu-link">
-
                                     Xem tất cả thông báo
                                 </a>
                             </li>
@@ -132,67 +154,99 @@
 
                 <div class="vr d-none d-md-block pm-topbar-divider"></div>
 
+                <!-- Khu vực tài khoản -->
                 <div class="dropdown">
                     <a href="#"
                        class="pm-topbar-user"
                        role="button"
                        data-bs-toggle="dropdown"
                        aria-expanded="false">
-          <span class="pm-topbar-avatar"
-                th:text="${currentUserInitials != null ? currentUserInitials : 'U'}">
-            U
-          </span>
+
+                        <span class="pm-topbar-avatar"
+                              th:text="${currentUserInitials != null
+                                  ? currentUserInitials
+                                  : 'U'}">
+                            U
+                        </span>
 
                         <span class="pm-topbar-user-text d-none d-md-block">
-            <span class="pm-topbar-user-name"
-                  th:text="${currentAccountName != null ? currentAccountName : 'Người dùng'}">
-              Người dùng
-            </span>
-            <span class="pm-topbar-user-role"
-                  th:text="${currentRoleDisplay != null ? currentRoleDisplay : 'Vai trò'}">
-              Vai trò
-            </span>
-          </span>
+                            <span class="pm-topbar-user-name"
+                                  th:text="${currentAccountName != null
+                                      ? currentAccountName
+                                      : 'Người dùng'}">
+                                Người dùng
+                            </span>
+
+                            <span class="pm-topbar-user-role"
+                                  th:text="${currentRoleDisplay != null
+                                      ? currentRoleDisplay
+                                      : 'Vai trò'}">
+                                Vai trò
+                            </span>
+                        </span>
                     </a>
 
-                    <div class="dropdown-menu dropdown-menu-end p-0 pm-user-menu">
-                        <div class="d-flex gap-3 align-items-center border-bottom px-3 py-3">
-            <span class="pm-topbar-avatar pm-topbar-avatar-lg"
-                  th:text="${currentUserInitials != null ? currentUserInitials : 'U'}">
-              U
-            </span>
+                    <div class="dropdown-menu dropdown-menu-end
+                                p-0 pm-user-menu">
+
+                        <div class="d-flex gap-3 align-items-center
+                                    border-bottom px-3 py-3">
+
+                            <span class="pm-topbar-avatar
+                                         pm-topbar-avatar-lg"
+                                  th:text="${currentUserInitials != null
+                                      ? currentUserInitials
+                                      : 'U'}">
+                                U
+                            </span>
 
                             <div>
                                 <h4 class="mb-0 small"
-                                    th:text="${currentAccountName != null ? currentAccountName : 'Người dùng'}">
+                                    th:text="${currentAccountName != null
+                                        ? currentAccountName
+                                        : 'Người dùng'}">
                                     Người dùng
                                 </h4>
+
                                 <span class="pm-role-badge mt-1"
-                                      th:text="${currentRoleDisplay != null ? currentRoleDisplay : 'Vai trò'}">
-                Vai trò
-              </span>
+                                      th:text="${currentRoleDisplay != null
+                                          ? currentRoleDisplay
+                                          : 'Vai trò'}">
+                                    Vai trò
+                                </span>
                             </div>
                         </div>
 
-                        <div class="p-3 d-flex flex-column gap-1 small lh-lg">
+                        <div class="p-3 d-flex flex-column gap-1
+                                    small lh-lg">
+
                             <a th:href="@{/profile}" href="#!">
                                 <i class="ti ti-user me-1"></i>
                                 <span>Hồ sơ cá nhân</span>
                             </a>
 
-                            <a th:href="@{/profile(section='password')}" href="#!">
+                            <a th:href="@{/profile(section='password')}"
+                               href="#!">
                                 <i class="ti ti-key me-1"></i>
                                 <span>Đổi mật khẩu</span>
                             </a>
                         </div>
 
                         <div class="border-top px-3 py-3">
-                            <form th:action="@{/logout-guard}" method="post" class="m-0">
+                            <form th:action="@{/logout-guard}"
+                                  method="post"
+                                  class="m-0">
+
                                 <input type="hidden"
                                        th:if="${_csrf}"
                                        th:name="${_csrf.parameterName}"
                                        th:value="${_csrf.token}">
-                                <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
+
+                                <button type="submit"
+                                        class="btn btn-sm
+                                               btn-outline-secondary
+                                               w-100">
+
                                     <i class="ti ti-logout me-1"></i>
                                     Đăng xuất
                                 </button>
@@ -204,12 +258,23 @@
         </div>
     </nav>
 
+    <!-- Nơi chứa popup thông báo realtime -->
+    <div id="notificationToastContainer"
+         class="pm-notification-toast-container"
+         aria-live="polite"
+         aria-atomic="false">
+    </div>
+
     <style>
         .pm-topbar {
             height: 60px;
             margin-left: 240px;
             z-index: 1020;
-            font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: "Plus Jakarta Sans",
+            system-ui,
+            -apple-system,
+            "Segoe UI",
+            sans-serif;
         }
 
         .pm-topbar-inner {
@@ -261,7 +326,10 @@
             text-decoration: none;
             background: #ffffff;
             border: 1px solid transparent;
-            transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+            transition:
+                    background-color .16s ease,
+                    border-color .16s ease,
+                    color .16s ease;
         }
 
         .pm-topbar-icon-btn:hover,
@@ -288,7 +356,8 @@
             font-size: 13px;
             font-weight: 700;
             white-space: nowrap;
-            box-shadow: 0 3px 10px rgba(5, 150, 105, .22);
+            box-shadow:
+                    0 3px 10px rgba(5, 150, 105, .22);
         }
 
         .pm-selling-btn:hover,
@@ -296,7 +365,8 @@
             border-color: #047857;
             background: #047857;
             color: #ffffff;
-            box-shadow: 0 5px 14px rgba(5, 150, 105, .3);
+            box-shadow:
+                    0 5px 14px rgba(5, 150, 105, .3);
             transform: translateY(-1px);
         }
 
@@ -325,10 +395,6 @@
         .pm-topbar-divider {
             height: 24px;
             opacity: .5;
-            /* Bootstrap's .vr sets align-self:stretch; with an explicit height that no longer
-               stretches the element, so it keeps the flex-start (top) fallback instead of
-               following .pm-topbar-actions' align-items:center like its siblings. Force it back
-               to center so the line sits level with the icon/avatar next to it. */
             align-self: center;
         }
 
@@ -392,6 +458,142 @@
             min-width: 320px;
         }
 
+        .pm-notification-header-link {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: #111827 !important;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color .16s ease;
+        }
+
+        .pm-notification-header-link:hover,
+        .pm-notification-header-link:focus-visible {
+            color: #111827 !important;
+            background: #ecfdf5;
+            outline: none;
+        }
+
+        .pm-notification-clickable {
+            cursor: pointer;
+            transition: background-color .16s ease;
+        }
+
+        .pm-notification-clickable:hover,
+        .pm-notification-clickable:focus-visible {
+            background: #ecfdf5;
+            outline: none;
+        }
+
+        .pm-notification-toast-container {
+            position: fixed;
+            top: 76px;
+            right: 20px;
+            z-index: 1090;
+            width: min(380px, calc(100vw - 32px));
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .pm-notification-toast {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #bbf7d0;
+            border-left: 4px solid #059669;
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow:
+                    0 16px 38px rgba(15, 23, 42, .18);
+            opacity: 0;
+            transform: translateX(28px);
+            transition:
+                    opacity .2s ease,
+                    transform .2s ease;
+            pointer-events: auto;
+        }
+
+        .pm-notification-toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .pm-notification-toast-content {
+            display: flex;
+            gap: 12px;
+            padding: 14px 14px 12px;
+        }
+
+        .pm-notification-toast-icon {
+            width: 36px;
+            height: 36px;
+            flex: 0 0 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 11px;
+            background: #dcfce7;
+            color: #059669;
+            font-size: 19px;
+        }
+
+        .pm-notification-toast-body {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .pm-notification-toast-title {
+            margin: 0 28px 4px 0;
+            color: #111827;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .pm-notification-toast-message {
+            margin: 0;
+            color: #6b7280;
+            font-size: 12px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .pm-notification-toast-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 26px;
+            height: 26px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #6b7280;
+        }
+
+        .pm-notification-toast-close:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .pm-notification-toast-actions {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0 14px 12px;
+        }
+
+        .pm-notification-toast-open {
+            border: 0;
+            background: transparent;
+            color: #059669;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
         .pm-user-menu {
             min-width: 240px;
         }
@@ -400,7 +602,8 @@
         .pm-notification-menu {
             border: 1px solid #e5e7eb;
             border-radius: 12px;
-            box-shadow: 0 14px 34px rgba(15, 23, 42, .12);
+            box-shadow:
+                    0 14px 34px rgba(15, 23, 42, .12);
             overflow: hidden;
         }
 
@@ -462,6 +665,13 @@
                 height: 36px;
                 padding: 0 11px;
             }
+
+            .pm-notification-toast-container {
+                top: 70px;
+                right: 16px;
+                left: 16px;
+                width: auto;
+            }
         }
     </style>
 
@@ -482,16 +692,333 @@
                     : String(value);
             }
 
-            /**
-             * Lấy số notification chưa đọc và danh sách
-             * notification mới nhất.
+            var topbar =
+                document.getElementById('topbar');
+
+            var notificationBasePath = topbar
+                ? safeText(
+                    topbar.dataset.notificationsBase
+                )
+                : '';
+
+            var csrfHeaderName = topbar
+                ? safeText(topbar.dataset.csrfHeader)
+                : '';
+
+            var csrfToken = topbar
+                ? safeText(topbar.dataset.csrfToken)
+                : '';
+
+            /*
+             * Lưu ID những thông báo đã có khi trang
+             * được tải để không popup lại thông báo cũ.
              */
-            function refreshNotificationTopbar() {
+            var knownNotificationIds = new Set();
+
+            document
+                .querySelectorAll(
+                    '.realtime-notification-item'
+                    + '[data-notification-id]'
+                )
+                .forEach(function (item) {
+                    knownNotificationIds.add(
+                        safeText(
+                            item.dataset.notificationId
+                        )
+                    );
+                });
+
+            /**
+             * Chỉ cho phép điều hướng tới URL nội bộ.
+             */
+            function internalUrl(value, fallback) {
+                var url =
+                    safeText(value).trim();
+
+                return url.indexOf('/') === 0
+                && url.indexOf('//') !== 0
+                    ? url
+                    : fallback;
+            }
+
+            function removeNotificationToast(toast) {
+                if (!toast
+                    || !toast.parentElement) {
+                    return;
+                }
+
+                toast.classList.remove('show');
+
+                window.setTimeout(function () {
+                    if (toast.parentElement) {
+                        toast.remove();
+                    }
+                }, 220);
+            }
+
+            /**
+             * Đánh dấu thông báo đã đọc rồi chuyển tới
+             * trang nghiệp vụ tương ứng.
+             */
+            function openNotificationAndNavigate(
+                notificationId,
+                actionUrl
+            ) {
+                var fallbackUrl = internalUrl(
+                    actionUrl,
+                    notificationBasePath || '/'
+                );
+
+                if (!notificationBasePath
+                    || !notificationId) {
+
+                    window.location.assign(fallbackUrl);
+                    return;
+                }
+
+                var headers = {
+                    'Accept': 'application/json'
+                };
+
+                if (csrfHeaderName && csrfToken) {
+                    headers[csrfHeaderName] =
+                        csrfToken;
+                }
+
+                fetch(
+                    notificationBasePath
+                    + '/'
+                    + encodeURIComponent(
+                        notificationId
+                    )
+                    + '/open',
+                    {
+                        method: 'POST',
+                        headers: headers,
+                        credentials: 'same-origin'
+                    }
+                )
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error(
+                                'Không thể mở thông báo'
+                            );
+                        }
+
+                        return response.json();
+                    })
+                    .then(function (result) {
+                        /*
+                         * Hỗ trợ cả hai kiểu response:
+                         * NotificationResponse trực tiếp hoặc
+                         * object có thuộc tính notification.
+                         */
+                        var openedNotification =
+                            result
+                            && result.notification
+                                ? result.notification
+                                : result;
+
+                        var serverActionUrl =
+                            openedNotification
+                                ? openedNotification.actionUrl
+                                : '';
+
+                        window.location.assign(
+                            internalUrl(
+                                serverActionUrl,
+                                fallbackUrl
+                            )
+                        );
+                    })
+                    .catch(function () {
+                        /*
+                         * Nếu request đánh dấu đã đọc gặp lỗi,
+                         * vẫn cho phép người dùng tới trang đích.
+                         */
+                        window.location.assign(
+                            fallbackUrl
+                        );
+                    });
+            }
+
+            /**
+             * Hiển thị popup của một thông báo mới.
+             */
+            function showNotificationToast(
+                notification
+            ) {
+                var container =
+                    document.getElementById(
+                        'notificationToastContainer'
+                    );
+
+                if (!container || !notification) {
+                    return;
+                }
+
+                /*
+                 * Chỉ giữ tối đa ba popup trên màn hình.
+                 */
+                while (container.children.length >= 3) {
+                    container.firstElementChild.remove();
+                }
+
+                var toast =
+                    document.createElement('div');
+
+                toast.className =
+                    'pm-notification-toast';
+
+                toast.setAttribute(
+                    'role',
+                    'status'
+                );
+
+                var content =
+                    document.createElement('div');
+
+                content.className =
+                    'pm-notification-toast-content';
+
+                var icon =
+                    document.createElement('span');
+
+                icon.className =
+                    'pm-notification-toast-icon';
+
+                var iconGlyph =
+                    document.createElement('i');
+
+                iconGlyph.className =
+                    'ti ti-bell';
+
+                icon.appendChild(iconGlyph);
+
+                var body =
+                    document.createElement('div');
+
+                body.className =
+                    'pm-notification-toast-body';
+
+                var title =
+                    document.createElement('p');
+
+                title.className =
+                    'pm-notification-toast-title';
+
+                title.textContent =
+                    safeText(notification.title);
+
+                var message =
+                    document.createElement('p');
+
+                message.className =
+                    'pm-notification-toast-message';
+
+                message.textContent =
+                    safeText(notification.message);
+
+                var actions =
+                    document.createElement('div');
+
+                actions.className =
+                    'pm-notification-toast-actions';
+
+                var openButton =
+                    document.createElement('button');
+
+                openButton.type = 'button';
+
+                openButton.className =
+                    'pm-notification-toast-open';
+
+                openButton.textContent =
+                    'Xem ngay';
+
+                var closeButton =
+                    document.createElement('button');
+
+                closeButton.type = 'button';
+
+                closeButton.className =
+                    'pm-notification-toast-close';
+
+                closeButton.setAttribute(
+                    'aria-label',
+                    'Đóng thông báo'
+                );
+
+                closeButton.textContent = '×';
+
+                actions.appendChild(openButton);
+
+                body.appendChild(title);
+                body.appendChild(message);
+                body.appendChild(actions);
+
+                content.appendChild(icon);
+                content.appendChild(body);
+
+                toast.appendChild(content);
+                toast.appendChild(closeButton);
+
+                container.appendChild(toast);
+
+                var openCurrentNotification =
+                    function () {
+
+                        openNotificationAndNavigate(
+                            safeText(notification.id),
+                            safeText(
+                                notification.actionUrl
+                            )
+                        );
+                    };
+
+                openButton.addEventListener(
+                    'click',
+                    openCurrentNotification
+                );
+
+                closeButton.addEventListener(
+                    'click',
+                    function (event) {
+                        event.stopPropagation();
+
+                        removeNotificationToast(
+                            toast
+                        );
+                    }
+                );
+
+                window.requestAnimationFrame(
+                    function () {
+                        toast.classList.add('show');
+                    }
+                );
+
+                /*
+                 * Popup tự đóng sau 8 giây.
+                 */
+                window.setTimeout(function () {
+                    removeNotificationToast(toast);
+                }, 8000);
+            }
+
+            /**
+             * Lấy số lượng chưa đọc và danh sách
+             * thông báo mới nhất.
+             */
+            function refreshNotificationTopbar(
+                showPopup
+            ) {
                 fetch(
                     SUMMARY_URL,
                     {
                         headers: {
-                            'Accept': 'application/json'
+                            'Accept':
+                                'application/json'
                         },
                         credentials: 'same-origin'
                     }
@@ -505,47 +1032,63 @@
 
                         return response.json();
                     })
-                    .then(renderNotificationTopbar)
+                    .then(function (data) {
+                        renderNotificationTopbar(
+                            data,
+                            showPopup === true
+                        );
+                    })
                     .catch(function () {
                         /*
                          * Bỏ qua lỗi mạng tạm thời.
-                         * SSE sẽ gửi sự kiện lại khi có thay đổi tiếp theo.
+                         * SSE sẽ phát sự kiện lại khi
+                         * có thay đổi tiếp theo.
                          */
                     });
             }
 
             /**
-             * Cập nhật badge và dropdown notification.
+             * Cập nhật badge và dropdown thông báo.
              */
-            function renderNotificationTopbar(data) {
+            function renderNotificationTopbar(
+                data,
+                showPopup
+            ) {
                 var count = Number(
                     data && data.unreadCount
                         ? data.unreadCount
                         : 0
                 );
 
-                var bell = document.querySelector(
-                    '[aria-label="Thông báo"]'
-                );
+                var bell =
+                    document.querySelector(
+                        '[aria-label="Thông báo"]'
+                    );
 
-                var dot = document.getElementById(
-                    'notificationDot'
-                );
+                var dot =
+                    document.getElementById(
+                        'notificationDot'
+                    );
 
-                var badge = document.getElementById(
-                    'notificationCountBadge'
-                );
+                var badge =
+                    document.getElementById(
+                        'notificationCountBadge'
+                    );
 
                 /*
-                 * Cập nhật chấm báo và số chưa đọc.
+                 * Cập nhật chấm đỏ và tổng số
+                 * thông báo chưa đọc.
                  */
                 if (count > 0) {
                     if (!dot && bell) {
-                        dot = document.createElement(
-                            'span'
-                        );
+                        dot =
+                            document.createElement(
+                                'span'
+                            );
 
-                        dot.id = 'notificationDot';
+                        dot.id =
+                            'notificationDot';
+
                         dot.className =
                             'pm-notification-dot';
 
@@ -558,9 +1101,10 @@
                     }
 
                     if (!badge) {
-                        badge = document.createElement(
-                            'span'
-                        );
+                        badge =
+                            document.createElement(
+                                'span'
+                            );
 
                         badge.id =
                             'notificationCountBadge';
@@ -570,8 +1114,7 @@
 
                         var header =
                             document.querySelector(
-                                '.pm-notification-menu '
-                                + 'li:first-child'
+                                '.pm-notification-header-link'
                             );
 
                         if (header) {
@@ -594,7 +1137,8 @@
                 }
 
                 /*
-                 * Xóa các notification cũ khỏi dropdown.
+                 * Xóa danh sách thông báo cũ khỏi
+                 * dropdown trước khi render lại.
                  */
                 document
                     .querySelectorAll(
@@ -630,12 +1174,60 @@
                         ? data.latestNotifications
                         : [];
 
+                /*
+                 * Chỉ lấy những thông báo chưa từng
+                 * xuất hiện và vẫn đang chưa đọc.
+                 */
+                var newNotifications =
+                    notifications.filter(
+                        function (notification) {
+                            var id = notification
+                                ? safeText(
+                                    notification.id
+                                )
+                                : '';
+
+                            return id
+                                && !knownNotificationIds
+                                    .has(id)
+                                && !Boolean(
+                                    notification.isRead
+                                );
+                        }
+                    );
+
+                /*
+                 * Ghi nhận tất cả ID vừa nhận để lần
+                 * tải sau không hiện lại popup cũ.
+                 */
+                notifications.forEach(
+                    function (notification) {
+                        if (notification
+                            && notification.id != null) {
+
+                            knownNotificationIds.add(
+                                safeText(
+                                    notification.id
+                                )
+                            );
+                        }
+                    }
+                );
+
+                if (showPopup) {
+                    newNotifications
+                        .slice(0, 3)
+                        .forEach(
+                            showNotificationToast
+                        );
+                }
+
                 if (!list || !viewAll) {
                     return;
                 }
 
                 /*
-                 * Trạng thái không có notification.
+                 * Trạng thái không có thông báo.
                  */
                 if (notifications.length === 0) {
                     var empty =
@@ -667,25 +1259,48 @@
                 }
 
                 /*
-                 * Dùng textContent thay vì innerHTML để tránh
-                 * đưa nội dung notification trực tiếp thành HTML.
+                 * Dùng textContent thay vì innerHTML
+                 * để nội dung thông báo không bị đưa
+                 * trực tiếp vào trang dưới dạng HTML.
                  */
                 notifications.forEach(
                     function (notification) {
                         var item =
-                            document.createElement('li');
+                            document.createElement(
+                                'li'
+                            );
 
                         item.className =
                             'p-3 border-bottom '
-                            + 'realtime-notification-item';
+                            + 'realtime-notification-item '
+                            + 'pm-notification-clickable';
+
+                        item.setAttribute(
+                            'role',
+                            'button'
+                        );
+
+                        item.tabIndex = 0;
+
+                        item.dataset.notificationId =
+                            safeText(notification.id);
+
+                        item.dataset.actionUrl =
+                            safeText(
+                                notification.actionUrl
+                            );
 
                         var content =
-                            document.createElement('div');
+                            document.createElement(
+                                'div'
+                            );
 
                         content.className = 'small';
 
                         var title =
-                            document.createElement('p');
+                            document.createElement(
+                                'p'
+                            );
 
                         title.className =
                             'mb-1 fw-semibold';
@@ -696,7 +1311,9 @@
                             );
 
                         var message =
-                            document.createElement('p');
+                            document.createElement(
+                                'p'
+                            );
 
                         message.className =
                             'mb-1 text-secondary';
@@ -707,7 +1324,9 @@
                             );
 
                         var createdAt =
-                            document.createElement('span');
+                            document.createElement(
+                                'span'
+                            );
 
                         createdAt.className =
                             'text-secondary';
@@ -732,44 +1351,84 @@
                 );
             }
 
-            /**
-             * Mốc THAO TÁC THẬT gần nhất của người dùng.
-             *
-             * Chỉ kiểm tab có hiển thị hay không là CHƯA ĐỦ: máy ở
-             * quầy thường để nguyên trình duyệt mở, tab vẫn "visible"
-             * suốt đêm dù không ai đụng vào. Khi đó vòng poll và SSE
-             * vẫn chạy ⇒ phiên vẫn bất tử, đúng cái lỗi đang muốn
-             * chữa. Nên phải đo bằng thao tác thật.
-             *
-             * CỐ Ý KHÔNG nghe 'mousemove': chuột bị va nhẹ khi lau
-             * bàn không phải là người dùng đang làm việc.
-             *
-             * 5 phút < 30 phút (hạn phiên) nên sau khi rời máy, lần
-             * ping cuối cùng cách lúc rời đi tối đa 5 phút — phiên
-             * chắc chắn hết hạn, chỉ muộn hơn đúng khoảng đó.
+            /*
+             * Bấm vào một thông báo trong dropdown.
              */
-            var IDLE_MS = 5 * 60 * 1000;
+            document.addEventListener(
+                'click',
+                function (event) {
+                    var item =
+                        event.target.closest(
+                            '.realtime-notification-item'
+                            + '[data-notification-id]'
+                        );
 
-            var lastActivityAt = Date.now();
+                    if (!item) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    openNotificationAndNavigate(
+                        item.dataset.notificationId,
+                        item.dataset.actionUrl
+                    );
+                }
+            );
+
+            /*
+             * Hỗ trợ mở thông báo bằng phím
+             * Enter hoặc Space.
+             */
+            document.addEventListener(
+                'keydown',
+                function (event) {
+                    if (event.key !== 'Enter'
+                        && event.key !== ' ') {
+                        return;
+                    }
+
+                    var item =
+                        event.target.closest(
+                            '.realtime-notification-item'
+                            + '[data-notification-id]'
+                        );
+
+                    if (!item) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    openNotificationAndNavigate(
+                        item.dataset.notificationId,
+                        item.dataset.actionUrl
+                    );
+                }
+            );
+
+            /**
+             * Mốc thao tác thật gần nhất của người dùng.
+             *
+             * Không sử dụng mousemove vì chuyển động chuột
+             * nhỏ không nhất thiết là người dùng đang làm việc.
+             */
+            var IDLE_MS =
+                5 * 60 * 1000;
+
+            var lastActivityAt =
+                Date.now();
 
             function isUserActive() {
-                return document.visibilityState === 'visible'
-                    && (Date.now() - lastActivityAt) <= IDLE_MS;
+                return document.visibilityState
+                    === 'visible'
+                    && (
+                        Date.now() - lastActivityAt
+                    ) <= IDLE_MS;
             }
 
             /**
-             * Mở kết nối SSE.
-             *
-             * EventSource tự kết nối lại nếu kết nối bị timeout
-             * hoặc mất mạng tạm thời.
-             *
-             * ĐÓNG LẠI KHI TAB BỊ ẨN HOẶC NGƯỜI DÙNG BỎ MÁY ĐI —
-             * xem khối "kiểm tra phiên" bên dưới để biết lý do.
-             * SseEmitter đặt timeout đúng 30 phút, bằng luôn thời hạn
-             * phiên: mỗi lần nó tự kết nối lại là một request mới làm
-             * mới phiên ngay tại thời điểm phiên đáng lẽ hết hạn, nên
-             * chỉ cần một tab bỏ quên là tài khoản không bao giờ được
-             * nhả ra.
+             * Mở kết nối SSE nhận thông báo realtime.
              */
             var notificationStream = null;
 
@@ -785,7 +1444,16 @@
                 notificationStream
                     .addEventListener(
                         'notification-refresh',
-                        refreshNotificationTopbar
+                        function () {
+                            /*
+                             * Khi server báo có thay đổi,
+                             * tải lại topbar và cho phép
+                             * hiển thị popup mới.
+                             */
+                            refreshNotificationTopbar(
+                                true
+                            );
+                        }
                     );
             }
 
@@ -806,23 +1474,21 @@
             );
 
             /**
-             * Người dùng thao tác trở lại sau một quãng nghỉ dài:
-             * mở lại SSE và nạp bù phần thông báo đã bỏ lỡ.
+             * Khi người dùng quay lại sau một khoảng
+             * nghỉ, mở lại SSE và tải bù thông báo.
              */
             function markUserActivity() {
                 lastActivityAt = Date.now();
 
-                /*
-                 * Điều kiện là "SSE đang đóng", KHÔNG phải "vừa mới
-                 * nghỉ đủ lâu": tab bị ẩn 10 giây cũng đã đóng SSE
-                 * rồi, mà quãng nghỉ đó chưa tới ngưỡng nghỉ dài —
-                 * đo theo ngưỡng thì quay lại tab sẽ không có thông
-                 * báo realtime nữa.
-                 */
-                if (document.visibilityState === 'visible'
+                if (document.visibilityState
+                    === 'visible'
                     && !notificationStream) {
+
                     openNotificationStream();
-                    refreshNotificationTopbar();
+
+                    refreshNotificationTopbar(
+                        true
+                    );
                 }
             }
 
@@ -837,7 +1503,9 @@
                     window.addEventListener(
                         eventName,
                         markUserActivity,
-                        { passive: true }
+                        {
+                            passive: true
+                        }
                     );
                 }
             );
@@ -847,10 +1515,7 @@
                 function () {
                     if (document.visibilityState
                         === 'visible') {
-                        /*
-                         * Chuyển sang tab này CŨNG là một thao tác
-                         * thật của người dùng.
-                         */
+
                         markUserActivity();
                     } else {
                         closeNotificationStream();
@@ -859,55 +1524,45 @@
             );
 
             /*
-             * Logic kiểm tra phiên đăng nhập hiện tại.
+             * Kiểm tra trạng thái phiên đăng nhập.
              */
             var POLL_MS = 30000;
 
             setInterval(
                 function () {
                     /*
-                     * CHỈ hỏi khi người dùng ĐANG THẬT SỰ LÀM VIỆC
-                     * (tab hiển thị VÀ có thao tác trong IDLE_MS).
+                     * Chỉ gửi request kiểm tra phiên khi
+                     * người dùng thực sự đang hoạt động.
                      *
-                     * Mọi request đều làm mới lastAccessedTime của
-                     * HttpSession, nên vòng lặp 30 giây này giữ
-                     * phiên sống VĨNH VIỄN — luật "30 phút không
-                     * thao tác thì hết phiên" (F-01) không bao giờ
-                     * có cơ hội chạy khi còn một tab bỏ quên ở đâu
-                     * đó. Cộng với maximumSessions(1) +
-                     * maxSessionsPreventsLogin(true) (F-02), người
-                     * dùng quên đăng xuất sẽ bị chặn ở mọi lần đăng
-                     * nhập sau, mà SessionRegistry nằm trong RAM
-                     * nên chỉ restart app mới gỡ được.
-                     *
-                     * Đóng luôn SSE ở đây: đó là chỗ DUY NHẤT phát
-                     * hiện được "đang mở màn hình nhưng đã bỏ đi" —
-                     * trình duyệt không bắn sự kiện nào khi người
-                     * dùng ngừng thao tác.
+                     * Nếu không còn hoạt động thì đóng SSE
+                     * để request nền không giữ phiên sống
+                     * mãi mãi.
                      */
                     if (!isUserActive()) {
                         closeNotificationStream();
                         return;
                     }
 
-                    fetch('/api/session/check')
-                        .then(function (res) {
+                    fetch(
+                        '/api/session/check'
+                    )
+                        .then(function (response) {
                             /*
-                             * Đi theo đích server điều hướng:
+                             * Server có thể điều hướng tới:
                              *
-                             * /signin?roleChanged:
-                             * Vai trò hoặc quyền đã bị đổi.
+                             * /signin?roleChanged
+                             * khi vai trò hoặc quyền thay đổi.
                              *
-                             * /signin:
-                             * Phiên đăng nhập đã hết hạn.
+                             * /signin
+                             * khi phiên đăng nhập hết hạn.
                              */
-                            if (res.redirected) {
+                            if (response.redirected) {
                                 window.location.replace(
-                                    res.url
+                                    response.url
                                 );
                             } else if (
-                                res.status === 401
-                                || res.status === 403
+                                response.status === 401
+                                || response.status === 403
                             ) {
                                 window.location.replace(
                                     '/signin'

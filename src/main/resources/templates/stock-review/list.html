@@ -134,7 +134,7 @@
             <div>
                 <h1 class="fs-4 mb-1">Rà soát kho</h1>
                 <p class="text-secondary mb-0">
-                    Rà soát số lượng, hạn dùng và tình trạng hàng trong kho
+                    Rà soát số lượng và hạn dùng của hàng hóa trong kho
                 </p>
             </div>
 
@@ -158,7 +158,7 @@
         <div th:replace="~{fragments/toast :: flash}"></div>
 
         <div class="row g-3 mb-4">
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl-4">
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -184,7 +184,7 @@
                 </div>
             </div>
 
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl-4">
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -209,7 +209,7 @@
                 </div>
             </div>
 
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl-4">
                 <div class="stock-card stat-card p-4">
                     <div class="d-flex justify-content-between">
                         <div>
@@ -234,30 +234,7 @@
                 </div>
             </div>
 
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="stock-card stat-card p-4">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <div class="text-secondary small mb-2">
-                                Rà soát tình trạng
-                            </div>
 
-                            <div class="fs-3 fw-bold"
-                                 th:text="${stats.conditionTypeCount}">
-                                0
-                            </div>
-
-                            <div class="text-danger small">
-                                Đánh giá chất lượng thực tế
-                            </div>
-                        </div>
-
-                        <div class="stat-icon">
-                            <i class="ti ti-shield-check"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <div class="stock-card p-4 mb-4">

@@ -6,13 +6,8 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * A tax period computed live from the transactions in it — nothing is stored. This is what the
- * "xem trước kỳ hiện tại" screen renders, and what pre-fills the figures when the period is
- * eventually closed. The docx allows either ("chốt tay hoặc tính runtime rồi lưu lại"), so the
- * numbers are a starting point, not a verdict.
- *
- * <p>Each VAT total is exposed together with the two components it was built from, because an
- * accountant checking a declaration needs to see <em>why</em> a figure moved, not just the net.</p>
+ * Kết quả tính một kỳ thuế trực tiếp từ chứng từ, không lưu gì cả — dùng cho màn "xem trước" và để
+ * điền sẵn số liệu khi chốt kỳ.
  */
 @Getter
 @AllArgsConstructor
@@ -25,56 +20,40 @@ public class TaxPeriodComputationResponse {
     private Integer revenueGroup;
     private String revenueGroupDisplay;
 
-    /**
-     * {@code group == 3} on its own terms — no longer means "GTGT uses the deduction method" (see
-     * {@code TaxRevenueGroup.DEDUCTION}'s javadoc). Kept for callers that still need group identity;
-     * the GTGT-deduction-breakdown block on the tax-period screens it used to gate is permanently
-     * hidden now (hardcoded off in the template), since no group uses that method any more.
-     */
+    /** {@code group == 3} — chỉ còn là định danh nhóm, không còn nghĩa "GTGT khấu trừ". */
     private boolean deductionGroup;
     private boolean taxExempt;
 
-    /**
-     * GTGT method: true whenever the period is not tax-exempt — <strong>both</strong> group 2 and
-     * group 3 now pay a flat percentage of revenue instead of output minus input.
-     */
+    /** Phương pháp GTGT trực tiếp trên doanh thu — true khi kỳ không miễn thuế (áp dụng cả Nhóm 2 lẫn Nhóm 3). */
     private boolean percentageMethod;
 
-    /** Revenue of the period: sales that are "còn hiệu lực" plus hoa hồng NCC and hàng biếu tặng. */
+    /** Doanh thu của kỳ: hóa đơn còn hiệu lực cộng hàng biếu tặng. */
     private BigDecimal periodRevenue;
 
     /**
-     * Doanh thu tính thuế TNCN — {@code periodRevenue} cộng thêm các khoản riêng cho TNCN (tiền đền
+     * Doanh thu tính thuế TNCN = {@link #periodRevenue} cộng thêm các khoản riêng cho TNCN (tiền đền
      * bù của nhân viên, giá vốn hàng thừa kiểm kê không rõ nguồn gốc, phần nhà thuốc giữ lại khi hoàn
-     * tiền khách &lt;100%) — xem {@code TaxperiodsnapshotService.taxableIncomeRevenueOf}. Khác
-     * {@code taxableIncome} (đã trừ chi phí hợp lý) và khác {@code periodRevenue} (GTGT) mỗi khi có
-     * ít nhất một trong ba khoản trên phát sinh trong kỳ.
+     * tiền khách &lt;100%). Chỉ dùng cho TNCN, không dùng cho GTGT.
      */
     private BigDecimal taxableIncomeRevenue;
 
     /**
-     * "Thu nhập phát sinh (thu nhập khác)" từ trả hàng một phần ({@code Ho_so_nghiep_vu_v2.xlsx},
-     * sheet "05_Tra_Hang") — phần nhà thuốc GIỮ LẠI khi hoàn tiền khách ở tỷ lệ &lt;100%, một trong
-     * ba khoản cộng vào {@link #taxableIncomeRevenue}. Tách riêng ra đây (thay vì chỉ nằm trong tổng)
-     * để hiển thị được trên `tax-period/preview.html`, cùng tinh thần "mỗi tổng đi kèm các thành
-     * phần đã tạo ra nó" của DTO này. Hai khoản còn lại (tiền đền bù nhân viên, giá vốn hàng thừa
-     * kiểm kê không rõ nguồn gốc) chưa được tách riêng — chỉ nằm trong {@link #taxableIncomeRevenue}.
+     * "Thu nhập phát sinh (thu nhập khác)" từ trả hàng một phần — phần nhà thuốc GIỮ LẠI khi hoàn
+     * tiền khách ở tỷ lệ &lt;100%, một trong ba khoản cộng vào {@link #taxableIncomeRevenue}. Tách
+     * riêng để hiển thị trên `tax-period/preview.html`.
      */
     private BigDecimal customerReturnRetained;
 
-    /** The percentage-method rate as a human number (e.g. {@code 1.00} for 1%). */
+    /** Thuế suất GTGT dạng phần trăm cho người đọc (vd {@code 1.00} nghĩa là 1%). */
     private BigDecimal directVatRatePercent;
 
-    // --- output VAT. vatOutputFromSales/vatOutput are the same figure now (revenue × 1%);
-    //     vatOutputReturnDeduction is always zero — kept as separate fields only so the DTO shape is
-    //     unchanged, since the "Nhóm 3 khấu trừ" block that showed them broken out is hidden for good.
+    // --- GTGT đầu ra. vatOutputFromSales/vatOutput hiện là cùng một số (doanh thu × 1%);
+    //     vatOutputReturnDeduction luôn bằng 0 — giữ field riêng để không đổi shape DTO.
     private BigDecimal vatOutputFromSales;
     private BigDecimal vatOutputReturnDeduction;
     private BigDecimal vatOutput;
 
-    // --- input VAT. Always zero now — no group deducts input VAT against output VAT any more.
-    //     Kept as fields (never removed from the DTO, never shown) because Taxperiodsnapshot's
-    //     vatInput/vatCarryforwardIn/vatCarryforwardOut columns stay in the schema unchanged.
+    // --- GTGT đầu vào. Luôn bằng 0 — không nhóm nào còn khấu trừ đầu vào nữa.
     private BigDecimal vatInputFromPurchases;
     private BigDecimal vatInputReturnReversal;
     private BigDecimal vatInput;
@@ -83,55 +62,76 @@ public class TaxPeriodComputationResponse {
     private BigDecimal vatCarryforwardOut;
     private BigDecimal vatPayable;
 
-    // --- personal income tax. Only populated (and only meaningful) when pitCostMethod is true.
+    // --- thuế TNCN. Chỉ có ý nghĩa khi pitCostMethod = true.
     private BigDecimal costOfGoodsSold;
     private BigDecimal operatingCost;
 
     /**
-     * Loss on supplier returns not refunded in full ({@code originalLineValue - lineRefund} summed
-     * across the period's approved supplier-return lines) — a chi phí hợp lý per {@code
-     * Tax-Invoice.xlsx}, sheet "03_Cong_Thuc_TNCN". Zero whenever no supplier return fell short.
+     * Khoản lỗ do NCC không hoàn đủ tiền khi trả hàng ({@code originalLineValue - lineRefund} cộng
+     * dồn trên các dòng trả hàng NCC đã duyệt trong kỳ) — một chi phí hợp lý. Bằng 0 nếu không có
+     * trường hợp nào.
      */
     private BigDecimal supplierReturnShortfall;
 
     private BigDecimal taxableIncome;
     private BigDecimal incomeTax;
 
-    /**
-     * PIT rate as a human number: {@code 0.50} for group 2 on the revenue method, {@code 15.00} for
-     * group 2 on the profit method, {@code 17.00} for group 3.
-     */
+    /** Thuế suất TNCN dạng phần trăm: 0,50 (Nhóm 2 Cách 1), 15,00 (Nhóm 2 Cách 2), 17,00 (Nhóm 3). */
     private BigDecimal incomeTaxRatePercent;
 
+    // --- Phần bóc tách lợi nhuận (chỉ có ý nghĩa khi pitCostMethod = true):
+    //     Doanh thu (periodRevenue) − giảm trừ (revenueDeduction) + thu nhập khác (otherIncome)
+    //     − giá vốn (costOfGoodsSold) − chi phí hoạt động (operatingCost, đã gồm
+    //     supplierReturnShortfall) = lợi nhuận trước thuế (profitBeforeTax);
+    //     lợi nhuận trước thuế − thuế TNCN (incomeTax) = lợi nhuận sau thuế (netProfitAfterTax).
+
     /**
-     * Tổng thuế phải nộp trong kỳ = {@code vatPayable + incomeTax} (cùng công thức
-     * {@code PricesettingService.totalTax} đã dùng cho một sản phẩm, áp cho cả kỳ). Không có cột
-     * riêng trên {@code Taxperiodsnapshot} — tính lại mỗi lần từ hai cột đã lưu sẵn
-     * ({@code vatOutput}, {@code incomeTax}), giống mọi tổng khác trong DTO này.
+     * "Các khoản giảm trừ doanh thu" — luôn bằng 0 trong hệ thống này: chiết khấu đã được trừ thẳng
+     * vào {@code Invoice.total} lúc bán, còn hàng trả lại đã được loại trừ tại nguồn qua cơ chế hóa
+     * đơn thay thế. Giữ field để hiển thị đủ dòng, dù luôn ra 0đ.
      */
+    private BigDecimal revenueDeduction;
+
+    /**
+     * "Thu nhập khác" = {@link #taxableIncomeRevenue} − {@link #periodRevenue} — gồm tiền đền bù
+     * nhân viên, giá vốn hàng thừa kiểm kê không rõ nguồn gốc, và {@link #customerReturnRetained}.
+     */
+    private BigDecimal otherIncome;
+
+    /**
+     * "Lợi nhuận trước thuế" = {@link #taxableIncomeRevenue} − {@link #costOfGoodsSold} −
+     * {@link #operatingCost} − {@link #supplierReturnShortfall}, <strong>không floor tại 0</strong>
+     * (khác {@link #taxableIncome}, vốn floor vì một quý lỗ không phải nộp thuế âm). Bằng 0 khi
+     * {@link #pitCostMethod} là false.
+     */
+    private BigDecimal profitBeforeTax;
+
+    /** "Lợi nhuận sau thuế" = {@link #profitBeforeTax} − {@link #incomeTax}. Bằng 0 khi {@link #pitCostMethod} là false. */
+    private BigDecimal netProfitAfterTax;
+
+    /** Tổng thuế phải nộp trong kỳ = {@code vatPayable + incomeTax}. Không lưu cột riêng, tính lại mỗi lần. */
     private BigDecimal totalTaxPayable;
 
-    /** How many source documents fell in the period — a sanity check for an empty-looking result. */
+    /** Số chứng từ phát sinh trong kỳ — dùng để kiểm tra nhanh khi kết quả trông trống rỗng. */
     private int invoiceCount;
     private int customerReturnCount;
     private int purchaseInvoiceCount;
     private int supplierReturnCount;
 
-    /** Purchase invoices inside the period that were skipped as not deductible. */
+    /** Số phiếu nhập trong kỳ bị loại vì không đủ điều kiện khấu trừ. */
     private int nonDeductiblePurchaseCount;
 
-    /** Label of the period supplying {@code vatCarryforwardIn}; null when this is the first one. */
+    /** Nhãn kỳ cung cấp {@code vatCarryforwardIn}; null nếu đây là kỳ đầu tiên. */
     private String previousPeriodLabel;
 
-    /** True when a snapshot with this {@code periodLabel} has already been closed. */
+    /** True khi kỳ với {@code periodLabel} này đã được chốt. */
     private boolean alreadyClosed;
 
     /**
-     * TNCN method: true when this period's personal income tax is computed on profit (taxable-income
-     * revenue minus chi phí hợp lý) rather than a flat rate on revenue. Always true for group 3;
-     * for group 2 it follows {@code Financialsetting.taxCalculationMethod} — the Owner's choice
-     * between the two. Independent from {@link #percentageMethod}, which is about GTGT only: a
-     * group-2 period can be GTGT-percentage <em>and</em> PIT-cost-method at the same time.
+     * Phương pháp TNCN: true khi tính theo lợi nhuận (doanh thu tính TNCN trừ chi phí hợp lý) thay vì
+     * tỷ lệ cố định trên doanh thu. Luôn true với Nhóm 3; Nhóm 2 theo lựa chọn
+     * {@code Financialsetting.taxCalculationMethod}. Độc lập với {@link #percentageMethod} (chỉ nói
+     * về GTGT) — một kỳ Nhóm 2 có thể vừa GTGT-theo-tỷ-lệ vừa TNCN-theo-lợi-nhuận.
      */
     private boolean pitCostMethod;
 }

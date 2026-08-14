@@ -4,6 +4,7 @@ import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.ReturnPurchaseCreateRequest;
 import com.example.project.dto.response.ReturnPurchaseLineResponse;
 import com.example.project.dto.response.ReturnPurchaseListItemResponse;
+import com.example.project.dto.response.SlipCreateOutcome;
 import com.example.project.service.ReturnPurchaseService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -79,10 +80,9 @@ public class ReturnPurchaseController {
 
     @GetMapping("/create")
     public String createPage(Model model) {
-        ReturnPurchaseCreateRequest form = new ReturnPurchaseCreateRequest();
-        // Điền sẵn tỷ lệ NCC chấp nhận hoàn theo thiết lập tài chính; Owner chỉnh được cho từng phiếu.
-        form.setRefundRate(returnPurchaseService.getDefaultRefundRate());
-        model.addAttribute("form", form);
+        // Số tiền NCC chấp nhận hoàn do Owner gõ vào; màn tạo tự điền sẵn giá trị hàng đang chọn
+        // (hoàn đủ) ngay trên trình duyệt, nên không có gì để điền sẵn từ server.
+        model.addAttribute("form", new ReturnPurchaseCreateRequest());
         addCreateFormOptions(model);
         return "return-purchase/create";
     }
@@ -101,12 +101,20 @@ public class ReturnPurchaseController {
                          Model model) {
         boolean asDraft = "draft".equals(action);
         try {
-            Integer returnId = returnPurchaseService.createReturn(
+            SlipCreateOutcome outcome = returnPurchaseService.createReturn(
                     form, currentUserContext.getCurrentAccountId(), asDraft);
+
+            // Phiếu trùng: lần bấm này KHÔNG tạo gì thêm, nên không được báo "thành công" — đưa
+            // người dùng tới đúng phiếu đã lưu kèm cảnh báo. Xem SlipCreateOutcome.
+            if (outcome.duplicate()) {
+                redirectAttributes.addFlashAttribute("warningMessage", outcome.message());
+                return "redirect:" + BASE + "/" + outcome.id();
+            }
+
             redirectAttributes.addFlashAttribute("successMessage", asDraft
                     ? "Đã lưu nháp phiếu trả hàng nhà cung cấp"
                     : "Tạo phiếu trả hàng nhà cung cấp thành công (đã duyệt, tồn kho đã cập nhật)");
-            return "redirect:" + BASE + "/" + returnId;
+            return "redirect:" + BASE + "/" + outcome.id();
         } catch (IllegalArgumentException exception) {
             model.addAttribute("errorMessage", exception.getMessage());
             model.addAttribute("form", form);
@@ -119,7 +127,6 @@ public class ReturnPurchaseController {
     private void addCreateFormOptions(Model model) {
         model.addAttribute("returnablePurchases", returnPurchaseService.listReturnablePurchases(null));
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        model.addAttribute("defaultRefundRate", returnPurchaseService.getDefaultRefundRate());
         model.addAttribute("autoOffsetDebt", returnPurchaseService.isAutoOffsetDebt());
         model.addAttribute("basePath", BASE);
     }

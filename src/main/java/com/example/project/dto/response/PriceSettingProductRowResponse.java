@@ -7,19 +7,15 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * One collapsible product row on the Price Settings screen ({@code /owner/price-settings}). The
- * table lists products; expanding a row reveals its {@link PriceSettingRowResponse} unit rows,
- * which are the actually-editable cells.
+ * Một dòng sản phẩm có thể mở rộng trên màn Cài đặt giá bán. Mở dòng ra sẽ hiện các đơn vị
+ * ({@link PriceSettingRowResponse}) — nơi thực sự sửa được giá.
  *
- * <p>{@code averageImportPricePerBase} is read-only reference info: the arithmetic mean
- * ("trung bình cộng") of {@code Batch.importPricePerBase} across the product's <strong>in-stock</strong>
- * batches only ({@code storageQuantity > 0} and not deactivated), so it reflects the cost of goods
- * actually sitting in the warehouse rather than being dragged around by long-since-sold-out lots.
- * It is GROSS/VAT-inclusive per the team's confirmed convention (see CLAUDE.md) and is never
- * written back or folded into a saved price. {@code null} when the product has no in-stock batch.</p>
+ * <p>{@code averageImportPricePerBase} chỉ mang tính tham khảo: trung bình cộng giá nhập
+ * ({@code Batch.importPricePerBase}) của các lô <strong>còn tồn kho</strong>, giá GROSS, không
+ * bao giờ ghi ngược lại hay tính vào công thức lưu giá. {@code null} nếu sản phẩm không còn lô tồn.</p>
  *
- * <p>{@code basePrice} is the product's representative price for the price asc/desc sort — the
- * base unit's {@code sellPrice}, since every other unit is derived from it by ratio.</p>
+ * <p>{@code basePrice} là giá dùng để sắp xếp tăng/giảm theo giá — giá bán của đơn vị cơ bản, vì
+ * mọi đơn vị khác đều suy ra từ đó theo tỷ lệ quy đổi.</p>
  */
 @Getter
 @AllArgsConstructor
@@ -35,6 +31,7 @@ public class PriceSettingProductRowResponse {
 
     private List<PriceSettingRowResponse> units;
 
+    // Trả về số lượng đơn vị của sản phẩm (0 nếu chưa có đơn vị nào).
     public int getUnitCount() {
         return units == null ? 0 : units.size();
     }

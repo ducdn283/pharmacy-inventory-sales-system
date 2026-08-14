@@ -25,16 +25,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Expense ("Phiếu chi") screens (list / detail / create / submit / approve / reject / confirm
- * payment / cancel). Owner and Accountant retain their full existing list scope. Pharmacists only
- * see their own slips and may create customer-return refund slips under
- * {@link ExpenseType#PHARMACIST_REFUND_LIMIT} — and, since one of those is always under
- * {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} too, never actually hit {@code PENDING} (BA
- * 2026-08-13, see {@code ExpenseService.pharmacistAutoApproves}). Approve/reject are Owner-only,
- * same as Stock Adjustment. Confirm-payment is Owner-only for everyone else — even a slip an
- * Accountant raised or that was approved on their behalf (BA 2026-08) — EXCEPT a Pharmacist may
- * also confirm their own slip when it stayed under that same auto-approve threshold (BA 2026-08-13,
- * mapped under {@code /pharmacist/**} too — {@code ExpenseService} re-checks ownership and amount).
+ * Màn Phiếu chi (danh sách / chi tiết / tạo / gửi duyệt / duyệt / từ chối / xác nhận thanh toán /
+ * hủy). Owner và Accountant xem toàn bộ danh sách; Dược sĩ chỉ thấy phiếu của mình và chỉ tạo được
+ * phiếu hoàn tiền trả hàng dưới {@link ExpenseType#PHARMACIST_REFUND_LIMIT} — phiếu này luôn dưới
+ * {@link ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} nên không bao giờ rơi vào {@code PENDING}.
+ * Duyệt/từ chối chỉ Chủ nhà thuốc. Xác nhận thanh toán mặc định cũng chỉ Chủ nhà thuốc (kể cả với
+ * phiếu do Kế toán lập/được duyệt hộ) — riêng Dược sĩ được tự xác nhận thanh toán cho phiếu của
+ * chính mình nếu vẫn dưới ngưỡng tự động duyệt (route mở dưới {@code /pharmacist/**} nữa,
+ * {@code ExpenseService} tự kiểm lại cả quyền sở hữu lẫn số tiền).
  */
 @Controller
 public class ExpensePageController {
@@ -54,6 +52,7 @@ public class ExpensePageController {
         this.financialsettingService = financialsettingService;
     }
 
+    // Danh sách phiếu chi có lọc/phân trang; Dược sĩ chỉ thấy phiếu do chính mình lập.
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE, PHARMACIST_BASE})
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
                         @RequestParam(name = "fromDate", required = false) String fromDate,
@@ -100,6 +99,7 @@ public class ExpensePageController {
         return "expense/list";
     }
 
+    // Hiển thị form tạo phiếu chi mới, tự điền loại phiếu mặc định theo vai trò/nguồn gốc điều hướng.
     @GetMapping({OWNER_BASE + "/create", ACCOUNTANT_BASE + "/create", PHARMACIST_BASE + "/create"})
     public String createPage(@RequestParam(name = "expenseType", required = false) String expenseType,
                              @RequestParam(name = "returnId", required = false) Integer returnId,
@@ -122,6 +122,7 @@ public class ExpensePageController {
         return "expense/create";
     }
 
+    // Xử lý submit form tạo phiếu chi (lưu nháp hoặc gửi/tự duyệt), báo thông báo phù hợp theo kết quả.
     @PostMapping({OWNER_BASE + "/create", ACCOUNTANT_BASE + "/create", PHARMACIST_BASE + "/create"})
     public String create(@ModelAttribute("form") ExpenseCreateRequest form,
                           @RequestParam(name = "action", required = false) String action,
@@ -144,8 +145,8 @@ public class ExpensePageController {
             if (asDraft) {
                 message = "Đã lưu nháp phiếu chi";
             } else if (ExpenseStatus.AWAITING_PAYMENT.equals(expenseService.getDetail(expenseId).getStatusName())) {
-                // Owner tự duyệt, và dược sĩ dưới ngưỡng ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT
-                // cũng vậy (BA 2026-08-13) — cả hai đều nhảy thẳng qua Chờ duyệt.
+                // Owner tự duyệt, Dược sĩ dưới ngưỡng PHARMACIST_AUTO_APPROVE_LIMIT cũng vậy — cả
+                // hai đều nhảy thẳng qua Chờ duyệt.
                 message = "Tạo phiếu chi thành công (đã tự động duyệt, đang chờ thanh toán)";
             } else {
                 message = "Đã gửi phiếu chi, đang chờ duyệt";
@@ -165,8 +166,8 @@ public class ExpensePageController {
     }
 
     /**
-     * Everything the create form needs besides the form object itself. Shared by the GET and the
-     * validation-failure re-render so the customer-return picker survives a rejected submit.
+     * Mọi dữ liệu form tạo phiếu cần ngoài chính đối tượng form — dùng chung cho GET và cho lần
+     * render lại khi validate lỗi, để danh sách phiếu trả hàng không bị mất khi submit thất bại.
      */
     private void addCreateFormOptions(Model model, String basePath) {
         boolean pharmacist = currentUserContext.isPharmacist();
@@ -191,11 +192,9 @@ public class ExpensePageController {
         model.addAttribute("purchaseInvoiceAmounts", expenseService.payablePurchaseInvoiceAmounts());
         model.addAttribute("purchaseLinkableTypes", expenseService.purchaseLinkableTypes());
         model.addAttribute("creatorName", currentUserContext.getCurrentAccountName());
-        // Cash is Owner/Pharmacist-only; chuyển khoản is Owner/Accountant-only (BA 2026-08-13) — a
-        // Pharmacist's shift only ever opens with a fixed cash float, never a bank transfer, and an
-        // Accountant never opens the drawer at all. Enforced server-side in
-        // ExpenseService.resolveSplit — this is just so the form does not offer a field the server
-        // will reject.
+        // Tiền mặt: Owner/Dược sĩ. Chuyển khoản: Owner/Kế toán — Dược sĩ ca chỉ mở bằng quỹ tiền
+        // mặt, Kế toán không giữ quỹ tiền mặt. Server kiểm lại ở ExpenseService.resolveSplit, đây
+        // chỉ để form không hiện ô mà server sẽ từ chối.
         model.addAttribute("canPayCash", currentUserContext.isOwner() || currentUserContext.isPharmacist());
         model.addAttribute("canPayBanking", !currentUserContext.isPharmacist());
         model.addAttribute("basePath", basePath);
@@ -208,6 +207,7 @@ public class ExpensePageController {
         model.addAttribute("bankAccountBalance", settings.getBankAccountBalance());
     }
 
+    // Trang chi tiết một phiếu chi, kèm cờ cho biết người xem hiện tại có được hủy phiếu hay không.
     @GetMapping({OWNER_BASE + "/{expenseId}", ACCOUNTANT_BASE + "/{expenseId}", PHARMACIST_BASE + "/{expenseId}"})
     public String detail(@PathVariable Integer expenseId, HttpServletRequest request, Model model,
                          RedirectAttributes redirectAttributes) {
@@ -229,6 +229,7 @@ public class ExpensePageController {
 
     @PostMapping({OWNER_BASE + "/{expenseId}/submit", ACCOUNTANT_BASE + "/{expenseId}/submit",
             PHARMACIST_BASE + "/{expenseId}/submit"})
+    // Gửi phiếu nháp đi duyệt (hoặc tự duyệt luôn nếu người gửi là Chủ nhà thuốc).
     public String submit(@PathVariable Integer expenseId,
                           HttpServletRequest request,
                           RedirectAttributes redirectAttributes) {
@@ -244,9 +245,10 @@ public class ExpensePageController {
         return "redirect:" + basePath + "/" + expenseId;
     }
 
-    // redirectTo: optional override used by the unified Approve List (/owner/approvals) so its
-    // Duyệt/Từ chối buttons land back on that screen; absent → original behaviour (expense detail).
+    // redirectTo: cho phép màn Duyệt tổng hợp (/owner/approvals) điều hướng quay lại chính nó sau
+    // khi Duyệt/Từ chối; bỏ trống thì quay về trang chi tiết phiếu chi như mặc định.
     @PostMapping(OWNER_BASE + "/{expenseId}/approve")
+    // Chủ nhà thuốc duyệt phiếu đang Chờ duyệt -> chuyển sang Chờ thanh toán.
     public String approve(@PathVariable Integer expenseId,
                           @RequestParam(name = "redirectTo", required = false) String redirectTo,
                           RedirectAttributes redirectAttributes) {
@@ -260,6 +262,7 @@ public class ExpensePageController {
     }
 
     @PostMapping(OWNER_BASE + "/{expenseId}/reject")
+    // Chủ nhà thuốc từ chối phiếu đang Chờ duyệt -> quay về Nháp.
     public String reject(@PathVariable Integer expenseId,
                          @RequestParam(name = "redirectTo", required = false) String redirectTo,
                          RedirectAttributes redirectAttributes) {
@@ -273,15 +276,14 @@ public class ExpensePageController {
     }
 
     /**
-     * Confirms an {@link com.example.project.constant.ExpenseStatus#AWAITING_PAYMENT} slip's money
-     * actually left. Owner-only for most slips (mapped under {@code /owner/**}, matching
-     * approve/reject), even for a slip an Accountant raised or that an Owner approved on their
-     * behalf — EXCEPT a Pharmacist may also confirm their own slip when it's under
-     * {@code ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT} (BA 2026-08-13, mapped under
-     * {@code /pharmacist/**} too; {@code ExpenseService} still re-checks both the ownership and the
-     * amount, this route mapping alone is not the real gate). This is NOT the old, deleted
-     * "mark-paid" (that let a slip under-pay itself and be topped up later) — a phiếu chi is still
-     * one payment for its whole posted amount; this only confirms that amount really left.
+     * Xác nhận tiền của một phiếu {@link com.example.project.constant.ExpenseStatus#AWAITING_PAYMENT}
+     * đã thực sự rời quỹ. Mặc định chỉ Chủ nhà thuốc (route dưới {@code /owner/**}, giống duyệt/từ
+     * chối), kể cả với phiếu Kế toán lập hoặc được duyệt hộ — trừ trường hợp Dược sĩ tự xác nhận
+     * phiếu của chính mình khi còn dưới {@code ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT} (route
+     * mở thêm dưới {@code /pharmacist/**}; {@code ExpenseService} vẫn tự kiểm lại quyền sở hữu và
+     * số tiền, route mapping không phải chốt chặn duy nhất). Không phải cơ chế "chi thiếu rồi trả
+     * góp" — một phiếu chi vẫn là một lần chi trọn số tiền đã ghi, hàm này chỉ xác nhận số đó đã
+     * thực sự rời quỹ.
      */
     @PostMapping({OWNER_BASE + "/{expenseId}/confirm-payment", PHARMACIST_BASE + "/{expenseId}/confirm-payment"})
     public String confirmPayment(@PathVariable Integer expenseId,
@@ -303,6 +305,7 @@ public class ExpensePageController {
 
     @PostMapping({OWNER_BASE + "/{expenseId}/cancel", ACCOUNTANT_BASE + "/{expenseId}/cancel",
             PHARMACIST_BASE + "/{expenseId}/cancel"})
+    // Hủy phiếu chi (chỉ người tạo, và chỉ khi phiếu chưa hoàn thành thật).
     public String cancel(@PathVariable Integer expenseId,
                           @RequestParam(name = "reason", required = false) String reason,
                           HttpServletRequest request,
@@ -317,6 +320,7 @@ public class ExpensePageController {
         return "redirect:" + basePath + "/" + expenseId;
     }
 
+    // Suy ra tiền tố URL theo vai trò (/owner, /accountant, /pharmacist) từ request hiện tại.
     private String resolveBasePath(HttpServletRequest request) {
         String uri = request.getRequestURI();
         if (uri.startsWith(PHARMACIST_BASE)) {

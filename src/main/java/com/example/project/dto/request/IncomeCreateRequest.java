@@ -6,47 +6,50 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * Form backing the "create income" screen. {@code applicantID} is always the current user.
- * Reference documents are required by income type: debt sales invoice (CUSTOMER), approved
- * supplier return (SUPPLIER), approved stock adjustment (EMPLOYEE),
- * closed shift report with cash shortage (SHIFT_SHORTAGE).
+ * Form tạo phiếu thu — người lập luôn là tài khoản hiện tại.
+ * Chứng từ liên quan bắt buộc theo loại: hóa đơn nợ (khách hàng), phiếu trả NCC (nhà cung cấp),
+ * phiếu điều chỉnh kho (nhân viên), báo cáo ca thiếu quỹ (thất thoát ca).
  */
 @Getter
 @Setter
 public class IncomeCreateRequest {
 
-    /** One of {@link com.example.project.dto.response.IncomeTypeOptionResponse}'s type codes. */
+    /** Một trong các mã loại phiếu thu — xem {@link com.example.project.dto.response.IncomeTypeOptionResponse}. */
     private String incomeType;
 
+    /** Nội dung / lý do thu tiền. */
     private String reason;
 
     /** Tổng số tiền thu. */
     private BigDecimal amount;
 
+    /** Số tiền thu bằng tiền mặt. */
     private BigDecimal paidByCash;
 
+    /** Số tiền thu chuyển khoản. */
     private BigDecimal paidByBanking;
 
-    /** Set when {@code incomeType} is SUPPLIER. */
+    /** Id nhà cung cấp — bắt buộc khi loại SUPPLIER. */
     private Integer supplierId;
 
-    /** Set when {@code incomeType} is CUSTOMER. */
+    /** Id khách hàng — bắt buộc khi loại CUSTOMER. */
     private Integer customerId;
 
-    /** Set when {@code incomeType} is EMPLOYEE. */
+    /** Id người chịu trách nhiệm — bắt buộc khi loại EMPLOYEE hoặc SHIFT_SHORTAGE. */
     private Integer accountId;
 
-    /** Sales invoice with debt — set when {@code incomeType} is CUSTOMER. */
+    /** Id hóa đơn bán còn nợ — bắt buộc khi loại CUSTOMER. */
     private Integer invoiceId;
 
-    /** Approved supplier return — set when {@code incomeType} is SUPPLIER. */
+    /** Id phiếu trả NCC đã duyệt — bắt buộc khi loại SUPPLIER. */
     private Integer returnId;
 
-    /** Approved stock adjustment — set when {@code incomeType} is EMPLOYEE. */
+    /** Id phiếu điều chỉnh kho — bắt buộc khi loại EMPLOYEE. */
     private Integer stockAdjustmentId;
 
-    /** Closed shift report with cash shortage — set when {@code incomeType} is SHIFT_SHORTAGE. */
+    /** Id báo cáo ca còn thiếu tiền mặt — bắt buộc khi loại SHIFT_SHORTAGE. */
     private Integer shiftReportOfAccountId;
 
+    /** Ghi chú trên phiếu thu. */
     private String note;
 }

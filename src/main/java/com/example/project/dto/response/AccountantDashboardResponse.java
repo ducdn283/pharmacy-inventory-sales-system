@@ -7,18 +7,33 @@ public class AccountantDashboardResponse {
 
     private final String greetingName;
     private final String subtitle;
+
     private final List<QuickAction> quickActions;
     private final List<MetricCard> metrics;
-    private final DashboardView.DashboardChart overviewChart;
+
+    private final DashboardView.DashboardChart
+            overviewChart;
+
     private final String selectedPeriod;
     private final String selectedDate;
     private final String periodDescription;
+
     private final List<AlertItem> alerts;
-    private final List<ActivityRow> recentActivities;
+
+    private final List<ActivityRow>
+            recentActivities;
+
+    /*
+     * Các khối phân tích mới của dashboard.
+     *
+     * Không đưa thuộc tính này vào constructor để các
+     * đoạn code và Unit Test cũ vẫn tương thích.
+     */
+    private DashboardAnalyticsResponse analytics;
 
     /**
-     * Constructor tương thích với các test và đoạn code cũ
-     * trước khi dashboard có bộ lọc thời gian.
+     * Constructor tương thích với các test và đoạn code
+     * cũ trước khi dashboard có bộ lọc thời gian.
      *
      * Mặc định hiển thị theo tuần và lấy ngày hiện tại
      * làm ngày tham chiếu.
@@ -47,7 +62,8 @@ public class AccountantDashboardResponse {
     }
 
     /**
-     * Constructor mới, có đầy đủ thông tin bộ lọc thời gian.
+     * Constructor có đầy đủ thông tin của bộ lọc
+     * thời gian.
      */
     public AccountantDashboardResponse(
             String greetingName,
@@ -89,7 +105,8 @@ public class AccountantDashboardResponse {
         return metrics;
     }
 
-    public DashboardView.DashboardChart getOverviewChart() {
+    public DashboardView.DashboardChart
+    getOverviewChart() {
         return overviewChart;
     }
 
@@ -111,6 +128,16 @@ public class AccountantDashboardResponse {
 
     public List<ActivityRow> getRecentActivities() {
         return recentActivities;
+    }
+
+    public DashboardAnalyticsResponse getAnalytics() {
+        return analytics;
+    }
+
+    public void setAnalytics(
+            DashboardAnalyticsResponse analytics
+    ) {
+        this.analytics = analytics;
     }
 
     public static class QuickAction {

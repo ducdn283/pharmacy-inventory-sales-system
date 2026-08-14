@@ -924,7 +924,7 @@
     }
 
     function isSimpleManualIncomeType(type) {
-        return type === 'OTHER' || type === 'TAX_REFUND' || type === 'SUPPLIER_COMMISSION';
+        return type === 'OTHER';
     }
 
     function requiresManualAmount(type) {
@@ -2496,6 +2496,8 @@
         });
     });
 </script>
+
+<div th:replace="~{fragments/single-submit :: singleSubmit}"></div>
 
 </body>
 </html>

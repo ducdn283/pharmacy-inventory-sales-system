@@ -6,16 +6,11 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * One <strong>in-stock</strong> batch of a product, as plotted on the Price Settings detail modal
- * ({@code /owner/price-settings}). One point on the chart = one lot still sitting in the warehouse.
+ * Một lô hàng <strong>còn tồn kho</strong> của sản phẩm, tương ứng một điểm trên biểu đồ của modal
+ * chi tiết giá ({@code /owner/price-settings}).
  *
- * <p>Every money figure is <strong>per base unit</strong> so the batch's cost and the product's sell
- * price are directly comparable — {@code Batch.importPricePerBase} is already per base unit, and the
- * sell price the chart draws against is the base unit's. Both are <strong>GROSS</strong>
- * (VAT-inclusive) per the team's confirmed convention; see {@code CLAUDE.md}.</p>
- *
- * <p>Dates are pre-formatted {@code String}s: this DTO is serialised to JSON for the modal, and the
- * project's Thymeleaf/JS convention is that a date crossing into a script is already a string.</p>
+ * <p>Mọi số tiền đều tính <strong>trên một đơn vị cơ bản</strong> để so sánh trực tiếp với giá
+ * bán, và đều là giá <strong>GROSS</strong> (đã gồm thuế) theo quy ước chung của dự án.</p>
  */
 @Getter
 @AllArgsConstructor
@@ -23,34 +18,26 @@ public class PriceSettingBatchPointResponse {
 
     private Integer batchId;
     private String batchCode;
-    /** Lot number, or {@code "—"} when the batch was received without one. */
+    /** Số lô, hoặc {@code "—"} nếu lô không có số lô. */
     private String lotNumber;
-    /** {@code dd/MM/yyyy}, or {@code "—"} when the product has no expiry. */
+    /** Hạn dùng dạng {@code dd/MM/yyyy}, hoặc {@code "—"} nếu sản phẩm không theo dõi hạn dùng. */
     private String expirationDate;
 
-    /** Remaining quantity, in base units. */
+    /** Số lượng còn tồn, tính theo đơn vị cơ bản. */
     private Integer storageQuantity;
 
-    /** {@code Batch.importPricePerBase} — GROSS. */
+    /** {@code Batch.importPricePerBase} — giá GROSS. */
     private BigDecimal importPricePerBase;
 
-    /**
-     * VAT already embedded in {@link #importPricePerBase}: {@code gross × rate / (100 + rate)}.
-     *
-     * <p>This is a real number for every group — it is what the pharmacy actually paid the supplier
-     * in tax. Whether it can be <em>deducted</em> is a different question and depends on the revenue
-     * group (and, per invoice, on {@code Purchaseinvoice.isValidForDeduction}), which is why the
-     * modal only surfaces it as deductible under the deduction method.</p>
-     */
+    /** Phần thuế GTGT nằm trong {@link #importPricePerBase}: {@code gross × rate / (100 + rate)}. */
     private BigDecimal embeddedInputVat;
 
     /**
-     * {@code sellPricePerBase − importPricePerBase}. <strong>Can be negative</strong> — a lot bought
-     * above the current sell price is exactly the thing this screen exists to make visible, so it is
-     * never floored at zero.
+     * {@code sellPricePerBase − importPricePerBase}. <strong>Có thể âm</strong> — lô nhập đắt hơn
+     * giá bán hiện tại chính là điều màn hình này cần chỉ ra, nên không làm tròn về 0.
      */
     private BigDecimal grossMargin;
 
-    /** {@link #grossMargin} as a percentage of the sell price; {@code null} when there is no price. */
+    /** {@link #grossMargin} tính theo phần trăm giá bán; {@code null} nếu chưa có giá bán. */
     private BigDecimal grossMarginPercent;
 }

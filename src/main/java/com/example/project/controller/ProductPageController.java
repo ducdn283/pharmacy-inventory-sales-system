@@ -24,9 +24,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Thymeleaf page controller for the Product List / Detail / Create / Edit screens. Serves the
- * same screen under each role prefix (Owner / Pharmacist / Accountant) — Create and Edit are
- * Owner-only.
+ * Controller cho các màn Danh sách / Chi tiết / Tạo / Sửa Hàng hóa. Dùng chung 1 view cho cả 3
+ * role (Owner / Pharmacist / Accountant) — riêng Tạo và Sửa chỉ Owner mới được phép.
  */
 @Controller
 public class ProductPageController {
@@ -40,6 +39,7 @@ public class ProductPageController {
         this.procurementplanService = procurementplanService;
     }
 
+    // Hiển thị danh sách hàng hóa có tìm kiếm/lọc/phân trang, dùng chung cho cả 3 role.
     @GetMapping({
             "/owner/products",
             "/pharmacist/products",
@@ -80,8 +80,8 @@ public class ProductPageController {
 
         model.addAttribute("keyword", keyword);
         model.addAttribute("filterTypeId", typeId);
-        // One combined status dropdown. A non-Owner-crafted INACTIVE query is not reflected here,
-        // and ProductService independently keeps inactive rows hidden as the authoritative gate.
+        // Một dropdown trạng thái dùng chung. ProductService mới là nơi chặn thật sự (luôn ẩn hàng
+        // ngừng kinh doanh với role không phải Owner), ở đây chỉ là hiển thị.
         model.addAttribute("filterStatus", canFilterBusinessStatus
                 || businessStatus == null ? status : null);
         model.addAttribute("canFilterBusinessStatus", canFilterBusinessStatus);
@@ -101,11 +101,7 @@ public class ProductPageController {
         return "product/list";
     }
 
-    /**
-     * Create Product form — Owner only (the {@code /owner/**} security rule blocks other roles with
-     * 403). Mapped on the literal {@code /create} path, which Spring prefers over the
-     * {@code /{productId}} detail mapping.
-     */
+    /** Form tạo hàng hóa — chỉ Owner. Mapping literal {@code /create} được Spring ưu tiên hơn {@code /{productId}}. */
     @GetMapping("/owner/products/create")
     public String createProductForm(Model model) {
         model.addAttribute("form", newFormWithBaseUnit());
@@ -113,6 +109,7 @@ public class ProductPageController {
         return "product/create";
     }
 
+    // Xử lý submit form tạo hàng hóa mới; nếu lỗi validate thì hiển thị lại form kèm thông báo lỗi.
     @PostMapping("/owner/products/create")
     public String createProduct(@ModelAttribute("form") ProductCreateRequest form,
                                 Model model,
@@ -128,6 +125,7 @@ public class ProductPageController {
         }
     }
 
+    // Tạo form trống với sẵn 1 đơn vị cơ bản (base unit) mặc định để người dùng điền tiếp.
     private ProductCreateRequest newFormWithBaseUnit() {
         ProductCreateRequest form = new ProductCreateRequest();
         form.setStatus(Boolean.TRUE);
@@ -140,11 +138,12 @@ public class ProductPageController {
         return form;
     }
 
+    // Nạp dữ liệu tham chiếu (loại hàng, nhà sản xuất, nguồn gốc, hoạt chất...) cho form tạo/sửa hàng hóa.
     private void addCreateFormReferenceData(Model model, boolean isEdit, Integer productId) {
         List<Type> types = productService.listTypes();
         model.addAttribute("types", types);
-        // "Nhóm mặt hàng" is derived from the distinct Type.sortType values; the Type dropdown is
-        // then filtered client-side to the selected group so the two boxes stay consistent.
+        // "Nhóm mặt hàng" lấy từ các giá trị Type.sortType khác nhau; dropdown Loại hàng sẽ được
+        // lọc client-side theo nhóm đã chọn để 2 ô luôn khớp nhau.
         model.addAttribute("typeGroups", types.stream()
                 .map(Type::getSortType)
                 .filter(sortType -> sortType != null && !sortType.isBlank())
@@ -154,18 +153,14 @@ public class ProductPageController {
         model.addAttribute("origins", productService.listOrigins());
         model.addAttribute("ingredientNames", productService.listIngredientNames());
         model.addAttribute("ingredientStrengths", productService.listIngredientStrengths());
-        // Only meaningful on Create — Edit shows the product's real, immutable code instead.
+        // Chỉ có ý nghĩa khi Tạo mới — khi Sửa hiển thị mã thật (không đổi được) của sản phẩm.
         model.addAttribute("nextCode", isEdit ? null : productService.previewNextProductCode());
         model.addAttribute("basePath", "/owner/products");
         model.addAttribute("isEdit", isEdit);
         model.addAttribute("productId", productId);
     }
 
-    /**
-     * Edit Product form — Owner only, same access rule as Create. Reuses {@code create.html} in
-     * edit mode: the model carries {@code isEdit=true} and {@code productId} so the template posts
-     * to the edit route and shows the real (immutable) product code instead of a generated preview.
-     */
+    /** Form sửa hàng hóa — chỉ Owner. Dùng chung template {@code create.html}, model mang {@code isEdit=true}. */
     @GetMapping("/owner/products/{productId}/edit")
     public String editProductForm(@PathVariable Integer productId,
                                   Model model,
@@ -181,6 +176,7 @@ public class ProductPageController {
         return "product/create";
     }
 
+    // Xử lý submit form sửa hàng hóa; nếu lỗi validate hoặc dữ liệu không hợp lệ thì báo lỗi tương ứng.
     @PostMapping("/owner/products/{productId}/edit")
     public String updateProduct(@PathVariable Integer productId,
                                 @ModelAttribute("form") ProductCreateRequest form,
@@ -200,6 +196,7 @@ public class ProductPageController {
         }
     }
 
+    // Hiển thị trang chi tiết 1 hàng hóa (thông tin chung, đơn vị, lô hàng, lịch sử tồn kho gần đây).
     @GetMapping({
             "/owner/products/{productId}",
             "/pharmacist/products/{productId}",
@@ -228,6 +225,7 @@ public class ProductPageController {
         return "product/detail";
     }
 
+    // Xác định basePath (/owner, /pharmacist, /accountant) từ URL để dựng link/redirect đúng role.
     private String resolveBasePath(HttpServletRequest request) {
         String uri = request.getRequestURI();
 

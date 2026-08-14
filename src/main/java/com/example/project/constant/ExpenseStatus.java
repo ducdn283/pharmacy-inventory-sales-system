@@ -3,32 +3,25 @@ package com.example.project.constant;
 import java.util.List;
 
 /**
- * Central definition of the valid {@code Expense.status} values, per
- * {@code docs/context/Pharmacy-Database-Description.docx}. The column is a plain
- * {@code varchar(50)} (no {@code Status} table, see CLAUDE.md) — these constants exist so the
- * vocabulary is written in exactly one place and never drifts between the service and templates.
+ * Danh sách hợp lệ của {@code Expense.status}. Cột là {@code varchar(50)} thuần (không có bảng
+ * Status riêng), các hằng số này là nơi duy nhất định nghĩa từ vựng, tránh lệch giữa service và
+ * template.
  *
- * <p><strong>Workflow (BA 2026-08): approval and real payment are two separate steps again</strong>
- * — reverses the 2026-07-30 "approval = instant completion" rule. {@link #AWAITING_PAYMENT} is a
- * real, reachable state now, not legacy display-only:
+ * <p><strong>Quy trình 2 giai đoạn: duyệt rồi mới thanh toán thật.</strong></p>
  * <ul>
- *   <li>{@link #DRAFT} — a work-in-progress slip the creator has not sent yet.</li>
- *   <li>{@link #PENDING} — submitted by a non-Owner creator, awaiting the Owner's approval. A
-*       Pharmacist's slip under {@code ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} skips this state
-*       entirely and lands straight on {@link #AWAITING_PAYMENT} (BA 2026-08-13).</li>
- *   <li>{@link #REJECTED} — the Owner declined a pending slip.</li>
- *   <li>{@link #AWAITING_PAYMENT} — approved (by Owner directly, or Owner approving an
- *       Accountant's pending slip), but the money has not actually left yet. Not editable, but can
- *       still be cancelled — nothing has been disbursed, so there is nothing to reverse.</li>
- *   <li>{@link #COMPLETED} — the Owner has confirmed the money was actually paid out. This is when
- *       the linked purchase invoice/customer return's obligation is settled, the financial-setting
- *       fund is debited, and the shift is stamped — see {@code ExpenseService.confirmPayment()}.
- *       Only the Owner may reach this state, even for a slip an Accountant raised/approved-into.
- *       Terminal — cannot be cancelled once real money has left.</li>
- *   <li>{@link #CANCELLED} — internal correction for a wrongly-entered slip (same spirit as
- *       {@code PurchaseInvoiceStatus.CANCELLED}), not a real accounting reversal. Reachable from
- *       {@link #DRAFT}/{@link #PENDING}/{@link #AWAITING_PAYMENT} only — never from
- *       {@link #COMPLETED}.</li>
+ *   <li>{@link #DRAFT} — phiếu nháp, người tạo chưa gửi đi.</li>
+ *   <li>{@link #PENDING} — người tạo không phải Chủ nhà thuốc đã gửi, chờ Chủ nhà thuốc duyệt.
+ *       Riêng phiếu của Dược sĩ dưới ngưỡng {@code ExpenseType#PHARMACIST_AUTO_APPROVE_LIMIT} bỏ
+ *       qua trạng thái này, đi thẳng sang {@link #AWAITING_PAYMENT}.</li>
+ *   <li>{@link #REJECTED} — Chủ nhà thuốc từ chối phiếu đang chờ duyệt.</li>
+ *   <li>{@link #AWAITING_PAYMENT} — đã được duyệt (tự duyệt hoặc Chủ nhà thuốc duyệt) nhưng tiền
+ *       CHƯA thực sự rời quỹ. Không sửa được, nhưng vẫn hủy được vì chưa có gì phải đảo ngược.</li>
+ *   <li>{@link #COMPLETED} — Chủ nhà thuốc đã xác nhận tiền thực sự được chi ra. Đây là lúc phiếu
+ *       nhập/phiếu trả hàng liên kết được tất toán, quỹ bị trừ, và ca làm việc được đóng dấu (xem
+ *       {@code ExpenseService.confirmPayment()}). Trạng thái cuối — không hủy được nữa.</li>
+ *   <li>{@link #CANCELLED} — sửa lỗi nội bộ cho phiếu lập sai, không phải một bút toán đảo ngược
+ *       thật. Chỉ hủy được từ {@link #DRAFT}/{@link #PENDING}/{@link #AWAITING_PAYMENT}, không
+ *       bao giờ từ {@link #COMPLETED}.</li>
  * </ul>
  */
 public final class ExpenseStatus {
@@ -40,7 +33,7 @@ public final class ExpenseStatus {
     public static final String COMPLETED = "Đã hoàn thành";
     public static final String CANCELLED = "Đã hủy";
 
-    /** All valid statuses, in workflow order (for the filter dropdown). */
+    /** Toàn bộ trạng thái hợp lệ, theo thứ tự quy trình (dùng cho dropdown lọc). */
     public static final List<String> ALL =
             List.of(DRAFT, PENDING, REJECTED, AWAITING_PAYMENT, COMPLETED, CANCELLED);
 

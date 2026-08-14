@@ -17,14 +17,19 @@ import java.time.format.DateTimeFormatter;
 @NoArgsConstructor
 public class CustomerInvoiceResponse {
 
-    // Invoice.date is stored as a VN wall-clock LocalDateTime — format directly, no zone conversion.
+    /** Invoice.date lưu giờ tường VN dạng LocalDateTime — format trực tiếp, không chuyển múi giờ. */
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    /** Id hóa đơn. */
     private Integer id;
+    /** Mã hóa đơn hiển thị — dạng {@code HD-xxxxxx}. */
     private String invoiceCode;
+    /** Ngày giờ lập hóa đơn hiển thị. */
     private String date;
+    /** Tổng tiền hóa đơn. */
     private BigDecimal total;
 
+    /** Ánh xạ {@link Invoice} sang dòng lịch sử mua hàng. */
     public static CustomerInvoiceResponse from(Invoice invoice) {
         CustomerInvoiceResponse r = new CustomerInvoiceResponse();
         r.id = invoice.getId();

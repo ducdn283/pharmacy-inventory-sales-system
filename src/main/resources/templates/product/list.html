@@ -164,7 +164,7 @@
             color: #fff;
         }
 
-        /* Theme's --bs-primary is orange; force green focus to match the app's main color. */
+        /* Màu --bs-primary mặc định của theme là cam; ép về xanh lá cho khớp màu chủ đạo của app. */
         .form-control:focus,
         .form-select:focus {
             border-color: #059669;
@@ -669,14 +669,17 @@
         const searchInput = document.getElementById('restockProductSearchInput');
         const noSearchResult = document.getElementById('restockNoSearchResult');
 
+        // Toàn bộ checkbox chọn sản phẩm trong modal dự trù (kể cả đang bị ẩn do lọc).
         function productCheckboxes() {
             return Array.from(rows.querySelectorAll('.restock-product-checkbox'));
         }
 
+        // Chỉ các checkbox thuộc dòng đang hiển thị (chưa bị lọc ẩn đi).
         function visibleProductCheckboxes() {
             return productCheckboxes().filter(checkbox => checkbox.closest('.restock-product-row').style.display !== 'none');
         }
 
+        // Chuẩn hoá chuỗi để tìm kiếm không phân biệt dấu/hoa-thường trong modal dự trù.
         function normalizeSearchValue(value) {
             return String(value || '')
                 .normalize('NFD')
@@ -687,6 +690,7 @@
                 .trim();
         }
 
+        // Lọc các dòng sản phẩm trong modal theo từ khoá gõ vào, ẩn dòng không khớp.
         function filterProducts() {
             const keyword = normalizeSearchValue(searchInput.value);
             let visibleCount = 0;
@@ -706,6 +710,7 @@
             updateSelection();
         }
 
+        // Cập nhật trạng thái checkbox "Chọn tất cả", số lượng đã chọn và bật/tắt nút submit.
         function updateSelection() {
             const checkboxes = productCheckboxes();
             const selected = checkboxes.filter(checkbox => checkbox.checked).length;
@@ -718,6 +723,7 @@
             submitButton.disabled = selected === 0;
         }
 
+        // Mở modal chọn sản phẩm cần dự trù.
         function openModal() {
             modal.classList.add('show');
             modal.setAttribute('aria-hidden', 'false');
@@ -725,6 +731,7 @@
             searchInput.focus();
         }
 
+        // Đóng modal chọn sản phẩm cần dự trù.
         function closeModal() {
             modal.classList.remove('show');
             modal.setAttribute('aria-hidden', 'true');

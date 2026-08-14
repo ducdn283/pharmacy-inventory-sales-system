@@ -5,18 +5,17 @@ import lombok.Getter;
 import java.util.List;
 
 /**
- * The whole state of the (single-store) Owner permission screen for one render: the current page
- * of account rows and the active search. All pagination maths is pre-computed here so the
- * Thymeleaf template only reads simple values.
+ * Toàn bộ trạng thái màn hình Bảng phân quyền cho một lần render: trang tài khoản hiện tại và
+ * từ khóa tìm kiếm. Mọi tính toán phân trang đã làm sẵn ở đây để template chỉ cần đọc giá trị.
  *
- * <p>{@link #pageIndex} is 0-based (it equals the {@code page} request parameter); {@link
- * #getPageNumber()} / {@link #getTotalPages()} are 1-based for display.</p>
+ * <p>{@link #pageIndex} 0-based (bằng tham số {@code page}); {@link #getPageNumber()} /
+ * {@link #getTotalPages()} là 1-based để hiển thị.</p>
  */
 @Getter
 public class PermissionPageView {
 
     private final List<PermissionAccountRow> rows;
-    private final int pageIndex;        // 0-based current page (= the "page" request param)
+    private final int pageIndex;        // trang hiện tại, 0-based (= tham số "page")
     private final int size;
     private final long totalElements;
     private final int totalPages;
@@ -33,35 +32,37 @@ public class PermissionPageView {
         this.search = search;
     }
 
-    /** 1-based current page, for the "Trang {current} / {total}" label. */
+    /** Trang hiện tại (1-based), dùng cho nhãn "Trang {current} / {total}". */
     public int getPageNumber() {
         return pageIndex + 1;
     }
 
+    /** True nếu có trang trước đó (không phải trang đầu). */
     public boolean isHasPrevious() {
         return pageIndex > 0;
     }
 
+    /** True nếu còn trang sau (chưa phải trang cuối). */
     public boolean isHasNext() {
         return pageIndex + 1 < totalPages;
     }
 
-    /** Target page for the "Trước" link (never negative). */
+    /** Trang đích cho nút "Trước" (không âm). */
     public int getPreviousPage() {
         return Math.max(0, pageIndex - 1);
     }
 
-    /** Target page for the "Sau" link (never past the last page). */
+    /** Trang đích cho nút "Sau" (không vượt quá trang cuối). */
     public int getNextPage() {
         return totalPages == 0 ? 0 : Math.min(totalPages - 1, pageIndex + 1);
     }
 
-    /** 1-based index of the first row on this page (0 when there are no rows). */
+    /** Chỉ số dòng đầu tiên trên trang này (1-based, 0 nếu không có dòng nào). */
     public long getFromIndex() {
         return totalElements == 0 ? 0 : (long) pageIndex * size + 1;
     }
 
-    /** 1-based index of the last row on this page. */
+    /** Chỉ số dòng cuối cùng trên trang này. */
     public long getToIndex() {
         return Math.min((long) (pageIndex + 1) * size, totalElements);
     }

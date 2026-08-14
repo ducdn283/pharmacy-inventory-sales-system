@@ -19,8 +19,8 @@
         .table thead th { font-size: 12px; color: #6b7280; background: #f9fafb; font-weight: 600; }
         .table tbody td { font-size: 13px; vertical-align: middle; }
 
-        /* Theme's Bootstrap --bs-primary is orange (#E66239); force green focus/checked to match
-           the app's main color (#059669) for inputs, selects and checkboxes on this screen. */
+        /* Màu --bs-primary mặc định của theme là cam; ép về xanh lá (#059669) cho focus/checked
+           của input, select, checkbox trên màn này cho khớp màu chủ đạo của app. */
         .form-control:focus,
         .form-select:focus {
             border-color: #059669;
@@ -35,7 +35,7 @@
             box-shadow: 0 0 0 .2rem rgba(5, 150, 105, .18);
         }
 
-        /* Custom ingredient autocomplete dropdown (theme-consistent, replaces native <datalist>). */
+        /* Dropdown autocomplete tự dựng (thay cho <datalist> gốc để đồng bộ giao diện). */
         .ac-menu {
             position: absolute;
             z-index: 2000;
@@ -51,9 +51,8 @@
         .ac-item:hover, .ac-item.active { background: #d1fae5; color: #059669; }
         .ac-empty { padding: 7px 12px; font-size: 12px; color: #9ca3af; }
 
-        /* Fixed-size box for the image preview so large photos don't overflow the form — the whole
-           image always fits inside (object-fit: contain), never cropped or stretched, regardless of
-           its original dimensions/aspect ratio. */
+        /* Khung cố định kích thước cho ảnh xem trước để ảnh lớn không tràn form — luôn hiển thị
+           trọn ảnh (object-fit: contain), không bị cắt/méo dù kích thước gốc thế nào. */
         .image-preview-box {
             width: 200px;
             height: 150px;
@@ -66,8 +65,7 @@
 
         @media (max-width: 991.98px) { .product-page-content { padding-top: 84px !important; } }
 
-        /* Quick "add producer" modal — same lightweight pm-modal-backdrop pattern used elsewhere
-           (e.g. the batch picker on the sale screen), not Bootstrap's JS Modal component. */
+        /* Modal "thêm nhanh nhà sản xuất" — dùng pattern pm-modal-backdrop tự dựng, không phải Modal của Bootstrap JS. */
         .pm-modal-backdrop {
             position: fixed;
             inset: 0;
@@ -186,11 +184,11 @@
                                autocomplete="off" th:field="*{origin}" placeholder="Gõ để tìm xuất xứ...">
                     </div>
 
-                    <!-- Autocomplete source for the Producer combobox (value = name, data-id = id). -->
+                    <!-- Nguồn dữ liệu autocomplete cho ô Nhà sản xuất (value = tên, data-id = id). -->
                     <datalist id="producerOptions">
                         <option th:each="p : ${producers}" th:value="${p.name}" th:attr="data-id=${p.id}"></option>
                     </datalist>
-                    <!-- Autocomplete source for Xuất xứ — free text, no id (country names from java.util.Locale). -->
+                    <!-- Nguồn dữ liệu autocomplete cho Xuất xứ — chỉ text tự do, không có id (danh sách quốc gia). -->
                     <datalist id="originOptions">
                         <option th:each="o : ${origins}" th:value="${o}"></option>
                     </datalist>
@@ -240,7 +238,7 @@
                 </div>
             </div>
 
-            <!-- 2. Hoạt chất / thành phần (Thuốc & TPCN) -->
+            <!-- 2. Hoạt chất / thành phần (chỉ áp dụng cho nhóm Thuốc) -->
             <div class="stock-card p-4 mb-4" id="ingredientSection">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h2 class="section-title mb-0">Hoạt chất / Thành phần</h2>
@@ -248,7 +246,7 @@
                         <i class="ti ti-plus me-1"></i> Thêm hoạt chất
                     </button>
                 </div>
-                <p class="text-secondary small" id="ingredientHint">Tuỳ chọn — có thể bỏ trống với mọi loại hàng hóa.</p>
+                <p class="text-secondary small" id="ingredientHint">Tuỳ chọn — chỉ áp dụng cho nhóm thuốc.</p>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
                         <thead>
@@ -266,7 +264,7 @@
                     </table>
                 </div>
 
-                <!-- Autocomplete sources: existing ingredient names/strengths (reuse instead of retyping). -->
+                <!-- Nguồn autocomplete: tên hoạt chất/hàm lượng đã có sẵn. -->
                 <datalist id="apiNameOptions">
                     <option th:each="n : ${ingredientNames}" th:value="${n}"></option>
                 </datalist>
@@ -277,27 +275,11 @@
 
             <!-- 3. Vị trí lưu trữ -->
             <div class="stock-card p-4 mb-4" id="positionSection">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="section-title mb-0">Vị trí lưu trữ</h2>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addPosition()">
-                        <i class="ti ti-plus me-1"></i> Thêm vị trí
-                    </button>
-                </div>
-                <p class="text-secondary small">Tuỳ chọn — ví dụ: Kệ A1, Tủ lạnh, Kho phụ...</p>
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead>
-                        <tr><th>Tên vị trí</th><th style="width:60px"></th></tr>
-                        </thead>
-                        <tbody id="positionRows">
-                        <tr th:each="pos,stat : *{positions}">
-                            <td><input type="text" class="form-control form-control-sm" data-field="name"
-                                       th:name="'positions[' + ${stat.index} + '].name'" th:value="${pos.name}" placeholder="VD: Kệ A1"></td>
-                            <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this,'positionRows','positions')"><i class="ti ti-trash"></i></button></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <h2 class="section-title mb-2">Vị trí lưu trữ</h2>
+                <p class="text-secondary small">Tuỳ chọn — mỗi sản phẩm có tối đa một vị trí, ví dụ: Kệ A1, Tủ lạnh, Kho phụ...</p>
+                <label for="positionName" class="form-label">Tên vị trí</label>
+                <input id="positionName" type="text" class="form-control form-control-sm"
+                       th:field="*{position.name}" placeholder="VD: Kệ A1">
             </div>
 
             <!-- 4. Đơn vị tính -->
@@ -316,7 +298,7 @@
                 <div id="unitRows">
                     <div th:each="u,stat : *{units}" class="unit-row" th:classappend="${stat.index == 0} ? 'unit-row-base' : 'unit-row-extra'">
 
-                        <!-- Base unit row: always index 0, always the smallest unit, never removable. -->
+                        <!-- Dòng đơn vị cơ bản: luôn ở index 0, luôn là đơn vị nhỏ nhất, không xoá được. -->
                         <div th:if="${stat.index == 0}" class="row g-3 align-items-center pb-3 mb-3 border-bottom">
                             <div class="col-12 col-md-4">
                                 <label class="info-label">Tên đơn vị cơ bản</label>
@@ -401,7 +383,7 @@
     </div>
 </main>
 
-<!-- Quick "add producer" modal -->
+<!-- Modal thêm nhanh nhà sản xuất -->
 <div class="pm-modal-backdrop" id="addProducerModal">
     <div class="pm-modal">
         <div class="pm-modal-header">
@@ -420,7 +402,7 @@
     </div>
 </div>
 
-<!-- Row templates for JS-added rows -->
+<!-- Template cho các dòng thêm bằng JS -->
 <template id="unitTemplate">
     <div class="unit-row unit-row-extra">
         <div class="row g-3 align-items-center pb-3 mb-3 border-bottom">
@@ -466,14 +448,8 @@
         <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this,'ingredientRows','ingredients')"><i class="ti ti-trash"></i></button></td>
     </tr>
 </template>
-<template id="positionTemplate">
-    <tr>
-        <td><input type="text" class="form-control form-control-sm" data-field="name" placeholder="VD: Kệ A1"></td>
-        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this,'positionRows','positions')"><i class="ti ti-trash"></i></button></td>
-    </tr>
-</template>
-
 <script th:inline="none">
+    // Đánh lại số thứ tự (index) cho name="prefix[i].field" của các dòng còn lại sau khi thêm/xoá dòng.
     function reindex(tbodyId, prefix) {
         const rows = document.querySelectorAll('#' + tbodyId + ' > *');
         rows.forEach((row, i) => {
@@ -483,12 +459,14 @@
         });
     }
 
+    // Xoá 1 dòng (đơn vị/hoạt chất/vị trí) khỏi form rồi đánh lại số thứ tự.
     function removeRow(btn, tbodyId, prefix) {
         const row = btn.closest('tr, .unit-row');
         row.parentNode.removeChild(row);
         reindex(tbodyId, prefix);
     }
 
+    // Nhân bản 1 dòng trống từ <template> rồi thêm vào cuối bảng, sau đó đánh lại số thứ tự.
     function addFromTemplate(templateId, tbodyId, prefix) {
         const tpl = document.getElementById(templateId);
         const clone = tpl.content.cloneNode(true);
@@ -496,27 +474,25 @@
         reindex(tbodyId, prefix);
     }
 
+    // Thêm 1 dòng hoạt chất trống.
     function addIngredient() { addFromTemplate('ingredientTemplate', 'ingredientRows', 'ingredients'); }
-    function addPosition() { addFromTemplate('positionTemplate', 'positionRows', 'positions'); }
+    // Thêm 1 dòng đơn vị tính trống rồi gắn lại sự kiện/tính lại giá đề xuất.
     function addUnit() {
         addFromTemplate('unitTemplate', 'unitRows', 'units');
         wireUnitEvents();
         recomputeUnits();
     }
 
-    // Base/Default behave like single-select radios across unit rows.
+    // Cơ bản/Mặc định hoạt động như radio chọn 1 giữa các dòng đơn vị.
     function enforceSingle(cls, changed) {
         if (!changed.checked) return;
         document.querySelectorAll('#unitRows .' + cls).forEach(cb => { if (cb !== changed) cb.checked = false; });
     }
 
-    // Each row (after the base row) shows the previous row's unit name next to its
-    // "Giá trị quy đổi" input (e.g. "1 vien") so the quy đổi is always relative to the row
-    // directly above it, not the base unit. It also auto-fills "Giá bán" as
-    // (giá đơn vị cơ bản × tỷ lệ quy đổi lũy kế), keeping it in sync as qty/base price change,
-    // right up until the user types a real price into that field themselves — a price input
-    // marked "touched" (via markPriceTouched below) is never overwritten again, matching the
-    // pre-fill pattern already used elsewhere in this app (Purchase Invoice's "Giá nhập").
+    // Mỗi dòng (trừ dòng cơ bản) hiện tên đơn vị của dòng trước ngay cạnh ô "Giá trị quy đổi",
+    // vì quy đổi luôn tính so với dòng liền trước, không phải đơn vị cơ bản. Đồng thời tự điền
+    // "Giá bán" = giá đơn vị cơ bản × tỷ lệ quy đổi luỹ kế, cập nhật liên tục cho đến khi người
+    // dùng tự gõ giá thật vào ô đó — khi đó ô giá được đánh dấu "touched" và không bị ghi đè nữa.
     function recomputeUnits() {
         const rows = document.querySelectorAll('#unitRows > .unit-row');
         let ratio = 1;
@@ -541,15 +517,15 @@
         });
     }
 
-    // A price is "touched" once it holds a real number — whether typed by the user or already
-    // persisted (Edit mode) — so recomputeUnits() will never silently overwrite it. Clearing the
-    // field back to empty releases it back to auto-suggest mode.
+    // Ô giá được coi là "touched" khi có số thật (do người dùng gõ hoặc đã lưu sẵn khi Sửa), để
+    // recomputeUnits() không ghi đè nữa. Xoá trống ô giá sẽ trả lại chế độ tự gợi ý.
     function markPriceTouched(e) {
         if (parseFloat(e.target.value) > 0) e.target.dataset.touched = '1';
         else delete e.target.dataset.touched;
         recomputeUnits();
     }
 
+    // Gắn lại sự kiện change/input cho các dòng đơn vị hiện có (radio Cơ bản/Mặc định, tự tính giá).
     function wireUnitEvents() {
         document.querySelectorAll('#unitRows .unit-default').forEach(cb => cb.onchange = () => enforceSingle('unit-default', cb));
         document.querySelectorAll('#unitRows .unit-name, #unitRows .unit-qty').forEach(el => el.oninput = recomputeUnits);
@@ -559,41 +535,68 @@
         });
     }
 
-    // "Nhóm mặt hàng" filters "Loại hàng" to the Types whose sortType matches the chosen group,
-    // so only a type belonging to that group can be picked.
+    // "Nhóm mặt hàng" lọc dropdown "Loại hàng" chỉ còn các Type có sortType khớp nhóm đã chọn.
     function filterTypesByGroup() {
         const group = document.getElementById('itemGroup')?.value || '';
         const typeSelect = document.getElementById('typeSelect');
         if (!typeSelect) return;
         Array.from(typeSelect.options).forEach(opt => {
-            if (!opt.value) { opt.hidden = false; return; }   // keep the placeholder
+            if (!opt.value) { opt.hidden = false; return; }   // giữ nguyên option placeholder
             opt.hidden = group !== '' && opt.dataset.group !== group;
         });
         const selected = typeSelect.selectedOptions[0];
         if (selected && selected.value && group !== '' && selected.dataset.group !== group) {
-            typeSelect.value = '';   // reset a selection that no longer belongs to the group
+            typeSelect.value = '';   // reset vì lựa chọn cũ không còn thuộc nhóm mới
         }
+        applyIngredientVisibility();
     }
 
-    // --- Custom autocomplete (theme-consistent). Sources are arrays of {label, id}.
-    //     Free-text fields (ingredients/origin) have id = null; ID-backed comboboxes (producer)
-    //     carry the real id and write it into a hidden target input on selection. ---
+    // MedicineAPI/hoạt chất chỉ có ý nghĩa với nhóm Thuốc. Dựa trên Type.sortType (dữ liệu từ
+    // migration) thay vì id cố định để quy tắc vẫn đúng khi bổ sung/chỉnh lại các Type sau này.
+    // Disable toàn bộ control lúc ẩn để trình duyệt không gửi các dòng hoạt chất đang còn trong DOM;
+    // server vẫn kiểm tra lại cùng quy tắc dựa trên typeId khi lưu.
+    function applyIngredientVisibility() {
+        const section = document.getElementById('ingredientSection');
+        if (!section) return;
+
+        const itemGroup = document.getElementById('itemGroup')?.value || '';
+        const selectedType = document.getElementById('typeSelect')?.selectedOptions[0];
+        const typeGroup = selectedType?.value ? selectedType.dataset.group : itemGroup;
+        const normalizedGroup = (typeGroup || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/Đ/g, 'D')
+            .toLowerCase()
+            .trim();
+        const visible = normalizedGroup === 'thuoc';
+
+        section.hidden = !visible;
+        section.querySelectorAll('input, button').forEach(control => {
+            control.disabled = !visible;
+        });
+    }
+
+    // --- Autocomplete tự dựng. Nguồn dữ liệu là mảng {label, id}. Ô text tự do (hoạt chất/xuất
+    //     xứ) có id = null; ô gắn với id thật (nhà sản xuất) sẽ ghi id vào input ẩn khi chọn. ---
     const AC = { apiName: [], strength: [], producer: [], origin: [] };
     let acMenu = null, acInput = null, acItems = [], acIndex = -1;
 
+    // Đọc các <option> của 1 <datalist> thành mảng {label, id} cho autocomplete tự dựng.
     function optionsToItems(selector) {
         return Array.from(document.querySelectorAll(selector + ' option'))
             .map(o => ({ label: o.value, id: o.dataset.id ? parseInt(o.dataset.id, 10) : null }))
             .filter(x => x.label);
     }
 
+    // Nạp toàn bộ nguồn dữ liệu autocomplete và điền lại label hiển thị từ id đã lưu (khi render lại do lỗi validate).
     function initAcSources() {
         AC.apiName = optionsToItems('#apiNameOptions');
         AC.strength = optionsToItems('#strengthOptions');
         AC.producer = optionsToItems('#producerOptions');
         AC.origin = optionsToItems('#originOptions');
 
-        // On error re-render the hidden id is preserved; show its label in the visible input.
+        // Khi render lại do lỗi validate, id ẩn vẫn được giữ nguyên; hiển thị lại label tương ứng.
         document.querySelectorAll('.ac-field[data-target]').forEach(input => {
             const hidden = document.querySelector('[name="' + input.dataset.target + '"]');
             if (hidden && hidden.value) {
@@ -603,6 +606,7 @@
         });
     }
 
+    // Tạo (nếu chưa có) và trả về phần tử DOM dùng chung cho dropdown gợi ý autocomplete.
     function ensureAcMenu() {
         if (!acMenu) {
             acMenu = document.createElement('div');
@@ -612,15 +616,18 @@
         return acMenu;
     }
 
+    // Chuẩn hoá chuỗi (bỏ dấu, viết thường) để so khớp autocomplete không phân biệt dấu/hoa-thường.
     function acNorm(s) {
         return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
             .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
     }
 
+    // Lấy input ẩn (lưu id thật) tương ứng với ô autocomplete đang gõ, nếu có.
     function hiddenTargetOf(input) {
         return input.dataset.target ? document.querySelector('[name="' + input.dataset.target + '"]') : null;
     }
 
+    // Lọc nguồn dữ liệu theo text đang gõ và vẽ dropdown gợi ý ngay dưới ô input.
     function showAc(input) {
         const source = AC[input.dataset.field] || [];
         const q = acNorm(input.value);
@@ -640,11 +647,13 @@
         menu.style.display = 'block';
     }
 
+    // Tô sáng mục gợi ý đang được chọn bằng phím mũi tên.
     function highlightAc() {
         if (!acMenu) return;
         acMenu.querySelectorAll('.ac-item').forEach((el, i) => el.classList.toggle('active', i === acIndex));
     }
 
+    // Chọn 1 mục gợi ý: điền text vào ô input và ghi id thật (nếu có) vào input ẩn.
     function selectAc(i) {
         const item = acItems[i];
         if (acInput && item) {
@@ -655,12 +664,13 @@
         hideAc();
     }
 
+    // Ẩn dropdown gợi ý autocomplete và reset trạng thái đang chọn.
     function hideAc() {
         if (acMenu) acMenu.style.display = 'none';
         acInput = null; acItems = []; acIndex = -1;
     }
 
-    // On blur of an ID-backed combobox: keep the id only if the text still matches a known label.
+    // Khi rời khỏi ô gắn id: chỉ giữ id nếu text gõ vào vẫn khớp đúng 1 label đã biết.
     function reconcileTarget(input) {
         const hidden = hiddenTargetOf(input);
         if (!hidden) return;
@@ -668,7 +678,7 @@
         if (!typed) { hidden.value = ''; input.value = ''; return; }
         const item = (AC[input.dataset.field] || []).find(x => acNorm(x.label) === typed);
         if (item) { hidden.value = item.id; input.value = item.label; }
-        else { hidden.value = ''; }   // typed something not in the list -> treated as "not selected"
+        else { hidden.value = ''; }   // gõ giá trị không có trong danh sách -> coi như chưa chọn
     }
 
     document.addEventListener('input', e => {
@@ -691,15 +701,15 @@
         else if (e.key === 'Escape') { hideAc(); }
     });
 
-    // Live preview of the chosen file before upload; unchecks "Xoá ảnh hiện tại" if the user then
-    // picks a new file (the two are mutually exclusive — a new file always wins on submit).
+    // Xem trước ảnh vừa chọn trước khi upload; tự bỏ tick "Xoá ảnh hiện tại" nếu người dùng chọn
+    // ảnh mới sau đó (2 lựa chọn loại trừ nhau — ảnh mới luôn thắng khi submit).
     function wireImagePreview() {
         const fileInput = document.getElementById('imageFileInput');
         const preview = document.getElementById('imagePreview');
         const removeCheck = document.getElementById('removeImageCheck');
         const sizeError = document.getElementById('imageSizeError');
         if (!fileInput || !preview) return;
-        // Must match spring.servlet.multipart.max-file-size in application.properties.
+        // Phải khớp với spring.servlet.multipart.max-file-size trong application.properties.
         const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
         fileInput.addEventListener('change', () => {
@@ -734,15 +744,15 @@
         });
     }
 
-    // Quick "add producer" modal — lets the user register a producer that isn't in the system yet
-    // without leaving this form. Posts to ProducerController's JSON endpoint, then fills in both
-    // the visible combobox and its hidden producerId, same as picking an existing producer would.
+    // Modal thêm nhanh nhà sản xuất — cho phép đăng ký nhà sản xuất mới ngay tại form này. Gọi
+    // JSON endpoint của ProducerController rồi điền lại cả ô hiển thị lẫn producerId ẩn.
     function wireAddProducerModal() {
         const modal = document.getElementById('addProducerModal');
         const nameInput = document.getElementById('newProducerName');
         const errorBox = document.getElementById('addProducerError');
         if (!modal || !nameInput) return;
 
+        // Mở modal, xoá lỗi/giá trị cũ và focus vào ô tên.
         function openModal() {
             errorBox.classList.add('d-none');
             errorBox.textContent = '';
@@ -751,15 +761,18 @@
             setTimeout(() => nameInput.focus(), 0);
         }
 
+        // Đóng modal thêm nhanh nhà sản xuất.
         function closeModal() {
             modal.classList.remove('open');
         }
 
+        // Hiển thị thông báo lỗi trong modal.
         function showError(message) {
             errorBox.textContent = message;
             errorBox.classList.remove('d-none');
         }
 
+        // Gọi API tạo nhanh nhà sản xuất, rồi điền lại ô nhà sản xuất trên form chính với kết quả trả về.
         async function saveProducer() {
             const name = nameInput.value.trim();
             if (!name) {
@@ -767,10 +780,8 @@
                 return;
             }
             try {
-                // The form's own _csrf hidden input is auto-injected by Spring's
-                // RequestDataValueProcessor (no thymeleaf-extras-springsecurity needed for that),
-                // but a plain fetch() never picks it up automatically — must attach it by hand,
-                // same as the sale screen's "thêm khách hàng nhanh" modal does.
+                // Input ẩn _csrf của form được Spring tự chèn sẵn, nhưng fetch() thuần không tự
+                // gửi kèm — phải lấy giá trị và gắn thủ công vào header.
                 const csrfInput = document.querySelector('#createForm input[name="_csrf"]');
                 const headers = { 'Content-Type': 'application/json' };
                 if (csrfInput) headers['X-CSRF-TOKEN'] = csrfInput.value;
@@ -811,10 +822,10 @@
         wireImagePreview();
         wireAddProducerModal();
         document.getElementById('itemGroup')?.addEventListener('change', filterTypesByGroup);
+        document.getElementById('typeSelect')?.addEventListener('change', applyIngredientVisibility);
         document.getElementById('createForm')?.addEventListener('submit', () => {
             reindex('unitRows', 'units');
             reindex('ingredientRows', 'ingredients');
-            reindex('positionRows', 'positions');
         });
     });
 </script>

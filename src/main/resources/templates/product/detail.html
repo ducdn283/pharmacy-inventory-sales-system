@@ -54,8 +54,8 @@
         .qty-in { color: #059669; font-weight: 600; }
         .qty-out { color: #dc2626; font-weight: 600; }
 
-        /* Fixed-size box so large photos don't overflow the page — the whole image always fits
-           inside (object-fit: contain), never cropped or stretched. */
+        /* Khung cố định kích thước để ảnh lớn không tràn trang — luôn hiển thị trọn ảnh
+           (object-fit: contain), không bị cắt hay méo. */
         .image-preview-box {
             width: 200px;
             height: 150px;
@@ -80,7 +80,7 @@
     <div class="container-fluid"
          th:with="baseUnitName=${product.units.?[isBaseUnit].isEmpty() ? '' : product.units.?[isBaseUnit][0].unitName}">
 
-        <!-- Header -->
+        <!-- Phần đầu trang -->
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
             <div>
                 <a th:if="${backSupplierId != null}"
@@ -184,7 +184,7 @@
                         <th>Tên lô</th>
                         <th>Ngày nhập</th>
                         <th>Ngày SX</th>
-                        <th>Hạn SD</th>
+                        <th th:if="${product.tracksExpirationDate}">Hạn SD</th>
                         <th class="text-end">Tồn kho (đơn vị cơ bản)</th>
                         <th th:if="${basePath != '/pharmacist/products'}">Đơn vị nhập</th>
                         <th th:if="${basePath != '/pharmacist/products'}" class="text-end">Giá nhập</th>
@@ -197,7 +197,7 @@
                         <td class="fw-semibold" th:text="${b.batchName != null and !b.batchName.isEmpty() ? b.batchName : '—'}">Lô nhập tháng 08</td>
                         <td th:text="${b.importDateDisplay}">01/06/2026 09:00</td>
                         <td th:text="${b.productionDateDisplay}">01/01/2026</td>
-                        <td th:text="${b.expirationDateDisplay}">01/01/2028</td>
+                        <td th:if="${product.tracksExpirationDate}" th:text="${b.expirationDateDisplay}">01/01/2028</td>
                         <td class="text-end"
                             th:text="${b.storageQuantity + (#strings.isEmpty(baseUnitName) ? '' : ' ' + baseUnitName)}">0</td>
                         <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.importUnitName}">Hộp</td>
@@ -206,14 +206,17 @@
                         <td th:if="${basePath != '/pharmacist/products'}" th:text="${b.note != null and !b.note.isEmpty()} ? ${b.note} : '—'">—</td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(product.batches)}">
-                        <td th:attr="colspan=${basePath == '/pharmacist/products'} ? 5 : 9" class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
+                        <td th:attr="colspan=${basePath == '/pharmacist/products'
+                                ? (product.tracksExpirationDate ? 5 : 4)
+                                : (product.tracksExpirationDate ? 9 : 8)}"
+                            class="text-center text-secondary py-3">Không có lô hàng còn bán.</td>
                     </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 3. Lịch sử tồn kho gần đây (chỉ Owner / Chief Pharmacist) -->
+        <!-- 3. Lịch sử tồn kho gần đây (chỉ Owner) -->
         <div class="stock-card p-4 mb-4" th:if="${canViewRecentHistory}">
             <h2 class="section-title mb-1">Lịch sử tồn kho gần đây</h2>
             <p class="text-secondary small mb-3">Tối đa 10 biến động gần nhất (nhập, bán, xuất kho, trả hàng).</p>

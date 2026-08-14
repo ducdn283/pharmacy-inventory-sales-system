@@ -412,10 +412,9 @@
                     </div>
 
                     <div class="expense-card p-4">
-                        <!-- Owner: submit always auto-approves. Dược sĩ: chỉ được tạo phiếu hoàn tiền
-                             trả hàng dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT (500.000đ, cùng
-                             ngưỡng PHARMACIST_REFUND_LIMIT), nên phiếu của họ cũng luôn tự động duyệt
-                             (BA 2026-08-13) — không còn qua Chờ duyệt như trước. -->
+                        <!-- Owner: gửi luôn tự duyệt. Dược sĩ: chỉ tạo được phiếu hoàn tiền trả hàng
+                             dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT nên cũng luôn tự động
+                             duyệt, không qua Chờ duyệt. -->
                         <button th:if="${#strings.startsWith(basePath, '/owner') or #strings.startsWith(basePath, '/pharmacist')}"
                                 type="submit" name="action" value="submit"
                                 class="btn btn-expense-primary w-100 mb-3"
@@ -424,7 +423,7 @@
                             Tạo &amp; duyệt
                         </button>
 
-                        <!-- Accountant: submit sends the slip to the Owner for approval. -->
+                        <!-- Kế toán: gửi phiếu để Chủ nhà thuốc duyệt. -->
                         <button th:unless="${#strings.startsWith(basePath, '/owner') or #strings.startsWith(basePath, '/pharmacist')}"
                                 type="submit" name="action" value="submit"
                                 class="btn btn-expense-primary w-100 mb-3"
@@ -463,6 +462,7 @@
     const cashInput = document.getElementById('cashInput');
     const bankingInput = document.getElementById('bankingInput');
 
+    // Định dạng số tiền kiểu Việt Nam kèm hậu tố "đ".
     function money(value) {
         return (value || 0).toLocaleString('vi-VN') + 'đ';
     }
@@ -476,6 +476,7 @@
         input.dispatchEvent(new Event('input', {bubbles: true}));
     }
 
+    // Tăng/giảm giá trị ô tiền theo bước nhấn nút mũi tên, không cho xuống dưới 0.
     function stepMoney(inputId, delta) {
         const input = document.getElementById(inputId);
         if (!input || input.readOnly || input.disabled) {
@@ -484,6 +485,7 @@
         setMoney(input, Math.max(0, pmMoneyValue(input) + delta));
     }
 
+    // Hình thức thanh toán đang được chọn (cash/banking/both).
     function currentPayMethod() {
         const picked = document.querySelector('input[name="payMethod"]:checked');
         return picked ? picked.value : 'banking';
@@ -529,6 +531,7 @@
 
     let syncing = false;
 
+    // Gọi syncPaymentOnce() với chốt chống đệ quy (vì setMoney() bên trong tự phát sự kiện 'input').
     function syncPayment() {
         // setMoney() phát 'input', mà chính 'input' lại gọi vào đây — không chốt thì đệ quy vô hạn.
         if (syncing) {
@@ -588,6 +591,7 @@
         applyFundCheck();
     }
 
+    // Trả về thông báo lỗi khi tổng tiền mặt + chuyển khoản không khớp số tiền chi (rỗng nếu hợp lệ).
     function paymentErrorFor(total, paid, split) {
         if (total <= 0 || !split) {
             return '';
@@ -603,6 +607,7 @@
         return '';
     }
 
+    // Hiện/ẩn khối cảnh báo lệch tiền mặt/chuyển khoản.
     function showPaymentError(message) {
         const box = document.getElementById('paymentError');
         document.getElementById('paymentErrorText').textContent = message;
@@ -639,6 +644,7 @@
         return warnings.join(' ');
     }
 
+    // Hiện/ẩn khối cảnh báo thiếu quỹ.
     function showFundError(message) {
         const box = document.getElementById('fundError');
         document.getElementById('fundErrorText').textContent = message;
@@ -655,20 +661,24 @@
         });
     }
 
+    // Kiểm tra quỹ có đủ chi không, hiện cảnh báo và khoá/mở nút submit tương ứng.
     function applyFundCheck() {
         const warning = fundShortageWarning();
         showFundError(warning);
         setCreateButtonsDisabled(!!warning);
     }
 
+    // Loại phiếu chi đang được chọn trên form.
     function currentType() {
         return document.getElementById('expenseTypeInput').value;
     }
 
+    // Loại đang chọn có phải hoàn tiền trả hàng hay không.
     function isRefundPayout() {
         return currentType() === TYPE_RETURN_REFUND;
     }
 
+    // Loại đang chọn có được phép gắn phiếu nhập hay không.
     function supportsPurchaseLink() {
         return PURCHASE_LINKABLE_TYPES.indexOf(currentType()) !== -1;
     }
@@ -682,6 +692,7 @@
         syncPayment();
     }
 
+    // Tự điền số tiền hoàn theo phiếu trả hàng vừa chọn và khoá lại ô tiền.
     function syncRefundAmount() {
         const returnId = document.getElementById('returnIdInput').value;
         // Ô tiền đã khoá (readonly) từ applyAmountLock — đây chỉ điền lại giá trị đúng của phiếu trả
@@ -729,6 +740,7 @@
             : 'Đã điền sẵn phần còn thiếu — sửa nhỏ lại nếu lần này chỉ trả một phần.';
     }
 
+    // Hiện/ẩn khối chọn phiếu trả hàng / phiếu nhập theo loại phiếu chi, dọn giá trị của khối bị ẩn.
     function toggleReferenceFields() {
         const refundPayout = isRefundPayout();
         const purchaseLink = supportsPurchaseLink();
@@ -740,8 +752,7 @@
         document.getElementById('purchaseLinkFields').style.display = purchaseLink ? '' : 'none';
 
         returnInput.required = refundPayout;
-        // Not required, unlike the refund picker above: paying a supplier without pointing at
-        // one specific invoice is legitimate (see the comment on #purchaseLinkFields).
+        // Không bắt buộc như ô hoàn tiền: trả NCC mà không gắn hóa đơn cụ thể vẫn hợp lệ.
         purchaseInput.required = false;
 
         // Bỏ chọn tham chiếu của loại không còn được chọn, để không POST kèm một id cũ.
@@ -759,6 +770,7 @@
         syncPayment();
     }
 
+    // Gắn toàn bộ listener khi trang đã tải xong, và chạy đồng bộ lần đầu theo dữ liệu đã điền sẵn.
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('input[name="payMethod"]').forEach(function (radio) {
             radio.addEventListener('change', applyPayMethod);
@@ -799,7 +811,9 @@
         // Sau khi fragment chạy xong, mọi ô đều là "500.000" và đọc lúc nào cũng đúng.
         setTimeout(applyPayMethod, 0);
 
+        // Kiểm tra hợp lệ phía client trước khi submit; server vẫn là nơi quyết định cuối cùng.
         document.getElementById('expenseForm').addEventListener('submit', function (event) {
+            // Chặn submit và hiện thông báo lỗi (toast nếu có, không thì alert).
             function reject(message) {
                 event.preventDefault();
                 if (window.pmToast) {
@@ -818,7 +832,7 @@
                 reject('Vui lòng chọn phiếu nhập cần thanh toán.');
                 return;
             }
-            // pmMoneyValue ignores the thousand separators — Number("500.000") would read 500.
+            // pmMoneyValue bỏ qua dấu phân cách nghìn — Number("500.000") sẽ đọc nhầm thành 500.
             const amount = pmMoneyValue(document.getElementById('amountInput'));
             if (amount <= 0) {
                 reject('Vui lòng nhập số tiền cần chi lớn hơn 0.');

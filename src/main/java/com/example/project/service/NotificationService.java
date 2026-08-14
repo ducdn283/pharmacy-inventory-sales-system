@@ -8,18 +8,17 @@ import com.example.project.dto.response.NotificationStatsResponse;
 import com.example.project.entity.Account;
 import com.example.project.entity.Notification;
 import com.example.project.repository.NotificationRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class NotificationService {
@@ -27,8 +26,10 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
 
     /*
-     * Dùng setter injection để không làm thay đổi constructor hiện tại.
-     * Nhờ vậy những Unit Test đang khởi tạo:
+     * Dùng setter injection để không thay đổi
+     * constructor hiện tại.
+     *
+     * Các Unit Test đang sử dụng:
      *
      * new NotificationService(notificationRepository)
      *
@@ -65,15 +66,17 @@ public class NotificationService {
     ) {
         validateAccountId(accountId);
 
-        return notificationRepository.searchForAccount(
-                accountId,
-                blankToNull(keyword),
-                blankToNull(category),
-                blankToNull(severity),
-                blankToNull(status),
-                unreadOnly,
-                pageable
-        ).map(NotificationResponse::from);
+        return notificationRepository
+                .searchForAccount(
+                        accountId,
+                        blankToNull(keyword),
+                        blankToNull(category),
+                        blankToNull(severity),
+                        blankToNull(status),
+                        unreadOnly,
+                        pageable
+                )
+                .map(NotificationResponse::from);
     }
 
     @Transactional(readOnly = true)
@@ -83,18 +86,27 @@ public class NotificationService {
         validateAccountId(accountId);
 
         return notificationRepository
-                .findTop5ActiveForAccount(accountId)
+                .findTop5ActiveForAccount(
+                        accountId
+                )
                 .stream()
                 .map(NotificationResponse::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public long unreadCount(Integer accountId) {
+    public long unreadCount(
+            Integer accountId
+    ) {
         validateAccountId(accountId);
 
+        /*
+         * Chỉ đếm các thông báo được phép hiển thị.
+         * Các thông báo ký hóa đơn cũ đã bị loại
+         * tại NotificationRepository.
+         */
         return notificationRepository
-                .countByAccountID_IdAndIsActiveTrueAndIsReadFalse(
+                .countVisibleUnreadForAccount(
                         accountId
                 );
     }
@@ -107,28 +119,33 @@ public class NotificationService {
 
         List<Notification> active =
                 notificationRepository
-                        .findActiveForAccount(accountId);
+                        .findActiveForAccount(
+                                accountId
+                        );
 
-        long unread = active.stream()
-                .filter(notification ->
-                        !Boolean.TRUE.equals(
-                                notification.getIsRead()
+        long unread =
+                active.stream()
+                        .filter(notification ->
+                                !Boolean.TRUE.equals(
+                                        notification.getIsRead()
+                                )
                         )
-                )
-                .count();
+                        .count();
 
-        long urgent = active.stream()
-                .filter(notification ->
-                        NotificationSeverity.URGENT.equals(
-                                notification.getSeverity()
+        long urgent =
+                active.stream()
+                        .filter(notification ->
+                                NotificationSeverity.URGENT.equals(
+                                        notification.getSeverity()
+                                )
                         )
-                )
-                .filter(this::isNotClosed)
-                .count();
+                        .filter(this::isNotClosed)
+                        .count();
 
-        long actionRequired = active.stream()
-                .filter(this::isActionRequired)
-                .count();
+        long actionRequired =
+                active.stream()
+                        .filter(this::isActionRequired)
+                        .count();
 
         return new NotificationStatsResponse(
                 active.size(),
@@ -180,6 +197,7 @@ public class NotificationService {
                 notification.getIsRead()
         )) {
             notification.setIsRead(true);
+
             notification.setReadAt(
                     LocalDateTime.now()
             );
@@ -193,13 +211,72 @@ public class NotificationService {
             );
         }
 
-        notificationRepository.save(notification);
+        notificationRepository.save(
+                notification
+        );
 
         notifyAfterCommit(accountId);
     }
 
+    /**
+     * Mở thông báo thuộc đúng tài khoản và
+     * tự động đánh dấu thông báo là đã đọc.
+     *
+     * Dữ liệu sau khi cập nhật được trả về để
+     * giao diện thay đổi nội dung mà không phải
+     * tải lại toàn bộ trang.
+     */
     @Transactional
-    public void markAllAsRead(Integer accountId) {
+    public NotificationResponse openAndMarkAsRead(
+            Integer accountId,
+            Integer notificationId
+    ) {
+        validateAccountId(accountId);
+
+        Notification notification =
+                notificationRepository
+                        .findByIdAndAccountId(
+                                notificationId,
+                                accountId
+                        )
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Không tìm thấy thông báo"
+                                )
+                        );
+
+        if (!Boolean.TRUE.equals(
+                notification.getIsRead()
+        )) {
+            notification.setIsRead(true);
+
+            notification.setReadAt(
+                    LocalDateTime.now()
+            );
+        }
+
+        if (NotificationStatus.UNREAD.equals(
+                notification.getStatus()
+        )) {
+            notification.setStatus(
+                    NotificationStatus.READ
+            );
+        }
+
+        Notification saved =
+                notificationRepository.save(
+                        notification
+                );
+
+        notifyAfterCommit(accountId);
+
+        return NotificationResponse.from(saved);
+    }
+
+    @Transactional
+    public void markAllAsRead(
+            Integer accountId
+    ) {
         validateAccountId(accountId);
 
         LocalDateTime now =
@@ -207,7 +284,9 @@ public class NotificationService {
 
         List<Notification> notifications =
                 notificationRepository
-                        .findActiveForAccount(accountId);
+                        .findActiveForAccount(
+                                accountId
+                        );
 
         for (Notification notification
                 : notifications) {
@@ -268,11 +347,12 @@ public class NotificationService {
 
         notification.setIsActive(false);
 
-        notificationRepository.save(notification);
+        notificationRepository.save(
+                notification
+        );
 
         notifyAfterCommit(accountId);
     }
-
     @Transactional
     public Notification createIfMissing(
             Account receiver,
@@ -289,22 +369,21 @@ public class NotificationService {
     ) {
         if (receiver == null
                 || receiver.getId() == null) {
-
             throw new IllegalArgumentException(
                     "Tài khoản nhận thông báo không hợp lệ"
             );
         }
 
         /*
-         * Nếu cảnh báo cùng dedupeKey vẫn còn hoạt động,
-         * không tạo thêm notification trùng.
+         * Nếu cảnh báo cùng dedupeKey vẫn đang hoạt động,
+         * không tạo thêm một thông báo trùng lặp.
          */
         if (dedupeKey != null
+                && !dedupeKey.isBlank()
                 && notificationRepository
                 .existsByDedupeKeyAndIsActiveTrue(
                         dedupeKey
                 )) {
-
             return notificationRepository
                     .findFirstByDedupeKeyAndIsActiveTrue(
                             dedupeKey
@@ -381,10 +460,11 @@ public class NotificationService {
         notification.setExpiresAt(null);
 
         notification.setDedupeKey(
-                dedupeKey
+                blankToNull(dedupeKey)
         );
 
         notification.setIsActive(true);
+
         notification.setCreatedAt(
                 Instant.now()
         );
@@ -395,10 +475,12 @@ public class NotificationService {
                 );
 
         /*
-         * Sự kiện SSE chỉ được gửi sau khi transaction
-         * tạo notification commit thành công.
+         * Chỉ gửi sự kiện realtime sau khi transaction
+         * tạo thông báo đã commit thành công.
          */
-        notifyAfterCommit(receiver.getId());
+        notifyAfterCommit(
+                receiver.getId()
+        );
 
         return saved;
     }
@@ -469,15 +551,15 @@ public class NotificationService {
                 LocalDateTime.now();
 
         /*
-         * Lưu accountID trước khi cập nhật để sau commit
-         * có thể gửi SSE đến đúng người nhận.
+         * Lưu các accountID trước khi cập nhật để
+         * sau khi commit có thể gửi sự kiện realtime
+         * đến đúng người nhận.
          */
         Set<Integer> affectedAccountIds =
                 accountIds(notifications);
 
         for (Notification notification
                 : notifications) {
-
             notification.setStatus(
                     NotificationStatus.RESOLVED
             );
@@ -521,7 +603,6 @@ public class NotificationService {
 
         for (Notification notification
                 : notifications) {
-
             notification.setStatus(
                     NotificationStatus.RESOLVED
             );
@@ -538,7 +619,6 @@ public class NotificationService {
                 affectedAccountIds
         );
     }
-
     private boolean isActionRequired(
             Notification notification
     ) {
@@ -553,8 +633,11 @@ public class NotificationService {
                 notification.getCategory();
 
         /*
-         * Chỉ thông báo PENDING mới là việc cần phê duyệt.
-         * APPROVED/REJECTED chỉ là thông báo kết quả.
+         * Chỉ thông báo PENDING mới được tính là
+         * công việc cần phê duyệt.
+         *
+         * APPROVED và REJECTED chỉ là thông báo
+         * kết quả, không phải việc đang chờ xử lý.
          */
         boolean pendingApproval =
                 NotificationCategory.PHE_DUYET.equals(
@@ -567,15 +650,22 @@ public class NotificationService {
                 || NotificationCategory.KY_THUE.equals(
                 category
         )
-                || type != null && (
-                NotificationSeverity.URGENT.equals(
-                        notification.getSeverity()
+                || (
+                type != null
+                        && (
+                        NotificationSeverity.URGENT.equals(
+                                notification.getSeverity()
+                        )
+                                || "INVOICE_DEBT".equals(type)
+                                || "PURCHASE_INVOICE_DUE".equals(
+                                type
+                        )
+                                || "OUT_OF_STOCK".equals(type)
+                                || "EXPIRED_BATCH".equals(type)
+                                || "TAX_REVENUE_EXCEEDED".equals(
+                                type
+                        )
                 )
-                        || "INVOICE_DEBT".equals(type)
-                        || "PURCHASE_INVOICE_DUE".equals(type)
-                        || "OUT_OF_STOCK".equals(type)
-                        || "EXPIRED_BATCH".equals(type)
-                        || "TAX_REVENUE_EXCEEDED".equals(type)
         );
     }
 
@@ -632,20 +722,26 @@ public class NotificationService {
                                 != null
                 )
                 .map(notification ->
-                        notification
-                                .getAccountID()
+                        notification.getAccountID()
                                 .getId()
                 )
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
+                .filter(
+                        java.util.Objects::nonNull
+                )
+                .collect(
+                        Collectors.toSet()
+                );
     }
 
     private void notifyAfterCommit(
             Integer accountId
     ) {
         /*
-         * Trong Unit Test cũ, setter có thể chưa được gọi.
-         * Khi đó bỏ qua SSE nhưng không ảnh hưởng logic notification.
+         * Trong Unit Test, setter realtime có thể
+         * chưa được Spring gọi.
+         *
+         * Khi đó chỉ bỏ qua SSE, không ảnh hưởng đến
+         * việc lưu hoặc cập nhật thông báo.
          */
         if (notificationRealtimeService != null) {
             notificationRealtimeService

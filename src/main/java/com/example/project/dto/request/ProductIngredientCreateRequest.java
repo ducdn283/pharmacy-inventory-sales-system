@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** One active-ingredient row of the Create Product form (persisted as a MedicineAPI). */
+/** Một dòng hoạt chất trong form tạo hàng hóa (lưu thành MedicineAPI). */
 @Getter
 @Setter
 @NoArgsConstructor

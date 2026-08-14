@@ -297,10 +297,10 @@
 
                 <div class="expense-card p-4 mb-4">
 
-                    <!-- Draft: the creator sends it forward. Owner -> auto-approved. Dược sĩ -> cũng
-                         auto-approved khi dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT, tức luôn
-                         luôn (họ chỉ tạo được phiếu hoàn tiền dưới PHARMACIST_REFUND_LIMIT, cùng
-                         ngưỡng — BA 2026-08-13). Kế toán -> Chờ duyệt như cũ. -->
+                    <!-- Nháp: người tạo gửi tiếp. Owner -> tự động duyệt. Dược sĩ -> cũng tự động
+                         duyệt vì họ chỉ tạo được phiếu hoàn tiền dưới ngưỡng
+                         PHARMACIST_AUTO_APPROVE_LIMIT (trùng PHARMACIST_REFUND_LIMIT). Kế toán ->
+                         Chờ duyệt. -->
                     <form th:if="${detail.statusName == 'Nháp'}"
                           th:action="${basePath + '/' + detail.id + '/submit'}"
                           method="post"
@@ -337,12 +337,12 @@
                         </form>
                     </th:block>
 
-                    <!-- Xác nhận thanh toán: bước chi tiền THẬT, tách khỏi duyệt (BA 2026-08). Chủ
-                         nhà thuốc luôn bấm được, kể cả với phiếu Kế toán lập/được duyệt hộ — màn Kế
-                         toán không có nút này. Dược sĩ cũng bấm được, nhưng chỉ với phiếu CỦA CHÍNH
-                         MÌNH và dưới ExpenseType.PHARMACIST_AUTO_APPROVE_LIMIT (BA 2026-08-13,
-                         detail.pharmacistCanConfirmPayment — trang chi tiết đã tự giới hạn dược sĩ
-                         chỉ xem được phiếu của mình nên ở đây chỉ cần kiểm thêm số tiền).
+                    <!-- Xác nhận thanh toán: bước chi tiền THẬT, tách khỏi duyệt. Chủ nhà thuốc luôn
+                         bấm được, kể cả với phiếu Kế toán lập/được duyệt hộ — màn Kế toán không có
+                         nút này. Dược sĩ cũng bấm được, nhưng chỉ với phiếu CỦA CHÍNH MÌNH và dưới
+                         ngưỡng PHARMACIST_AUTO_APPROVE_LIMIT (detail.pharmacistCanConfirmPayment —
+                         trang chi tiết đã tự giới hạn dược sĩ chỉ xem được phiếu của mình nên ở đây
+                         chỉ cần kiểm thêm số tiền).
                          Đây mới là lúc phiếu nhập/phiếu trả hàng được cập nhật, quỹ bị trừ và ca làm
                          việc được gắn (xem ExpenseService.confirmPayment). -->
                     <form th:if="${(#strings.startsWith(basePath, '/owner')

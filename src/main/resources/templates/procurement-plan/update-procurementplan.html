@@ -836,9 +836,13 @@
         <div id="completionValidationAlert" class="alert alert-danger d-none" role="alert"></div>
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
 
-        <div th:if="${viewOnly}" class="view-only-banner">
+        <div th:if="${viewOnly and procurementPlan.status == 'Đã hoàn thành'}" class="view-only-banner">
             <i class="ti ti-info-circle me-1"></i>
             Dự trù mua hàng đã hoàn thành. Bạn chỉ có thể xem thông tin, không thể chỉnh sửa hoặc xóa.
+        </div>
+        <div th:if="${viewOnly and procurementPlan.status != 'Đã hoàn thành'}" class="view-only-banner">
+            <i class="ti ti-info-circle me-1"></i>
+            Bạn chỉ có thể xem thông tin dự trù mua hàng, không thể chỉnh sửa.
         </div>
 
         <form id="procurementUpdateForm"
@@ -903,7 +907,8 @@
                             <span class="plan-info-label">Trạng thái</span>
                             <div>
                                 <span th:if="${viewOnly}"
-                                      class="plan-status-badge status-completed-view"
+                                      class="plan-status-badge"
+                                      th:classappend="${procurementPlan.status == 'Đã hoàn thành'} ? ' status-completed-view' : ''"
                                       th:text="${procurementPlan.status}">Đã hoàn thành</span>
                                 <div th:unless="${viewOnly}">
                                     <input type="hidden" th:field="*{status}" id="procurementStatusInput">

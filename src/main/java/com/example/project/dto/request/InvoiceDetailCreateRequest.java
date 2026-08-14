@@ -7,27 +7,30 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
-/** One line of the sell (create-invoice) form: product + chosen sell unit + quantity. */
+/** Một dòng sản phẩm trên form bán hàng: hàng hóa + đơn vị bán + số lượng. */
 @Getter
 @Setter
 public class InvoiceDetailCreateRequest {
 
+    /** Id hàng hóa bán. */
     @NotNull(message = "Vui lòng chọn sản phẩm")
     private Integer productId;
 
+    /** Id đơn vị bán (VD: Vỉ, Hộp). */
     @NotNull(message = "Vui lòng chọn đơn vị bán")
     private Integer productUnitId;
 
+    /** Số lượng bán theo đơn vị đã chọn. */
     @NotNull(message = "Số lượng không được để trống")
     @Min(value = 1, message = "Số lượng phải lớn hơn 0")
     private Integer quantity;
 
-    /** Optional override of the unit's sell price; falls back to the unit's configured price. */
+    /** Giá bán ghi đè — null thì lấy giá cấu hình trên đơn vị. */
     private BigDecimal unitSellPrice;
 
-    /** Optional batch to deduct from; null means FEFO across all batches. */
+    /** Lô trừ tồn — null thì trừ theo FEFO trên tất cả lô còn hàng. */
     private Integer batchId;
 
-    /** Optional sales note for this line (e.g. usage instructions). */
+    /** Ghi chú dòng hàng (VD: hướng dẫn sử dụng). */
     private String note;
 }

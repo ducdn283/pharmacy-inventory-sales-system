@@ -11,8 +11,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Truy vấn dữ liệu phiếu thu ({@link Income}).
+ */
 public interface IncomeRepository extends JpaRepository<Income, Integer> {
 
+    /** Một phiếu thu kèm người lập và các chứng từ liên quan — trang chi tiết. */
     @Query("""
            select i
            from Income i
@@ -29,6 +33,7 @@ public interface IncomeRepository extends JpaRepository<Income, Integer> {
            """)
     Optional<Income> findByIdWithRelations(Integer id);
 
+    /** Danh sách phiếu thu kèm quan hệ — màn danh sách và lọc trong bộ nhớ. */
     @Query("""
            select i
            from Income i
@@ -45,13 +50,10 @@ public interface IncomeRepository extends JpaRepository<Income, Integer> {
     List<Income> findAllWithRelations();
 
     /**
-     * Sum of {@code Income.amount} for one income type in {@code [from, to)} — feeds tax-period
-     * revenue (SUPPLIER_COMMISSION, mục C) and taxable-income-only revenue (EMPLOYEE, mục D). Only
-     * completed income counts as real money received; {@code incomeType}/{@code status} are matched
-     * as stored — {@code Income} persists the Vietnamese label, not the code, so callers pass
-     * {@code IncomeTypeOptionResponse.labelOf(...)}. {@code statuses} takes more than one value so a
-     * caller can include the legacy "Duyệt" label alongside "Hoàn thành" the same way
-     * {@code IncomeService.isCompleted} does.
+     * Tổng {@code Income.amount} theo loại phiếu thu trong khoảng {@code [from, to)} — phục vụ
+     * doanh thu tính thuế (EMPLOYEE, mục D). Chỉ phiếu hoàn thành mới tính; {@code incomeType}/
+     * {@code status} so khớp giá trị lưu DB (nhãn tiếng Việt). {@code statuses} có thể gồm cả
+     * legacy "Duyệt" và "Hoàn thành" — giống {@code IncomeService.isCompletedStatus}.
      */
     @Query("""
            select coalesce(sum(i.amount), 0)

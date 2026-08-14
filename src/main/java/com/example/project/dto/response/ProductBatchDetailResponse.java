@@ -7,7 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
-/** One in-stock batch of a product, for the "Lô hàng còn bán" block. Dates are pre-formatted. */
+/** Một lô hàng còn tồn của sản phẩm, dùng cho khối "Lô hàng còn bán". Ngày tháng đã format sẵn. */
 @Getter
 @Setter
 @NoArgsConstructor

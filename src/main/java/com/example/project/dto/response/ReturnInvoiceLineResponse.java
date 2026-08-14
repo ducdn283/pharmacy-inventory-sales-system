@@ -6,37 +6,43 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * One returnable line of a chosen invoice, fetched as JSON by the create screen after the user picks
- * an invoice. Carries the still-returnable quantity so the UI can cap the input.
+ * Một dòng hàng còn trả được của hóa đơn đã chọn — trả về dạng JSON sau khi người dùng chọn hóa đơn
+ * trên màn tạo phiếu trả. Mang số lượng còn trả để UI giới hạn nhập.
  */
 @Getter
 @AllArgsConstructor
 public class ReturnInvoiceLineResponse {
 
+    /** Id dòng chi tiết hóa đơn gốc. */
     private Integer invoiceDetailId;
 
+    /** Id sản phẩm. */
     private Integer productId;
+    /** Tên sản phẩm. */
     private String productName;
 
-    /** TEN lo (batch.batchName), khong phai SO lo - dong bo voi man chi tiet phieu tra. */
+    /** Tên lô ({@code batch.batchName}), không phải số lô — đồng bộ với màn chi tiết phiếu trả. */
     private String batchName;
+    /** Hạn sử dụng hiển thị. */
     private String expirationDateDisplay;
 
+    /** Đơn vị bán trên hóa đơn gốc. */
     private String unitName;
 
-    /** Units originally sold on this line. */
+    /** Số lượng đã bán trên dòng này. */
     private Integer soldQty;
-    /** Units already returned across prior returns. */
+    /** Số lượng đã trả qua các phiếu trả trước. */
     private Integer returnedQty;
-    /** {@code soldQty - returnedQty} — the max this line can still return. */
+    /** {@code soldQty - returnedQty} — số lượng tối đa còn trả được. */
     private Integer returnableQty;
 
+    /** Đơn giá bán trên hóa đơn gốc. */
     private BigDecimal unitSellPrice;
 
     /**
-     * Whether this line's returned goods will be put back into stock — hard-coded by item type
-     * (only the manufacturer's default packaging unit, {@code productunit.isDefault}). Shown read-only
-     * on the create screen; there is no manual checkbox .
+     * Hàng trả có nhập lại kho hay không — cố định theo loại đơn vị
+     * (chỉ đơn vị đóng gói mặc định của nhà sản xuất, {@code productunit.isDefault}).
+     * Hiển thị chỉ đọc trên màn tạo; không có ô tick thủ công.
      */
     private boolean restockable;
 }

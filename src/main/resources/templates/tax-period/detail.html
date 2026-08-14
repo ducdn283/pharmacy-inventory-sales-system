@@ -239,11 +239,8 @@
                         <tr class="row-total" th:unless="${detail.taxExempt}">
                             <td>
                                 Thuế TNCN của kỳ
-                                <!-- Nhóm 3 luôn tính theo lợi nhuận (17%) nên nêu rõ được; nhóm 2 từ
-                                     nay có thể đã dùng MỘT trong hai cách (Financialsetting
-                                     .taxCalculationMethod tại thời điểm chốt kỳ không được lưu lại
-                                     riêng cho từng kỳ), nên không còn nêu đích danh % được — chỉ số
-                                     tiền th:text bên cạnh là số đã lưu, luôn đúng. -->
+                                <!-- Nhóm 3 luôn 17% nên nêu rõ được; nhóm 2 có thể theo Cách 1 hoặc
+                                     Cách 2 (không lưu riêng cho từng kỳ) nên không nêu đích danh %. -->
                                 <span class="text-secondary small d-block"
                                       th:text="${detail.deductionGroup
                                                 ? '17% trên thu nhập chịu thuế (doanh thu − chi phí)'
@@ -332,11 +329,8 @@
 
                 <div class="col-12 col-md-9">
                     <label for="cashBalanceInput" class="form-label">Số dư quỹ tiền mặt cuối kỳ</label>
-                    <!-- Không có cột nào lưu số dư quỹ tiền mặt cuối kỳ đã chốt (giá trị gõ ở đây chỉ
-                         được validate rồi bỏ, xem TaxperiodsnapshotService) — nên không có gì để điền
-                         sẵn. Trước đây ô này bị điền nhầm bằng detail.quarterlyRevenue (Doanh thu tính
-                         TNCN của kỳ, một số liệu hoàn toàn khác), khiến người sửa tưởng đó là số dư quỹ
-                         tiền mặt đang lưu. -->
+                    <!-- Không có cột nào lưu số dư quỹ tiền mặt cuối kỳ — giá trị gõ ở đây chỉ được
+                         validate rồi bỏ, nên không điền sẵn được. -->
                     <input id="cashBalanceInput"
                            type="text"
                            inputmode="numeric"

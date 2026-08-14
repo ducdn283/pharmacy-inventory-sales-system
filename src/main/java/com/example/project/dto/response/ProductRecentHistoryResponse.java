@@ -8,39 +8,36 @@ import lombok.Setter;
 import java.time.Instant;
 
 /**
- * One recent stock-movement row for the "Lịch sử tồn kho gần đây" preview block.
+ * Một dòng biến động tồn kho gần đây, dùng cho khối xem trước "Lịch sử tồn kho gần đây".
  *
- * <p>This is a lightweight preview assembled from import (Batch), sale (InvoiceDetail), stock-out
- * (StockOutDetail) and return (ReturnDetail) events — NOT the full Product Inventory History screen.
- * {@code occurredAt} is kept only for chronological sorting; the template uses {@code timeDisplay}.</p>
+ * <p>Đây chỉ là bản xem trước nhẹ, gộp từ sự kiện nhập hàng (Batch), bán hàng (InvoiceDetail),
+ * xuất kho (StockOutDetail) và trả hàng (ReturnDetail) — không phải màn Lịch sử tồn kho đầy đủ.
+ * {@code occurredAt} chỉ dùng để sắp xếp thời gian; template hiển thị bằng {@code timeDisplay}.</p>
  *
- * <p>{@code resultingStock} is a best-effort PRODUCT-WIDE running balance (all batches combined —
- * the batches table above this preview already shows each individual batch's own current total, so
- * this is deliberately not per-batch), reconstructed backward from the product's real current total
- * stock through only the rows visible in this same preview (see
- * {@code ProductService.loadRecentHistory()}). It is NOT a true, complete ledger: an event older than
- * what this top-N preview shows breaks the chain for every row before it, surfacing as null (shown
- * as "—") rather than a stock figure that would have to go negative to "balance".</p>
+ * <p>{@code resultingStock} là số dư tồn kho TOÀN SẢN PHẨM (gộp mọi lô — khác với bảng lô hàng ở
+ * trên vốn đã hiển thị tồn riêng từng lô), dựng ngược từ tổng tồn thật hiện tại qua các dòng trong
+ * chính bản xem trước này (xem {@code ProductService.loadRecentHistory()}). Đây KHÔNG phải sổ cái
+ * đầy đủ: một sự kiện cũ hơn phạm vi top-N này sẽ làm đứt chuỗi tính toán cho mọi dòng trước đó,
+ * khi đó hiển thị null ("—") thay vì một con số tồn kho sai (âm).</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductRecentHistoryResponse {
-    /** Raw timestamp, used only to sort rows from the different sources. */
+    /** Mốc thời gian gốc, chỉ dùng để sắp xếp các dòng từ nhiều nguồn khác nhau. */
     private Instant occurredAt;
     private String timeDisplay;
-    /** Movement type label: "Nhập kho" / "Bán hàng" / "Nhập kho - .../"Xuất kho - ..." / "Trả hàng". */
+    /** Nhãn loại biến động: "Nhập kho" / "Bán hàng" / "Nhập kho - ..."/"Xuất kho - ..." / "Trả hàng". */
     private String changeType;
-    /** Reference code of the source document (invoice code, stock-out code, batch name…). */
+    /** Mã chứng từ nguồn (mã hóa đơn, mã phiếu xuất, tên lô…). */
     private String reference;
     private String lotNumber;
-    /** Signed base-unit quantity change: positive = stock in, negative = stock out. */
+    /** Số lượng thay đổi có dấu, theo đơn vị cơ bản: dương = nhập, âm = xuất. */
     private int quantityChange;
-    /** Unit {@code quantityChange} is expressed in — the import unit for "Nhập kho", else the product's base unit. */
+    /** Đơn vị của {@code quantityChange} — đơn vị nhập cho dòng "Nhập kho", còn lại là đơn vị cơ bản. */
     private String unitName;
     private String note;
-    /** Product's total base-unit stock (all batches) right after this event, or null if it couldn't
-     *  be reconstructed. */
+    /** Tổng tồn kho (đơn vị cơ bản, mọi lô) ngay sau sự kiện này, null nếu không dựng lại được. */
     private Integer resultingStock;
 }

@@ -5,14 +5,19 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 
-/** One sellable unit of a product, embedded into the create-invoice page for the inline JS. */
+/** Một đơn vị bán của sản phẩm — nhúng vào form bán hàng cho JavaScript inline. */
 @Getter
 @AllArgsConstructor
 public class SellUnitOptionResponse {
 
+    /** Id đơn vị bán ({@code productUnitId}). */
     private Integer id;
+    /** Tên đơn vị (VD: Vỉ, Hộp). */
     private String unitName;
+    /** Hệ số quy đổi sang đơn vị cơ sở. */
     private BigDecimal ratio;
+    /** Giá bán cấu hình trên đơn vị. */
     private BigDecimal sellPrice;
+    /** Có phải đơn vị mặc định hay không. */
     private boolean defaultUnit;
 }

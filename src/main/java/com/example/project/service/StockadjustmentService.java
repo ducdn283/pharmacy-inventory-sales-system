@@ -84,6 +84,15 @@ public class StockadjustmentService {
     private static final String REVIEW_STATUS_ADJUSTED = "Đã điều chỉnh";
 
     /**
+     * Khoảng thời gian coi hai phiếu trùng khít nội dung là MỘT lần bấm Tạo bị lặp — xem
+     * {@link #findRecentDuplicate}. Giữ bằng với hai màn trả hàng để cả ba hành xử như nhau.
+     *
+     * <p>Chỉ áp cho phiếu lập TAY. Phiếu sinh từ rà soát kho đã có chốt chặn riêng và chặt hơn:
+     * mỗi phiếu rà soát chỉ sinh được một phiếu điều chỉnh (xem {@link #createFromStockReview}).</p>
+     */
+    private static final Duration DUPLICATE_WINDOW = Duration.ofMinutes(2);
+
+    /**
      * Loại phiếu người dùng tự chọn khi lập tay. {@code COUNT} và {@code DATE_ADJUSTMENT} KHÔNG nằm ở
      * đây — hai loại đó luôn suy ra từ {@code StockReview.type} của phiếu rà soát kho được chọn, không cho
      * gõ tay (số liệu phải là số đã đếm/đã kiểm, không phải số người lập tự nhập).
@@ -810,9 +819,11 @@ public class StockadjustmentService {
      * duyệt chéo. Bảng không có cột người thao tác — mốc duy nhất là {@code date} (lúc lập phiếu).</p>
      */
     @Transactional
-    public Integer createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
+    public SlipCreateOutcome createAdjustment(StockAdjustmentCreateRequest request, boolean asDraft) {
         if (isStockReviewSource(request)) {
-            return createFromStockReview(request, asDraft);
+            // Nhánh này không cần dò trùng: một phiếu rà soát kho chỉ sinh được đúng một phiếu điều
+            // chỉnh, lần bấm thứ hai bị chặn ngay trong createFromStockReview.
+            return SlipCreateOutcome.created(createFromStockReview(request, asDraft));
         }
 
         validateRequest(request);
@@ -846,12 +857,26 @@ public class StockadjustmentService {
         String status = asDraft ? StockAdjustmentStatus.DRAFT : StockAdjustmentStatus.COMPLETED;
         boolean approvedNow = StockAdjustmentStatus.COMPLETED.equals(status);
 
+        String reason = request.getReason().trim();
+        Stockreview conditionReview = resolveConditionReview(request.getStockReviewId(), adjustmentType);
+        Map<Integer, Integer> qtyByBatch = itemMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().getQuantity()));
+        Optional<Stockadjustment> duplicate = findRecentDuplicate(adjustmentType, status, reason,
+                conditionReview, qtyByBatch);
+        if (duplicate.isPresent()) {
+            Stockadjustment existing = duplicate.get();
+            return SlipCreateOutcome.duplicate(existing.getId(), "Phiếu điều chỉnh kho "
+                    + existing.getStockAdjustmentCode() + " với đúng nội dung này đã được lập lúc "
+                    + formatInstant(existing.getDate())
+                    + ". Hệ thống KHÔNG tạo thêm phiếu mới — đây là phiếu đã lưu.");
+        }
+
         Stockadjustment adjustment = new Stockadjustment();
         adjustment.setStockAdjustmentCode(temporaryCode());
         adjustment.setAdjustmentType(adjustmentType);
         adjustment.setDate(Instant.now());
-        adjustment.setReason(request.getReason().trim());
-        adjustment.setStockReviewID(resolveConditionReview(request.getStockReviewId(), adjustmentType));
+        adjustment.setReason(reason);
+        adjustment.setStockReviewID(conditionReview);
         adjustment.setStatus(status);
         adjustment.setNote(trimToNull(request.getNote()));
 
@@ -888,7 +913,54 @@ public class StockadjustmentService {
             applyStockEffect(savedAdjustment, savedDetails);
         }
 
-        return savedAdjustment.getId();
+        return SlipCreateOutcome.created(savedAdjustment.getId());
+    }
+
+    /**
+     * Tìm phiếu điều chỉnh lập TAY vừa tạo có nội dung TRÙNG KHÍT với phiếu sắp tạo — dấu hiệu của
+     * một cú bấm Tạo lặp lại (mất mạng rồi gửi lại) chứ không phải một phiếu mới.
+     *
+     * <p>So khớp toàn bộ nội dung — loại phiếu, trạng thái đích, lý do, phiếu rà soát tình trạng gắn
+     * kèm, và từng lô với đúng số lượng — chứ không chỉ "cùng loại phiếu": hủy tiếp một lô khác ngay
+     * sau đó là việc hợp lệ, chặn nhầm là Owner không lập được phiếu.</p>
+     *
+     * <p><b>Không lọc được theo người thao tác</b>: bảng {@code stockadjustment} không có cột nào ghi
+     * ai lập phiếu (3 cột {@code createdBy}/{@code approvedBy}/{@code approvedAt} đã bị bỏ khỏi DB).
+     * Chấp nhận được vì màn này Owner-only nên gần như không có hai người lập song song.</p>
+     */
+    private Optional<Stockadjustment> findRecentDuplicate(String adjustmentType,
+                                                          String status,
+                                                          String reason,
+                                                          Stockreview conditionReview,
+                                                          Map<Integer, Integer> qtyByBatch) {
+        Integer reviewId = conditionReview == null ? null : conditionReview.getId();
+        Instant since = Instant.now().minus(DUPLICATE_WINDOW);
+        for (Stockadjustment candidate : stockadjustmentRepository.findByDateAfterOrderByDateDesc(since)) {
+            Integer candidateReviewId = candidate.getStockReviewID() == null
+                    ? null : candidate.getStockReviewID().getId();
+            if (!adjustmentType.equals(candidate.getAdjustmentType())
+                    || !status.equals(candidate.getStatus())
+                    || !reason.equals(candidate.getReason())
+                    || !Objects.equals(reviewId, candidateReviewId)) {
+                continue;
+            }
+            if (qtyByBatch.equals(savedQtyByBatch(candidate.getId()))) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Các dòng của một phiếu điều chỉnh đã lưu, dạng {@code batchId -> quantity}, để so khớp nội dung. */
+    private Map<Integer, Integer> savedQtyByBatch(Integer adjustmentId) {
+        Map<Integer, Integer> qtyByBatch = new LinkedHashMap<>();
+        for (Stockadjustmentdetail detail : stockadjustmentdetailRepository
+                .findByStockOutIdWithRelations(adjustmentId)) {
+            if (detail.getBatchID() != null) {
+                qtyByBatch.put(detail.getBatchID().getId(), detail.getQuantity());
+            }
+        }
+        return qtyByBatch;
     }
 
     private boolean isStockReviewSource(StockAdjustmentCreateRequest request) {

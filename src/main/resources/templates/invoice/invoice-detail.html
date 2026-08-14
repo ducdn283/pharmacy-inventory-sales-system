@@ -121,6 +121,7 @@
         .sell-items-table thead th.col-qty,
         .sell-items-table thead th.col-price,
         .sell-items-table thead th.col-line-total,
+        .sell-items-table thead th.col-cost,
         .sell-items-table thead th.col-total,
         .sell-items-table thead th.col-pretax,
         .sell-items-table thead th.col-vat {
@@ -154,6 +155,11 @@
         }
 
         .sell-items-table .col-line-total {
+            width: 100px;
+            text-align: right;
+        }
+
+        .sell-items-table .col-cost {
             width: 100px;
             text-align: right;
         }
@@ -501,6 +507,7 @@
                                 <th class="col-lot">Mã lô</th>
                                 <th class="col-unit-select">Đơn vị bán</th>
                                 <th class="col-qty">SL</th>
+                                <th th:if="${currentRole == 'OWNER'}" class="col-cost">Giá vốn</th>
                                 <th class="col-price">Giá bán</th>
                                 <th class="col-line-total">Thành tiền</th>
                                 <th class="col-total">Tổng</th>
@@ -546,6 +553,11 @@
                                         </span>
                                     </td>
                                     <td class="unit-qty-cell" th:text="${line.quantity}">2</td>
+                                    <td th:if="${currentRole == 'OWNER'}"
+                                        class="unit-cost-cell"
+                                        th:text="${#numbers.formatDecimal(line.unitCostPrice, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                        0đ
+                                    </td>
                                     <td class="unit-price-cell"
                                         th:text="${#numbers.formatDecimal(line.unitSellPrice, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                         0đ
@@ -565,7 +577,7 @@
                                 </tr>
                                 <tr class="entry-note-row"
                                     th:if="${group.lines.?[note != null && !#strings.isEmpty(note)].size() > 0}">
-                                    <td colspan="7" class="entry-note-cell">
+                                    <td th:colspan="${currentRole == 'OWNER' ? 8 : 7}" class="entry-note-cell">
                                         <div class="entry-note-panel entry-note-panel-readonly">
                                             <div class="entry-note-head">
                                                 <i class="ti ti-note"></i>
@@ -580,7 +592,7 @@
                                 </tr>
                             </th:block>
                             <tr th:if="${#lists.isEmpty(detail.productGroups)}" class="sell-items-empty">
-                                <td colspan="7" class="text-center text-secondary">Không có hàng hóa</td>
+                                <td th:colspan="${currentRole == 'OWNER' ? 8 : 7}" class="text-center text-secondary">Không có hàng hóa</td>
                             </tr>
                             </tbody>
                         </table>
@@ -615,6 +627,14 @@
                         <div class="d-flex justify-content-between mb-3">
                             <span class="text-secondary">Giảm giá</span>
                             <strong th:text="${#numbers.formatDecimal(detail.discount, 0, 'POINT', 0, 'COMMA') + 'đ'}">
+                                0đ
+                            </strong>
+                        </div>
+
+                        <div th:if="${currentRole == 'OWNER' and detail.totalCost != null}"
+                             class="d-flex justify-content-between mb-3">
+                            <span class="text-secondary">Tổng giá vốn</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.totalCost, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                 0đ
                             </strong>
                         </div>
