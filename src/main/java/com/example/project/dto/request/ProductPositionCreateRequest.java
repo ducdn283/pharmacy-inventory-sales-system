@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Một dòng vị trí lưu kho trong form tạo hàng hóa (lưu thành Position). */
+/** Vị trí lưu kho tùy chọn trong form tạo/sửa hàng hóa (lưu thành Position). */
 @Getter
 @Setter
 @NoArgsConstructor

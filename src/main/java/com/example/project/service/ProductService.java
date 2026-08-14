@@ -495,18 +495,7 @@ public class ProductService {
             }
         }
 
-        if (request.getPositions() != null) {
-            for (ProductPositionCreateRequest position : request.getPositions()) {
-                String positionName = trimToNull(position.getName());
-                if (positionName == null) {
-                    continue;
-                }
-                Position entity = new Position();
-                entity.setProductID(saved);
-                entity.setName(positionName);
-                positionRepository.save(entity);
-            }
-        }
+        savePosition(saved, request.getPosition());
 
         return saved.getProductID();
     }
@@ -568,11 +557,11 @@ public class ProductService {
             }
         }
 
-        for (Position position : positionRepository.findByProductId(productId)) {
+        positionRepository.findByProductId(productId).stream().findFirst().ifPresent(position -> {
             ProductPositionCreateRequest row = new ProductPositionCreateRequest();
             row.setName(position.getName());
-            form.getPositions().add(row);
-        }
+            form.setPosition(row);
+        });
 
         return Optional.of(form);
     }
@@ -701,18 +690,20 @@ public class ProductService {
         }
 
         positionRepository.deleteAll(positionRepository.findByProductId(productId));
-        if (request.getPositions() != null) {
-            for (ProductPositionCreateRequest position : request.getPositions()) {
-                String positionName = trimToNull(position.getName());
-                if (positionName == null) {
-                    continue;
-                }
-                Position entity = new Position();
-                entity.setProductID(product);
-                entity.setName(positionName);
-                positionRepository.save(entity);
-            }
+        savePosition(product, request.getPosition());
+    }
+
+    /** Lưu tối đa một vị trí cho sản phẩm; vị trí vẫn là thông tin tùy chọn. */
+    private void savePosition(Product product, ProductPositionCreateRequest position) {
+        String positionName = position == null ? null : trimToNull(position.getName());
+        if (positionName == null) {
+            return;
         }
+
+        Position entity = new Position();
+        entity.setProductID(product);
+        entity.setName(positionName);
+        positionRepository.save(entity);
     }
 
     /**
