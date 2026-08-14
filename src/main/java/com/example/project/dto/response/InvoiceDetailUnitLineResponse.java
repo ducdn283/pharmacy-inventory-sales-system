@@ -19,4 +19,6 @@ public class InvoiceDetailUnitLineResponse {
     private Integer returnedQty;
     private String batchLabel;
     private String note;
+    /** Giá vốn / đơn vị bán — chỉ điền khi owner xem chi tiết. */
+    private BigDecimal unitCostPrice;
 }

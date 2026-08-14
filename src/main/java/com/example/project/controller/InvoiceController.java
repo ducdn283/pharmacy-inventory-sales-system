@@ -122,7 +122,8 @@ public class InvoiceController {
     public String invoiceDetail(@PathVariable Integer invoiceId,
                                 HttpServletRequest request,
                                 Model model) {
-        InvoiceDetailPageResponse detail = invoiceService.getDetail(invoiceId);
+        InvoiceDetailPageResponse detail = invoiceService.getDetail(
+                invoiceId, currentUserContext.isOwner());
         model.addAttribute("detail", detail);
         model.addAttribute("basePath", resolveBasePath(request));
         model.addAttribute("returnBasePath", resolveReturnBasePath(request));

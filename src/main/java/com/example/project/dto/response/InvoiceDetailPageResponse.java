@@ -45,6 +45,8 @@ public class InvoiceDetailPageResponse {
 
     private BigDecimal subtotal;
     private BigDecimal discount;
+    /** Tổng giá vốn hàng bán — chỉ điền khi owner xem chi tiết. */
+    private BigDecimal totalCost;
     private BigDecimal total;
 
     private BigDecimal paidByCash;

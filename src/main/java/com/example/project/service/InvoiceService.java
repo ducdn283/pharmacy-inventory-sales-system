@@ -785,6 +785,10 @@ public class InvoiceService {
     /** Full sale-invoice detail for the detail page. */
     @Transactional(readOnly = true)
     public InvoiceDetailPageResponse getDetail(Integer invoiceId) {
+        return getDetail(invoiceId, false);
+    }
+
+    public InvoiceDetailPageResponse getDetail(Integer invoiceId, boolean includeCostForOwner) {
         Invoice invoice = invoiceRepository.findByIdWithRelations(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
 
@@ -796,7 +800,8 @@ public class InvoiceService {
                 .map(this::toDetailItem)
                 .toList();
 
-        List<InvoiceDetailProductGroupResponse> productGroups = buildProductGroups(lines);
+        List<InvoiceDetailProductGroupResponse> productGroups = buildProductGroups(lines, includeCostForOwner);
+        BigDecimal totalCost = includeCostForOwner ? sumLineCost(lines) : null;
 
         int totalQuantity = items.stream()
                 .map(InvoiceDetailItemResponse::getQuantity)
@@ -842,6 +847,7 @@ public class InvoiceService {
                 original != null ? invoiceCode(original) : null,
                 invoice.getSubtotal(),
                 invoice.getDiscount() != null ? invoice.getDiscount() : BigDecimal.ZERO,
+                totalCost,
                 invoice.getTotal(),
                 invoice.getPaidByCash(),
                 invoice.getPaidByBanking(),
@@ -1039,7 +1045,8 @@ public class InvoiceService {
         return retainedRate.stripTrailingZeros().toPlainString().replace('.', ',') + "%";
     }
 
-    private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines) {
+    private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines,
+                                                                     boolean includeCostForOwner) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
         }
@@ -1057,7 +1064,7 @@ public class InvoiceService {
                 .map(productLines -> {
                     Product product = productLines.get(0).getProductID();
                     List<InvoiceDetailUnitLineResponse> unitLines = productLines.stream()
-                            .map(this::toUnitLine)
+                            .map(line -> toUnitLine(line, includeCostForOwner))
                             .toList();
                     BigDecimal productSubtotal = productLines.stream()
                             .map(Invoicedetail::getSubtotal)
@@ -1073,8 +1080,9 @@ public class InvoiceService {
                 .toList();
     }
 
-    private InvoiceDetailUnitLineResponse toUnitLine(Invoicedetail line) {
+    private InvoiceDetailUnitLineResponse toUnitLine(Invoicedetail line, boolean includeCostForOwner) {
         Productunit unit = line.getProductUnitID();
+        BigDecimal unitCostPrice = includeCostForOwner ? unitCostPrice(line) : null;
         return new InvoiceDetailUnitLineResponse(
                 unit != null ? unit.getId() : null,
                 line.getUnitName(),
@@ -1084,7 +1092,43 @@ public class InvoiceService {
                 line.getSubtotal(),
                 line.getReturnedQty() != null ? line.getReturnedQty() : 0,
                 formatBatchLabel(line.getBatchID()),
-                trimToNull(line.getNote()));
+                trimToNull(line.getNote()),
+                unitCostPrice);
+    }
+
+    private BigDecimal sumLineCost(List<Invoicedetail> lines) {
+        return lines.stream()
+                .map(this::lineCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Giá vốn / đơn vị bán = {@code batch.importPricePerBase × productUnit.ratio}.
+     */
+    private BigDecimal unitCostPrice(Invoicedetail line) {
+        Batch batch = line.getBatchID();
+        if (batch == null || batch.getImportPricePerBase() == null) {
+            return BigDecimal.ZERO;
+        }
+        Productunit unit = line.getProductUnitID();
+        BigDecimal ratio = unit != null && unit.getRatio() != null
+                && unit.getRatio().compareTo(BigDecimal.ZERO) > 0
+                ? unit.getRatio()
+                : BigDecimal.ONE;
+        return batch.getImportPricePerBase()
+                .multiply(ratio)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Thành tiền vốn dòng = {@code baseQtyDeducted × batch.importPricePerBase}. */
+    private BigDecimal lineCost(Invoicedetail line) {
+        Batch batch = line.getBatchID();
+        if (batch == null || batch.getImportPricePerBase() == null || line.getBaseQtyDeducted() == null) {
+            return BigDecimal.ZERO;
+        }
+        return batch.getImportPricePerBase()
+                .multiply(BigDecimal.valueOf(line.getBaseQtyDeducted()))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private InvoiceDetailItemResponse toDetailItem(Invoicedetail line) {
