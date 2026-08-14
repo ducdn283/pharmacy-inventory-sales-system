@@ -275,27 +275,11 @@
 
             <!-- 3. Vị trí lưu trữ -->
             <div class="stock-card p-4 mb-4" id="positionSection">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="section-title mb-0">Vị trí lưu trữ</h2>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addPosition()">
-                        <i class="ti ti-plus me-1"></i> Thêm vị trí
-                    </button>
-                </div>
-                <p class="text-secondary small">Tuỳ chọn — ví dụ: Kệ A1, Tủ lạnh, Kho phụ...</p>
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead>
-                        <tr><th>Tên vị trí</th><th style="width:60px"></th></tr>
-                        </thead>
-                        <tbody id="positionRows">
-                        <tr th:each="pos,stat : *{positions}">
-                            <td><input type="text" class="form-control form-control-sm" data-field="name"
-                                       th:name="'positions[' + ${stat.index} + '].name'" th:value="${pos.name}" placeholder="VD: Kệ A1"></td>
-                            <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this,'positionRows','positions')"><i class="ti ti-trash"></i></button></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <h2 class="section-title mb-2">Vị trí lưu trữ</h2>
+                <p class="text-secondary small">Tuỳ chọn — mỗi sản phẩm có tối đa một vị trí, ví dụ: Kệ A1, Tủ lạnh, Kho phụ...</p>
+                <label for="positionName" class="form-label">Tên vị trí</label>
+                <input id="positionName" type="text" class="form-control form-control-sm"
+                       th:field="*{position.name}" placeholder="VD: Kệ A1">
             </div>
 
             <!-- 4. Đơn vị tính -->
@@ -464,13 +448,6 @@
         <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this,'ingredientRows','ingredients')"><i class="ti ti-trash"></i></button></td>
     </tr>
 </template>
-<template id="positionTemplate">
-    <tr>
-        <td><input type="text" class="form-control form-control-sm" data-field="name" placeholder="VD: Kệ A1"></td>
-        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this,'positionRows','positions')"><i class="ti ti-trash"></i></button></td>
-    </tr>
-</template>
-
 <script th:inline="none">
     // Đánh lại số thứ tự (index) cho name="prefix[i].field" của các dòng còn lại sau khi thêm/xoá dòng.
     function reindex(tbodyId, prefix) {
@@ -499,8 +476,6 @@
 
     // Thêm 1 dòng hoạt chất trống.
     function addIngredient() { addFromTemplate('ingredientTemplate', 'ingredientRows', 'ingredients'); }
-    // Thêm 1 dòng vị trí lưu trữ trống.
-    function addPosition() { addFromTemplate('positionTemplate', 'positionRows', 'positions'); }
     // Thêm 1 dòng đơn vị tính trống rồi gắn lại sự kiện/tính lại giá đề xuất.
     function addUnit() {
         addFromTemplate('unitTemplate', 'unitRows', 'units');
@@ -851,7 +826,6 @@
         document.getElementById('createForm')?.addEventListener('submit', () => {
             reindex('unitRows', 'units');
             reindex('ingredientRows', 'ingredients');
-            reindex('positionRows', 'positions');
         });
     });
 </script>

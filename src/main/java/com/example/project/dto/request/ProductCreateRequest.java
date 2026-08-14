@@ -46,5 +46,6 @@ public class ProductCreateRequest {
 
     private List<ProductUnitCreateRequest> units = new ArrayList<>();
     private List<ProductIngredientCreateRequest> ingredients = new ArrayList<>();
-    private List<ProductPositionCreateRequest> positions = new ArrayList<>();
+    /** Vị trí lưu trữ duy nhất của sản phẩm; để trống nếu chưa cần khai báo. */
+    private ProductPositionCreateRequest position = new ProductPositionCreateRequest();
 }
