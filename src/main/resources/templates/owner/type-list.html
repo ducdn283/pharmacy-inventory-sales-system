@@ -272,7 +272,7 @@
     <div class="main-card">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fs-5 fw-semibold mb-0" style="color:#111827;">Danh sách loại hàng</h2>
-        <a th:if="${currentRole == 'OWNER'}" th:href="${basePath + '/create-type'}" class="btn-create">
+        <a th:href="${basePath + '/create-type'}" class="btn-create">
           <i class="ti ti-plus"></i>Tạo loại hàng
         </a>
       </div>
@@ -316,11 +316,10 @@
                       th:text="|${#numbers.formatDecimal(type.defaultVATRate, 1, 2)}%|">5,00%</span>
               </td>
               <td style="text-align:center;">
-                <a th:if="${currentRole == 'OWNER'}" class="update-link"
+                <a class="update-link"
                    th:href="${basePath + '/update-type/' + type.id}" title="Sửa loại hàng">
                   <i class="ti ti-edit"></i>
                 </a>
-                <span th:unless="${currentRole == 'OWNER'}" class="text-secondary">—</span>
               </td>
             </tr>
             <tr th:if="${#lists.isEmpty(types)}" class="empty-row">

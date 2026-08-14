@@ -11,7 +11,11 @@ import java.util.List;
 
 public interface TypeRepository extends JpaRepository<Type, Integer> {
 
-    //hiện danh sách loại (có tìm kiếm theo tên hoặc nhóm)
+    /**
+     * Danh sách loại hàng có lọc theo từ khóa (tên hoặc nhóm) và nhóm mặt hàng.
+     * <p>Hiện chưa dùng trực tiếp — {@link com.example.project.service.TypeService#list}
+     * lọc trong bộ nhớ để hỗ trợ tìm không dấu.</p>
+     */
     @Query("""
             SELECT t FROM Type t
             WHERE (:keyword = '' OR LOWER(t.name) LIKE LOWER(CONCAT(:keyword, '%'))
@@ -22,7 +26,7 @@ public interface TypeRepository extends JpaRepository<Type, Integer> {
                             @Param("sortType") String sortType,
                             Pageable pageable);
 
-    //lấy danh sách các sortType
+    /** Các giá trị {@code sortType} khác nhau — dropdown lọc / form tạo-sửa Owner. */
     @Query("SELECT DISTINCT t.sortType FROM Type t WHERE t.sortType IS NOT NULL ORDER BY t.sortType")
     List<String> findDistinctSortTypes();
 }
