@@ -1,13 +1,25 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi"
+      xmlns:th="http://www.thymeleaf.org">
 
 <head>
     <meta charset="UTF-8">
-    <title>Tổng quan | PharmaManager</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
-    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+    <title>
+        Tổng quan bán hàng | PharmaManager
+    </title>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <script type="module"
+            crossorigin
+            th:src="@{/assets/js/main.js}">
+    </script>
+
+    <link rel="stylesheet"
+          crossorigin
+          th:href="@{/assets/css/main.css}">
 
     <style>
         body {
@@ -20,10 +32,38 @@
         }
 
         .dash-card {
-            background: #ffffff;
             border: 1px solid #eef0f3;
             border-radius: 16px;
+            background: #ffffff;
             box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            animation: dashboard-rise .38s ease both;
+            transition:
+                    transform .18s ease,
+                    box-shadow .18s ease;
+        }
+
+        a:hover > .dash-card {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 24px rgba(16, 24, 40, .08);
+        }
+
+        @keyframes dashboard-rise {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .dash-card {
+                animation: none;
+                transition: none;
+            }
         }
 
         .welcome-card {
@@ -31,9 +71,9 @@
         }
 
         .welcome-title {
+            color: #111827;
             font-size: 18px;
             font-weight: 700;
-            color: #111827;
         }
 
         .welcome-subtitle {
@@ -49,20 +89,35 @@
         }
 
         .quick-action {
-            border-radius: 10px;
             padding: 9px 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #374151;
             font-size: 13px;
             font-weight: 600;
             text-decoration: none;
-            border: 1px solid #e5e7eb;
-            background: #ffffff;
-            color: #374151;
+            transition:
+                    border-color .18s ease,
+                    color .18s ease,
+                    transform .18s ease;
+        }
+
+        .quick-action:hover {
+            border-color: #10b981;
+            color: #047857;
+            transform: translateY(-1px);
         }
 
         .quick-action.primary {
-            background: #059669;
             border-color: #059669;
+            background: #059669;
             color: #ffffff;
+        }
+
+        .metric-link {
+            color: inherit;
+            text-decoration: none;
         }
 
         .metric-card {
@@ -71,10 +126,10 @@
         }
 
         .metric-title {
+            margin-bottom: 10px;
             color: #6b7280;
             font-size: 12px;
             font-weight: 600;
-            margin-bottom: 10px;
         }
 
         .metric-value {
@@ -82,7 +137,7 @@
             font-size: 24px;
             font-weight: 800;
             line-height: 1.1;
-            word-break: break-word;
+            overflow-wrap: anywhere;
         }
 
         .metric-helper {
@@ -92,12 +147,12 @@
         }
 
         .metric-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
             font-size: 22px;
         }
 
@@ -161,10 +216,10 @@
         }
 
         .section-title {
+            margin-bottom: 0;
+            color: #111827;
             font-size: 16px;
             font-weight: 700;
-            color: #111827;
-            margin-bottom: 0;
         }
 
         .chart-box {
@@ -173,9 +228,9 @@
         }
 
         .chart-wrap {
-            min-height: 285px;
-            width: 100%;
             position: relative;
+            width: 100%;
+            min-height: 285px;
         }
 
         .chart-legend {
@@ -201,38 +256,40 @@
             border-radius: 3px;
         }
 
-        /* Grouped bar chart */
-
+        /*
+         * Biểu đồ cột ghép:
+         * doanh thu và khoản thu theo 7 ngày.
+         */
         .grouped-bar-chart {
-            height: 270px;
             display: flex;
             flex-direction: column;
+            height: 270px;
         }
 
         .bar-groups {
-            flex: 1;
             display: flex;
+            flex: 1;
             align-items: stretch;
             gap: 10px;
             padding: 10px 6px 0;
         }
 
         .bar-group {
-            flex: 1;
-            min-width: 42px;
             display: flex;
+            flex: 1;
             flex-direction: column;
-            justify-content: flex-end;
             align-items: center;
+            justify-content: flex-end;
+            min-width: 42px;
         }
 
         .bar-cluster {
-            width: 100%;
-            height: 210px;
             display: flex;
             align-items: flex-end;
             justify-content: center;
             gap: 5px;
+            width: 100%;
+            height: 210px;
             border-bottom: 1px solid #cbd5e1;
         }
 
@@ -240,11 +297,13 @@
             width: 18px;
             min-height: 4px;
             border-radius: 6px 6px 0 0;
-            transition: opacity 0.15s ease;
+            transition:
+                    opacity .15s ease,
+                    height .6s ease;
         }
 
         .grouped-bar:hover {
-            opacity: 0.78;
+            opacity: .78;
         }
 
         .bar-label {
@@ -254,8 +313,9 @@
             text-align: center;
         }
 
-        /* Line chart */
-
+        /*
+         * Biểu đồ đường.
+         */
         .line-chart svg {
             width: 100%;
             height: 270px;
@@ -278,36 +338,50 @@
             fill: #6b7280;
             font-size: 11px;
         }
-
-        /* Donut chart */
-
+        /*
+ * Biểu đồ donut thể hiện cơ cấu
+ * tiền mặt và chuyển khoản.
+ */
         .donut-layout {
-            min-height: 270px;
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: center;
             gap: 36px;
-            flex-wrap: wrap;
+            min-height: 270px;
         }
 
         .donut-ring {
-            width: 190px;
-            height: 190px;
-            border-radius: 50%;
             display: grid;
             place-items: center;
             flex-shrink: 0;
+            width: 190px;
+            height: 190px;
+            border-radius: 50%;
+            animation: donut-appear .7s ease both;
+        }
+
+        @keyframes donut-appear {
+            from {
+                opacity: 0;
+                transform: rotate(-25deg) scale(.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: rotate(0) scale(1);
+            }
         }
 
         .donut-hole {
-            width: 118px;
-            height: 118px;
-            border-radius: 50%;
-            background: #ffffff;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            width: 118px;
+            height: 118px;
+            border-radius: 50%;
+            background: #ffffff;
             box-shadow: inset 0 0 0 1px #eef0f3;
         }
 
@@ -318,17 +392,17 @@
         }
 
         .donut-total-value {
+            margin-top: 3px;
             color: #111827;
             font-size: 20px;
             font-weight: 800;
-            margin-top: 3px;
         }
 
         .donut-details {
-            min-width: 190px;
             display: flex;
             flex-direction: column;
             gap: 14px;
+            min-width: 190px;
         }
 
         .donut-detail-row {
@@ -336,6 +410,12 @@
             grid-template-columns: 12px 1fr auto;
             align-items: center;
             gap: 8px;
+        }
+
+        .donut-detail-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
         }
 
         .donut-detail-label {
@@ -363,54 +443,63 @@
             padding: 12px;
             border-radius: 12px;
             background: #fff8ed;
-            text-decoration: none;
             color: inherit;
+            text-decoration: none;
+            transition:
+                    transform .18s ease,
+                    background-color .18s ease;
+        }
+
+        .todo-item:hover {
+            background: #fff3df;
+            color: inherit;
+            transform: translateX(2px);
         }
 
         .todo-icon {
+            display: inline-flex;
+            flex-shrink: 0;
+            align-items: center;
+            justify-content: center;
             width: 34px;
             height: 34px;
             border-radius: 10px;
             background: #ffedd5;
             color: #ea580c;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
         }
 
         .todo-title {
+            color: #111827;
             font-size: 13px;
             font-weight: 700;
-            color: #111827;
         }
 
         .todo-desc {
-            font-size: 12px;
-            color: #6b7280;
             margin-top: 2px;
+            color: #6b7280;
+            font-size: 12px;
         }
 
         .soft-badge {
-            border-radius: 999px;
             padding: 5px 9px;
+            border-radius: 999px;
             font-size: 11px;
             font-weight: 700;
             white-space: nowrap;
         }
 
         .table thead th {
+            border-bottom: 1px solid #eef0f3;
             background: #f9fafb;
             color: #6b7280;
             font-size: 12px;
             font-weight: 700;
-            border-bottom: 1px solid #eef0f3;
         }
 
         .table tbody td {
+            border-bottom: 1px solid #f1f5f9;
             font-size: 13px;
             vertical-align: middle;
-            border-bottom: 1px solid #f1f5f9;
         }
 
         .table tbody tr:last-child td {
@@ -422,43 +511,88 @@
             font-weight: 700;
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            .donut-ring {
+                animation: none;
+            }
+
+            .todo-item {
+                transition: none;
+            }
+        }
+
         @media (max-width: 991.98px) {
             .dashboard-content {
                 padding-top: 76px !important;
             }
 
-            .bar-chart {
+            .bar-groups {
                 gap: 8px;
+                overflow-x: auto;
             }
 
-            .bar {
-                width: 18px;
+            .grouped-bar {
+                width: 16px;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .welcome-card,
+            .chart-box {
+                padding: 16px;
+            }
+
+            .donut-layout {
+                gap: 20px;
+            }
+
+            .donut-ring {
+                width: 165px;
+                height: 165px;
+            }
+
+            .donut-hole {
+                width: 102px;
+                height: 102px;
             }
         }
     </style>
 </head>
-
 <body>
-<div th:replace="~{fragments/topbar :: topbar}"></div>
-<aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 
-<main id="content" class="content dashboard-content">
+<div th:replace="~{fragments/topbar :: topbar}">
+</div>
+
+<aside th:replace="~{fragments/sidebar :: sidebar}">
+</aside>
+
+<main id="content"
+      class="content dashboard-content">
+
     <div class="container-fluid">
 
         <div class="dash-card welcome-card mb-4">
+
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+
                 <div>
                     <div class="welcome-title">
                         Xin chào,
-                        <span th:text="${dashboard.greetingName ?: 'Người dùng'}">Người dùng</span>
+
+                        <span th:text="${dashboard.greetingName ?: 'Người dùng'}">
+                            Người dùng
+                        </span>
                     </div>
-                    <div class="welcome-subtitle mt-1" th:text="${dashboard.subtitle}">
-                        Tổng quan hôm nay
+
+                    <div class="welcome-subtitle mt-1"
+                         th:text="${dashboard.subtitle}">
+                        Tổng quan bán hàng hôm nay
                     </div>
                 </div>
             </div>
 
             <div class="quick-actions">
+
                 <a th:each="action : ${dashboard.quickActions}"
                    th:href="${action.url}"
                    class="quick-action"
@@ -469,19 +603,40 @@
             </div>
         </div>
 
+        <!-- Tám thẻ chỉ số: 4 thẻ mỗi hàng trên màn hình lớn -->
         <div class="row g-3 mb-4">
-            <div class="col-12 col-md-6 col-xl-2" th:each="metric : ${dashboard.metrics}">
-                <a th:href="${metric.url}" class="text-decoration-none">
+
+            <div class="col-12 col-sm-6 col-xl-3"
+                 th:each="metric : ${dashboard.metrics}">
+
+                <a th:href="${metric.url}"
+                   class="metric-link">
+
                     <div class="dash-card metric-card h-100"
                          th:classappend="${' tone-' + metric.tone}">
+
                         <div class="d-flex justify-content-between gap-3">
+
                             <div>
-                                <div class="metric-title" th:text="${metric.title}">Chỉ số</div>
-                                <div class="metric-value" th:text="${metric.value}">0</div>
-                                <div class="metric-helper" th:text="${metric.helper}">Mô tả</div>
+                                <div class="metric-title"
+                                     th:text="${metric.title}">
+                                    Chỉ số
+                                </div>
+
+                                <div class="metric-value"
+                                     th:text="${metric.value}">
+                                    0
+                                </div>
+
+                                <div class="metric-helper"
+                                     th:text="${metric.helper}">
+                                    Mô tả
+                                </div>
                             </div>
+
                             <div class="metric-icon">
-                                <i th:class="${metric.icon}"></i>
+                                <i th:class="${metric.icon}">
+                                </i>
                             </div>
                         </div>
                     </div>
@@ -491,35 +646,29 @@
 
         <div class="row g-4 mb-4">
 
-            <!-- Danh sách biểu đồ -->
             <div th:each="chart, chartStat : ${dashboard.charts}"
                  class="col-12"
-                 th:classappend="${
-            #lists.size(dashboard.charts) > 1
-            ? ' col-xl-6'
-            : ' col-xl-8'
-         }">
+                 th:classappend="${#lists.size(dashboard.charts) > 1
+                         ? ' col-xl-6'
+                         : ' col-xl-8'}">
 
                 <div class="dash-card chart-box h-100">
 
-                    <div class="d-flex justify-content-between
-                        align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
 
                         <h2 class="section-title"
                             th:text="${chart.title}">
                             Biểu đồ
                         </h2>
-
                     </div>
 
                     <div class="chart-wrap dashboard-chart"
                          th:id="${'dashboardChart-' + chartStat.index}">
                     </div>
-
                 </div>
             </div>
 
-            <!-- Khi chỉ có một biểu đồ thì todo nằm bên phải -->
+            <!-- Trường hợp dashboard chỉ có một biểu đồ -->
             <div class="col-12 col-xl-4"
                  th:if="${#lists.size(dashboard.charts) == 1}">
 
@@ -536,41 +685,36 @@
                            th:href="${item.url}"
                            class="todo-item">
 
-                    <span class="todo-icon">
-                        <i class="ti ti-alert-circle"></i>
-                    </span>
+                            <span class="todo-icon">
+                                <i class="ti ti-alert-circle">
+                                </i>
+                            </span>
 
                             <span class="flex-grow-1">
 
-                        <span class="todo-title d-block"
-                              th:text="${item.title}">
-                            Việc cần xử lý
-                        </span>
+                                <span class="todo-title d-block"
+                                      th:text="${item.title}">
+                                    Việc cần xử lý
+                                </span>
 
-                        <span class="todo-desc d-block"
-                              th:text="${item.description}">
-                            Mô tả
-                        </span>
-
-                    </span>
+                                <span class="todo-desc d-block"
+                                      th:text="${item.description}">
+                                    Mô tả
+                                </span>
+                            </span>
 
                             <span class="soft-badge"
-                                  th:classappend="${
-                              ' badge-' + item.tone + '-soft'
-                          }"
+                                  th:classappend="${' badge-' + item.tone + '-soft'}"
                                   th:text="${item.badge}">
-                        Chờ xử lý
-                    </span>
-
+                                Chờ xử lý
+                            </span>
                         </a>
-
                     </div>
                 </div>
             </div>
-
         </div>
 
-        <!-- Khi có hai biểu đồ thì todo hiển thị phía dưới -->
+        <!-- Dashboard Dược sĩ có hai biểu đồ -->
         <div class="dash-card p-4 mb-4"
              th:if="${#lists.size(dashboard.charts) > 1}">
 
@@ -585,49 +729,57 @@
                    th:href="${item.url}"
                    class="todo-item">
 
-            <span class="todo-icon">
-                <i class="ti ti-alert-circle"></i>
-            </span>
+                    <span class="todo-icon">
+                        <i class="ti ti-alert-circle">
+                        </i>
+                    </span>
 
                     <span class="flex-grow-1">
 
-                <span class="todo-title d-block"
-                      th:text="${item.title}">
-                    Việc cần xử lý
-                </span>
+                        <span class="todo-title d-block"
+                              th:text="${item.title}">
+                            Việc cần xử lý
+                        </span>
 
-                <span class="todo-desc d-block"
-                      th:text="${item.description}">
-                    Mô tả
-                </span>
-
-            </span>
+                        <span class="todo-desc d-block"
+                              th:text="${item.description}">
+                            Mô tả
+                        </span>
+                    </span>
 
                     <span class="soft-badge"
-                          th:classappend="${
-                      ' badge-' + item.tone + '-soft'
-                  }"
+                          th:classappend="${' badge-' + item.tone + '-soft'}"
                           th:text="${item.badge}">
-                Chờ xử lý
-            </span>
-
+                        Chờ xử lý
+                    </span>
                 </a>
-
             </div>
         </div>
 
-        <div class="row g-4" th:if="${dashboard.roleCode == 'OWNER'}">
+        <!-- Khối cũ dành cho Owner, vẫn giữ để tương thích -->
+        <div class="row g-4"
+             th:if="${dashboard.roleCode == 'OWNER'}">
+
             <div class="col-12 col-xl-8">
+
                 <div class="dash-card p-4">
+
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h2 class="section-title" th:text="${dashboard.performanceTitle}">
-                            Hiệu suất
+
+                        <h2 class="section-title"
+                            th:text="${dashboard.performanceTitle}">
+                            Hiệu suất nhân viên
                         </h2>
-                        <span class="text-secondary small">Cập nhật hôm nay</span>
+
+                        <span class="text-secondary small">
+                            Cập nhật hôm nay
+                        </span>
                     </div>
 
                     <div class="table-responsive">
+
                         <table class="table mb-0">
+
                             <thead>
                             <tr>
                                 <th>Nhân viên</th>
@@ -639,11 +791,27 @@
                             </thead>
 
                             <tbody>
+
                             <tr th:each="row : ${dashboard.performanceRows}">
-                                <td class="fw-semibold" th:text="${row.name}">Nhân viên</td>
-                                <td class="text-money" th:text="${row.revenueDisplay}">0đ</td>
-                                <td th:text="${row.invoiceCount}">0</td>
-                                <td th:text="${row.debtDisplay}">0đ</td>
+
+                                <td class="fw-semibold"
+                                    th:text="${row.name}">
+                                    Nhân viên
+                                </td>
+
+                                <td class="text-money"
+                                    th:text="${row.revenueDisplay}">
+                                    0đ
+                                </td>
+
+                                <td th:text="${row.invoiceCount}">
+                                    0
+                                </td>
+
+                                <td th:text="${row.debtDisplay}">
+                                    0đ
+                                </td>
+
                                 <td>
                                     <span class="soft-badge"
                                           th:classappend="${' badge-' + row.tone + '-soft'}"
@@ -654,10 +822,13 @@
                             </tr>
 
                             <tr th:if="${#lists.isEmpty(dashboard.performanceRows)}">
-                                <td colspan="5" class="text-center text-secondary py-4">
+
+                                <td colspan="5"
+                                    class="text-center text-secondary py-4">
                                     Chưa có dữ liệu hóa đơn hôm nay.
                                 </td>
                             </tr>
+
                             </tbody>
                         </table>
                     </div>
@@ -665,36 +836,48 @@
             </div>
 
             <div class="col-12 col-xl-4">
+
                 <div class="dash-card p-4 h-100">
+
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h2 class="section-title" th:text="${dashboard.approvalTitle}">
+
+                        <h2 class="section-title"
+                            th:text="${dashboard.approvalTitle}">
                             Phê duyệt gần đây
                         </h2>
-                        <a th:href="@{/owner/approvals}" class="small text-success text-decoration-none">
+
+                        <a th:href="@{/owner/approvals}"
+                           class="small text-success text-decoration-none">
                             Xem tất cả
                         </a>
                     </div>
 
                     <div class="todo-list">
+
                         <a th:each="item : ${dashboard.approvalItems}"
                            th:href="${item.detailUrl}"
                            class="todo-item">
+
                             <span class="todo-icon">
-                                <i class="ti ti-clock"></i>
+                                <i class="ti ti-clock">
+                                </i>
                             </span>
 
                             <span class="flex-grow-1">
+
                                 <span class="todo-title d-block"
                                       th:text="${item.type + ' ' + item.code}">
                                     Phiếu
                                 </span>
+
                                 <span class="todo-desc d-block"
                                       th:text="${item.requesterName + ' • ' + item.requestedAtDisplay}">
                                     Người gửi
                                 </span>
                             </span>
 
-                            <span class="soft-badge badge-warning-soft" th:text="${item.status}">
+                            <span class="soft-badge badge-warning-soft"
+                                  th:text="${item.status}">
                                 Chờ duyệt
                             </span>
                         </a>
@@ -708,13 +891,19 @@
             </div>
         </div>
 
-        <div class="dash-card p-4" th:if="${dashboard.roleCode == 'PHARMACIST'}">
-            <h2 class="section-title mb-3" th:text="${dashboard.recentInvoiceTitle}">
+        <!-- Danh sách hóa đơn gần đây của Dược sĩ -->
+        <div class="dash-card p-4"
+             th:if="${dashboard.roleCode == 'PHARMACIST'}">
+
+            <h2 class="section-title mb-3"
+                th:text="${dashboard.recentInvoiceTitle}">
                 Hóa đơn gần đây
             </h2>
 
             <div class="table-responsive">
+
                 <table class="table mb-0">
+
                     <thead>
                     <tr>
                         <th>Mã hóa đơn</th>
@@ -722,45 +911,70 @@
                         <th>Khách hàng</th>
                         <th>Tổng tiền</th>
                         <th>Trạng thái</th>
-                        <th class="text-end">Thao tác</th>
+
+                        <th class="text-end">
+                            Thao tác
+                        </th>
                     </tr>
                     </thead>
 
                     <tbody>
+
                     <tr th:each="invoice : ${dashboard.recentInvoices}">
-                        <td th:text="${invoice.code}">INV-000001</td>
-                        <td th:text="${invoice.time}">09:15</td>
-                        <td th:text="${invoice.customerName}">Khách lẻ</td>
-                        <td class="text-money" th:text="${invoice.totalDisplay}">0đ</td>
+
+                        <td th:text="${invoice.code}">
+                            INV-000001
+                        </td>
+
+                        <td th:text="${invoice.time}">
+                            09:15
+                        </td>
+
+                        <td th:text="${invoice.customerName}">
+                            Khách lẻ
+                        </td>
+
+                        <td class="text-money"
+                            th:text="${invoice.totalDisplay}">
+                            0đ
+                        </td>
+
                         <td>
                             <span class="soft-badge"
                                   th:classappend="${' badge-' + invoice.tone + '-soft'}"
                                   th:text="${invoice.status}">
-                                Hoàn tất
+                                Hoàn thành
                             </span>
                         </td>
+
                         <td class="text-end">
-                            <a th:href="${invoice.url}" class="text-success text-decoration-none fw-semibold">
+
+                            <a th:href="${invoice.url}"
+                               class="text-success text-decoration-none fw-semibold">
                                 Xem
                             </a>
                         </td>
                     </tr>
 
                     <tr th:if="${#lists.isEmpty(dashboard.recentInvoices)}">
-                        <td colspan="6" class="text-center text-secondary py-4">
+
+                        <td colspan="6"
+                            class="text-center text-secondary py-4">
                             Chưa có hóa đơn gần đây.
                         </td>
                     </tr>
+
                     </tbody>
                 </table>
             </div>
         </div>
-
     </div>
 </main>
-
 <script th:inline="javascript">
-    const dashboardCharts = /*[[${dashboard.charts}]]*/ [];
+
+    const dashboardCharts =
+        /*[[${dashboard.charts}]]*/
+        [];
 
     const chartPalette = [
         '#059669',
@@ -770,27 +984,39 @@
     ];
 
     function formatMoneyShort(value) {
-        const numberValue = Number(value || 0);
-        const absValue = Math.abs(numberValue);
+        const numberValue =
+            Number(value || 0);
 
-        if (absValue >= 1000000000) {
-            return (numberValue / 1000000000)
-                .toFixed(1)
-                .replace('.0', '') + ' Tỷ';
+        const absoluteValue =
+            Math.abs(numberValue);
+
+        if (absoluteValue >= 1_000_000_000) {
+            return (
+                    numberValue / 1_000_000_000
+                )
+                    .toFixed(1)
+                    .replace('.0', '')
+                + ' tỷ';
         }
 
-        if (absValue >= 1000000) {
-            return (numberValue / 1000000)
-                .toFixed(1)
-                .replace('.0', '') + ' Tr';
+        if (absoluteValue >= 1_000_000) {
+            return (
+                    numberValue / 1_000_000
+                )
+                    .toFixed(1)
+                    .replace('.0', '')
+                + ' triệu';
         }
 
-        return new Intl.NumberFormat('vi-VN')
-            .format(numberValue) + 'đ';
+        return new Intl.NumberFormat(
+            'vi-VN'
+        ).format(numberValue) + 'đ';
     }
 
     function escapeHtml(value) {
-        return String(value == null ? '' : value)
+        return String(
+            value == null ? '' : value
+        )
             .replaceAll('&', '&amp;')
             .replaceAll('<', '&lt;')
             .replaceAll('>', '&gt;')
@@ -811,27 +1037,39 @@
                     : 'line',
 
             labels:
-                Array.isArray(chart && chart.labels)
+                Array.isArray(
+                    chart && chart.labels
+                )
                     ? chart.labels
                     : [],
 
             series:
-                Array.isArray(chart && chart.series)
-                    ? chart.series.map(function (series) {
-                        return {
-                            name:
-                                series && series.name
-                                    ? series.name
-                                    : 'Dữ liệu',
+                Array.isArray(
+                    chart && chart.series
+                )
+                    ? chart.series.map(
+                        function (series) {
+                            return {
+                                name:
+                                    series && series.name
+                                        ? series.name
+                                        : 'Dữ liệu',
 
-                            data:
-                                Array.isArray(series && series.data)
-                                    ? series.data.map(function (value) {
-                                        return Number(value || 0);
-                                    })
-                                    : []
-                        };
-                    })
+                                data:
+                                    Array.isArray(
+                                        series && series.data
+                                    )
+                                        ? series.data.map(
+                                            function (value) {
+                                                return Number(
+                                                    value || 0
+                                                );
+                                            }
+                                        )
+                                        : []
+                            };
+                        }
+                    )
                     : []
         };
     }
@@ -841,22 +1079,31 @@
             return '';
         }
 
-        let html = '<div class="chart-legend">';
+        let html =
+            '<div class="chart-legend">';
 
-        series.forEach(function (item, index) {
-            const color =
-                chartPalette[index % chartPalette.length];
+        series.forEach(
+            function (item, index) {
+                const color =
+                    chartPalette[
+                    index % chartPalette.length
+                        ];
 
-            html += '<span class="chart-legend-item">';
+                html +=
+                    '<span class="chart-legend-item">';
 
-            html += '<span class="chart-legend-dot" '
-                + 'style="background:' + color + '">'
-                + '</span>';
+                html +=
+                    '<span class="chart-legend-dot" '
+                    + 'style="background:'
+                    + color
+                    + '"></span>';
 
-            html += escapeHtml(item.name);
+                html +=
+                    escapeHtml(item.name);
 
-            html += '</span>';
-        });
+                html += '</span>';
+            }
+        );
 
         html += '</div>';
 
@@ -864,202 +1111,306 @@
     }
 
     /*
-     * Biểu đồ cột:
-     * Invoice và Income theo từng ngày.
+     * Biểu đồ cột ghép:
+     * doanh thu và khoản thu theo từng ngày.
      */
-    function renderGroupedBarChart(container, chart) {
-        const allValues = chart.series.flatMap(
-            function (series) {
-                return series.data;
-            }
-        );
-
-        const max = Math.max.apply(
-            null,
-            allValues.concat([1])
-        );
-
-        let html = renderLegend(chart.series);
-
-        html += '<div class="grouped-bar-chart">';
-        html += '<div class="bar-groups">';
-
-        chart.labels.forEach(function (label, labelIndex) {
-            html += '<div class="bar-group">';
-            html += '<div class="bar-cluster">';
-
-            chart.series.forEach(
-                function (series, seriesIndex) {
-                    const value = Number(
-                        series.data[labelIndex] || 0
-                    );
-
-                    const barHeight = Math.max(
-                        4,
-                        Math.round(value / max * 200)
-                    );
-
-                    const color =
-                        chartPalette[
-                        seriesIndex % chartPalette.length
-                            ];
-
-                    const title = escapeHtml(
-                        series.name
-                        + ' - '
-                        + label
-                        + ': '
-                        + formatMoneyShort(value)
-                    );
-
-                    html += '<div class="grouped-bar" '
-                        + 'title="' + title + '" '
-                        + 'style="height:' + barHeight + 'px;'
-                        + 'background:' + color + '">'
-                        + '</div>';
+    function renderGroupedBarChart(
+        container,
+        chart
+    ) {
+        const allValues =
+            chart.series.flatMap(
+                function (series) {
+                    return series.data;
                 }
             );
 
-            html += '</div>';
+        const maximum =
+            Math.max.apply(
+                null,
+                allValues.concat([1])
+            );
 
-            html += '<div class="bar-label">'
-                + escapeHtml(label)
-                + '</div>';
+        let html =
+            renderLegend(chart.series);
 
-            html += '</div>';
-        });
+        html +=
+            '<div class="grouped-bar-chart">';
+
+        html +=
+            '<div class="bar-groups">';
+
+        chart.labels.forEach(
+            function (label, labelIndex) {
+                html +=
+                    '<div class="bar-group">';
+
+                html +=
+                    '<div class="bar-cluster">';
+
+                chart.series.forEach(
+                    function (
+                        series,
+                        seriesIndex
+                    ) {
+                        const value =
+                            Number(
+                                series.data[
+                                    labelIndex
+                                    ] || 0
+                            );
+
+                        const barHeight =
+                            Math.max(
+                                4,
+                                Math.round(
+                                    value
+                                    / maximum
+                                    * 200
+                                )
+                            );
+
+                        const color =
+                            chartPalette[
+                            seriesIndex
+                            % chartPalette.length
+                                ];
+
+                        const tooltip =
+                            escapeHtml(
+                                series.name
+                                + ' - '
+                                + label
+                                + ': '
+                                + formatMoneyShort(
+                                    value
+                                )
+                            );
+
+                        html +=
+                            '<div class="grouped-bar" '
+                            + 'title="'
+                            + tooltip
+                            + '" '
+                            + 'style="height:'
+                            + barHeight
+                            + 'px;'
+                            + 'background:'
+                            + color
+                            + '">'
+                            + '</div>';
+                    }
+                );
+
+                html += '</div>';
+
+                html +=
+                    '<div class="bar-label">'
+                    + escapeHtml(label)
+                    + '</div>';
+
+                html += '</div>';
+            }
+        );
 
         html += '</div>';
         html += '</div>';
 
         container.innerHTML = html;
     }
-
     /*
-     * Biểu đồ đường được giữ lại để dashboard Owner
-     * vẫn hiển thị doanh thu 7 ngày.
-     */
-    function renderLineChart(container, chart) {
+ * Biểu đồ đường vẫn được hỗ trợ
+ * để tương thích với các dashboard cũ.
+ */
+    function renderLineChart(
+        container,
+        chart
+    ) {
         const width = 760;
         const height = 250;
         const paddingX = 38;
         const paddingY = 25;
 
-        const allValues = chart.series.flatMap(
-            function (series) {
-                return series.data;
-            }
-        );
+        const allValues =
+            chart.series.flatMap(
+                function (series) {
+                    return series.data;
+                }
+            );
 
-        const max = Math.max.apply(
-            null,
-            allValues.concat([1])
-        );
+        const maximum =
+            Math.max.apply(
+                null,
+                allValues.concat([1])
+            );
 
-        const stepX = chart.labels.length > 1
-            ? (width - paddingX * 2)
-            / (chart.labels.length - 1)
-            : 0;
+        const stepX =
+            chart.labels.length > 1
+                ? (
+                width - paddingX * 2
+            ) / (
+                chart.labels.length - 1
+            )
+                : 0;
 
         let gridLines = '';
 
-        [0, 1, 2, 3].forEach(function (item) {
-            const y = paddingY
-                + item
-                * ((height - paddingY * 2) / 3);
+        [0, 1, 2, 3].forEach(
+            function (item) {
+                const y =
+                    paddingY
+                    + item
+                    * (
+                        (
+                            height - paddingY * 2
+                        ) / 3
+                    );
 
-            gridLines += '<line class="axis" '
-                + 'x1="' + paddingX + '" '
-                + 'y1="' + y + '" '
-                + 'x2="' + (width - paddingX) + '" '
-                + 'y2="' + y + '">'
-                + '</line>';
-        });
+                gridLines +=
+                    '<line class="axis" '
+                    + 'x1="'
+                    + paddingX
+                    + '" '
+                    + 'y1="'
+                    + y
+                    + '" '
+                    + 'x2="'
+                    + (width - paddingX)
+                    + '" '
+                    + 'y2="'
+                    + y
+                    + '">'
+                    + '</line>';
+            }
+        );
 
         let seriesSvg = '';
 
         chart.series.forEach(
-            function (series, seriesIndex) {
+            function (
+                series,
+                seriesIndex
+            ) {
                 const color =
                     chartPalette[
-                    seriesIndex % chartPalette.length
+                    seriesIndex
+                    % chartPalette.length
                         ];
 
-                const points = series.data.map(
-                    function (value, index) {
-                        return {
-                            x:
-                                paddingX
-                                + stepX * index,
+                const points =
+                    series.data.map(
+                        function (value, index) {
+                            return {
+                                x:
+                                    paddingX
+                                    + stepX * index,
 
-                            y:
-                                height
-                                - paddingY
-                                - (value / max)
-                                * (height - paddingY * 2),
+                                y:
+                                    height
+                                    - paddingY
+                                    - (
+                                        value / maximum
+                                    )
+                                    * (
+                                        height
+                                        - paddingY * 2
+                                    ),
 
-                            value: value
-                        };
-                    }
-                );
+                                value
+                            };
+                        }
+                    );
 
-                const path = points.map(
-                    function (point, index) {
-                        return (
-                            index === 0
-                                ? 'M '
-                                : ' L '
-                        ) + point.x + ' ' + point.y;
-                    }
-                ).join('');
+                const path =
+                    points.map(
+                        function (point, index) {
+                            return (
+                                    index === 0
+                                        ? 'M '
+                                        : ' L '
+                                )
+                                + point.x
+                                + ' '
+                                + point.y;
+                        }
+                    ).join('');
 
-                seriesSvg += '<path class="line" '
-                    + 'stroke="' + color + '" '
-                    + 'd="' + path + '">'
+                seriesSvg +=
+                    '<path class="line" '
+                    + 'stroke="'
+                    + color
+                    + '" '
+                    + 'd="'
+                    + path
+                    + '">'
                     + '</path>';
 
-                points.forEach(function (point, index) {
-                    const label =
-                        chart.labels[index] || '';
+                points.forEach(
+                    function (point, index) {
+                        const label =
+                            chart.labels[index] || '';
 
-                    seriesSvg += '<circle '
-                        + 'cx="' + point.x + '" '
-                        + 'cy="' + point.y + '" '
-                        + 'r="4" '
-                        + 'fill="' + color + '">';
+                        seriesSvg +=
+                            '<circle '
+                            + 'cx="'
+                            + point.x
+                            + '" '
+                            + 'cy="'
+                            + point.y
+                            + '" '
+                            + 'r="4" '
+                            + 'fill="'
+                            + color
+                            + '">';
 
-                    seriesSvg += '<title>'
-                        + escapeHtml(
-                            series.name
-                            + ' - '
-                            + label
-                            + ': '
-                            + formatMoneyShort(point.value)
-                        )
-                        + '</title>';
+                        seriesSvg +=
+                            '<title>'
+                            + escapeHtml(
+                                series.name
+                                + ' - '
+                                + label
+                                + ': '
+                                + formatMoneyShort(
+                                    point.value
+                                )
+                            )
+                            + '</title>';
 
-                    seriesSvg += '</circle>';
-                });
+                        seriesSvg += '</circle>';
+                    }
+                );
             }
         );
 
         let xLabels = '';
 
-        chart.labels.forEach(function (label, index) {
-            const x = paddingX + stepX * index;
+        chart.labels.forEach(
+            function (label, index) {
+                const x =
+                    paddingX
+                    + stepX * index;
 
-            xLabels += '<text class="label" '
-                + 'x="' + x + '" '
-                + 'y="' + (height - 2) + '" '
-                + 'text-anchor="middle">'
-                + escapeHtml(label)
-                + '</text>';
-        });
+                xLabels +=
+                    '<text class="label" '
+                    + 'x="'
+                    + x
+                    + '" '
+                    + 'y="'
+                    + (height - 2)
+                    + '" '
+                    + 'text-anchor="middle">'
+                    + escapeHtml(label)
+                    + '</text>';
+            }
+        );
 
-        container.classList.add('line-chart');
+        container.classList.add(
+            'line-chart'
+        );
 
         container.innerHTML =
             renderLegend(chart.series)
+
             + '<svg '
             + 'viewBox="0 0 '
             + width
@@ -1067,73 +1418,100 @@
             + height
             + '" '
             + 'preserveAspectRatio="none">'
+
             + gridLines
             + seriesSvg
             + xLabels
+
             + '</svg>';
     }
 
     /*
      * Biểu đồ donut:
-     * Tiền mặt và chuyển khoản.
+     * cơ cấu tiền mặt và chuyển khoản.
      */
-    function renderDonutChart(container, chart) {
+    function renderDonutChart(
+        container,
+        chart
+    ) {
         const data =
             chart.series.length > 0
                 ? chart.series[0].data
                 : [];
 
-        const cashValue = Number(data[0] || 0);
-        const bankingValue = Number(data[1] || 0);
+        const cashValue =
+            Number(data[0] || 0);
 
-        const total = cashValue + bankingValue;
+        const bankingValue =
+            Number(data[1] || 0);
 
-        const cashPercent = total > 0
-            ? cashValue / total * 100
-            : 0;
+        const total =
+            cashValue + bankingValue;
 
-        const gradient = total > 0
-            ? 'conic-gradient('
-            + chartPalette[0]
-            + ' 0 '
-            + cashPercent
-            + '%, '
-            + chartPalette[1]
-            + ' '
-            + cashPercent
-            + '% 100%)'
-            : 'conic-gradient(#e5e7eb 0 100%)';
+        const cashPercent =
+            total > 0
+                ? cashValue / total * 100
+                : 0;
+
+        const gradient =
+            total > 0
+                ? 'conic-gradient('
+                + chartPalette[0]
+                + ' 0 '
+                + cashPercent
+                + '%, '
+                + chartPalette[1]
+                + ' '
+                + cashPercent
+                + '% 100%)'
+                : 'conic-gradient('
+                + '#e5e7eb 0 100%'
+                + ')';
 
         let details = '';
 
-        chart.labels.forEach(function (label, index) {
-            const value = Number(data[index] || 0);
+        chart.labels.forEach(
+            function (label, index) {
+                const value =
+                    Number(data[index] || 0);
 
-            const color =
-                chartPalette[index % chartPalette.length];
+                const color =
+                    chartPalette[
+                    index
+                    % chartPalette.length
+                        ];
 
-            details += '<div class="donut-detail-row">';
+                details +=
+                    '<div class="donut-detail-row">';
 
-            details += '<span class="chart-legend-dot" '
-                + 'style="background:' + color + '">'
-                + '</span>';
+                details +=
+                    '<span class="donut-detail-color" '
+                    + 'style="background:'
+                    + color
+                    + '">'
+                    + '</span>';
 
-            details += '<span class="donut-detail-label">'
-                + escapeHtml(label)
-                + '</span>';
+                details +=
+                    '<span class="donut-detail-label">'
+                    + escapeHtml(label)
+                    + '</span>';
 
-            details += '<span class="donut-detail-value">'
-                + formatMoneyShort(value)
-                + '</span>';
+                details +=
+                    '<span class="donut-detail-value">'
+                    + formatMoneyShort(value)
+                    + '</span>';
 
-            details += '</div>';
-        });
+                details += '</div>';
+            }
+        );
 
         container.innerHTML =
             '<div class="donut-layout">'
 
             + '<div class="donut-ring" '
-            + 'style="background:' + gradient + '">'
+            + 'style="background:'
+            + gradient
+            + '">'
 
             + '<div class="donut-hole">'
 
@@ -1158,7 +1536,9 @@
     document.addEventListener(
         'DOMContentLoaded',
         function () {
-            if (!Array.isArray(dashboardCharts)) {
+            if (!Array.isArray(
+                dashboardCharts
+            )) {
                 return;
             }
 
@@ -1166,16 +1546,24 @@
                 function (rawChart, index) {
                     const container =
                         document.getElementById(
-                            'dashboardChart-' + index
+                            'dashboardChart-'
+                            + index
                         );
 
                     const chart =
                         normalizeChart(rawChart);
 
-                    if (
-                        !container
-                        || chart.labels.length === 0
-                    ) {
+                    if (!container
+                        || chart.labels.length === 0) {
+                        if (container) {
+                            container.innerHTML =
+                                '<div class="text-center '
+                                + 'text-secondary py-5">'
+                                + 'Chưa có dữ liệu '
+                                + 'để hiển thị.'
+                                + '</div>';
+                        }
+
                         return;
                     }
 
@@ -1184,7 +1572,9 @@
                             container,
                             chart
                         );
-                    } else if (chart.type === 'donut') {
+                    } else if (
+                        chart.type === 'donut'
+                    ) {
                         renderDonutChart(
                             container,
                             chart
@@ -1199,6 +1589,7 @@
             );
         }
     );
+
 </script>
 
 </body>
