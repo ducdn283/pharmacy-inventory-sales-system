@@ -68,6 +68,20 @@ public class StockreviewService {
         this.workflowNotificationService = workflowNotificationService;
     }
 
+    private boolean isVisibleReviewType(
+            Stockreview review
+    ) {
+        if (review == null) {
+            return false;
+        }
+
+        return !StockReviewType.CONDITION.equals(
+                StockReviewType.normalize(
+                        review.getType()
+                )
+        );
+    }
+
     @Transactional(readOnly = true)
     public Page<StockReviewListItemResponse> search(
             String keyword,
@@ -98,6 +112,7 @@ public class StockreviewService {
 
         List<StockReviewListItemResponse> rows =
                 reviews.stream()
+                        .filter(this::isVisibleReviewType)
                         .filter(review -> matchesKeyword(
                                 review,
                                 detailMap.getOrDefault(
@@ -159,17 +174,39 @@ public class StockreviewService {
     @Transactional(readOnly = true)
     public StockReviewStatsResponse getStats() {
         List<Stockreview> reviews =
-                stockreviewRepository.findAllWithRelations();
+                stockreviewRepository
+                        .findAllWithRelations()
+                        .stream()
+                        .filter(this::isVisibleReviewType)
+                        .toList();
 
         return new StockReviewStatsResponse(
                 reviews.size(),
-                countByType(reviews, StockReviewType.COUNT),
-                countByType(reviews, StockReviewType.DATE),
-                countByType(reviews, StockReviewType.CONDITION),
-                countByStatus(reviews, StockReviewStatus.DRAFT),
-                countByStatus(reviews, StockReviewStatus.PENDING),
-                countByStatus(reviews, StockReviewStatus.APPROVED),
-                countByStatus(reviews, StockReviewStatus.ADJUSTED)
+                countByType(
+                        reviews,
+                        StockReviewType.COUNT
+                ),
+                countByType(
+                        reviews,
+                        StockReviewType.DATE
+                ),
+                0,
+                countByStatus(
+                        reviews,
+                        StockReviewStatus.DRAFT
+                ),
+                countByStatus(
+                        reviews,
+                        StockReviewStatus.PENDING
+                ),
+                countByStatus(
+                        reviews,
+                        StockReviewStatus.APPROVED
+                ),
+                countByStatus(
+                        reviews,
+                        StockReviewStatus.ADJUSTED
+                )
         );
     }
 
@@ -178,7 +215,24 @@ public class StockreviewService {
     }
 
     public Map<String, String> typeLabels() {
-        return StockReviewType.labels();
+        Map<String, String> visibleTypes =
+                new LinkedHashMap<>();
+
+        visibleTypes.put(
+                StockReviewType.COUNT,
+                StockReviewType.label(
+                        StockReviewType.COUNT
+                )
+        );
+
+        visibleTypes.put(
+                StockReviewType.DATE,
+                StockReviewType.label(
+                        StockReviewType.DATE
+                )
+        );
+
+        return visibleTypes;
     }
 
     public Map<String, String> conditionLabels() {
