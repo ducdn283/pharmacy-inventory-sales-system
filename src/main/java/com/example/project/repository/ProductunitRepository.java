@@ -9,6 +9,7 @@ import java.util.List;
 
 public interface ProductunitRepository extends JpaRepository<Productunit, Integer> {
 
+    /** Lấy toàn bộ đơn vị quy đổi kèm sản phẩm cha, tránh N+1 khi cần duyệt tất cả đơn vị. */
     @Query("""
            select u
            from Productunit u
@@ -17,6 +18,7 @@ public interface ProductunitRepository extends JpaRepository<Productunit, Intege
            """)
     List<Productunit> findAllWithProduct();
 
+    /** Lấy toàn bộ đơn vị quy đổi của 1 sản phẩm, kèm sản phẩm cha. */
     @Query("""
            select u
            from Productunit u

@@ -523,11 +523,13 @@
 
 <script>
     (function () {
+        // Lấy bảng đơn vị (panel) tương ứng với dòng sản phẩm đang bấm.
         function panelOf(productRow) {
             var id = productRow.getAttribute('data-unit-target');
             return id ? document.getElementById(id) : null;
         }
 
+        // Mở/đóng bảng đơn vị của một dòng sản phẩm.
         function setOpen(productRow, open) {
             var panel = panelOf(productRow);
             if (!panel) {
@@ -575,11 +577,13 @@
         var subtitle = document.getElementById('pdModalSubtitle');
         var lastTrigger = null;
 
+        // Định dạng tiền làm tròn đồng chẵn kiểu vi-VN, "—" nếu chưa có giá trị.
         function money(value) {
             if (value === null || value === undefined) return '—';
             return Math.round(Number(value)).toLocaleString('vi-VN') + 'đ';
         }
 
+        // Giống money() nhưng luôn có dấu +/− phía trước để thể hiện chênh lệch.
         function signedMoney(value) {
             if (value === null || value === undefined) return '—';
             var rounded = Math.round(Number(value));
@@ -596,11 +600,13 @@
             return Number(value).toLocaleString('vi-VN', {maximumFractionDigits: 2}) + 'đ';
         }
 
+        // Giống taxMoney() nhưng có dấu +/− phía trước để thể hiện chênh lệch.
         function signedTaxMoney(value) {
             if (value === null || value === undefined) return '—';
             return (Number(value) > 0 ? '+' : '') + taxMoney(value);
         }
 
+        // Định dạng số phần trăm kiểu vi-VN, "—" nếu chưa có giá trị.
         function percent(value) {
             if (value === null || value === undefined) return '—';
             return Number(value).toLocaleString('vi-VN', {maximumFractionDigits: 2}) + '%';
@@ -613,6 +619,7 @@
                 .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
+        // Mở modal chi tiết giá, gọi API lấy dữ liệu rồi render; trigger dùng để trả focus khi đóng.
         function open(productId, trigger) {
             lastTrigger = trigger || null;
             subtitle.textContent = 'Đang tải…';
@@ -634,6 +641,7 @@
                 });
         }
 
+        // Đóng modal chi tiết giá và trả focus lại nút vừa mở nó.
         function close() {
             modal.classList.remove('is-open');
             document.body.style.overflow = '';
@@ -731,6 +739,7 @@
             return '<div class="pd-chart-scroll">' + parts.join('') + '</div>';
         }
 
+        // Dựng bảng liệt kê từng lô còn tồn: số lô, hạn dùng, tồn, giá nhập, chênh lệch, tỷ suất.
         function batchTable(detail) {
             var batches = detail.batches || [];
             if (!batches.length) return '';
@@ -763,12 +772,14 @@
                 + '<tbody>' + rows + '</tbody></table></div>';
         }
 
+        // Dựng một dòng nhãn/giá trị trong khối thuế.
         function taxLine(label, value, extraClass) {
             return '<div class="pd-tax-line ' + (extraClass || '') + '">'
                 + '<span class="text-secondary">' + label + '</span>'
                 + '<span>' + value + '</span></div>';
         }
 
+        // Dựng khối thẻ tổng hợp thuế GTGT/TNCN và lợi nhuận sau thuế theo nhóm doanh thu hiện tại.
         function taxCard(detail) {
             var tax = detail.taxProjection;
             if (!tax) return '';
@@ -822,6 +833,7 @@
                 + '</div>';
         }
 
+        // Dựng một ô thống kê nhỏ (nhãn + giá trị) trong hàng tổng quan của modal.
         function statCard(label, value, extraClass) {
             return '<div class="col-6 col-lg-3"><div class="pd-stat">'
                 + '<div class="pd-stat-label">' + label + '</div>'
@@ -829,6 +841,7 @@
                 + '</div></div>';
         }
 
+        // Render toàn bộ nội dung modal chi tiết giá từ dữ liệu API trả về.
         function render(detail) {
             subtitle.textContent = detail.productCode + ' · ' + detail.typeName
                 + ' · đơn vị cơ bản: ' + detail.baseUnitName;

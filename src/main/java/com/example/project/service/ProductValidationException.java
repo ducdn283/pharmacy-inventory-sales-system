@@ -3,8 +3,8 @@ package com.example.project.service;
 import java.util.List;
 
 /**
- * Thrown by {@link ProductService#createProduct} when the submitted product fails business
- * validation. Carries the user-facing error messages so the controller can re-render the form.
+ * Ném ra bởi {@link ProductService#createProduct} khi dữ liệu sản phẩm gửi lên không hợp lệ.
+ * Mang theo danh sách thông báo lỗi để controller render lại form cho người dùng.
  */
 public class ProductValidationException extends RuntimeException {
 

@@ -5,10 +5,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 
-/**
- * One row of the closed-tax-period list. Dates are pre-formatted {@code String}s so the template
- * never has to format a temporal in a {@code th:inline} block (see CLAUDE.md).
- */
+/** Một dòng trong danh sách kỳ thuế đã chốt. Ngày đã được format sẵn thành {@code String}. */
 @Getter
 @AllArgsConstructor
 public class TaxPeriodListItemResponse {
@@ -19,25 +16,18 @@ public class TaxPeriodListItemResponse {
     private String startDateDisplay;
     private String endDateDisplay;
 
-    /** The group this period was declared under — derived from the chain, not stored on the row. */
+    /** Nhóm mà kỳ này được khai — suy ra từ chuỗi kỳ, không lưu trực tiếp trên dòng. */
     private Integer revenueGroup;
     private String revenueGroupDisplay;
 
-    /**
-     * The VAT actually payable — the one figure that means the same thing in every group.
-     *
-     * <p>Output and input VAT are deliberately <em>not</em> on this row: they only exist under the
-     * deduction method (group 3). A group-2 period owes a flat percentage of revenue and a group-1
-     * period owes nothing, so columns for them would be blank or misleading on most rows. The full
-     * breakdown lives on the detail screen, where the group is stated alongside it.</p>
-     */
+    /** Thuế GTGT thực phải nộp — con số duy nhất có nghĩa giống nhau ở mọi nhóm. */
     private BigDecimal vatPayable;
 
-    /** Thuế TNCN của kỳ — the other half of what the household actually owes. */
+    /** Thuế TNCN của kỳ. */
     private BigDecimal incomeTax;
 
     private String recordedAtDisplay;
 
-    /** Only the newest period may still be edited — the chain below it is frozen. */
+    /** Chỉ kỳ mới nhất mới được sửa — các kỳ trước đã bị khóa. */
     private boolean editable;
 }

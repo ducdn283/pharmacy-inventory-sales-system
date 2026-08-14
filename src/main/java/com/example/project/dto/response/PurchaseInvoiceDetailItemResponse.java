@@ -25,6 +25,6 @@ public class PurchaseInvoiceDetailItemResponse {
     private BigDecimal vatRate;
     private BigDecimal preTaxAmount;
     private BigDecimal vatAmount;
-    /** Current base-unit sell price of the product, for cross-reference only; null if unset. */
+    /** Giá bán hiện tại (đơn vị cơ bản) để tham chiếu, null nếu chưa thiết lập giá. */
     private BigDecimal sellPrice;
 }

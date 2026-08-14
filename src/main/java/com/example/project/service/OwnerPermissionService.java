@@ -21,24 +21,19 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Owner "account &rarr; role" permission logic over the existing {@code AccountPermission} table,
- * for the single-store {@code /owner/permissions} screen: which account holds which role,
- * system-wide. There are no branches any more — every operation reads/writes
- * {@code AccountPermission} directly, with no new tables.
+ * Xử lý gán vai trò (tài khoản → vai trò) cho màn hình "Bảng phân quyền"
+ * ({@code /owner/permissions}). Đọc/ghi trực tiếp bảng {@code AccountPermission}.
  *
- * <p>Rules, validated here rather than by a DB constraint:</p>
+ * <p>Quy tắc nghiệp vụ:</p>
  * <ul>
- *   <li>An account holds at most one role (one {@code AccountPermission} row).</li>
- *   <li>Assignable roles are exactly {@code PHARMACIST} and {@code ACCOUNTANT}, plus blank/"Không
- *       quyền" to clear the assignment. {@code OWNER} can never be assigned from this screen — the
- *       system has exactly one Owner, always (mirrors {@code OwnerUserService}'s refusal to create a
- *       second Owner account).</li>
- *   <li>The sole Owner's own row is read-only here (never editable/removable) — enforced by the
- *       existing "last Owner" guard below, which now always applies since a second Owner can never
- *       be created in the first place.</li>
+ *   <li>Mỗi tài khoản chỉ giữ tối đa một vai trò.</li>
+ *   <li>Chỉ được gán {@code PHARMACIST} hoặc {@code ACCOUNTANT} (hoặc để trống = "Không quyền").
+ *       <b>Không được gán {@code OWNER} qua màn hình này</b> — hệ thống chỉ có đúng một Owner
+ *       duy nhất, việc này ngăn lỗ hổng leo thang quyền (tạo thêm Owner thứ hai).</li>
+ *   <li>Dòng của Owner duy nhất luôn readonly, không thể sửa/xóa qua bảng này.</li>
  * </ul>
- * Friendly Vietnamese messages are thrown as {@link IllegalArgumentException} for the controller
- * to surface as flash messages.
+ * Thông báo lỗi tiếng Việt được ném dưới dạng {@link IllegalArgumentException} để controller
+ * hiển thị thành flash message.
  */
 @Service
 public class OwnerPermissionService {
@@ -66,13 +61,8 @@ public class OwnerPermissionService {
     }
 
     /**
-     * Builds the whole screen state for one render: one page of account rows, each with its
-     * system-wide role.
-     *
-     * <ul>
-     *   <li>{@code search} matches account name / username / email.</li>
-     *   <li>Pagination is by account row ({@code page} is 0-based, {@code size} defaults to 10).</li>
-     * </ul>
+     * Dựng dữ liệu cho một lần render màn hình: danh sách tài khoản kèm vai trò, có phân trang.
+     * {@code search} tìm theo tên/tên đăng nhập/email; {@code page} 0-based, {@code size} mặc định 10.
      */
     @Transactional(readOnly = true)
     public PermissionPageView getPermissionPage(String search, int page, int size) {
@@ -80,7 +70,7 @@ public class OwnerPermissionService {
         int safeSize = size <= 0 ? DEFAULT_SIZE : size;
         String needle = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
 
-        // accountId -> its single assignment (one-role-per-account).
+        // accountId -> vai trò duy nhất của tài khoản đó
         Map<Integer, Accountpermission> assignmentByAccount = new HashMap<>();
         for (Accountpermission ap : accountpermissionRepository.findAllWithAccount()) {
             Account account = ap.getAccountID();
@@ -112,14 +102,14 @@ public class OwnerPermissionService {
                     role, roleDisplay, lastOwner));
         }
 
-        // Owner(s) always first, then assigned before unassigned, then by account name, then by id.
+        // Sắp xếp: Owner lên đầu, đã phân quyền trước chưa phân quyền, rồi theo tên, rồi theo id
         allRows.sort(Comparator
                 .comparing((PermissionAccountRow row) -> RoleConstants.OWNER.equals(row.getRole()) ? 0 : 1)
                 .thenComparing(Comparator.comparing(PermissionAccountRow::isAssigned).reversed())
                 .thenComparing(row -> normalizedName(row.getAccountName()))
                 .thenComparing(row -> row.getAccountId() == null ? Integer.MAX_VALUE : row.getAccountId()));
 
-        // In-memory pagination by account row (the account set is small).
+        // Phân trang trong bộ nhớ vì số lượng tài khoản nhỏ
         long totalElements = allRows.size();
         int totalPages = (int) Math.ceil((double) totalElements / safeSize);
         int boundedPage = totalPages == 0 ? 0 : Math.min(safePage, totalPages - 1);
@@ -132,20 +122,11 @@ public class OwnerPermissionService {
     }
 
     /**
-     * Saves one account's system-wide role (a dropdown change on the Permission Table).
-     *
-     * <ul>
-     *   <li>A blank/empty {@code role} clears the assignment: the existing
-     *       {@code AccountPermission} row (if any) is deleted, meaning "Không quyền".</li>
-     *   <li>{@code OWNER} is rejected outright — never assignable from here, see class javadoc.</li>
-     *   <li>Only {@code PHARMACIST}/{@code ACCOUNTANT} can otherwise be assigned; anything else is
-     *       rejected.</li>
-     *   <li>If the account currently holds the Owner role, no change to it is ever allowed (it's
-     *       the system's sole Owner, by construction) — surfaced via the pre-existing "last Owner"
-     *       message so the wording stays familiar.</li>
-     *   <li>Otherwise the role is created (with a manual id — the PK is not guaranteed
-     *       auto-increment on every environment) or updated in place.</li>
-     * </ul>
+     * Lưu vai trò hệ thống của một tài khoản (đổi dropdown trên Bảng phân quyền).
+     * {@code role} rỗng → xóa gán quyền hiện tại (= "Không quyền"). {@code OWNER} luôn bị từ chối
+     * — không được gán qua màn hình này (xem javadoc của class). Chỉ {@code PHARMACIST}/
+     * {@code ACCOUNTANT} được phép gán, giá trị khác bị từ chối. Nếu tài khoản đang là Owner thì
+     * không cho đổi, vì đó là Owner duy nhất của hệ thống.
      */
     @Transactional
     public void saveRole(Integer accountId, String role) {
@@ -167,8 +148,7 @@ public class OwnerPermissionService {
         Accountpermission existing = findAssignment(accountId);
         boolean wasOwnerLike = existing != null && isOwnerLikeRole(existing.getRole());
 
-        // The sole Owner's row can never be changed from here — OWNER is never a valid target
-        // above, so any existing Owner assignment is, by definition, always "the last one".
+        // Owner luôn là duy nhất nên dòng của Owner không bao giờ được đổi qua đây
         if (wasOwnerLike) {
             throw new IllegalArgumentException(MSG_LAST_OWNER);
         }
@@ -183,7 +163,7 @@ public class OwnerPermissionService {
 
         if (existing == null) {
             Accountpermission permission = new Accountpermission();
-            // Manual id assignment, matching the existing findMaxId()+1 convention for this table.
+            // Gán id thủ công theo quy ước findMaxId()+1 của bảng này
             permission.setId(accountpermissionRepository.findMaxId() + 1);
             permission.setAccountID(account);
             permission.setRole(normalized);
@@ -195,6 +175,7 @@ public class OwnerPermissionService {
         invalidateSessions(accountId);
     }
 
+    // Buộc đăng xuất mọi phiên đang đăng nhập của tài khoản này (áp dụng vai trò mới ngay lập tức).
     private void invalidateSessions(Integer accountId) {
         sessionRegistry.getAllPrincipals().stream()
                 .filter(p -> p instanceof AccountPrincipal ap && ap.getAccountId().equals(accountId))
@@ -204,18 +185,19 @@ public class OwnerPermissionService {
 
     // ------------------------------------------------------------------
 
-    /** Current assignment for an account, or {@code null} (one-role-per-account rule). */
+    /** Vai trò hiện tại của tài khoản, hoặc {@code null} nếu chưa có. */
     private Accountpermission findAssignment(Integer accountId) {
         List<Accountpermission> existing = accountpermissionRepository.findByAccountId(accountId);
         return existing.isEmpty() ? null : existing.get(0);
     }
 
+    // Lấy tài khoản theo id, ném lỗi nếu không tồn tại.
     private Account requireAccount(Integer accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException(MSG_ACCOUNT_NOT_FOUND));
     }
 
-    /** True for {@code OWNER}. */
+    /** True nếu là vai trò {@code OWNER}. */
     private boolean isOwnerLikeRole(String role) {
         if (role == null) {
             return false;
@@ -223,6 +205,7 @@ public class OwnerPermissionService {
         return RoleConstants.OWNER.equals(canonicalRole(role));
     }
 
+    // Ưu tiên hiển thị tên đăng nhập, nếu trống thì dùng email.
     private String usernameOrEmail(Account account) {
         if (account.getUsername() != null && !account.getUsername().isBlank()) {
             return account.getUsername();
@@ -230,6 +213,7 @@ public class OwnerPermissionService {
         return account.getEmail() == null ? "" : account.getEmail();
     }
 
+    // True nếu tài khoản khớp từ khóa tìm kiếm theo tên/tên đăng nhập/email.
     private boolean matchesAccount(Account account, String needle) {
         if (needle.isEmpty()) {
             return true;
@@ -239,10 +223,12 @@ public class OwnerPermissionService {
                 || contains(account.getEmail(), needle);
     }
 
+    // So khớp chuỗi không phân biệt hoa/thường, an toàn với giá trị null.
     private boolean contains(String value, String needle) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(needle);
     }
 
+    // Chuẩn hóa mã vai trò: bỏ khoảng trắng, viết hoa, bỏ tiền tố "ROLE_" nếu có.
     private String canonicalRole(String role) {
         if (role == null) {
             return null;
@@ -251,6 +237,7 @@ public class OwnerPermissionService {
         return normalized.startsWith("ROLE_") ? normalized.substring("ROLE_".length()) : normalized;
     }
 
+    // Chuẩn hóa tên để so sánh/sắp xếp (trim + viết thường), an toàn với giá trị null.
     private String normalizedName(String name) {
         return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }

@@ -6,32 +6,30 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * Form backing the "create expense" screen. {@code applicantID} is always the current user.
- * {@code returnID} (see {@link #returnId}) and {@code purchaseID} (see {@link #purchaseId}) are
- * both wired here; {@code customerID}/{@code supplierID} are derived server-side from whichever is
- * linked. {@code shiftReportID} and {@code accountID} are never posted by this form.
+ * Form của màn "tạo phiếu chi". {@code applicantID} luôn là người dùng hiện tại;
+ * {@code customerID}/{@code supplierID} được suy ra server-side từ chứng từ gắn kèm (nếu có).
+ * {@code shiftReportID} và {@code accountID} không được form này gửi lên.
  */
 @Getter
 @Setter
 public class ExpenseCreateRequest {
 
-    /** One of {@link com.example.project.constant.ExpenseType}'s ALL values. */
+    /** Một trong các giá trị của {@link com.example.project.constant.ExpenseType}. */
     private String expenseType;
 
     /**
-     * The customer return this slip pays out. Required when {@code expenseType} is
-     * {@link com.example.project.constant.ExpenseType#RETURN_REFUND_PAYOUT}, ignored otherwise.
-     * When set, the server overrides {@link #amount} with the return's own cash refund figure —
-     * the posted value is never trusted.
+     * Phiếu trả hàng của khách mà phiếu chi này hoàn tiền. Bắt buộc khi {@code expenseType} là
+     * {@link com.example.project.constant.ExpenseType#RETURN_REFUND_PAYOUT}, bỏ qua ở loại khác.
+     * Khi có, server luôn ghi đè {@link #amount} bằng đúng số tiền hoàn của phiếu trả — số client
+     * gửi lên không được tin.
      */
     private Integer returnId;
 
     /**
-     * The purchase invoice this slip settles. Only read for the types in
-     * {@link com.example.project.constant.ExpenseType#PURCHASE_LINKABLE} and optional even there —
-     * paying a supplier without pointing at one specific invoice is legitimate. When set,
-     * {@link #amount} stays the user's to choose (a partial payment is normal) but may not exceed
-     * what the invoice still has outstanding.
+     * Phiếu nhập mà phiếu chi này thanh toán. Chỉ đọc với các loại trong
+     * {@link com.example.project.constant.ExpenseType#PURCHASE_LINKABLE}, và không bắt buộc dù
+     * thuộc loại đó — trả NCC mà không gắn hóa đơn cụ thể vẫn hợp lệ. Khi có, {@link #amount} vẫn
+     * do người dùng chọn (trả một phần là bình thường) nhưng không được vượt phần còn nợ của phiếu.
      */
     private Integer purchaseId;
 

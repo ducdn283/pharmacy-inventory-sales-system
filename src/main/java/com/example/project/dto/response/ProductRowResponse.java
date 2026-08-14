@@ -8,33 +8,32 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * One row of the Product List screen. Carries already-resolved, display-ready values
- * (type name, ingredient, main selling unit, sell price, current stock, stock status)
- * so the Thymeleaf template never touches lazy entity relations.
+ * Một dòng của màn Danh sách hàng hóa. Đã mang sẵn giá trị hiển thị (tên loại, hoạt chất, đơn vị
+ * bán chính, giá bán, tồn kho, trạng thái tồn) để template Thymeleaf không cần đụng entity lazy.
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductRowResponse {
-    /** Primary key – used to build the detail link. */
+    /** Khóa chính – dùng để tạo link tới trang chi tiết. */
     private Integer productId;
-    /** Business code shown in the "Mã hàng" column. */
+    /** Mã nghiệp vụ hiển thị ở cột "Mã hàng". */
     private String code;
     private String name;
     private String typeName;
-    /** Joined active ingredient(s); empty string when the product has none. */
+    /** Hoạt chất, nối chuỗi; rỗng nếu sản phẩm không có hoạt chất. */
     private String ingredient;
-    /** Main selling unit name (default unit, else base unit). */
+    /** Tên đơn vị bán chính (đơn vị mặc định, hoặc đơn vị cơ bản nếu chưa có mặc định). */
     private String unitName;
-    /** Sell price of the main selling unit; null when no unit is configured. */
+    /** Giá bán của đơn vị bán chính; null nếu chưa cấu hình đơn vị nào. */
     private BigDecimal sellPrice;
-    /** Current on-hand stock = SUM(Batch.storageQuantity). */
+    /** Tồn kho hiện có = SUM(Batch.storageQuantity). */
     private long stock;
-    /** Stock-status label: "Còn hàng" / "Sắp hết" / "Hết hàng". */
+    /** Nhãn trạng thái tồn: "Còn hàng" / "Sắp hết" / "Hết hàng". */
     private String stockStatusLabel;
-    /** CSS class for the stock-status badge. */
+    /** Class CSS cho badge trạng thái tồn. */
     private String stockStatusCss;
-    /** "Có" / "Không" derived from the product's Type name; "—" when no type is set. */
+    /** "Có" / "Không" suy từ tên Loại hàng; "—" nếu chưa gán loại. */
     private String prescriptionDisplay;
 }

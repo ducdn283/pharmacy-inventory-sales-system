@@ -23,13 +23,9 @@ import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Tax period ("Kỳ thuế") screens — list and detail, both read-only for now; closing a period is a
- * separate step.
+ * Màn hình Kỳ thuế — danh sách, xem trước, chi tiết, chốt kỳ và điều chỉnh kỳ mới nhất.
  *
- * <p>Reachable by the Accountant and the Owner. The BA's rule is that the Accountant closes a period
- * and the Owner only does so when the pharmacy has no accountant, but that only gates the
- * <em>closing</em> action; both roles may always look. There is no Pharmacist route, matching
- * Expense and the Financial Settings screen.</p>
+ * <p>Owner và Accountant đều xem được; không có route cho Pharmacist.</p>
  */
 @Controller
 public class TaxPeriodPageController {
@@ -51,10 +47,11 @@ public class TaxPeriodPageController {
         this.taxRevenueNotificationService = taxRevenueNotificationService;
     }
 
+    // Hiển thị danh sách kỳ thuế đã chốt + thông tin nhóm doanh thu hiện tại + kỳ kế tiếp cần chốt.
     @GetMapping({OWNER_BASE, ACCOUNTANT_BASE})
     public String list(HttpServletRequest request, Model model) {
-        // Applies a pending 1 → 2 transition (and warns about an approaching one) every time the
-        // screen is opened — there is no background scheduler, so this is when the correction lands.
+        // Áp dụng chuyển nhóm 1→2 đang chờ (và cảnh báo nếu sắp vượt ngưỡng) mỗi lần mở màn hình —
+        // không có scheduler nền, nên đây là lúc việc chuyển nhóm thực sự được ghi nhận.
         taxRevenueNotificationService.checkGroupTransitionAndWarn(taxperiodsnapshotService.currentQuarter(), null);
 
         TaxperiodsnapshotService.TaxPeriod next = taxperiodsnapshotService.nextPeriodToClose();
@@ -77,14 +74,10 @@ public class TaxPeriodPageController {
     }
 
     /**
-     * "Xem trước" — the period's figures totalled live from the transactions in it, with nothing
-     * written. The docx allows a period to be closed either by hand or from a runtime calculation,
-     * and this is the runtime half: it forces every definition (which documents count, from which
-     * date, under which group) to be settled while a wrong answer still costs nothing but a reload.
+     * "Xem trước" — tính số liệu kỳ trực tiếp từ chứng từ hiện có, không lưu gì cả.
      *
-     * <p>Mapped above {@code /{periodId}} on purpose — Spring ranks a literal segment higher than a
-     * template variable, so {@code /preview} never reaches the detail handler's {@code Integer}
-     * conversion.</p>
+     * <p>Map phía trên {@code /{periodId}} có chủ đích — Spring ưu tiên đoạn URL cố định hơn biến
+     * template, nên {@code /preview} không rơi vào handler chi tiết theo id.</p>
      */
     @GetMapping({OWNER_BASE + "/preview", ACCOUNTANT_BASE + "/preview"})
     public String preview(@RequestParam(name = "year", required = false) Integer year,
@@ -97,8 +90,7 @@ public class TaxPeriodPageController {
         TaxperiodsnapshotService.TaxPeriod period;
         try {
             period = taxperiodsnapshotService.resolveQuarter(year, quarter);
-            // Apply/warn about a group transition BEFORE computing, so the figures below already
-            // reflect a just-applied 1 → 2 correction instead of the stale pre-transition group.
+            // Áp dụng/cảnh báo chuyển nhóm TRƯỚC khi tính, để số liệu bên dưới phản ánh đúng nhóm mới.
             taxRevenueNotificationService.checkGroupTransitionAndWarn(period, null);
             model.addAttribute("computation", taxperiodsnapshotService.computePeriod(period));
         } catch (IllegalArgumentException exception) {
@@ -120,6 +112,7 @@ public class TaxPeriodPageController {
         return "tax-period/preview";
     }
 
+    // Chốt kỳ thuế theo form đã nhập, rồi chuyển sang trang chi tiết kỳ vừa chốt.
     @PostMapping({OWNER_BASE + "/close", ACCOUNTANT_BASE + "/close"})
     public String close(@ModelAttribute("form") TaxPeriodCloseRequest form,
                         HttpServletRequest request,
@@ -145,6 +138,7 @@ public class TaxPeriodPageController {
         }
     }
 
+    // Điều chỉnh (amend) kỳ thuế mới nhất đã chốt theo form nhập lại.
     @PostMapping({OWNER_BASE + "/{periodId}/update", ACCOUNTANT_BASE + "/{periodId}/update"})
     public String update(@PathVariable Integer periodId,
                          @ModelAttribute("form") TaxPeriodUpdateRequest form,
@@ -160,11 +154,12 @@ public class TaxPeriodPageController {
         return "redirect:" + basePath + "/" + periodId;
     }
 
-    /** 1–4, derived from the period's first month. */
+    /** Số quý 1–4, suy từ tháng đầu kỳ. */
     private int quarterNumber(TaxperiodsnapshotService.TaxPeriod period) {
         return (period.startDate().getMonthValue() - 1) / 3 + 1;
     }
 
+    // Hiển thị chi tiết một kỳ thuế đã chốt.
     @GetMapping({OWNER_BASE + "/{periodId}", ACCOUNTANT_BASE + "/{periodId}"})
     public String detail(@PathVariable Integer periodId,
                          HttpServletRequest request,
@@ -184,12 +179,11 @@ public class TaxPeriodPageController {
     }
 
     /**
-     * Accepts a vi-VN thousand-separated amount ("45.500.000") as well as plain digits.
+     * Nhận số tiền có dấu chấm ngăn cách kiểu vi-VN ("45.500.000") lẫn số thuần.
      *
-     * <p>The {@code data-money} fragment normally strips the separators before submitting, so the
-     * server sees plain digits — but if that script does not run, Spring's default converter throws
-     * and the user gets a raw 400 error page instead of a flash message. Money on these screens is
-     * whole đồng, so a dot is always a separator here and never a decimal point.</p>
+     * <p>Fragment {@code data-money} thường tự bỏ dấu chấm trước khi submit; nếu script đó không
+     * chạy thì converter mặc định của Spring sẽ ném lỗi 400 thô thay vì flash message. Tiền trên các
+     * màn hình này là đồng nguyên, nên dấu chấm luôn là dấu ngăn cách, không phải thập phân.</p>
      */
     @InitBinder
     public void bindSeparatedMoney(WebDataBinder binder) {
@@ -202,6 +196,7 @@ public class TaxPeriodPageController {
         });
     }
 
+    // Xác định basePath (Owner hay Accountant) dựa trên URI của request.
     private String resolveBasePath(HttpServletRequest request) {
         return request.getRequestURI().startsWith(ACCOUNTANT_BASE) ? ACCOUNTANT_BASE : OWNER_BASE;
     }

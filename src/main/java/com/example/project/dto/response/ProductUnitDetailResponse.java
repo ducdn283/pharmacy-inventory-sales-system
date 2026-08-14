@@ -7,7 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
-/** One conversion unit + sell price of a product, for the Product Detail screen. */
+/** Một đơn vị quy đổi + giá bán của sản phẩm, dùng cho màn Chi tiết hàng hóa. */
 @Getter
 @Setter
 @NoArgsConstructor

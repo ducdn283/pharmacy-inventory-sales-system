@@ -6,10 +6,9 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * One editable unit row nested under a product on the Price Settings screen
- * ({@code /owner/price-settings}) — one {@code ProductUnit}. Product-level context (code, name,
- * type, average import price) lives on the owning {@link PriceSettingProductRowResponse} instead of
- * being repeated on every unit, since the table groups units under their product.
+ * Một dòng đơn vị (một {@code ProductUnit}) có thể sửa giá, nằm trong sản phẩm cha
+ * ({@link PriceSettingProductRowResponse}) — thông tin sản phẩm (mã, tên, loại, giá nhập trung
+ * bình) không lặp lại ở đây vì bảng đã nhóm theo sản phẩm.
  */
 @Getter
 @AllArgsConstructor

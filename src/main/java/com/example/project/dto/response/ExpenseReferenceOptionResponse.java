@@ -6,12 +6,9 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * One selectable reference document on the create-expense screen — currently only a customer
- * return awaiting its refund payout. Mirrors {@link IncomeReferenceOptionResponse}, which does the
- * same job for the opposite direction (a supplier return the pharmacy collects money for).
- *
- * <p>All fields are scalars and {@code dateDisplay} is pre-formatted, so the list is safe to embed
- * in a {@code th:inline} block.</p>
+ * Một chứng từ tham chiếu chọn được trên màn tạo phiếu chi (phiếu trả hàng của khách chờ hoàn
+ * tiền, hoặc phiếu nhập chờ thanh toán). Toàn bộ field là kiểu vô hướng và {@code dateDisplay} đã
+ * được định dạng sẵn, nên an toàn khi nhúng vào block {@code th:inline}.
  */
 @Getter
 @AllArgsConstructor
@@ -21,7 +18,7 @@ public class ExpenseReferenceOptionResponse {
     private String code;
     private String dateDisplay;
 
-    /** How much is still available to commit against this document — never the raw obligation. */
+    /** Phần còn có thể chi/nhận cho chứng từ này — không phải tổng nghĩa vụ ban đầu. */
     private BigDecimal amount;
 
     private String detail;

@@ -11,11 +11,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * Owner-only "Bảng phân quyền" screen — a single store, so this is a flat account &rarr; role
- * table: one row per account, one role dropdown, one save button. Changing and saving a role posts
- * to {@code /owner/permissions/cell}, which assigns, updates or clears that one account's role and
- * bounces back to the same page/filters. Access is enforced by Spring Security
- * ({@code /owner/**} requires {@code ROLE_OWNER}), so no manual role check is needed here.
+ * Màn hình "Bảng phân quyền" — chỉ Owner được truy cập. Mỗi tài khoản một dòng, một dropdown
+ * vai trò, một nút lưu. Đổi vai trò sẽ post lên {@code /owner/permissions/cell}. Quyền truy cập
+ * đã được Spring Security kiểm tra qua tiền tố {@code /owner/**} (yêu cầu {@code ROLE_OWNER}),
+ * nên không cần check role thủ công ở đây.
  */
 @Controller
 @RequestMapping("/owner/permissions")
@@ -30,6 +29,7 @@ public class PermissionController {
         this.ownerPermissionService = ownerPermissionService;
     }
 
+    // Hiển thị màn hình Bảng phân quyền: danh sách tài khoản kèm vai trò, có phân trang và tìm kiếm.
     @GetMapping
     public String view(@RequestParam(name = "page", required = false, defaultValue = "0") int page,
                        @RequestParam(name = "size", required = false, defaultValue = "10") int size,
@@ -42,6 +42,7 @@ public class PermissionController {
         return "owner/permissions";
     }
 
+    // Lưu vai trò mới cho 1 tài khoản (đổi dropdown trên 1 dòng), rồi quay lại trang/tìm kiếm hiện tại.
     @PostMapping("/cell")
     public String saveCell(@RequestParam Integer accountId,
                            @RequestParam(required = false) String role,
@@ -56,7 +57,7 @@ public class PermissionController {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
 
-        // Preserve the current page and search so the Owner stays where they were.
+        // Giữ lại trang và từ khóa tìm kiếm hiện tại
         redirectAttributes.addAttribute("page", page < 0 ? DEFAULT_PAGE : page);
         redirectAttributes.addAttribute("size", size <= 0 ? DEFAULT_SIZE : size);
         if (search != null && !search.isBlank()) {

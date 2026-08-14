@@ -35,6 +35,7 @@ public class FinancialsettingResponse {
     private LocalDateTime balanceUpdatedAt;
 
 
+    // Chuyển entity Financialsetting thành DTO response để trả về cho tầng controller/view.
     public static FinancialsettingResponse from(Financialsetting financialsetting) {
         return new FinancialsettingResponse(
                 financialsetting.getId(),

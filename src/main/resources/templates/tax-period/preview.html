@@ -550,12 +550,14 @@
 
 <div th:replace="~{fragments/money-input :: moneyInputs}"></div>
 <script>
+    // Hỏi xác nhận trước khi chốt kỳ thuế, vì số liệu đã chốt sẽ không tính lại được nữa.
     (function () {
         // Scope by id: the topbar's hidden logout form is rendered before this one.
         var form = document.getElementById('closePeriodForm');
         if (!form) {
             return;
         }
+        // Chặn submit nếu người dùng bấm Hủy trên hộp thoại xác nhận.
         form.addEventListener('submit', function (event) {
             var label = form.querySelector('input[name="periodLabel"]').value;
             if (!window.confirm('Chốt kỳ thuế ' + label + '? Số liệu đã chốt sẽ không được tính lại.')) {

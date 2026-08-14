@@ -8,15 +8,12 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Tax period snapshots ("kỳ thuế đã chốt"). The entity has no relations, so there is nothing to
- * fetch-join — the queries here exist only to fix an ordering, since the period <em>chain</em> is
- * what every caller actually needs: a period's revenue group comes from the previous period's
- * {@code nextPeriodTaxType} and its {@code vatCarryforwardIn} from that period's
- * {@code vatCarryforwardOut}.
+ * Kỳ thuế đã chốt. Entity không có quan hệ nào, các query ở đây chỉ để sắp thứ tự — mỗi kỳ cần biết
+ * chuỗi kỳ trước nó (nhóm doanh thu và số khấu trừ chuyển tiếp đều lấy từ kỳ liền trước).
  */
 public interface TaxperiodsnapshotRepository extends JpaRepository<Taxperiodsnapshot, Integer> {
 
-    /** Newest period first — the order the list screen shows. */
+    /** Kỳ mới nhất trước — thứ tự màn danh sách hiển thị. */
     @Query("""
            select t
            from Taxperiodsnapshot t
@@ -24,7 +21,7 @@ public interface TaxperiodsnapshotRepository extends JpaRepository<Taxperiodsnap
            """)
     List<Taxperiodsnapshot> findAllNewestFirst();
 
-    /** Oldest period first — the order the chain must be walked in. */
+    /** Kỳ cũ nhất trước — thứ tự cần duyệt chuỗi kỳ. */
     @Query("""
            select t
            from Taxperiodsnapshot t
@@ -32,19 +29,12 @@ public interface TaxperiodsnapshotRepository extends JpaRepository<Taxperiodsnap
            """)
     List<Taxperiodsnapshot> findAllOldestFirst();
 
-    /**
-     * The most recently closed period, i.e. the tail of the chain. Its {@code nextPeriodTaxType}
-     * decides the group of the period being closed next, and its {@code vatCarryforwardOut} becomes
-     * that period's {@code vatCarryforwardIn}.
-     *
-     * <p>A derived query rather than a {@code default} method walking {@link #findAllNewestFirst()}:
-     * a {@code default} method is mocked away like any other when the repository is stubbed in a
-     * unit test, so the "latest" rule would silently become whatever the test set it to.</p>
-     */
+    /** Kỳ đã chốt gần nhất — nhóm và số khấu trừ chuyển tiếp của nó quyết định kỳ chốt tiếp theo. */
     Optional<Taxperiodsnapshot> findFirstByOrderByStartDateDescIdDesc();
 
-    /** Guards against closing the same quarter twice — {@code periodLabel} is the business key. */
+    /** Chống chốt trùng một quý — {@code periodLabel} là khóa nghiệp vụ. */
     List<Taxperiodsnapshot> findByPeriodLabelOrderByIdAsc(String periodLabel);
 
+    /** Kiểm tra một nhãn kỳ đã tồn tại (đã chốt) hay chưa. */
     boolean existsByPeriodLabel(String periodLabel);
 }

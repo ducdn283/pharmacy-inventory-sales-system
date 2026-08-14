@@ -6,9 +6,8 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * A closed tax period, as shown on the detail screen. Carries both the stored figures and the
- * chain context needed to read them: which group the period was declared under, and which period
- * fed its {@code vatCarryforwardIn}.
+ * Một kỳ thuế đã chốt, hiển thị trên màn chi tiết — gồm số liệu đã lưu và bối cảnh chuỗi kỳ (nhóm
+ * áp dụng, kỳ trước cung cấp vatCarryforwardIn).
  */
 @Getter
 @AllArgsConstructor
@@ -28,19 +27,19 @@ public class TaxPeriodDetailResponse {
     private BigDecimal vatOutput;
     private BigDecimal vatPayable;
 
-    /** Thuế TNCN của kỳ. Stored, not re-derived — see {@code TaxPeriodUpdateRequest}. */
+    /** Thuế TNCN của kỳ — số đã lưu, không tính lại. */
     private BigDecimal incomeTax;
 
     private BigDecimal quarterlyRevenue;
 
-    /** Group to apply from the day after {@code endDate}; defaults to this period's own group. */
+    /** Nhóm áp dụng từ ngày sau {@code endDate}; mặc định bằng nhóm của chính kỳ này. */
     private Integer nextPeriodTaxType;
     private String nextPeriodTaxTypeDisplay;
 
     private String recordedAtDisplay;
     private String note;
 
-    /** Label of the period this one's carry-forward came from; null for the first period. */
+    /** Nhãn kỳ cung cấp số khấu trừ chuyển tiếp; null nếu là kỳ đầu tiên. */
     private String previousPeriodLabel;
 
     private boolean editable;

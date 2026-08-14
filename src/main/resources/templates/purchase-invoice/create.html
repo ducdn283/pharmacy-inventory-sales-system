@@ -283,8 +283,7 @@
             }
         }
 
-        /* Quick "add supplier" modal — same lightweight pm-modal-backdrop pattern used elsewhere
-           (e.g. Product create's "+" nhà sản xuất), not Bootstrap's JS Modal component. */
+        /* Modal thêm nhanh nhà cung cấp — dùng chung pattern pm-modal-backdrop nhẹ (không phải Bootstrap Modal). */
         .pm-modal-backdrop {
             position: fixed;
             inset: 0;
@@ -784,7 +783,7 @@
     </div>
 </main>
 
-<!-- Quick "add supplier" modal -->
+<!-- Modal thêm nhanh nhà cung cấp -->
 <div class="pm-modal-backdrop" id="addSupplierModal">
     <div class="pm-modal">
         <div class="pm-modal-header">
@@ -879,6 +878,7 @@
         }
     }
 
+    // Gắn gợi ý đơn giá cho 1 dòng ngay khi dòng được tạo/khởi tạo.
     function wirePriceSuggestion(row) {
         applySuggestedPrice(row);
     }
@@ -906,6 +906,7 @@
         calculateSummary();
     }
 
+    // Gắn gợi ý thuế suất VAT cho 1 dòng ngay khi dòng được tạo/khởi tạo.
     function wireVatRateSuggestion(row) {
         applySuggestedVatRate(row);
     }
@@ -921,6 +922,7 @@
         unitDisplay.value = unitName || '';
     }
 
+    // Gắn hiển thị đơn vị nhập cho 1 dòng ngay khi dòng được tạo/khởi tạo.
     function wireImportUnitDisplay(row) {
         applyImportUnitDisplay(row);
     }
@@ -938,6 +940,7 @@
             : 'Giá bán: ' + Number(price).toLocaleString('vi-VN') + 'đ';
     }
 
+    // Gắn hiển thị giá bán tham khảo cho 1 dòng ngay khi dòng được tạo/khởi tạo.
     function wireSellPriceSuggestion(row) {
         applySuggestedSellPrice(row);
     }
@@ -963,6 +966,7 @@
             : 'Đơn giá lần trước: ' + Number(price).toLocaleString('vi-VN') + 'đ';
     }
 
+    // Gắn hiển thị đơn giá lần trước cho 1 dòng ngay khi dòng được tạo/khởi tạo.
     function wirePreviousCostPriceDisplay(row) {
         applyPreviousCostPriceDisplay(row);
     }
@@ -995,6 +999,7 @@
     // định dạng/khoảng giá trị khác vẫn để trình duyệt tự báo.
     function wireVietnameseRequiredMessages(scope) {
         scope.querySelectorAll('[required]').forEach(function (input) {
+            // Cập nhật thông báo lỗi tùy chỉnh khi ô đang để trống.
             function updateValidity() {
                 if (input.validity.valueMissing) {
                     input.setCustomValidity(input.dataset.requiredMessage || 'Vui lòng điền vào trường này');
@@ -1010,11 +1015,13 @@
         });
     }
 
+    // Định dạng số tiền theo kiểu Việt Nam kèm hậu tố "đ".
     function formatMoney(value) {
         value = Math.round(Number(value || 0));
         return value.toLocaleString('vi-VN') + 'đ';
     }
 
+    // Đọc giá trị số từ 1 input, trả về 0 nếu trống.
     function numberValue(input) {
         if (!input || input.value === '') {
             return 0;
@@ -1023,6 +1030,7 @@
         return Number(input.value);
     }
 
+    // Đọc giá trị tiền (đã format dấu chấm ngăn cách) từ 1 input, trả về số thuần.
     function moneyValue(input) {
         if (!input) return 0;
         if (typeof window.pmMoneyValue === 'function') {
@@ -1067,6 +1075,7 @@
         });
     }
 
+    // Tính lại thành tiền từng dòng + tổng cộng/chiết khấu/còn nợ của cả phiếu, cập nhật lên giao diện.
     function calculateSummary() {
         let subtotal = 0;
         const includesVat = priceAlreadyIncludesVat();
@@ -1131,6 +1140,7 @@
         document.getElementById('debtDisplay').textContent = formatMoney(totalAmount);
     }
 
+    // Đánh số lại chỉ mục details[i] cho mọi dòng sau khi thêm/xóa dòng, để name/id các input luôn khớp thứ tự.
     function refreshRowIndexes() {
         document.querySelectorAll('#detailTable tbody.detail-item').forEach((row, index) => {
             row.querySelectorAll('[data-field]').forEach(input => {
@@ -1141,6 +1151,7 @@
         });
     }
 
+    // Chuẩn hóa chuỗi tìm kiếm: bỏ dấu, chuyển thường, trim.
     function normalizeSearchText(value) {
         if (!value) return '';
         return value.toString()
@@ -1151,6 +1162,7 @@
             .trim();
     }
 
+    // Lọc tối đa 20 sản phẩm khớp từ khóa tìm kiếm.
     function searchProductMatches(keyword) {
         const normalized = normalizeSearchText(keyword);
         if (!normalized) return [];
@@ -1159,6 +1171,7 @@
             .slice(0, 20);
     }
 
+    // Render danh sách kết quả tìm sản phẩm (hoặc thông báo không tìm thấy) dưới ô tìm kiếm của 1 dòng.
     function renderProductSearchResults(row, items) {
         const results = row.querySelector('.product-search-results');
         if (!results) return;
@@ -1175,6 +1188,7 @@
         results.classList.add('show');
     }
 
+    // Ẩn danh sách kết quả tìm sản phẩm của 1 dòng.
     function hideProductSearchResults(row) {
         const results = row.querySelector('.product-search-results');
         if (results) {
@@ -1182,6 +1196,7 @@
         }
     }
 
+    // Chọn 1 sản phẩm cho dòng: gán id/tên rồi áp lại toàn bộ gợi ý (giá, VAT, đơn vị, giá bán, hạn dùng).
     function selectProductForRow(row, productId, productName) {
         const hiddenInput = row.querySelector('.product-select');
         const searchInput = row.querySelector('.product-search-input');
@@ -1199,6 +1214,7 @@
         applyExpirationVisibility(row);
     }
 
+    // Gắn các sự kiện tìm kiếm/chọn sản phẩm (gõ, focus, click kết quả, click ra ngoài để ẩn) cho 1 dòng.
     function wireProductSearch(row) {
         const searchInput = row.querySelector('.product-search-input');
         const results = row.querySelector('.product-search-results');
@@ -1229,6 +1245,7 @@
 
     // -------------------------------------------------------------- supplier search field
 
+    // Lọc tối đa 20 nhà cung cấp khớp từ khóa tìm kiếm.
     function searchSupplierMatches(keyword) {
         const normalized = normalizeSearchText(keyword);
         if (!normalized) return [];
@@ -1237,6 +1254,7 @@
             .slice(0, 20);
     }
 
+    // Render danh sách kết quả tìm nhà cung cấp (hoặc thông báo không tìm thấy).
     function renderSupplierSearchResults(items) {
         const results = document.getElementById('supplierSearchResults');
         if (!results) return;
@@ -1253,6 +1271,7 @@
         results.classList.add('show');
     }
 
+    // Ẩn danh sách kết quả tìm nhà cung cấp.
     function hideSupplierSearchResults() {
         const results = document.getElementById('supplierSearchResults');
         if (results) {
@@ -1260,6 +1279,7 @@
         }
     }
 
+    // Chọn 1 nhà cung cấp: gán id/tên, áp lại gợi ý giá cho các dòng và refetch dữ liệu dự trù mua hàng.
     function selectSupplier(supplierId, supplierName) {
         const hiddenInput = document.getElementById('supplierId');
         const searchInput = document.getElementById('supplierSearchInput');
@@ -1278,6 +1298,7 @@
         maybeFetchProcurementPlanDetails();
     }
 
+    // Gắn các sự kiện tìm kiếm/chọn nhà cung cấp (gõ, focus, click kết quả, click ra ngoài để ẩn).
     function wireSupplierSearch() {
         const searchInput = document.getElementById('supplierSearchInput');
         const results = document.getElementById('supplierSearchResults');
@@ -1370,11 +1391,13 @@
         calculateSummary();
     }
 
+    // Tìm dòng hàng đầu tiên chưa chọn sản phẩm, để tự điền gợi ý từ dự trù vào đó.
     function findEmptyDetailRow() {
         return Array.from(document.querySelectorAll('#detailTable tbody.detail-item'))
             .find(row => !row.querySelector('.product-select').value);
     }
 
+    // Điền 1 dòng hàng từ dữ liệu dự trù mua hàng (sản phẩm, số lượng, đơn giá gợi ý).
     function fillDetailRowFromProcurementPlan(row, item) {
         selectProductForRow(row, item.productId, item.productName);
 
@@ -1393,6 +1416,7 @@
         }
     }
 
+    // Điền các dòng hàng từ dự trù mua hàng vào bảng, bỏ qua sản phẩm đã có sẵn dòng, tự thêm dòng mới nếu cần.
     function applyProcurementPlanDetails(items) {
         const existingProductIds = new Set();
         document.querySelectorAll('#detailTable tbody.detail-item .product-select').forEach(input => {
@@ -1419,6 +1443,7 @@
         calculateSummary();
     }
 
+    // Thêm 1 dòng hàng trống mới vào bảng "Hàng hóa nhập" và gắn đầy đủ sự kiện/gợi ý cho dòng đó.
     function addItemRow() {
         const table = document.getElementById('detailTable');
         const index = table.querySelectorAll('tbody.detail-item').length;
@@ -1519,6 +1544,7 @@
         calculateSummary();
     }
 
+    // Xóa 1 dòng hàng (giữ tối thiểu 1 dòng), rồi đánh số lại và tính lại tổng.
     function removeItemRow(button) {
         const rows = document.querySelectorAll('#detailTable tbody.detail-item');
 
@@ -1532,9 +1558,8 @@
         calculateSummary();
     }
 
-    // Quick "add supplier" modal — lets the user register a supplier that isn't in the system yet
-    // without leaving this form. Posts to SupplierController's JSON endpoint, then fills in both
-    // the visible search box and its hidden supplierId, same as picking an existing supplier would.
+    // Modal thêm nhanh NCC chưa có trong hệ thống — gọi endpoint JSON của SupplierController rồi
+    // điền vào cả ô tìm kiếm lẫn supplierId ẩn, giống như chọn NCC có sẵn.
     function wireAddSupplierModal() {
         const modal = document.getElementById('addSupplierModal');
         const errorBox = document.getElementById('addSupplierError');
@@ -1553,6 +1578,7 @@
             email: "Email chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
         };
 
+        // Xóa trạng thái lỗi hiển thị trên 1 ô nhập của modal thêm NCC.
         function clearFieldError(input) {
             input.classList.remove('is-invalid');
             input.setCustomValidity('');
@@ -1560,6 +1586,7 @@
             if (feedback) feedback.textContent = '';
         }
 
+        // Hiện thông báo lỗi trên 1 ô nhập của modal thêm NCC.
         function showFieldError(input, message) {
             input.setCustomValidity(message);
             input.classList.add('is-invalid');
@@ -1567,6 +1594,7 @@
             if (feedback) feedback.textContent = message;
         }
 
+        // Validate các field bắt buộc + định dạng (mã số thuế, điện thoại, email) trước khi gửi tạo nhanh NCC.
         function validateSupplierFields(payload) {
             Object.values(fields).forEach(clearFieldError);
 
@@ -1592,6 +1620,7 @@
             return true;
         }
 
+        // Mở modal thêm nhanh NCC, xóa trắng form và lỗi cũ.
         function openModal() {
             errorBox.classList.add('d-none');
             errorBox.textContent = '';
@@ -1603,15 +1632,18 @@
             setTimeout(() => fields.name.focus(), 0);
         }
 
+        // Đóng modal thêm nhanh NCC.
         function closeModal() {
             modal.classList.remove('open');
         }
 
+        // Hiện thông báo lỗi chung của modal thêm nhanh NCC.
         function showError(message) {
             errorBox.textContent = message;
             errorBox.classList.remove('d-none');
         }
 
+        // Gửi request tạo nhanh NCC (JSON, kèm CSRF token thủ công), rồi chọn luôn NCC vừa tạo.
         async function saveSupplier() {
             const payload = {
                 name: fields.name.value.trim(),
@@ -1626,9 +1658,7 @@
                 return;
             }
             try {
-                // The form's own _csrf hidden input is auto-injected by Spring's
-                // RequestDataValueProcessor — a plain fetch() never picks it up automatically,
-                // must attach it by hand (same as every other quick-add modal in this app).
+                // fetch() không tự đính kèm CSRF token như form submit thường — phải lấy tay từ input ẩn.
                 const csrfInput = document.querySelector('input[name="_csrf"]');
                 const headers = { 'Content-Type': 'application/json' };
                 if (csrfInput) headers['X-CSRF-TOKEN'] = csrfInput.value;
