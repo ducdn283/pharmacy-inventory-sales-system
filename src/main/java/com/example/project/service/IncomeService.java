@@ -55,6 +55,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Nghiệp vụ phiếu thu ({@link Income}) phục vụ màn Chủ nhà thuốc / Dược sĩ / Kế toán
+ * ({@code /owner/incomes/**}, {@code /pharmacist/incomes/**}, {@code /accountant/incomes/**}).
+ */
 @Service
 public class IncomeService {
 
@@ -67,7 +71,7 @@ public class IncomeService {
 
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
-    /** Legacy stock-adjustment status before BA removed the approval step (2026-07-27). */
+    /** Trạng thái phiếu điều chỉnh kho legacy trước khi bỏ bước duyệt (2026-07-27). */
     private static final String STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY = "Duyệt";
 
     /**
@@ -93,10 +97,7 @@ public class IncomeService {
     private final StockadjustmentRepository stockadjustmentRepository;
     private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
     private final ShiftreportRepository shiftreportRepository;
-    // Lazily opens/reuses the collector's shift the moment an income is actually recorded — same
-    // hook as InvoiceService/ReturnService (phát sinh giao dịch là tạo báo cáo ca). Income is
-    // only creatable by Owner/Pharmacist (see IncomeController routes), so this never opens a shift
-    // for an Accountant.
+    /** Mở hoặc tái sử dụng ca của người thu tiền khi ghi nhận phiếu thu — cùng cơ chế với {@link InvoiceService}. */
     private final ShiftreportService shiftreportService;
     private final InvoiceService invoiceService;
     private final FinancialsettingService financialsettingService;
@@ -132,6 +133,7 @@ public class IncomeService {
         this.workflowNotificationService = workflowNotificationService;
     }
 
+    /** Danh sách phiếu thu có phân trang, lọc theo mã, ngày, loại, trạng thái, hình thức thu và người lập. */
     @Transactional(readOnly = true)
     public Page<IncomeListItemResponse> list(String search,
                                        String fromDate,
@@ -166,11 +168,13 @@ public class IncomeService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
+    /** Các trạng thái hợp lệ — dropdown lọc trên màn danh sách. */
     @Transactional(readOnly = true)
     public List<String> listStatuses() {
         return List.of(STATUS_DRAFT, STATUS_PENDING, STATUS_COMPLETED, STATUS_REJECTED, STATUS_CANCELLED);
     }
 
+    /** Danh sách người đã từng lập phiếu thu — dropdown lọc theo người lập. */
     @Transactional(readOnly = true)
     public List<CustomerOptionResponse> listApplicants() {
         Map<Integer, String> byId = new LinkedHashMap<>();
@@ -187,10 +191,12 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Tất cả loại phiếu thu cho dropdown form tạo phiếu. */
     public List<IncomeTypeOptionResponse> listIncomeTypes() {
         return IncomeTypeOptionResponse.all();
     }
 
+    /** Nhãn tiếng Việt cho mã hình thức thu (CASH, BANKING, MIXED, CREDIT). */
     public Map<String, String> paymentTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put(PAYMENT_CASH, "Tiền mặt");
@@ -200,6 +206,7 @@ public class IncomeService {
         return labels;
     }
 
+    /** Danh sách khách hàng cho dropdown form tạo phiếu thu nợ khách. */
     @Transactional(readOnly = true)
     public List<CustomerOptionResponse> listCustomers() {
         return customerRepository.findAll().stream()
@@ -209,6 +216,7 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Danh sách nhà cung cấp cho dropdown form tạo phiếu thu nợ NCC. */
     @Transactional(readOnly = true)
     public List<CustomerOptionResponse> listSuppliers() {
         return supplierRepository.findAll().stream()
@@ -217,6 +225,7 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Danh sách nhân viên đang hoạt động — chọn người chịu trách nhiệm trên form. */
     @Transactional(readOnly = true)
     public List<CustomerOptionResponse> listEmployees() {
         return accountRepository.findAll().stream()
@@ -226,6 +235,7 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Hóa đơn bán còn nợ của khách — chọn chứng từ thu nợ khách hàng. */
     @Transactional(readOnly = true)
     public List<IncomeReferenceOptionResponse> listDebtInvoices(Integer customerId) {
         if (customerId == null) {
@@ -246,6 +256,7 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Phiếu trả NCC còn tiền phải hoàn — chọn chứng từ thu nợ NCC. */
     @Transactional(readOnly = true)
     public List<IncomeReferenceOptionResponse> listSupplierReturns(Integer supplierId) {
         if (supplierId == null) {
@@ -283,6 +294,7 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Phiếu điều chỉnh kho nhân viên phải đền bù — chọn chứng từ thu đền bù. */
     @Transactional(readOnly = true)
     public List<IncomeReferenceOptionResponse> listStockAdjustments(Integer accountId) {
         if (accountId == null) {
@@ -314,6 +326,7 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Báo cáo ca còn thiếu tiền mặt của nhân viên — chọn chứng từ thu thất thoát ca. */
     @Transactional(readOnly = true)
     public List<IncomeReferenceOptionResponse> listShiftReportsWithShortage(Integer accountId) {
         if (accountId == null) {
@@ -339,11 +352,13 @@ public class IncomeService {
                 .toList();
     }
 
+    /** Chi tiết phiếu thu — không kiểm tra quyền hủy. */
     @Transactional(readOnly = true)
     public IncomeDetailResponse getDetail(Integer incomeId) {
         return getDetail(incomeId, null);
     }
 
+    /** Chi tiết phiếu thu — kèm cờ {@code canCancel} theo tài khoản đang đăng nhập. */
     @Transactional(readOnly = true)
     public IncomeDetailResponse getDetail(Integer incomeId, Integer currentAccountId) {
         Income income = incomeRepository.findByIdWithRelations(incomeId)
@@ -364,15 +379,15 @@ public class IncomeService {
         return remainingCollectibleFromSupplier(ret, accountedByReturnId());
     }
 
-    /** Tổng tiền đã thu qua phiếu thu SUPPLIER hoàn thành, keyed by phiếu trả NCC. */
+    /** Tổng tiền đã thu qua phiếu thu SUPPLIER hoàn thành, gom theo id phiếu trả NCC. */
     @Transactional(readOnly = true)
     public Map<Integer, BigDecimal> collectedAmountBySupplierReturnId() {
         return accountedByReturnId();
     }
 
     /**
-     * Creates a manual income slip. When {@code asDraft} is true it is saved as {@link #STATUS_DRAFT};
-     * otherwise it is auto-completed ({@link #STATUS_COMPLETED}) — income slips do not require approval.
+     * Tạo phiếu thu thủ công.
+     * {@code asDraft = true}: lưu nháp; ngược lại hoàn thành ngay (phiếu thu không cần duyệt).
      */
     @Transactional
     public Integer createIncome(IncomeCreateRequest request, Integer currentAccountId, boolean asDraft) {
@@ -392,8 +407,7 @@ public class IncomeService {
         income.setAmount(request.getAmount());
         income.setPaidByCash(split[0]);
         income.setPaidByBanking(split[1]);
-        // NOT NULL on income.paidByCredit — Hibernate writes explicit NULL without @DynamicInsert,
-        // so default the unused debt-offset portion to zero (same as ExpenseService.create).
+        // Cột paidByCredit NOT NULL — gán 0 khi không dùng cấn trừ (giống ExpenseService.create).
         income.setPaidByCredit(BigDecimal.ZERO);
         income.setNote(trimToNull(request.getNote()));
         applyPartyLinks(income, incomeTypeCode, request);
@@ -405,9 +419,7 @@ public class IncomeService {
             income.setStatus(STATUS_COMPLETED);
         }
 
-        // A submitted income is a real counter transaction (cash/banking physically received) →
-        // attach the collector's open shift. Drafts are not transactions yet, so they stay
-        // unattached until they are actually sent (no submit flow exists for drafts yet).
+        // Phiếu hoàn thành là giao dịch thật → gắn ca đang mở; nháp chưa gắn ca.
         if (!asDraft) {
             income.setShiftReportID(shiftreportService.ensureOpenShiftFor(currentAccountId));
         }
@@ -433,18 +445,15 @@ public class IncomeService {
     }
 
     /**
-     * Internal correction for a wrongly-entered slip — same spirit as
-     * {@code ExpenseService.cancel()}: marks the record void and gives the money back to the linked
-     * document.
-     *
-     * <p><strong>A completed slip can still be cancelled.</strong> Income slips cannot be edited after
-     * creation, so cancellation is the only correction path for a mis-keyed slip.</p>
+     * Hủy phiếu thu nhập sai — tương tự {@link ExpenseService#cancel}.
+     * Phiếu đã hoàn thành vẫn hủy được vì không có luồng sửa sau khi tạo.
      */
     @Transactional
     public void cancel(Integer incomeId, String reason) {
         cancel(incomeId, reason, null);
     }
 
+    /** Hủy phiếu thu — chỉ người lập mới được hủy. */
     @Transactional
     public void cancel(Integer incomeId, String reason, Integer currentAccountId) {
         Income income = incomeRepository.findByIdWithRelations(incomeId)
@@ -486,11 +495,13 @@ public class IncomeService {
         financialsettingService.applyFundDelta(income.getPaidByCash(), income.getPaidByBanking());
     }
 
+    /** Tổng số phiếu thu — thẻ thống kê màn danh sách. */
     @Transactional(readOnly = true)
     public long countAll() {
         return incomeRepository.count();
     }
 
+    /** Số phiếu thu lập trong ngày hôm nay — thẻ thống kê. */
     @Transactional(readOnly = true)
     public long countToday() {
         LocalDate today = LocalDate.now(VN_ZONE);
@@ -499,6 +510,7 @@ public class IncomeService {
                 .count();
     }
 
+    /** Tổng tiền thu trong ngày hôm nay — thẻ thống kê. */
     @Transactional(readOnly = true)
     public BigDecimal sumTodayAmount() {
         LocalDate today = LocalDate.now(VN_ZONE);
@@ -509,22 +521,26 @@ public class IncomeService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Số phiếu thu đã hoàn thành — alias thống kê dashboard. */
     @Transactional(readOnly = true)
     public long countApproved() {
         return countCompleted();
     }
 
+    /** Tổng tiền phiếu thu đã hoàn thành — alias thống kê dashboard. */
     @Transactional(readOnly = true)
     public BigDecimal sumApprovedAmount() {
         return sumCompletedAmount();
     }
 
+    /** Đếm phiếu thu trạng thái hoàn thành (kể cả legacy "Duyệt"). */
     private long countCompleted() {
         return incomeRepository.findAll().stream()
                 .filter(income -> isCompletedStatus(income.getStatus()))
                 .count();
     }
 
+    /** Tổng tiền phiếu thu trạng thái hoàn thành. */
     private BigDecimal sumCompletedAmount() {
         return incomeRepository.findAll().stream()
                 .filter(income -> isCompletedStatus(income.getStatus()))
@@ -533,6 +549,7 @@ public class IncomeService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Map entity sang DTO một dòng trên bảng danh sách. */
     private IncomeListItemResponse toListItem(Income income) {
         String statusName = income.getStatus() != null ? displayStatus(income.getStatus()) : "Không rõ";
         return new IncomeListItemResponse(
@@ -549,6 +566,7 @@ public class IncomeService {
                 statusCssClass(statusName));
     }
 
+    /** Map entity sang DTO trang chi tiết phiếu thu. */
     private IncomeDetailResponse toDetail(Income income, Integer currentAccountId) {
         String typeCode = resolveIncomeType(income);
         String statusName = income.getStatus() != null ? displayStatus(income.getStatus()) : "Không rõ";
@@ -633,18 +651,21 @@ public class IncomeService {
         return null;
     }
 
+    /** Kiểm tra tài khoản hiện tại có phải người lập phiếu không. */
     private boolean belongsToApplicant(Income income, Integer applicantAccountId) {
         return applicantAccountId != null
                 && income.getApplicantID() != null
                 && applicantAccountId.equals(income.getApplicantID().getId());
     }
 
+    /** Ném lỗi nếu không phải người lập phiếu. */
     private void ensureApplicantAccess(Income income, Integer requiredApplicantAccountId) {
         if (!belongsToApplicant(income, requiredApplicantAccountId)) {
             throw new IllegalArgumentException("Chỉ người lập phiếu mới có thể hủy phiếu thu này");
         }
     }
 
+    /** Nội dung thu hiển thị — trả "—" nếu trống. */
     private String displayReason(Income income) {
         if (income.getReason() == null || income.getReason().isBlank()) {
             return "—";
@@ -652,7 +673,7 @@ public class IncomeService {
         return income.getReason();
     }
 
-    /** Internal type code; DB may store the Vietnamese label or a legacy English code. */
+    /** Suy ra mã loại nội bộ từ cột lưu hoặc liên kết đối tượng/chứng từ. */
     private String resolveIncomeType(Income income) {
         String stored = income.getIncomeType();
         if (stored != null && IncomeTypeOptionResponse.isValid(stored)) {
@@ -676,6 +697,7 @@ public class IncomeService {
         return IncomeTypeOptionResponse.OTHER;
     }
 
+    /** Mã chứng từ liên quan (HĐ, phiếu trả, điều chỉnh kho, báo cáo ca). */
     private String referenceCode(Income income) {
         if (income.getInvoiceID() != null && income.getInvoiceID().getInvoiceNumber() != null) {
             return income.getInvoiceID().getInvoiceNumber();
@@ -693,6 +715,7 @@ public class IncomeService {
         return "—";
     }
 
+    /** Chuỗi hiển thị hình thức thu từ các cột paidByCash / paidByBanking / paidByCredit. */
     private String paymentDisplay(BigDecimal paidByCash, BigDecimal paidByBanking, BigDecimal paidByCredit) {
         boolean hasCash = isPositive(paidByCash);
         boolean hasBanking = isPositive(paidByBanking);
@@ -722,6 +745,7 @@ public class IncomeService {
         return parts.isEmpty() ? "—" : parts.toString();
     }
 
+    /** Nối thêm một phần hình thức thu vào chuỗi hiển thị. */
     private void appendPaymentPart(StringBuilder parts, String label) {
         if (!parts.isEmpty()) {
             parts.append(" + ");
@@ -729,6 +753,7 @@ public class IncomeService {
         parts.append(label);
     }
 
+    /** So khớp từ khóa tìm kiếm với mã phiếu thu (đã chuẩn hóa). */
     private boolean matchesKeyword(Income income, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
@@ -740,6 +765,7 @@ public class IncomeService {
         return containsNormalized(code, normalizedKeyword);
     }
 
+    /** Kiểm tra ngày phiếu thu nằm trong khoảng lọc. */
     private boolean matchesDate(Income income, LocalDate from, LocalDate to) {
         if (income.getDate() == null) {
             return from == null && to == null;
@@ -751,10 +777,12 @@ public class IncomeService {
         return to == null || !date.isAfter(to);
     }
 
+    /** Kiểm tra phiếu thu thuộc người lập đang lọc. */
     private boolean matchesApplicant(Income income, Integer applicantId) {
         return income.getApplicantID() != null && applicantId.equals(income.getApplicantID().getId());
     }
 
+    /** Kiểm tra hình thức thu khớp bộ lọc (CASH, BANKING, MIXED, CREDIT). */
     private boolean matchesPaymentType(Income income, String paymentType) {
         if (paymentType == null || paymentType.isBlank()) {
             return true;
@@ -771,6 +799,7 @@ public class IncomeService {
         };
     }
 
+    /** Kiểm tra trạng thái khớp bộ lọc — "Hoàn thành" gom cả legacy "Duyệt". */
     private boolean matchesStatus(Income income, String filterStatus) {
         if (isStatus(filterStatus, STATUS_COMPLETED)) {
             return isCompletedStatus(income.getStatus());
@@ -778,14 +807,17 @@ public class IncomeService {
         return isStatus(income.getStatus(), filterStatus);
     }
 
+    /** So sánh hai chuỗi trạng thái sau khi chuẩn hóa. */
     private boolean isStatus(String actual, String expected) {
         return normalize(actual).equals(normalize(expected));
     }
 
+    /** Trạng thái coi là hoàn thành (kể cả legacy "Duyệt"). */
     private boolean isCompletedStatus(String status) {
         return isStatus(status, STATUS_COMPLETED) || isStatus(status, STATUS_COMPLETED_LEGACY);
     }
 
+    /** Nhãn trạng thái hiển thị — chuẩn hóa legacy về "Hoàn thành". */
     private String displayStatus(String status) {
         if (isCompletedStatus(status)) {
             return STATUS_COMPLETED;
@@ -796,6 +828,7 @@ public class IncomeService {
         return status;
     }
 
+    /** CSS class badge trạng thái trên giao diện. */
     private String statusCssClass(String statusName) {
         if (isCompletedStatus(statusName)) {
             return "status-completed";
@@ -815,6 +848,7 @@ public class IncomeService {
         return "status-default";
     }
 
+    /** Nhãn tiếng Việt loại phiếu thu từ mã nội bộ. */
     private String formatIncomeType(String typeCode) {
         if (typeCode == null) {
             return "Không rõ";
@@ -823,25 +857,28 @@ public class IncomeService {
         return label.isBlank() ? typeCode : label;
     }
 
+    /** Định dạng thời gian phiếu thu (dd/MM/yyyy HH:mm). */
     private String formatInstant(Instant instant) {
         if (instant == null) {
             return "";
         }
-        // Stored via nowVn() — read back as UTC (same convention as ReturnService).
+        // Lưu bằng nowVn() — đọc lại theo UTC (cùng quy ước ReturnService).
         return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
                 .withZone(ZoneOffset.UTC)
                 .format(instant);
     }
 
+    /** Chuyển {@link Instant} sang {@link LocalDate} theo quy ước UTC. */
     private LocalDate toLocalDate(Instant instant) {
         return instant.atZone(ZoneOffset.UTC).toLocalDate();
     }
 
-    /** VN wall-clock time stored on a UTC-labelled Instant (matches ReturnService/ShiftreportService). */
+    /** Thời điểm hiện tại theo giờ VN, lưu dạng Instant UTC (giống ReturnService). */
     private Instant nowVn() {
         return LocalDateTime.now(VN_ZONE).toInstant(ZoneOffset.UTC);
     }
 
+    /** Parse chuỗi ngày lọc (yyyy-MM-dd) — trả null nếu rỗng hoặc sai định dạng. */
     private LocalDate parseDate(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -853,10 +890,12 @@ public class IncomeService {
         }
     }
 
+    /** Kiểm tra chuỗi chứa từ khóa đã chuẩn hóa (bỏ dấu). */
     private boolean containsNormalized(String value, String normalizedKeyword) {
         return value != null && normalize(value).contains(normalizedKeyword);
     }
 
+    /** Chuẩn hóa chuỗi tìm kiếm — bỏ dấu tiếng Việt, chữ thường. */
     private String normalize(String value) {
         if (value == null) {
             return "";
@@ -867,6 +906,7 @@ public class IncomeService {
         return normalized.toLowerCase(Locale.ROOT).trim();
     }
 
+    /** Kiểm tra dữ liệu form tạo phiếu thu trước khi lưu. */
     private void validateCreateRequest(IncomeCreateRequest request) {
         if (request.getIncomeType() == null || request.getIncomeType().isBlank()) {
             throw new IllegalArgumentException("Vui lòng chọn loại phiếu thu");
@@ -905,6 +945,7 @@ public class IncomeService {
         validateReferenceSelection(incomeType, request);
     }
 
+    /** Kiểm tra chứng từ liên quan và số tiền thu theo từng loại phiếu. */
     private void validateReferenceSelection(String incomeType, IncomeCreateRequest request) {
         if (IncomeTypeOptionResponse.CUSTOMER.equals(incomeType)) {
             Invoice invoice = invoiceRepository.findById(request.getInvoiceId())
@@ -964,6 +1005,7 @@ public class IncomeService {
         }
     }
 
+    /** Chuẩn hóa và kiểm tra mã loại phiếu thu từ form. */
     private String resolveIncomeType(String rawType) {
         if (rawType == null || rawType.isBlank()) {
             throw new IllegalArgumentException("Vui lòng chọn loại phiếu thu");
@@ -975,6 +1017,7 @@ public class IncomeService {
         return IncomeTypeOptionResponse.codeOf(trimmed);
     }
 
+    /** Gắn liên kết đối tượng (khách, NCC, nhân viên) theo loại phiếu. */
     private void applyPartyLinks(Income income, String incomeType, IncomeCreateRequest request) {
         income.setSupplierID(null);
         income.setCustomerID(null);
@@ -995,6 +1038,7 @@ public class IncomeService {
         }
     }
 
+    /** Gắn liên kết chứng từ (HĐ, phiếu trả, điều chỉnh kho, báo cáo ca) theo loại phiếu. */
     private void applyReferenceLinks(Income income, String incomeType, IncomeCreateRequest request) {
         income.setInvoiceID(null);
         income.setReturnID(null);
@@ -1016,7 +1060,7 @@ public class IncomeService {
         }
     }
 
-    /** Returns {@code [paidByCash, paidByBanking]}, defaulting an unsplit amount entirely to cash. */
+    /** Trả {@code [paidByCash, paidByBanking]} — mặc định toàn bộ vào tiền mặt nếu chưa tách. */
     private BigDecimal[] resolveSplit(IncomeCreateRequest request) {
         BigDecimal amount = request.getAmount();
         BigDecimal cash = request.getPaidByCash();
@@ -1036,6 +1080,7 @@ public class IncomeService {
         return new BigDecimal[]{cash, banking};
     }
 
+    /** Sinh mã phiếu thu dạng PT-000001 từ id. */
     private String formatCode(Integer id) {
         if (id == null) {
             return "PT-000000";
@@ -1043,6 +1088,7 @@ public class IncomeService {
         return "PT-" + String.format("%06d", id);
     }
 
+    /** Mã phiếu tạm trước khi lưu — cập nhật lại sau khi có id thật. */
     private String generateCode() {
         int nextId = incomeRepository.findAll().stream()
                 .map(Income::getId)
@@ -1052,6 +1098,7 @@ public class IncomeService {
         return formatCode(nextId);
     }
 
+    /** Trim chuỗi — trả null nếu rỗng. */
     private String trimToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -1059,10 +1106,12 @@ public class IncomeService {
         return value.trim();
     }
 
+    /** Null-safe — trả {@link BigDecimal#ZERO} nếu null. */
     private BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    /** Hóa đơn còn nợ — trạng thái "Còn nợ" hoặc debtAmount > 0. */
     private boolean isDebtInvoice(Invoice invoice) {
         if (invoice == null) {
             return false;
@@ -1073,6 +1122,7 @@ public class IncomeService {
         return isPositive(invoice.getDebtAmount());
     }
 
+    /** Phiếu trả NCC còn khoản tiền mặt phải thu. */
     private boolean hasCollectibleCashFromSupplier(Return ret) {
         return isPositive(remainingCollectibleFromSupplier(ret, accountedByReturnId()));
     }
@@ -1086,13 +1136,14 @@ public class IncomeService {
                 .max(BigDecimal.ZERO);
     }
 
+    /** Số tiền NCC còn phải hoàn sau trừ các phiếu thu đã ghi nhận. */
     private BigDecimal remainingCollectibleFromSupplier(Return ret, Map<Integer, BigDecimal> accounted) {
         return collectibleCashFromSupplier(ret)
                 .subtract(accounted.getOrDefault(ret != null ? ret.getId() : null, BigDecimal.ZERO))
                 .max(BigDecimal.ZERO);
     }
 
-    /** Completed supplier-income slips pointing at a return — each amount counts against the collectible. */
+    /** Tổng tiền đã thu qua phiếu thu SUPPLIER hoàn thành, gom theo id phiếu trả NCC. */
     private Map<Integer, BigDecimal> accountedByReturnId() {
         Map<Integer, BigDecimal> accounted = new LinkedHashMap<>();
         for (Income income : incomeRepository.findAllWithRelations()) {
@@ -1111,6 +1162,7 @@ public class IncomeService {
         return accounted;
     }
 
+    /** Kiểm tra số tiền thu không vượt số NCC còn phải hoàn trên phiếu trả. */
     private void validateSupplierPaymentAmount(Return ret, BigDecimal paymentAmount) {
         if (paymentAmount == null) {
             return;
@@ -1124,8 +1176,8 @@ public class IncomeService {
     }
 
     /**
-     * Validates supplier-return collection. {@code Return.offsetDebtAmount} stays the approval-time
-     * debt offset only; cash collected is tracked via linked income slips ({@link #accountedByReturnId}).
+     * Xác thực số tiền thu phiếu trả NCC khi hoàn thành phiếu thu.
+     * {@code offsetDebtAmount} chỉ là cấn trừ công nợ lúc duyệt; tiền mặt thu theo dõi qua phiếu thu.
      */
     private void applySupplierOffsetDebtPayment(Income income) {
         if (income.getReturnID() == null || income.getAmount() == null) {
@@ -1136,6 +1188,7 @@ public class IncomeService {
         validateSupplierPaymentAmount(ret, income.getAmount());
     }
 
+    /** Phiếu trả hàng NCC đã duyệt (trả theo phiếu nhập, không phải trả khách). */
     private boolean isApprovedSupplierReturn(Return ret) {
         return ret != null
                 && ret.getPurchaseID() != null
@@ -1143,6 +1196,7 @@ public class IncomeService {
                 && isStatus(ret.getStatus(), ReturnPurchaseStatus.APPROVED);
     }
 
+    /** Id các phiếu điều chỉnh kho đã liên kết phiếu thu (trừ từ chối/hủy). */
     private Set<Integer> linkedStockAdjustmentIds() {
         return incomeRepository.findAllWithRelations().stream()
                 .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED)
@@ -1153,6 +1207,7 @@ public class IncomeService {
                 .collect(Collectors.toSet());
     }
 
+    /** Phiếu điều chỉnh kho đã hoàn thành (kể cả trạng thái legacy "Duyệt"). */
     private boolean isCompletedStockAdjustment(Stockadjustment adjustment) {
         if (adjustment == null || adjustment.getStatus() == null) {
             return false;
@@ -1162,6 +1217,7 @@ public class IncomeService {
                 || STOCK_ADJUSTMENT_STATUS_COMPLETED_LEGACY.equals(status);
     }
 
+    /** Phiếu điều chỉnh do lỗi nhân viên — hủy hàng hoặc giảm theo kiểm kê. */
     private boolean isEmployeeLiableStockAdjustment(Stockadjustment adjustment) {
         return adjustment != null
                 && adjustment.getAdjustmentType() != null
@@ -1190,6 +1246,7 @@ public class IncomeService {
         return totals;
     }
 
+    /** Giá trị đền bù của một phiếu điều chỉnh kho. */
     private BigDecimal reimbursementValueFor(Stockadjustment adjustment) {
         if (adjustment == null || adjustment.getId() == null) {
             return BigDecimal.ZERO;
@@ -1198,6 +1255,7 @@ public class IncomeService {
                 .getOrDefault(adjustment.getId(), BigDecimal.ZERO);
     }
 
+    /** Phiếu thu đền bù phải thu đúng một lần, bằng giá trị đền bù đề xuất. */
     private void validateEmployeePaymentAmount(Stockadjustment adjustment, BigDecimal paymentAmount) {
         if (paymentAmount == null) {
             return;
@@ -1215,6 +1273,7 @@ public class IncomeService {
         }
     }
 
+    /** Phiếu thu thất thoát ca phải thu đúng một lần, bằng số tiền thiếu mặt. */
     private void validateShiftShortagePaymentAmount(Shiftreport shift, BigDecimal paymentAmount) {
         if (paymentAmount == null) {
             return;
@@ -1232,6 +1291,7 @@ public class IncomeService {
         }
     }
 
+    /** Báo cáo ca đã kết (không nháp) và còn khoản thiếu tiền mặt cần thu. */
     private boolean isShiftWithCollectibleShortage(Shiftreport shift) {
         if (shift == null || shift.getStatus() == null) {
             return false;
@@ -1242,7 +1302,7 @@ public class IncomeService {
         return isPositive(collectibleShortageAmount(shift));
     }
 
-    /** {@code cashDiscrepancy < 0} means physical cash is short — collectible amount is the absolute value. */
+    /** {@code cashDiscrepancy < 0} nghĩa là thiếu tiền mặt — số thu = giá trị tuyệt đối. */
     private BigDecimal collectibleShortageAmount(Shiftreport shift) {
         if (shift == null || shift.getCashDiscrepancy() == null) {
             return BigDecimal.ZERO;
@@ -1252,6 +1312,7 @@ public class IncomeService {
                 : BigDecimal.ZERO;
     }
 
+    /** Id các báo cáo ca đã liên kết phiếu thu thất thoát (trừ từ chối/hủy). */
     private Set<Integer> linkedShiftReportOfAccountIds() {
         return incomeRepository.findAllWithRelations().stream()
                 .filter(income -> !isStatus(income.getStatus(), STATUS_REJECTED)
@@ -1262,6 +1323,7 @@ public class IncomeService {
                 .collect(Collectors.toSet());
     }
 
+    /** Ngày giờ hiển thị trên dropdown chọn báo cáo ca. */
     private String formatShiftReferenceDate(Shiftreport shift) {
         if (shift == null) {
             return "";
@@ -1279,14 +1341,17 @@ public class IncomeService {
         return datePart + " " + timePart;
     }
 
+    /** Null-safe — trả chuỗi rỗng nếu null. */
     private String nullToEmpty(String value) {
         return value != null ? value : "";
     }
 
+    /** Kiểm tra số tiền lớn hơn 0. */
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
 
+    /** Kiểm tra số tiền thu không vượt số nợ trên hóa đơn bán. */
     private void validateCustomerPaymentAmount(Invoice invoice, BigDecimal paymentAmount) {
         if (paymentAmount == null) {
             return;
@@ -1298,7 +1363,7 @@ public class IncomeService {
         }
     }
 
-    /** Restores the linked sales invoice debt when a completed customer debt-collection income is cancelled. */
+    /** Hoàn lại công nợ hóa đơn bán khi hủy phiếu thu nợ khách đã hoàn thành. */
     private void reverseCustomerDebtPayment(Income income) {
         if (income.getInvoiceID() == null || income.getAmount() == null) {
             return;
@@ -1318,7 +1383,7 @@ public class IncomeService {
         invoiceService.persistInvoice(invoice);
     }
 
-    /** Reduces the linked sales invoice debt when a customer debt-collection income is submitted. */
+    /** Giảm công nợ hóa đơn bán khi hoàn thành phiếu thu nợ khách. */
     private void applyCustomerDebtPayment(Income income, BigDecimal paidByCash, BigDecimal paidByBanking) {
         if (income.getInvoiceID() == null || income.getAmount() == null) {
             return;
@@ -1341,6 +1406,7 @@ public class IncomeService {
         invoiceService.persistInvoice(invoice);
     }
 
+    /** Định dạng ngày giờ hóa đơn bán cho dropdown chứng từ. */
     private String formatInvoiceDate(LocalDateTime dateTime) {
         if (dateTime == null) {
             return "";
@@ -1348,6 +1414,7 @@ public class IncomeService {
         return dateTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 
+    /** Định dạng số tiền kèm đơn vị "đ" cho hiển thị. */
     private String formatMoney(BigDecimal amount) {
         if (amount == null) {
             return "0đ";

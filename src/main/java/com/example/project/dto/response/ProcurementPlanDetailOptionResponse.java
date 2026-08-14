@@ -6,24 +6,27 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 /**
- * One {@code Procurementplandetail} line offered back to the Purchase Invoice create form once
- * both a supplier and a procurement plan are selected — the plan's requested quantity/price for
- * that supplier's products, used only to suggest/prefill a detail row (see
- * {@code PurchaseinvoiceService#getProcurementPlanDetailsForSupplier}). Never authoritative: the
- * user can still edit every prefilled value before saving.
+ * Một dòng {@link com.example.project.entity.Procurementplandetail} gợi ý cho form tạo phiếu nhập
+ * khi đã chọn nhà cung cấp và phiếu dự trù — dùng để điền sẵn số lượng/giá (xem
+ * {@link com.example.project.service.PurchaseinvoiceService#getProcurementPlanDetailsForSupplier}).
+ * Chỉ mang tính gợi ý; người dùng vẫn có thể sửa trước khi lưu.
  */
 @Getter
 @AllArgsConstructor
 public class ProcurementPlanDetailOptionResponse {
 
+    /** Id hàng hóa. */
     private Integer productId;
+    /** Tên hàng hóa. */
     private String productName;
+    /** Số lượng dự trù trên phiếu. */
     private Integer requestedQuantity;
+    /** Đơn vị dự trù. */
     private String unit;
 
-    /** Total estimated price for {@code requestedQuantity}, VAT-inclusive (as recorded on the plan). */
+    /** Tổng giá ước tính cho {@code requestedQuantity} — đã ghi trên phiếu dự trù. */
     private BigDecimal estimatedPrice;
 
-    /** {@code estimatedPrice ÷ requestedQuantity} — VAT-inclusive, directly usable as "Giá nhập". */
+    /** {@code estimatedPrice ÷ requestedQuantity} — dùng trực tiếp làm "Giá nhập" gợi ý. */
     private BigDecimal unitPrice;
 }

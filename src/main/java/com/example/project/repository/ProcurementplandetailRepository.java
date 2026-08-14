@@ -7,12 +7,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * Truy vấn chi tiết dòng sản phẩm trên phiếu dự trù ({@link Procurementplandetail}).
+ */
 public interface ProcurementplandetailRepository extends JpaRepository<Procurementplandetail, Integer> {
 
+    /** Chi tiết theo id phiếu dự trù — form cập nhật. */
     List<Procurementplandetail> findByProcurementID_Id(Integer procurementId);
 
-
-    // lấy tất cả chi tiết phiếu dự trù theo id phiếu dự trù
+    /** Chi tiết kèm hàng hóa và nhà cung cấp — màn in phiếu dự trù. */
     @Query("""
             SELECT d FROM Procurementplandetail d
             JOIN FETCH d.productID
@@ -21,6 +24,6 @@ public interface ProcurementplandetailRepository extends JpaRepository<Procureme
             """)
     List<Procurementplandetail> findByProcurementID_IdWithRelations(@Param("procurementId") Integer procurementId);
 
-    //xóa chi tiết dự trù theo theo id dự trù
+    /** Xóa toàn bộ dòng chi tiết khi cập nhật hoặc xóa phiếu dự trù. */
     void deleteByProcurementID_Id(Integer procurementId);
 }
