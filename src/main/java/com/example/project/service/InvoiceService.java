@@ -58,6 +58,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Nghiệp vụ hóa đơn bán hàng ({@link Invoice}) phục vụ màn Chủ nhà thuốc/Dược sĩ/Kế toán
+ * ({@code /owner/invoices/**}, {@code /pharmacist/invoices/**}, {@code /accountant/invoices/**}).
+ */
 @Service
 public class InvoiceService {
     private static final String RETURN_NONE = "NONE";
@@ -66,7 +70,7 @@ public class InvoiceService {
 
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
-    /** Legacy type from older data — displayed as "Bán hàng". */
+    /** Loại dữ liệu cũ — hiển thị là "Bán hàng". */
     private static final String INVOICE_TYPE_VAT_LEGACY = "Hóa đơn GTGT";
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
     private static final String INVOICE_TYPE_ADJUSTMENT_LEGACY = "adjustment";
@@ -104,9 +108,8 @@ public class InvoiceService {
     private final FinancialsettingRepository financialsettingRepository;
     private final FinancialsettingService financialsettingService;
     private final ReturnRepository returnRepository;
-    // Lazily opens/reuses the seller's shift the moment a sale invoice is actually recorded —
-    // mirrors the same hook on the Return side (see ShiftreportService), unconditionally (even a
-    // fully-on-credit invoice with no cash/banking movement still counts as a transaction).
+    // Mở/tái sử dụng ca bán ngay khi ghi nhận hóa đơn — tương tự phía trả hàng (xem ShiftreportService),
+    // luôn thực hiện kể cả hóa đơn ghi nợ toàn phần không có dòng tiền mặt/chuyển khoản.
     private final ShiftreportService shiftreportService;
     private InventoryAlertEventService inventoryAlertEventService;
 
@@ -136,6 +139,7 @@ public class InvoiceService {
         this.shiftreportService = shiftreportService;
     }
 
+    /** Gắn service cảnh báo tồn kho — inject sau để tránh vòng phụ thuộc. */
     @Autowired
     public void setInventoryAlertEventService(
             InventoryAlertEventService inventoryAlertEventService
@@ -144,6 +148,10 @@ public class InvoiceService {
                 inventoryAlertEventService;
     }
 
+    /**
+     * Danh sách hóa đơn có phân trang, lọc theo mã, khoảng ngày, hình thức thanh toán, trạng thái và người bán.
+     * Lọc trong bộ nhớ vì cần so khớp mã linh hoạt và trạng thái trả hàng.
+     */
     @Transactional(readOnly = true)
     public Page<InvoiceListItemResponse> list(String search,
                                               String fromDate,
@@ -180,11 +188,13 @@ public class InvoiceService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
+    /** Các trạng thái hóa đơn dùng cho dropdown lọc trên danh sách. */
     @Transactional(readOnly = true)
     public List<String> listStatuses() {
         return ALL_STATUSES;
     }
 
+    /** Danh sách người bán đã có hóa đơn — dùng cho dropdown lọc. */
     @Transactional(readOnly = true)
     public List<CustomerOptionResponse> listSellers() {
         Map<Integer, String> byId = new LinkedHashMap<>();
@@ -201,6 +211,7 @@ public class InvoiceService {
                 .toList();
     }
 
+    /** Nhãn hiển thị cho các hình thức thanh toán trên danh sách và form bán hàng. */
     public Map<String, String> paymentTypeLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put(PAYMENT_CASH, "Tiền mặt");
@@ -210,11 +221,13 @@ public class InvoiceService {
         return labels;
     }
 
+    /** Tổng số hóa đơn — thẻ thống kê trên danh sách. */
     @Transactional(readOnly = true)
     public long countAll() {
         return invoiceRepository.count();
     }
 
+    /** Số hóa đơn phát sinh trong ngày — thẻ thống kê trên danh sách. */
     @Transactional(readOnly = true)
     public long countToday() {
         LocalDate today = LocalDate.now();
@@ -223,6 +236,7 @@ public class InvoiceService {
                 .count();
     }
 
+    /** Doanh thu hôm nay (bỏ qua hóa đơn đã hủy) — thẻ thống kê trên danh sách. */
     @Transactional(readOnly = true)
     public BigDecimal sumTodayRevenue() {
         LocalDate today = LocalDate.now();
@@ -234,6 +248,7 @@ public class InvoiceService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Số hóa đơn còn nợ — thẻ thống kê trên danh sách. */
     @Transactional(readOnly = true)
     public long countDebt() {
         return invoiceRepository.findAll().stream()
@@ -241,6 +256,7 @@ public class InvoiceService {
                 .count();
     }
 
+    /** Tổng số tiền còn nợ — thẻ thống kê trên danh sách. */
     @Transactional(readOnly = true)
     public BigDecimal sumDebtTotal() {
         return invoiceRepository.findAll().stream()
@@ -249,6 +265,7 @@ public class InvoiceService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Số hóa đơn đã trả hàng (một phần hoặc toàn bộ) — thẻ thống kê trên danh sách. */
     @Transactional(readOnly = true)
     public long countReturned() {
         return returnStateByInvoice().values().stream()
@@ -256,6 +273,7 @@ public class InvoiceService {
                 .count();
     }
 
+    /** Map id hóa đơn → mã trạng thái trả (NONE / PARTIAL / FULL) — badge trên danh sách. */
     private Map<Integer, String> returnStateByInvoice() {
         Map<Integer, String> map = new LinkedHashMap<>();
         for (Object[] row : invoicedetailRepository.sumQuantitiesGroupedByInvoice()) {
@@ -275,6 +293,7 @@ public class InvoiceService {
         return map;
     }
 
+    /** Danh sách sản phẩm có thể bán kèm lô, đơn vị và tồn kho — form bán hàng. */
     @Transactional(readOnly = true)
     public List<SellProductOptionResponse> listSellableProducts() {
         Map<Integer, List<String>> positionsByProduct = new LinkedHashMap<>();
@@ -358,6 +377,7 @@ public class InvoiceService {
         return options;
     }
 
+    /** Danh sách khách hàng cho dropdown trên form bán hàng. */
     @Transactional(readOnly = true)
     public List<CustomerOptionResponse> listCustomers() {
         return customerRepository.findAll().stream()
@@ -367,6 +387,10 @@ public class InvoiceService {
                 .toList();
     }
 
+    /**
+     * Tạo hóa đơn bán hàng: validate, trừ tồn kho theo lô FEFO, tính tiền và gắn ca bán.
+     * {@code allowDebt}: Dược sĩ không được ghi nợ; Chủ nhà thuốc được phép.
+     */
     @Transactional
     public Integer createSaleInvoice(InvoiceCreateRequest request, Integer currentAccountId, boolean allowDebt) {
         if (request.getDetails() == null || request.getDetails().isEmpty()) {
@@ -408,7 +432,7 @@ public class InvoiceService {
         Invoice invoice = new Invoice();
         invoice.setInvoicePattern(buildInvoicePattern(invoiceDateTime.toLocalDate()));
         invoice.setInvoiceNumber(generateInvoiceNumber());
-        // Store Vietnam wall-clock time directly (mirrors ProcurementplanService using LocalDateTime.now(VN_ZONE)).
+        // Lưu giờ tường VN trực tiếp (giống ProcurementplanService dùng LocalDateTime.now(VN_ZONE)).
         invoice.setDate(invoiceDateTime);
         invoice.setEmployeeID(employee);
         invoice.setCustomerID(customer);
@@ -416,8 +440,8 @@ public class InvoiceService {
         invoice.setPrescriptionRequired(prescriptionRequired);
         invoice.setPrescriptionCode(prescriptionCode);
         invoice.setNote(trimToNull(request.getNote()));
-        // NOT NULL money columns must hold a value on the first flush (the detail rows below need the
-        // invoice id first); the real figures are computed and re-saved once the lines are priced.
+        // Cột tiền NOT NULL phải có giá trị trước flush đầu (dòng chi tiết bên dưới cần id hóa đơn);
+        // số liệu thật được tính và lưu lại sau khi tính giá từng dòng.
         invoice.setSubtotal(BigDecimal.ZERO);
         invoice.setDiscount(BigDecimal.ZERO);
         invoice.setTotal(BigDecimal.ZERO);
@@ -462,8 +486,8 @@ public class InvoiceService {
         savedInvoice.setDebtAmount(debt);
         savedInvoice.setStatus(debt.compareTo(BigDecimal.ZERO) > 0 ? STATUS_DEBT : STATUS_COMPLETED);
 
-        // A sale is a real transaction the instant it's recorded, regardless of payment mix —
-        // open/reuse the seller's shift and attach it (no amount-based condition).
+        // Giao dịch bán được ghi nhận ngay khi lưu hóa đơn, bất kể hình thức thanh toán —
+        // mở/tái sử dụng ca bán và gắn vào hóa đơn (không phụ thuộc số tiền).
         savedInvoice.setShiftReportID(shiftreportService.ensureOpenShiftFor(currentAccountId));
 
         saveInvoiceGuardingConcurrentEdit(savedInvoice);
@@ -473,6 +497,10 @@ public class InvoiceService {
         return savedInvoice.getId();
     }
 
+    /**
+     * Lưu một dòng hàng bán: trừ tồn kho, tạo {@link Invoicedetail} và trả tiền hàng của dòng.
+     * Nếu FEFO trải nhiều lô thì tách thành nhiều dòng chi tiết.
+     */
     private BigDecimal saveLineAndDeductStock(Invoice invoice, InvoiceDetailCreateRequest item) {
         if (item.getProductId() == null || item.getProductUnitId() == null) {
             throw new IllegalArgumentException("Dòng hàng chưa chọn sản phẩm hoặc đơn vị bán");
@@ -572,10 +600,10 @@ public class InvoiceService {
         return lineSubtotal;
     }
 
-    /** One batch's contribution to a single line's FEFO deduction. */
+    /** Phần trừ tồn của một lô trong một dòng hàng (FEFO). */
     private record BatchAllocation(Batch batch, int baseQtyTaken) {}
 
-    /** Deducts {@code baseQty} from a chosen batch or FEFO across batches (FIFO by importDate within same expiry). */
+    /** Trừ {@code baseQty} từ lô chỉ định hoặc FEFO trên nhiều lô (FIFO theo ngày nhập trong cùng HSD). */
     private List<BatchAllocation> deductStock(Product product, int baseQty, int sellQuantity,
                                                 BigDecimal ratio, String unitName, Integer batchId) {
         if (batchId != null) {
@@ -674,6 +702,7 @@ public class InvoiceService {
         return allocations;
     }
 
+    /** Lên lịch kiểm tra cảnh báo tồn sau khi trừ lô — chạy sau commit giao dịch. */
     private void scheduleInventoryAlert(
             Product product,
             Batch batch
@@ -736,6 +765,7 @@ public class InvoiceService {
         return "2K" + yearPart + "M" + sellerSuffix;
     }
 
+    /** Trả 0 nếu {@code value} null hoặc âm. */
     private BigDecimal maxZero(BigDecimal value) {
         if (value == null || value.compareTo(BigDecimal.ZERO) < 0) {
             return BigDecimal.ZERO;
@@ -743,10 +773,12 @@ public class InvoiceService {
         return value;
     }
 
+    /** Trim chuỗi; trả {@code null} nếu rỗng. */
     private String trimToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    /** Kiểm tra sản phẩm thuộc loại thuốc kê đơn. */
     private boolean isPrescriptionProduct(Product product) {
         if (product == null || product.getTypeID() == null || product.getTypeID().getName() == null) {
             return false;
@@ -754,6 +786,7 @@ public class InvoiceService {
         return PRESCRIPTION_PRODUCT_TYPE.equalsIgnoreCase(product.getTypeID().getName().trim());
     }
 
+    /** Kiểm tra form bán có ít nhất một dòng thuốc kê đơn. */
     private boolean invoiceContainsPrescriptionProduct(List<InvoiceDetailCreateRequest> details) {
         if (details == null) {
             return false;
@@ -771,7 +804,7 @@ public class InvoiceService {
         return false;
     }
 
-    /** The lines of one invoice, for the quick-view modal (JSON). */
+    /** Các dòng hàng của một hóa đơn — hộp thoại xem nhanh trên danh sách (dạng JSON). */
     @Transactional(readOnly = true)
     public List<InvoiceLineResponse> loadLines(Integer invoiceId) {
         if (!invoiceRepository.existsById(invoiceId)) {
@@ -782,12 +815,16 @@ public class InvoiceService {
                 .toList();
     }
 
-    /** Full sale-invoice detail for the detail page. */
+    /** Chi tiết hóa đơn bán hàng — trang xem chi tiết (không hiển thị giá vốn). */
     @Transactional(readOnly = true)
     public InvoiceDetailPageResponse getDetail(Integer invoiceId) {
         return getDetail(invoiceId, false);
     }
 
+    /**
+     * Chi tiết hóa đơn bán hàng — trang xem chi tiết.
+     * {@code includeCostForOwner}: Chủ nhà thuốc thấy thêm giá vốn và lợi nhuận.
+     */
     public InvoiceDetailPageResponse getDetail(Integer invoiceId, boolean includeCostForOwner) {
         Invoice invoice = invoiceRepository.findByIdWithRelations(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hóa đơn"));
@@ -860,11 +897,16 @@ public class InvoiceService {
                 productGroups);
     }
 
+    /** Dữ liệu in hóa đơn đầy đủ. */
     @Transactional(readOnly = true)
     public InvoicePrintPageResponse getPrintPage(Integer invoiceId) {
         return getPrintPage(invoiceId, false);
     }
 
+    /**
+     * Dữ liệu in hóa đơn.
+     * {@code aggregateLinesForReceipt}: gộp dòng hàng khi in phiếu thu nhỏ.
+     */
     @Transactional(readOnly = true)
     public InvoicePrintPageResponse getPrintPage(Integer invoiceId, boolean aggregateLinesForReceipt) {
         Invoice invoice = invoiceRepository.findByIdWithRelations(invoiceId)
@@ -948,6 +990,7 @@ public class InvoiceService {
                 printLines);
     }
 
+    /** Map một dòng hàng sang DTO in — đánh dấu dòng tiền giữ lại trên hóa đơn thay thế. */
     private InvoicePrintLineResponse toPrintLine(Invoice invoice, Invoicedetail line,
                                                  String retainedPercentDisplay) {
         Product product = line.getProductID();
@@ -993,6 +1036,7 @@ public class InvoiceService {
         return result;
     }
 
+    /** Khóa gộp dòng in: mã SP + tên + đơn vị + giá + ghi chú. */
     private String printLineAggregateKey(InvoicePrintLineResponse line) {
         return nullToEmpty(line.getProductCode()) + "\0"
                 + nullToEmpty(line.getProductName()) + "\0"
@@ -1001,6 +1045,7 @@ public class InvoiceService {
                 + nullToEmpty(line.getNote());
     }
 
+    /** Cộng số lượng và thành tiền hai dòng in cùng khóa gộp. */
     private InvoicePrintLineResponse mergePrintLines(InvoicePrintLineResponse left,
                                                      InvoicePrintLineResponse right) {
         int quantity = safeQuantity(left.getQuantity()) + safeQuantity(right.getQuantity());
@@ -1017,14 +1062,17 @@ public class InvoiceService {
                 null);
     }
 
+    /** Số lượng an toàn — null coi là 0. */
     private int safeQuantity(Integer quantity) {
         return quantity != null ? quantity : 0;
     }
 
+    /** Số tiền an toàn — null coi là 0. */
     private BigDecimal safeMoney(BigDecimal amount) {
         return amount != null ? amount : BigDecimal.ZERO;
     }
 
+    /** Hóa đơn loại "Thay thế" (sinh sau phiếu trả). */
     private boolean isReplacementInvoice(Invoice invoice) {
         return invoice != null && INVOICE_TYPE_REPLACEMENT.equals(invoice.getInvoiceType());
     }
@@ -1045,6 +1093,7 @@ public class InvoiceService {
         return retainedRate.stripTrailingZeros().toPlainString().replace('.', ',') + "%";
     }
 
+    /** Gom các dòng chi tiết theo sản phẩm — khối hiển thị trên trang chi tiết. */
     private List<InvoiceDetailProductGroupResponse> buildProductGroups(List<Invoicedetail> lines,
                                                                      boolean includeCostForOwner) {
         if (lines == null || lines.isEmpty()) {
@@ -1080,6 +1129,7 @@ public class InvoiceService {
                 .toList();
     }
 
+    /** Map một dòng chi tiết sang DTO đơn vị bán trong khối sản phẩm. */
     private InvoiceDetailUnitLineResponse toUnitLine(Invoicedetail line, boolean includeCostForOwner) {
         Productunit unit = line.getProductUnitID();
         BigDecimal unitCostPrice = includeCostForOwner ? unitCostPrice(line) : null;
@@ -1096,6 +1146,7 @@ public class InvoiceService {
                 unitCostPrice);
     }
 
+    /** Tổng giá vốn tất cả dòng hàng trên hóa đơn. */
     private BigDecimal sumLineCost(List<Invoicedetail> lines) {
         return lines.stream()
                 .map(this::lineCost)
@@ -1131,6 +1182,7 @@ public class InvoiceService {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
+    /** Map một dòng chi tiết sang DTO bảng phẳng trên trang chi tiết. */
     private InvoiceDetailItemResponse toDetailItem(Invoicedetail line) {
         Product product = line.getProductID();
         Batch batch = line.getBatchID();
@@ -1153,6 +1205,7 @@ public class InvoiceService {
                 trimToNull(line.getNote()));
     }
 
+    /** Số lô hiển thị — ưu tiên {@code lotNumber}, fallback {@code batchCode}. */
     private String batchLotNumber(Batch batch) {
         if (batch == null) {
             return "";
@@ -1164,6 +1217,7 @@ public class InvoiceService {
         return batch.getBatchCode() != null ? batch.getBatchCode() : "";
     }
 
+    /** Nhãn lô hiển thị: mã lô kèm HSD (vd. L001 - 31/12/2026). */
     private String formatBatchLabel(Batch batch) {
         if (batch == null) {
             return "";
@@ -1176,6 +1230,7 @@ public class InvoiceService {
         return code;
     }
 
+    /** Map {@link Invoice} sang một dòng trên danh sách hóa đơn. */
     private InvoiceListItemResponse toListItem(Invoice invoice, Map<Integer, String> returnStates) {
         String statusName = invoice.getStatus() != null ? invoice.getStatus() : "Không rõ";
         String returnCode = returnStates.getOrDefault(invoice.getId(), RETURN_NONE);
@@ -1198,6 +1253,7 @@ public class InvoiceService {
                 statusCssClass(statusName));
     }
 
+    /** Map một dòng chi tiết sang DTO hộp thoại xem nhanh trên danh sách. */
     private InvoiceLineResponse toLine(Invoicedetail line) {
         Product product = line.getProductID();
         Batch batch = line.getBatchID();
@@ -1215,7 +1271,7 @@ public class InvoiceService {
                 trimToNull(line.getNote()));
     }
 
-    /** The visible invoice number (the {@code invoiceNumber} column). */
+    /** Số hóa đơn hiển thị (cột {@code invoiceNumber}). */
     private String invoiceCode(Invoice invoice) {
         String number = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber().trim() : "";
         return number.isEmpty() ? "—" : number;
@@ -1230,7 +1286,7 @@ public class InvoiceService {
         return serial.isEmpty() ? "—" : serial;
     }
 
-    /** Tên thương hiệu ngắn lấy từ phần local-part email (vd. nhathuochangngoc). */
+    /** Tên thương hiệu ngắn lấy từ phần trước @ trong email (vd. nhathuochangngoc). */
     private String pharmacyBrandShort(Financialsetting setting) {
         if (setting == null) {
             return "";
@@ -1250,6 +1306,7 @@ public class InvoiceService {
         return "";
     }
 
+    /** Lọc theo từ khóa: mã hóa đơn, tên khách, trạng thái hoặc ghi chú. */
     private boolean matchesKeyword(Invoice invoice, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
             return true;
@@ -1261,6 +1318,7 @@ public class InvoiceService {
                 || containsNormalized(invoice.getNote(), normalizedKeyword);
     }
 
+    /** Lọc theo người bán (nhân viên lập hóa đơn). */
     private boolean matchesSeller(Invoice invoice, Integer sellerId) {
         if (sellerId == null) {
             return true;
@@ -1269,6 +1327,7 @@ public class InvoiceService {
                 && sellerId.equals(invoice.getEmployeeID().getId());
     }
 
+    /** Lọc theo khoảng ngày trên danh sách. */
     private boolean matchesDate(Invoice invoice, LocalDate from, LocalDate to) {
         if (from == null && to == null) {
             return true;
@@ -1283,6 +1342,7 @@ public class InvoiceService {
         return to == null || !date.isAfter(to);
     }
 
+    /** Lọc theo hình thức thanh toán (tiền mặt / chuyển khoản / hỗn hợp / ghi nợ). */
     private boolean matchesPaymentType(Invoice invoice, String paymentType) {
         if (paymentType == null || paymentType.isBlank()) {
             return true;
@@ -1299,6 +1359,7 @@ public class InvoiceService {
         };
     }
 
+    /** Nhãn loại hóa đơn hiển thị — chuẩn hóa giá trị legacy. */
     private String invoiceTypeDisplay(String invoiceType) {
         if (invoiceType == null || invoiceType.isBlank()) {
             return "—";
@@ -1318,6 +1379,7 @@ public class InvoiceService {
         };
     }
 
+    /** Viết tắt hình thức thanh toán trên mẫu in (TM / CK / TM/CK / Ghi nợ). */
     private String paymentMethodShort(Invoice invoice) {
         boolean cash = isPositive(invoice.getPaidByCash());
         boolean banking = isPositive(invoice.getPaidByBanking());
@@ -1336,6 +1398,7 @@ public class InvoiceService {
         return "TM";
     }
 
+    /** Định dạng ngày dài trên mẫu in (vd. Ngày 24 tháng 06 năm 2026). */
     private String formatDateLong(LocalDateTime dateTime) {
         if (dateTime == null) {
             return "";
@@ -1353,6 +1416,7 @@ public class InvoiceService {
         return DateTimeFormatter.ofPattern("dd/MM/yyyy").format(dateTime);
     }
 
+    /** Số hóa đơn 8 chữ số trên mẫu in — pad từ {@code invoiceNumber} hoặc id. */
     private String formatInvoiceSerialNumber(Invoice invoice) {
         if (invoice == null) {
             return "";
@@ -1372,6 +1436,7 @@ public class InvoiceService {
         }
     }
 
+    /** Ghép mã CQT trên mẫu in hóa đơn đã ký. */
     private String buildTaxAuthorityCode(Invoice invoice, Financialsetting setting) {
         if (invoice == null || invoice.getInvoicePattern() == null || invoice.getInvoicePattern().length() < 4) {
             return null;
@@ -1389,6 +1454,7 @@ public class InvoiceService {
         return String.format("M%c-%s-%s-%011d", kind, yearPart, series, invoiceKey);
     }
 
+    /** Đọc số tiền thành chữ tiếng Việt kèm hậu tố "đồng chẵn". */
     private String moneyAmountInWords(BigDecimal amount) {
         if (amount == null) {
             return "";
@@ -1403,6 +1469,7 @@ public class InvoiceService {
         return capitalizeMoneyWords(readMoneyNumber(value)) + " đồng chẵn.";
     }
 
+    /** Đọc số nguyên dương thành chữ — chia theo khối nghìn/triệu/tỷ. */
     private String readMoneyNumber(long number) {
         if (number == 0L) {
             return MONEY_WORD_DIGITS[0];
@@ -1429,6 +1496,7 @@ public class InvoiceService {
         return result.toString().trim();
     }
 
+    /** Đọc một khối 3 chữ số (0–999) thành chữ tiếng Việt. */
     private String readMoneyThreeDigits(int number, boolean fullReading) {
         int hundreds = number / 100;
         int tens = (number % 100) / 10;
@@ -1481,6 +1549,7 @@ public class InvoiceService {
         return words.toString().trim();
     }
 
+    /** Viết hoa chữ cái đầu chuỗi số tiền bằng chữ. */
     private String capitalizeMoneyWords(String text) {
         if (text == null || text.isBlank()) {
             return text;
@@ -1488,11 +1557,12 @@ public class InvoiceService {
         return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
+    /** Chuỗi an toàn — null/blank trả chuỗi rỗng. */
     private String nullToEmpty(String value) {
         return value == null ? "" : value.trim();
     }
 
-    /** Walk-in sale: no customer row, or the synthetic "Khách lẻ" placeholder. */
+    /** Khách lẻ: không có bản ghi khách, hoặc bản ghi placeholder "Khách lẻ". */
     private boolean isRetailCustomer(Customer customer) {
         if (customer == null) {
             return true;
@@ -1501,6 +1571,7 @@ public class InvoiceService {
         return name.isBlank() || "Khách lẻ".equalsIgnoreCase(name);
     }
 
+    /** Mô tả hình thức thanh toán đầy đủ trên danh sách/chi tiết. */
     private String paymentDisplay(Invoice invoice) {
         boolean cash = isPositive(invoice.getPaidByCash());
         boolean banking = isPositive(invoice.getPaidByBanking());
@@ -1522,6 +1593,7 @@ public class InvoiceService {
         return paid;
     }
 
+    /** Nhãn trạng thái trả hàng hiển thị trên danh sách/chi tiết. */
     private String returnStatusDisplay(String returnStatus) {
         if (returnStatus == null || returnStatus.isBlank()) {
             return "Không";
@@ -1533,6 +1605,7 @@ public class InvoiceService {
         };
     }
 
+    /** Class CSS badge trạng thái trả hàng. */
     private String returnStatusCssClass(String returnStatus) {
         if (returnStatus == null) {
             return "return-none";
@@ -1544,6 +1617,7 @@ public class InvoiceService {
         };
     }
 
+    /** Class CSS badge trạng thái hóa đơn. */
     private String statusCssClass(String statusName) {
         if (isStatus(statusName, STATUS_RETURNED_FULL)) {
             return "status-return-full";
@@ -1567,11 +1641,12 @@ public class InvoiceService {
         return "status-default";
     }
 
+    /** So sánh trạng thái không phân biệt dấu/hoa thường. */
     private boolean isStatus(String actual, String expected) {
         return normalize(actual).equals(normalize(expected));
     }
 
-    /** Legacy: ký hiệu C (có mã CQT) hoặc trạng thái cũ "Đã ký". */
+    /** Kiểu cũ: ký hiệu C (có mã CQT) hoặc trạng thái cũ "Đã ký". */
     private boolean hasCqtCode(Invoice invoice) {
         if (invoice == null) {
             return false;
@@ -1583,10 +1658,12 @@ public class InvoiceService {
         return pattern != null && pattern.length() >= 2 && pattern.charAt(1) == 'C';
     }
 
+    /** Kiểm tra số tiền dương. */
     private boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
     }
 
+    /** Định dạng ngày giờ hiển thị ({@code dd/MM/yyyy HH:mm}). */
     private String formatDate(LocalDateTime dateTime) {
         if (dateTime == null) {
             return "";
@@ -1594,10 +1671,12 @@ public class InvoiceService {
         return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(dateTime);
     }
 
+    /** Định dạng ngày ({@code dd/MM/yyyy}). */
     private String formatLocalDate(LocalDate date) {
         return date == null ? "" : date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
     }
 
+    /** Hôm nay theo múi giờ Việt Nam. */
     private LocalDate todayInVn() {
         return LocalDate.now(VN_ZONE);
     }
@@ -1608,6 +1687,7 @@ public class InvoiceService {
         return expiry != null && expiry.isBefore(todayInVn());
     }
 
+    /** Còn tồn nhưng toàn bộ lô đều hết hạn — không bán được. */
     private boolean hasOnlyExpiredStock(List<Batch> batches) {
         if (batches == null || batches.isEmpty()) {
             return false;
@@ -1625,15 +1705,18 @@ public class InvoiceService {
         return sellableStock == 0;
     }
 
+    /** Ném lỗi khi sản phẩm chỉ còn lô hết hạn. */
     private void throwNoSellableBatchStock(Product product) {
         throw new IllegalArgumentException("Sản phẩm \"" + product.getName()
                 + "\" đã hết lô còn hạn sử dụng — không thể bán.");
     }
 
+    /** {@link LocalDateTime} → {@link LocalDate} (giờ tường VN, không chuyển múi giờ). */
     private LocalDate toLocalDate(LocalDateTime dateTime) {
         return dateTime.toLocalDate();
     }
 
+    /** Parse chuỗi ngày ({@code yyyy-MM-dd}) từ bộ lọc form. */
     private LocalDate parseDate(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -1641,10 +1724,12 @@ public class InvoiceService {
         return LocalDate.parse(value);
     }
 
+    /** Kiểm tra chuỗi chứa từ khóa đã chuẩn hóa. */
     private boolean containsNormalized(String value, String normalizedKeyword) {
         return value != null && normalize(value).contains(normalizedKeyword);
     }
 
+    /** Chuẩn hóa chuỗi tìm kiếm: bỏ dấu tiếng Việt, chữ thường. */
     private String normalize(String value) {
         if (value == null) {
             return "";
@@ -1655,11 +1740,15 @@ public class InvoiceService {
         return normalized.toLowerCase(Locale.ROOT).trim();
     }
 
-    /** Entry point cho service khác cập nhật hóa đơn đã tồn tại. */
+    /** Điểm vào cho service khác cập nhật hóa đơn đã tồn tại. */
     public Invoice persistInvoice(Invoice invoice) {
         return saveInvoiceGuardingConcurrentEdit(invoice);
     }
 
+    /**
+     * Lưu hóa đơn và bắt xung đột cập nhật đồng thời
+     * (thu nợ, trả hàng, bù trừ công nợ từ nhiều phiên).
+     */
     private Invoice saveInvoiceGuardingConcurrentEdit(Invoice invoice) {
         try {
             return invoiceRepository.saveAndFlush(invoice);

@@ -6,30 +6,34 @@ import lombok.Getter;
 import java.util.List;
 
 /**
- * One selectable product on the create-invoice screen: identity + current base-unit stock + its
- * sellable units. Baked into inline JS (like the purchase-invoice create page) so the picker does
- * not touch lazy entity relations.
+ * Một sản phẩm chọn được trên form bán hàng: thông tin hàng + tồn kho đơn vị cơ sở + các đơn vị bán.
+ * Nhúng vào JavaScript inline để bộ chọn không phải tải chậm (lazy-load) quan hệ entity.
  */
 @Getter
 @AllArgsConstructor
 public class SellProductOptionResponse {
 
+    /** Id sản phẩm. */
     private Integer productId;
+    /** Mã sản phẩm. */
     private String code;
+    /** Tên sản phẩm. */
     private String name;
+    /** Mã vạch. */
     private String barcode;
 
-    /** On-hand stock in the base unit (SUM of batch storageQuantity, including expired lots). */
+    /** Tồn kho theo đơn vị cơ sở (tổng {@code storageQuantity} các lô, kể cả lô hết hạn). */
     private long baseStock;
 
+    /** Các đơn vị bán được cấu hình cho sản phẩm. */
     private List<SellUnitOptionResponse> units;
 
-    /** In-stock batches (soonest-expiry first) for lot selection. */
+    /** Các lô còn hàng (HSD sớm nhất trước) — chọn lô khi bán. */
     private List<SellBatchOptionResponse> batches;
 
-    /** True when the product type is {@code Thuốc kê đơn}. */
+    /** {@code true} khi loại hàng là {@code Thuốc kê đơn}. */
     private boolean requiresPrescription;
 
-    /** Storage positions configured for this product (e.g. Kệ A1). */
+    /** Vị trí kệ lưu trữ (VD: Kệ A1). */
     private List<String> storagePositions;
 }
