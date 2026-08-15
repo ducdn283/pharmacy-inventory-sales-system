@@ -19,7 +19,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
 
 /**
- * Stock Adjustment screens (list / detail / create / complete / cancel).
+ * Các màn Điều chỉnh kho (danh sách / chi tiết / tạo / thực hiện / hủy).
  *
  * <p><strong>Owner-only.</strong> Bảng phân quyền màn hình ({@code Nghiệp vụ.xlsx}, BA 2026-07-27)
  * ghi <em>"Chỉ Owner tạo"</em> phiếu điều chỉnh kho — Dược sĩ và Kế toán không có ô quyền nào ở

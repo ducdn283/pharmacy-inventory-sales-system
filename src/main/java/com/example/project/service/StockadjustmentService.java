@@ -24,8 +24,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Single service for the Stock Adjustment feature (formerly "stock out"): listing/searching,
- * detail, creation, and the approve/reject workflow that actually moves stock.
+ * Service duy nhất cho nghiệp vụ Điều chỉnh kho (đổi tên từ "Xuất kho"): danh sách/tìm kiếm, chi
+ * tiết, tạo phiếu, và luồng thực hiện/hủy — nơi tồn kho thật sự bị thay đổi.
  *
  * <p><b>7 loại phiếu:</b>
  * {@code DESTROY / DESTROY_EMPLOYEE_FAULT / INTERNAL_USE / SAMPLE / GIFT} (thủ công, giảm kho),
@@ -136,8 +136,8 @@ public class StockadjustmentService {
     private final StockadjustmentdetailRepository stockadjustmentdetailRepository;
     private final BatchRepository batchRepository;
     private final ProductunitRepository productunitRepository;
-    // Stock Count is owned by another module — we consume it read-only via these bare repositories
-    // (findAll / findById / save) and never add query methods to their files.
+    // Rà soát kho thuộc module của teammate — chỉ tiêu thụ CHỈ ĐỌC qua các repository trần này
+    // (findAll / findById / save), không bao giờ thêm method vào file của họ.
     private final StockreviewRepository stockreviewRepository;
     private final StockreviewdetailRepository stockreviewdetailRepository;
     // Income (module Thu/Chi của teammate) và Invoicedetail (module Bán hàng) — chỉ ĐỌC.
@@ -162,7 +162,7 @@ public class StockadjustmentService {
         this.invoicedetailRepository = invoicedetailRepository;
     }
 
-    // ------------------------------------------------------------------ list / search
+    // ------------------------------------------------------------------ danh sách / tìm kiếm
 
     @Transactional(readOnly = true)
     public Page<StockAdjustmentListItemResponse> search(String keyword,
@@ -262,7 +262,7 @@ public class StockadjustmentService {
         return !DIRECTION_IN.equals(detail.getDirection()) && !DIRECTION_NONE.equals(detail.getDirection());
     }
 
-    // ------------------------------------------------------------------ detail
+    // ------------------------------------------------------------------ chi tiết
 
     @Transactional(readOnly = true)
     public StockAdjustmentDetailPageResponse getDetail(Integer adjustmentId) {
@@ -355,9 +355,9 @@ public class StockadjustmentService {
     // ------------------------------------------------------------------ hoàn thành / hủy
 
     /**
-     * Commits the slip's stock movement to each batch: {@code IN} adds the quantity, {@code OUT}
-     * subtracts it (blocking negative stock). Called only when a slip reaches
-     * {@link StockAdjustmentStatus#COMPLETED} — the single point at which stock actually changes.
+     * Áp thật sự phần thay đổi tồn kho của phiếu vào từng lô: {@code IN} cộng số lượng, {@code OUT}
+     * trừ (chặn tồn âm). Chỉ gọi khi phiếu đạt {@link StockAdjustmentStatus#COMPLETED} — đây là điểm
+     * DUY NHẤT tồn kho thật sự thay đổi.
      *
      * <p>{@link #TYPE_DATE_ADJUSTMENT} đi nhánh riêng: nó sửa {@code batch.expirationDate} chứ KHÔNG
      * đụng {@code storageQuantity}.</p>
@@ -633,7 +633,7 @@ public class StockadjustmentService {
         }
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo phiếu
 
     @Transactional(readOnly = true)
     public List<StockAdjustmentBatchCandidateResponse> listAvailableBatches(String keyword) {
@@ -646,12 +646,12 @@ public class StockadjustmentService {
                 .toList();
     }
 
-    // ------------------------------------------------------------------ stock count source (read-only)
+    // ------------------------------------------------------------------ nguồn phiếu rà soát kho (chỉ đọc)
 
     /**
      * Phiếu rà soát kho "Đã duyệt" còn dùng được để lập phiếu điều chỉnh: còn ít nhất một dòng đáng điều
-     * chỉnh và chưa bị phiếu điều chỉnh nào (khác "đã hủy") dùng mất. Read-only — consumes the Stock
-     * Review module through its bare repositories.
+     * chỉnh và chưa bị phiếu điều chỉnh nào (khác "đã hủy") dùng mất. Chỉ đọc — tiêu thụ module Rà soát
+     * kho qua các repository trần của họ, không thêm method nào vào file của họ.
      *
      * <p>Trả về CẢ 3 loại; "đáng điều chỉnh" được đo theo đúng loại: {@code COUNT} đếm dòng lệch số
      * lượng, {@code DATE} đếm lô lệch hạn dùng, {@code CONDITION} đếm lô có ghi nhận tình trạng. Màn
@@ -709,10 +709,10 @@ public class StockadjustmentService {
     }
 
     /**
-     * The prospective adjustment lines for one approved stock count: one per detail whose actual
-     * quantity differs from the system quantity (and has a batch). Thừa → {@code IN}, thiếu →
-     * {@code OUT}; cả hai đều thuộc cùng MỘT phiếu loại {@link #TYPE_COUNT}. Read-only preview;
-     * the create flow rebuilds these server-side.
+     * Các dòng điều chỉnh dự kiến của MỘT phiếu rà soát kho đã duyệt: mỗi dòng chi tiết có số lượng
+     * thực tế khác số lượng hệ thống (và có lô). Thừa → {@code IN}, thiếu → {@code OUT}; cả hai đều
+     * thuộc cùng MỘT phiếu loại {@link #TYPE_COUNT}. Chỉ để xem trước — lúc tạo phiếu thật, server
+     * tự dựng lại từ đầu, không tin dữ liệu client gửi lên.
      */
     @Transactional(readOnly = true)
     public List<StockAdjustmentReviewLineResponse> loadStockReviewLines(Integer stockReviewId) {
@@ -806,11 +806,13 @@ public class StockadjustmentService {
     }
 
     /**
-     * Creates an adjustment slip. Two sources:
+     * Tạo một phiếu điều chỉnh. Hai nguồn:
      * <ul>
-     *   <li><b>MANUAL</b> — one slip of a {@link #CREATABLE_TYPES} type from the batches the user picked.
+     *   <li><b>MANUAL</b> — một phiếu loại {@link #CREATABLE_TYPES} từ các lô người dùng chọn.
      *       Phiếu hủy hàng có thể gắn kèm một phiếu rà soát tình trạng ({@code StockReview.type =
-     *       CONDITION}) làm căn cứ — bắt buộc khi hủy vì hỏng hóc, không cần khi hủy vì hết hạn.</li>
+     *       CONDITION}) làm căn cứ — bắt buộc khi hủy vì hỏng hóc, không cần khi hủy vì hết hạn. Server
+     *       vẫn nhận tham chiếu này dù màn tạo đã bỏ ô nhập từ UI (15/08/2026) — xem
+     *       {@link #resolveConditionReview}.</li>
      *   <li><b>STOCK_REVIEW</b> — MỘT phiếu dựng lại từ phiếu rà soát kho đã duyệt, loại suy ra từ
      *       {@code StockReview.type} ({@code COUNT} hoặc {@code DATE_ADJUSTMENT}).</li>
      * </ul>
@@ -1042,7 +1044,7 @@ public class StockadjustmentService {
         boolean dateSource = REVIEW_TYPE_DATE.equals(reviewType);
         String adjustmentType = dateSource ? TYPE_DATE_ADJUSTMENT : TYPE_COUNT;
 
-        // Reason is optional for a review-sourced slip: auto-fill it from the review when left blank.
+        // Lý do là TÙY CHỌN với phiếu nguồn từ rà soát kho: để trống thì tự điền theo phiếu rà soát.
         String reviewCode = count.getStockCountCode() != null ? count.getStockCountCode() : "";
         String reason = (request.getReason() != null && !request.getReason().isBlank())
                 ? request.getReason().trim()
@@ -1343,8 +1345,8 @@ public class StockadjustmentService {
         applyStockEffect(adjustment,
                 stockadjustmentdetailRepository.findByStockOutIdWithRelations(adjustmentId));
         markStockReviewAdjusted(adjustment.getStockReviewID());
-        // TODO(finance): auto-create an Expense (and link expenseID) for DESTROY with lineCost total > 0.
-        //   Deferred — the Expense entity/vocabulary is owned by the finance module.
+        // TODO(finance): tự tạo một Phiếu chi (và gắn expenseID) cho DESTROY khi tổng lineCost > 0.
+        //   Hoãn lại — entity/bộ trạng thái Expense thuộc module Kế toán.
 
         stockadjustmentRepository.save(adjustment);
     }
@@ -1409,7 +1411,7 @@ public class StockadjustmentService {
         }
     }
 
-    // ------------------------------------------------------------------ mapping helpers
+    // ------------------------------------------------------------------ hàm dựng DTO
 
     private StockAdjustmentListItemResponse toListItem(Stockadjustment adjustment, List<Stockadjustmentdetail> details) {
         BigDecimal estimatedValue = details.stream()
@@ -1511,7 +1513,7 @@ public class StockadjustmentService {
         detail.setRefSellPrice(unit != null && unit.getSellPrice() != null ? unit.getSellPrice() : BigDecimal.ZERO);
     }
 
-    // ------------------------------------------------------------------ unit / cost resolution
+    // ------------------------------------------------------------------ suy ra đơn vị / giá vốn
 
     private Productunit resolveUnit(Batch batch, Product product) {
         Productunit baseUnit = findBaseUnit(product).orElse(null);
@@ -1583,7 +1585,7 @@ public class StockadjustmentService {
         return 2;
     }
 
-    // ------------------------------------------------------------------ filtering / formatting
+    // ------------------------------------------------------------------ lọc / định dạng
 
     private boolean matchesKeyword(Stockadjustment adjustment,
                                    List<Stockadjustmentdetail> details,

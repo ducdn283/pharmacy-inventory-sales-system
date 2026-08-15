@@ -320,8 +320,9 @@
             </div>
         </div>
 
-        <!-- Standalone bulk form (checkboxes + submit button reference it via the form attribute) —
-             kept as a sibling of the filter form so no form is ever nested inside another. -->
+        <!-- Form duyệt hàng loạt đứng RIÊNG (các checkbox và nút submit trỏ về nó qua thuộc tính
+             form=) — đặt cạnh (sibling) form lọc chứ không lồng vào nhau, vì HTML không cho phép
+             form lồng trong form. -->
         <form id="bulkApproveForm" th:action="@{/owner/approvals/bulk-approve}" method="post">
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         </form>

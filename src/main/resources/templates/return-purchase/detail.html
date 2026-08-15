@@ -253,7 +253,7 @@
                 </div>
 
                 <div class="stock-card p-4">
-                    <!-- Draft: the Owner approves (deducts stock) or declines it. -->
+                    <!-- Phiếu Nháp: Owner duyệt (trừ kho) hoặc từ chối. -->
                     <th:block th:if="${detail.status == 'Nháp'}">
                         <form th:action="${basePath + '/' + detail.id + '/approve'}" method="post" class="mb-3">
                             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
