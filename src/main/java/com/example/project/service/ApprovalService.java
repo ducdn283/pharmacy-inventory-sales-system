@@ -34,10 +34,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Read-only aggregator for the Owner's unified Approve List. Approve/reject business logic still
- * lives in each module's own service (Return/StockReview/ShiftReport/Expense/PurchaseInvoice) — this
- * class only reads their PENDING + a recent window of resolved items for display, and dispatches the
- * bulk-approve action to each one's existing {@code approve(...)} method.
+ * Bộ gộp CHỈ ĐỌC cho danh sách duyệt hợp nhất của Owner. Logic duyệt/từ chối vẫn nằm nguyên ở service
+ * của từng module (Return/StockReview/ShiftReport/Expense/PurchaseInvoice) — class này chỉ đọc các
+ * phiếu đang PENDING của họ (kèm một cửa sổ ngắn phiếu vừa xử lý xong) để hiển thị, và điều phối
+ * hành động duyệt hàng loạt về đúng phương thức {@code approve(...)} sẵn có của từng bên.
  */
 @Service
 public class ApprovalService {
@@ -52,8 +52,8 @@ public class ApprovalService {
      */
     private static final String TYPE_PURCHASE_INVOICE = "Phiếu nhập";
 
-    /** Short, stable codes for the bulk-approve checkbox value ("CODE:id") — distinct from the
-     *  Vietnamese TYPE_* display labels used for the type filter dropdown. */
+    /** Mã ngắn, cố định cho giá trị checkbox duyệt hàng loạt (dạng "CODE:id") — khác với nhãn hiển
+     *  thị tiếng Việt TYPE_* dùng cho dropdown lọc theo loại. */
     private static final String TYPE_CODE_RETURN = "RETURN";
     private static final String TYPE_CODE_STOCK_REVIEW = "STOCK_REVIEW";
     private static final String TYPE_CODE_SHIFT_REPORT = "SHIFT_REPORT";
@@ -222,7 +222,7 @@ public class ApprovalService {
                 }
                 approved++;
             } catch (IllegalArgumentException ignored) {
-                // Skip rows that are already resolved by someone else or otherwise no longer approvable.
+                // Bỏ qua dòng đã được người khác xử lý xong hoặc không còn duyệt được nữa.
             }
         }
         return approved;
@@ -373,12 +373,12 @@ public class ApprovalService {
     }
 
     /**
-     * Return.returnDate and Shiftreport.startTime/endTime are written via a "nowVn()" trick (VN
-     * wall-clock digits stored as if they were UTC — see ReturnService/ShiftreportService) while
-     * Stockadjustment.date and Stockreview.reviewDate are genuine {@code Instant.now()} UTC values.
-     * Undoing the VN encoding here means every {@code requestedAt} in this aggregator ends up as a
-     * real UTC instant — required both to sort/window-filter the 4 sources together correctly and to
-     * format them all the same way below.
+     * {@code Return.returnDate} và {@code Shiftreport.startTime/endTime} được ghi qua mánh
+     * "nowVn()" (giờ tường VN lưu như thể là UTC — xem ReturnService/ShiftreportService), trong khi
+     * {@code Stockadjustment.date} và {@code Stockreview.reviewDate} là {@code Instant.now()} UTC
+     * thật. Giải mã ngược về đây để mọi {@code requestedAt} trong bộ gộp này đều thành Instant UTC
+     * thật — cần thiết để vừa sắp xếp/lọc theo cửa sổ thời gian đúng cho cả 4 nguồn cùng lúc, vừa
+     * định dạng hiển thị chúng theo cùng một cách bên dưới.
      */
     private Instant normalizeVnEncoded(Instant vnEncoded) {
         return vnEncoded == null ? null : vnEncoded.minus(Duration.ofHours(7));

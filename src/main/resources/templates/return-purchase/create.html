@@ -231,7 +231,7 @@
     </div>
 </main>
 
-<!-- Purchase picker modal (self-written, no Bootstrap JS) -->
+<!-- Modal chọn phiếu nhập, tự viết, không phụ thuộc Bootstrap JS -->
 <div class="pm-modal-backdrop" id="purchaseModal">
     <div class="pm-modal">
         <div class="pm-modal-header">
@@ -390,8 +390,8 @@
                 return;
             }
             lines.forEach((line, i) => {
-                // Default to returning the full on-hand quantity; the user lowers it for a partial return,
-                // or removes the whole row for items kept.
+                // Mặc định trả toàn bộ số lượng còn tồn; người dùng tự giảm xuống nếu chỉ trả một
+                // phần, hoặc xóa hẳn dòng nếu muốn giữ lại mặt hàng đó.
                 const full = line.returnableQty;
                 const qty = restoring
                     ? Math.min(Math.max(postedQty.get(String(line.purchaseDetailId)) || 0, 0), full)
@@ -568,7 +568,7 @@
             btn.addEventListener('click', () => { actionField.value = btn.getAttribute('data-action'); });
         });
 
-        // Re-render lines the server kept on validation error (purchase already chosen).
+        // Vẽ lại các dòng server giữ nguyên sau lỗi validate (phiếu nhập đã chọn từ trước).
         if (purchaseIdField.value) {
             document.getElementById('noPurchase').classList.add('d-none');
             document.getElementById('purchaseInfo').classList.remove('d-none');

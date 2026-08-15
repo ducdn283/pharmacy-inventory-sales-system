@@ -18,15 +18,15 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
 
 /**
- * Customer-return screens (list / detail / create / approve / reject).
+ * Các màn trả hàng khách (danh sách / chi tiết / tạo / duyệt / từ chối).
  *
- * <p>Reachable by the Owner (approver), the Pharmacist (creator), and — read-only — the Accountant.
- * All three share the same templates; the active base path (<code>/owner/returns</code>,
- * <code>/pharmacist/returns</code> or <code>/accountant/returns</code>) is resolved per request so
- * links stay within the caller's role prefix. Create/submit/approve/reject are never mapped under
- * {@code ACCOUNTANT_BASE} — the create/detail templates additionally hide those actions behind
- * {@code currentRole != 'ACCOUNTANT'} so the Accountant only ever sees a view link. Approve/reject
- * remain Owner-only (enforced by SecurityConfig on <code>/owner/**</code>).</p>
+ * <p>Owner (người duyệt), Dược sĩ (người tạo), và Kế toán (chỉ xem) đều truy cập được. Cả 3 role
+ * dùng chung một bộ template; base path đang dùng (<code>/owner/returns</code>,
+ * <code>/pharmacist/returns</code> hoặc <code>/accountant/returns</code>) được xác định theo từng
+ * request để mọi liên kết luôn đúng tiền tố role của người gọi. Tạo/gửi duyệt/duyệt/từ chối KHÔNG
+ * bao giờ được map dưới {@code ACCOUNTANT_BASE} — template tạo/chi tiết còn ẩn thêm các nút đó bằng
+ * {@code currentRole != 'ACCOUNTANT'} nên Kế toán chỉ thấy được link xem. Duyệt/từ chối vẫn
+ * Owner-only (chặn ở SecurityConfig trên <code>/owner/**</code>).</p>
  */
 @Controller
 public class ReturnController {

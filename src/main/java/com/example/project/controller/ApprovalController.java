@@ -12,11 +12,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
 
 /**
- * Owner-only unified Approve List: aggregates Return, PurchaseInvoice, StockReview, ShiftReport and Expense
- * items (see {@link ApprovalService}) — PENDING ones plus a short recent window of resolved ones so
- * a just-handled row stays visible instead of disappearing. Read-only view — each row's Duyệt/Từ
- * chối posts straight to that module's own endpoint (with redirectTo=/owner/approvals so the user
- * lands back here); the checkboxes instead post to this controller's own bulk-approve endpoint.
+ * Danh sách Duyệt hợp nhất, Owner-only: gộp phiếu Trả hàng, Phiếu nhập, Rà soát kho, Báo cáo ca và
+ * Phiếu chi (xem {@link ApprovalService}) — gồm những phiếu đang PENDING cộng một cửa sổ ngắn các
+ * phiếu vừa xử lý xong, để dòng vừa duyệt/từ chối không biến mất ngay lập tức. Bản thân màn này chỉ
+ * đọc — nút Duyệt/Từ chối ở từng dòng POST thẳng tới endpoint gốc của đúng module đó (kèm
+ * redirectTo=/owner/approvals để quay lại đây); riêng các checkbox thì POST tới endpoint duyệt hàng
+ * loạt của chính controller này.
  */
 @Controller
 public class ApprovalController {

@@ -411,7 +411,7 @@
                         </div>
                     </div>
 
-                    <!-- Shown only once an adjustment type is chosen (all creatable types deduct stock). -->
+                    <!-- Chỉ hiện sau khi đã chọn loại điều chỉnh (mọi loại lập tay đều trừ kho). -->
                     <div id="typePrompt" class="destroy-card p-4 mb-4 text-secondary">
                         <i class="ti ti-arrow-up-circle text-success me-1"></i>
                         Vui lòng chọn <strong>Loại điều chỉnh</strong> ở trên để bắt đầu chọn hàng hóa cần điều chỉnh.
@@ -573,8 +573,8 @@
             </div>
         </form>
 
-        <!-- Self-contained modal listing approved stock counts. Its buttons set the hidden
-             stockReviewId in the form via JS; it needs no Bootstrap JS. -->
+        <!-- Modal tự viết, liệt kê các phiếu rà soát kho đã duyệt. Nút trong modal set hidden
+             field stockReviewId của form bằng JS thuần; không phụ thuộc Bootstrap JS. -->
         <div id="reviewModal" class="review-modal" style="display: none;">
             <div class="review-modal-backdrop" onclick="closeReviewModal()"></div>
             <div class="review-modal-dialog destroy-card">
@@ -722,15 +722,15 @@
     const candidates = /*[[${candidates}]]*/ [];
     const selectedBatchIds = new Set();
 
-    // Draft that the server re-sends after a validation error (authoritative for that reload).
+    // Bản nháp server gửi lại sau lỗi validate — coi là đúng nhất cho lần tải trang này.
     const serverForm = /*[[${form}]]*/ null;
-    // Per-role key so an Owner draft and a Pharmacist draft don't clobber each other.
+    // Khoá localStorage riêng theo basePath để nháp của Owner và Dược sĩ không đè lên nhau.
     const basePath = /*[[${basePath}]]*/ '';
     const draftKey = 'pisms:stockAdjustmentDraft:' + basePath;
 
     // formatMoney() đã bỏ cùng với cột/dòng giá vốn (15/08/2026) — màn tạo phiếu không còn hiện tiền.
 
-    // Styled toast for client-side validation messages (falls back to alert if the fragment is absent).
+    // Toast dùng chung của trang cho thông báo lỗi phía client (rơi về alert() nếu fragment chưa nạp).
     function notify(message) {
         if (window.pmToast) {
             pmToast(message, 'error');
@@ -1232,7 +1232,7 @@
         document.getElementById('expirySummaryRow').style.display = dateMode ? '' : 'none';
     }
 
-    // ------------------------------------------------ source mode (folded into the type dropdown)
+    // ------------------------------------------------ nguồn phiếu (gộp chung vào dropdown loại)
 
     let reviewLines = [];
 
@@ -1347,7 +1347,7 @@
         }
     }
 
-    // ------------------------------------------------ stock-review picker modal
+    // ------------------------------------------------ modal chọn phiếu rà soát kho
 
     /**
      * Loại phiếu rà soát kho được phép chọn. Danh sách server trả về gồm cả 3 loại, nhưng màn này chỉ
@@ -1544,7 +1544,7 @@
         saveDraftLocal();
     }
 
-    // ---------------------------------------------------------------- draft autosave (crash recovery)
+    // ---------------------------------------------------------------- tự lưu nháp (phòng mất mạng/tắt nhầm)
 
     function serializeDraft() {
         const items = [];
@@ -1621,7 +1621,7 @@
             }
             const candidate = candidates.find(c => c.batchId === item.batchId);
             if (!candidate) {
-                return; // batch depleted / deactivated since the draft was saved
+                return; // lô đã hết hàng/bị vô hiệu hóa từ lúc lưu nháp tới giờ
             }
             addBatchRow(candidate, item.quantity, item.reason);
             applied = true;
@@ -1632,13 +1632,13 @@
     }
 
     function restoreDraft() {
-        // After a server validation error the form is resent with its values -> authoritative.
+        // Sau lỗi validate, server gửi lại đúng dữ liệu vừa nhập -> ưu tiên dùng bản này.
         if (serverForm && ((serverForm.items && serverForm.items.length > 0)
                 || serverForm.stockReviewId || serverForm.sourceMode)) {
             applyDraft(serverForm);
             return;
         }
-        // Otherwise recover whatever was being typed before a crash / accidental close.
+        // Không thì khôi phục những gì đang gõ dở trước khi mất mạng / tắt nhầm trang.
         try {
             const saved = JSON.parse(localStorage.getItem(draftKey) || 'null');
             applyDraft(saved);
@@ -1663,10 +1663,10 @@
 
         const form = document.getElementById('adjustmentForm');
 
-        // Autosave any edit and refresh checks (mode-aware).
+        // Mỗi lần sửa đều tự lưu nháp và tính lại (tùy chế độ đang chọn).
         form.addEventListener('input', onFormChanged);
 
-        // The type dropdown drives the whole flow (a real type vs "Theo phiếu rà soát kho").
+        // Dropdown loại điều chỉnh chi phối cả luồng (loại thật vs "Theo phiếu rà soát kho").
         document.getElementById('adjustmentTypeSelect').addEventListener('change', onTypeChanged);
 
         // ---- Ô tìm hàng: gõ ra gợi ý sản phẩm, mũi tên/Enter chọn nhanh (như màn bán hàng).
@@ -1700,7 +1700,7 @@
             }
         });
 
-        // Close the picker modals on Escape.
+        // Nhấn Escape đóng mọi modal chọn.
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
                 closeReviewModal();

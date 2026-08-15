@@ -30,13 +30,13 @@ import java.time.ZoneId;
 import java.util.Optional;
 
 /**
- * Shift-report screens.
+ * Các màn báo cáo ca.
  *
- * <p>Owner and Pharmacist run shifts; the Accountant does not (they never handle register cash, so
- * {@code ensureOpenShiftFor} never creates a shift for them) but must be able to READ shift reports.
- * That is why {@code ACCOUNTANT_BASE} is mapped on the two GET screens only — close/approve/reject
- * are never mapped for it, and the detail template gates its action cards on {@code isOwnShift} /
- * {@code isOwner}, both false for an Accountant.</p>
+ * <p>Owner và Dược sĩ mới trực ca; Kế toán thì không (họ không bao giờ đụng tiền mặt trong két nên
+ * {@code ensureOpenShiftFor} không bao giờ tạo ca cho họ), nhưng vẫn phải XEM được báo cáo ca. Vì
+ * vậy {@code ACCOUNTANT_BASE} chỉ được map cho 2 màn GET — chốt ca/duyệt/từ chối không bao giờ map
+ * cho họ, và template chi tiết còn tự ẩn các thẻ hành động theo {@code isOwnShift} /
+ * {@code isOwner}, cả hai đều false với Kế toán.</p>
  */
 @Controller
 public class ShiftreportController {
@@ -265,9 +265,9 @@ public class ShiftreportController {
     }
 
     /**
-     * Gate in front of the real {@code /logout}: Spring Security's LogoutHandler chain cannot be
-     * cancelled mid-flight, so we must stop the request here, before it ever reaches /logout, if the
-     * account still has an unsubmitted (Nháp) shift.
+     * Chốt chặn đứng trước `/logout` thật: chuỗi LogoutHandler của Spring Security không hủy được
+     * giữa chừng, nên phải chặn request ngay tại đây, TRƯỚC KHI nó chạm tới `/logout`, nếu tài khoản
+     * còn ca chưa nộp (Nháp).
      */
     @PostMapping("/logout-guard")
     public String logoutGuard(HttpServletRequest request,
