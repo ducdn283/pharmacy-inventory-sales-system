@@ -74,6 +74,11 @@
 
     .table thead th { font-size: 12px; color: var(--sup-muted); font-weight: 600; background: #f9fafb; white-space: nowrap; }
     .table tbody td { font-size: 13px; vertical-align: middle; }
+
+    /* nút Xem: hover nền xanh + chữ trắng (đồng bộ với màn chi tiết nhà cung cấp) */
+    .btn-outline-success:hover, .btn-outline-success:active { color: #fff !important; }
+    .debt-amount { color: #d97706; font-weight: 600; }
+    .badge-paid { background: #dcfce7; color: #166534; font-size: 11px; }
   </style>
 </head>
 
@@ -110,7 +115,7 @@
               <span th:unless="${customer.customerType == 'COMPANY'}" class="type-badge individual">Cá nhân</span>
             </div>
             <div class="d-flex flex-wrap gap-2">
-              <button th:if="${currentRole != 'ACCOUNTANT'}" type="button" class="btn btn-sup-primary px-3" id="btnToggleEdit">
+              <button th:if="${currentRole == 'OWNER'}" type="button" class="btn btn-sup-primary px-3" id="btnToggleEdit">
                 <i class="ti ti-edit"></i>Cập nhật thông tin
               </button>
               <a th:href="@{/customer}" class="btn btn-sup-outline px-3">
@@ -174,7 +179,7 @@
     </div>
 
     <!-- Form chỉnh sửa (ẩn, mở bằng nút "Cập nhật thông tin") -->
-    <div th:if="${currentRole != 'ACCOUNTANT'}" class="sup-card p-4 p-md-5 mt-4" id="editForm"
+    <div th:if="${currentRole == 'OWNER'}" class="sup-card p-4 p-md-5 mt-4" id="editForm"
          th:style="${showEditForm} ? 'display:block;' : 'display:none;'">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fs-6 mb-0">Cập nhật thông tin khách hàng</h2>
@@ -288,8 +293,11 @@
 
     <!-- Lịch sử mua hàng gần đây -->
     <div class="sup-card p-4 p-md-5 mt-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fs-6 mb-0">Lịch sử mua hàng gần đây</h2>
+      <div class="d-flex justify-content-between align-items-start mb-3 gap-2 flex-wrap">
+        <div>
+          <h2 class="fs-6 mb-1">Lịch sử mua hàng gần đây</h2>
+          <small class="text-secondary">5 hóa đơn gần nhất và mọi hóa đơn còn nợ. Bấm vào dòng để mở hóa đơn.</small>
+        </div>
         <span class="badge bg-light text-dark border"
               th:text="${(recentInvoices != null ? recentInvoices.size() : 0) + ' hóa đơn'}">0 hóa đơn</span>
       </div>
@@ -301,21 +309,41 @@
               <th>Mã hóa đơn</th>
               <th>Ngày</th>
               <th class="text-end">Tổng tiền</th>
+              <th class="text-end">Đã trả</th>
+              <th class="text-end">Còn nợ</th>
+              <th class="text-end">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             <tr th:each="inv : ${recentInvoices}">
-              <td class="fw-semibold text-secondary small" th:text="${inv.invoiceCode}">HD-000001</td>
+              <td class="fw-semibold text-secondary small" th:text="${inv.invoiceCode}">00000001</td>
               <td th:text="${inv.date}">01/01/2026 10:00</td>
               <td class="text-end">
                 <span th:if="${inv.total != null}"
                       th:text="${#numbers.formatInteger(inv.total, 1, 'COMMA') + ' ₫'}">0 ₫</span>
                 <span th:unless="${inv.total != null}" class="text-secondary">—</span>
               </td>
+              <!-- Hóa đơn đã trả đủ thì để "—": cặp Đã trả/Còn nợ chỉ có ý nghĩa khi còn nợ. -->
+              <td class="text-end">
+                <span th:if="${inv.hasDebt}"
+                      th:text="${#numbers.formatInteger(inv.paid, 1, 'COMMA') + ' ₫'}">0 ₫</span>
+                <span th:unless="${inv.hasDebt}" class="text-secondary">—</span>
+              </td>
+              <td class="text-end">
+                <span th:if="${inv.hasDebt}" class="debt-amount"
+                      th:text="${#numbers.formatInteger(inv.debtAmount, 1, 'COMMA') + ' ₫'}">0 ₫</span>
+                <span th:unless="${inv.hasDebt}" class="badge badge-paid rounded-pill">Đã thanh toán</span>
+              </td>
+              <td class="text-end">
+                <a th:if="${invoiceBasePath != null}"
+                   th:href="@{{base}/{id}(base=${invoiceBasePath}, id=${inv.id})}"
+                   class="btn btn-sm btn-outline-success" title="Xem chi tiết hóa đơn">Xem</a>
+                <span th:unless="${invoiceBasePath != null}" class="text-secondary">—</span>
+              </td>
             </tr>
 
             <tr th:if="${recentInvoices == null or #lists.isEmpty(recentInvoices)}">
-              <td colspan="3" class="text-center text-secondary py-5">
+              <td colspan="6" class="text-center text-secondary py-5">
                 <i class="ti ti-receipt-off d-block fs-2 mb-2 text-muted"></i>
                 Khách hàng chưa có hóa đơn mua hàng nào.
               </td>
@@ -335,6 +363,10 @@
     var infoSection = document.getElementById('infoSection');
     var btnToggle = document.getElementById('btnToggleEdit');
     var btnClose  = document.getElementById('btnCloseEdit');
+
+    // Vai trò không được sửa thì cả khối form không được render — thoát sớm, không thì mọi dòng
+    // bên dưới ném lỗi trên null và chết cả khối script này.
+    if (!editForm || !editFormEl) return;
 
     // Ẩn hẳn khối thông tin khi sửa: để nguyên thì form nằm giữa trang, còn thông báo lỗi của server
     // (vd sai định dạng CCCD) hiện ở đầu trang — người dùng không nhìn thấy nếu không cuộn lên.

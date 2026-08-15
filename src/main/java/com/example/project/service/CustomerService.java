@@ -31,7 +31,7 @@ public class CustomerService {
         this.invoiceRepository = invoiceRepository;
     }
 
-    // ------------------------------------------------------------------ list
+    // ------------------------------------------------------------------ danh sách
 
     @Transactional(readOnly = true)
     public Page<CustomerResponse> list(String keyword, String type, Pageable pageable) {
@@ -54,7 +54,7 @@ public class CustomerService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
-    // ------------------------------------------------------------------ stats
+    // ------------------------------------------------------------------ thống kê
 
     public record CustomerStats(long total, long individual, long company, long withDebt) {
     }
@@ -74,23 +74,42 @@ public class CustomerService {
         return new CustomerStats(total, individual, company, withDebt);
     }
 
-    // ------------------------------------------------------------------ getById
+    // ------------------------------------------------------------------ lấy theo id
 
     @Transactional(readOnly = true)
     public CustomerResponse getById(Integer id) {
         return CustomerResponse.from(findOrThrow(id));
     }
 
-    /** 5 hóa đơn gần nhất của khách hàng (suy ra từ FK Invoice.customerID). */
+    /** Số hóa đơn gần nhất luôn hiển thị, kể cả khi đã thanh toán xong. */
+    private static final int RECENT_INVOICE_LIMIT = 5;
+
+    /**
+     * Lịch sử mua hàng của khách: {@value #RECENT_INVOICE_LIMIT} hóa đơn gần nhất, CỘNG THÊM mọi
+     * hóa đơn còn nợ dù đã cũ.
+     *
+     * <p>Hóa đơn còn nợ không được rơi ra ngoài danh sách này: nếu chỉ hiện tổng công nợ thì người
+     * dùng biết khách nợ bao nhiêu nhưng không biết nợ ở hóa đơn nào, phải sang màn Hóa đơn rà lại
+     * từng phiếu — đúng việc mà màn này phải làm hộ.</p>
+     */
     @Transactional(readOnly = true)
     public List<CustomerInvoiceResponse> getRecentInvoices(Integer customerId) {
-        return invoiceRepository.findAll().stream()
+        List<Invoice> ofCustomer = invoiceRepository.findAll().stream()
                 .filter(i -> i.getCustomerID() != null && customerId.equals(i.getCustomerID().getId()))
                 .sorted(Comparator.comparing(Invoice::getDate,
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .limit(5)
+                .toList();
+
+        List<Invoice> recent = ofCustomer.stream().limit(RECENT_INVOICE_LIMIT).toList();
+        return ofCustomer.stream()
+                .filter(i -> recent.contains(i) || hasDebt(i))
                 .map(CustomerInvoiceResponse::from)
                 .toList();
+    }
+
+    private boolean hasDebt(Invoice invoice) {
+        return invoice.getDebtAmount() != null
+                && invoice.getDebtAmount().compareTo(BigDecimal.ZERO) > 0;
     }
 
     /** Tổng công nợ hiện tại = tổng debtAmount trên các hóa đơn của khách hàng. */
@@ -103,7 +122,7 @@ public class CustomerService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo
 
     @Transactional
     public Integer create(CustomerRequest req) {
@@ -113,7 +132,7 @@ public class CustomerService {
         return saveGuardingUniqueRace(c, req).getId();
     }
 
-    // ------------------------------------------------------------------ update
+    // ------------------------------------------------------------------ sửa
 
     @Transactional
     public void update(Integer id, CustomerRequest req) {
@@ -123,7 +142,7 @@ public class CustomerService {
         saveGuardingUniqueRace(c, req);
     }
 
-    // ------------------------------------------------------------------ legacy
+    // ------------------------------------------------------------------ cũ
 
     @Transactional(readOnly = true)
     public List<CustomerResponse> getAll() {
@@ -133,7 +152,7 @@ public class CustomerService {
                 .toList();
     }
 
-    // ------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------ hàm phụ trợ
 
     private Customer findOrThrow(Integer id) {
         return customerRepository.findById(id)
