@@ -263,16 +263,6 @@
             <div th:text="${#numbers.formatDecimal(printData.subtotal, 0, 'POINT', 0, 'COMMA')}">0</div>
         </div>
 
-        <div class="summary-row" th:if="${printData.additionCost.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
-            <div>Chi phí phát sinh:</div>
-            <div th:text="${#numbers.formatDecimal(printData.additionCost, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
-        <div class="summary-row">
-            <div>Chiết khấu hóa đơn:</div>
-            <div th:text="${#numbers.formatDecimal(printData.discount, 0, 'POINT', 0, 'COMMA')}">0</div>
-        </div>
-
         <div class="summary-row total">
             <div>Tiền cần trả NCC:</div>
             <div th:text="${#numbers.formatDecimal(printData.totalAmount, 0, 'POINT', 0, 'COMMA')}">0</div>
