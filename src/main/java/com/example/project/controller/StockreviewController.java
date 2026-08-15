@@ -2,6 +2,7 @@ package com.example.project.controller;
 
 import com.example.project.context.CurrentUserContext;
 import com.example.project.dto.request.StockReviewCreateRequest;
+import com.example.project.dto.response.StockReviewBatchCandidateResponse;
 import com.example.project.dto.response.StockReviewDetailPageResponse;
 import com.example.project.dto.response.StockReviewListItemResponse;
 import com.example.project.dto.response.StockReviewPrintPageResponse;
@@ -17,7 +18,10 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.util.List;
 
 @Controller
 public class StockreviewController {
@@ -26,7 +30,7 @@ public class StockreviewController {
     private static final String PHARMACIST_BASE = "/pharmacist/stock-reviews";
 
     /*
-     * Giữ URL cũ làm alias để bookmark và thông báo đã tồn tại
+     * Giữ URL cũ làm alias để các bookmark và thông báo đã tồn tại
      * không bị lỗi 404.
      */
     private static final String OWNER_LEGACY_BASE = "/owner/stock-counts";
@@ -53,18 +57,25 @@ public class StockreviewController {
     public String list(
             @RequestParam(name = "keyword", required = false)
             String keyword,
+
             @RequestParam(name = "fromDate", required = false)
             String fromDate,
+
             @RequestParam(name = "toDate", required = false)
             String toDate,
+
             @RequestParam(name = "type", required = false)
             String type,
+
             @RequestParam(name = "status", required = false)
             String status,
+
             @RequestParam(name = "page", defaultValue = "0")
             int page,
+
             @RequestParam(name = "size", defaultValue = "5")
             int size,
+
             HttpServletRequest request,
             Model model
     ) {
@@ -84,8 +95,20 @@ public class StockreviewController {
         model.addAttribute("reviewPage", reviewPage);
         model.addAttribute("reviews", reviewPage.getContent());
         model.addAttribute("stats", stockreviewService.getStats());
-        model.addAttribute("statuses", stockreviewService.listStatuses());
-        model.addAttribute("typeLabels", stockreviewService.typeLabels());
+        model.addAttribute(
+                "statuses",
+                stockreviewService.listStatuses()
+        );
+
+        /*
+         * Trang danh sách vẫn sử dụng đầy đủ typeLabels để các phiếu
+         * CONDITION cũ có thể tiếp tục được tìm kiếm và hiển thị.
+         */
+        model.addAttribute(
+                "typeLabels",
+                stockreviewService.typeLabels()
+        );
+
         model.addAttribute("keyword", keyword);
         model.addAttribute("fromDate", fromDate);
         model.addAttribute("toDate", toDate);
@@ -109,6 +132,7 @@ public class StockreviewController {
     public String createPage(
             @RequestParam(name = "keyword", required = false)
             String keyword,
+
             HttpServletRequest request,
             Model model
     ) {
@@ -118,7 +142,38 @@ public class StockreviewController {
                 keyword,
                 request
         );
+
         return "stock-review/create";
+    }
+
+    /**
+     * API được màn tạo phiếu sử dụng để tìm lô hàng.
+     *
+     * Không trả toàn bộ lô khi người dùng chưa nhập từ khóa
+     * hoặc chưa chọn bộ lọc.
+     */
+    @GetMapping({
+            OWNER_BASE + "/candidates",
+            PHARMACIST_BASE + "/candidates",
+            OWNER_LEGACY_BASE + "/candidates",
+            PHARMACIST_LEGACY_BASE + "/candidates"
+    })
+    @ResponseBody
+    public List<StockReviewBatchCandidateResponse> candidates(
+            @RequestParam(name = "keyword", required = false)
+            String keyword,
+
+            @RequestParam(name = "typeId", required = false)
+            Integer typeId,
+
+            @RequestParam(name = "position", required = false)
+            String position
+    ) {
+        return stockreviewService.listReviewableBatches(
+                keyword,
+                typeId,
+                position
+        );
     }
 
     @PostMapping({
@@ -128,9 +183,12 @@ public class StockreviewController {
             PHARMACIST_LEGACY_BASE + "/create"
     })
     public String create(
-            @ModelAttribute("form") StockReviewCreateRequest form,
+            @ModelAttribute("form")
+            StockReviewCreateRequest form,
+
             @RequestParam(name = "action", required = false)
             String action,
+
             HttpServletRequest request,
             RedirectAttributes redirectAttributes,
             Model model
@@ -146,11 +204,17 @@ public class StockreviewController {
                     asDraft
             );
 
-            String message = asDraft
-                    ? "Đã lưu nháp phiếu rà soát kho"
-                    : currentUserContext.isOwner()
-                    ? "Tạo phiếu rà soát kho thành công và đã tự động duyệt"
-                    : "Đã gửi phiếu rà soát kho cho chủ nhà thuốc duyệt";
+            String message;
+
+            if (asDraft) {
+                message = "Đã lưu nháp phiếu rà soát kho";
+            } else if (currentUserContext.isOwner()) {
+                message =
+                        "Tạo phiếu rà soát kho thành công và đã tự động duyệt";
+            } else {
+                message =
+                        "Đã gửi phiếu rà soát kho cho chủ nhà thuốc duyệt";
+            }
 
             redirectAttributes.addFlashAttribute(
                     "successMessage",
@@ -166,7 +230,14 @@ public class StockreviewController {
                     "errorMessage",
                     exception.getMessage()
             );
-            populateCreateModel(model, form, null, request);
+
+            populateCreateModel(
+                    model,
+                    form,
+                    null,
+                    request
+            );
+
             return "stock-review/create";
         }
     }
@@ -180,6 +251,7 @@ public class StockreviewController {
     public String printPage(
             @RequestParam(name = "type", defaultValue = "COUNT")
             String type,
+
             HttpServletRequest request,
             Model model
     ) {
@@ -190,10 +262,7 @@ public class StockreviewController {
                 );
 
         model.addAttribute("printData", printData);
-        model.addAttribute(
-                "basePath",
-                resolveBasePath(request)
-        );
+        model.addAttribute("basePath", resolveBasePath(request));
 
         return "stock-review/print";
     }
@@ -213,10 +282,7 @@ public class StockreviewController {
                 stockreviewService.getVoucherPrintPage(stockReviewId);
 
         model.addAttribute("printData", printData);
-        model.addAttribute(
-                "basePath",
-                resolveBasePath(request)
-        );
+        model.addAttribute("basePath", resolveBasePath(request));
 
         return "stock-review/print-voucher";
     }
@@ -236,10 +302,7 @@ public class StockreviewController {
                 stockreviewService.getDetail(stockReviewId);
 
         model.addAttribute("detail", detail);
-        model.addAttribute(
-                "basePath",
-                resolveBasePath(request)
-        );
+        model.addAttribute("basePath", resolveBasePath(request));
         model.addAttribute(
                 "isOwner",
                 currentUserContext.isOwner()
@@ -268,11 +331,13 @@ public class StockreviewController {
                     currentUserContext.isOwner()
             );
 
+            String message = currentUserContext.isOwner()
+                    ? "Đã duyệt phiếu rà soát kho"
+                    : "Đã gửi phiếu rà soát kho cho chủ nhà thuốc duyệt";
+
             redirectAttributes.addFlashAttribute(
                     "successMessage",
-                    currentUserContext.isOwner()
-                            ? "Đã duyệt phiếu rà soát kho"
-                            : "Đã gửi phiếu rà soát kho cho chủ nhà thuốc duyệt"
+                    message
             );
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute(
@@ -293,8 +358,10 @@ public class StockreviewController {
     })
     public String approve(
             @PathVariable Integer stockReviewId,
+
             @RequestParam(name = "redirectTo", required = false)
             String redirectTo,
+
             RedirectAttributes redirectAttributes
     ) {
         try {
@@ -302,6 +369,7 @@ public class StockreviewController {
                     stockReviewId,
                     currentUserContext.getCurrentAccountId()
             );
+
             redirectAttributes.addFlashAttribute(
                     "successMessage",
                     "Đã duyệt phiếu rà soát kho"
@@ -313,12 +381,11 @@ public class StockreviewController {
             );
         }
 
-        return "redirect:"
-                + (
-                redirectTo != null && !redirectTo.isBlank()
-                        ? redirectTo
-                        : OWNER_BASE + "/" + stockReviewId
-        );
+        String target = redirectTo != null && !redirectTo.isBlank()
+                ? redirectTo
+                : OWNER_BASE + "/" + stockReviewId;
+
+        return "redirect:" + target;
     }
 
     @PostMapping({
@@ -327,8 +394,10 @@ public class StockreviewController {
     })
     public String reject(
             @PathVariable Integer stockReviewId,
+
             @RequestParam(name = "redirectTo", required = false)
             String redirectTo,
+
             RedirectAttributes redirectAttributes
     ) {
         try {
@@ -336,6 +405,7 @@ public class StockreviewController {
                     stockReviewId,
                     currentUserContext.getCurrentAccountId()
             );
+
             redirectAttributes.addFlashAttribute(
                     "successMessage",
                     "Đã từ chối phiếu rà soát kho"
@@ -347,12 +417,11 @@ public class StockreviewController {
             );
         }
 
-        return "redirect:"
-                + (
-                redirectTo != null && !redirectTo.isBlank()
-                        ? redirectTo
-                        : OWNER_BASE + "/" + stockReviewId
-        );
+        String target = redirectTo != null && !redirectTo.isBlank()
+                ? redirectTo
+                : OWNER_BASE + "/" + stockReviewId;
+
+        return "redirect:" + target;
     }
 
     private void populateCreateModel(
@@ -364,30 +433,32 @@ public class StockreviewController {
         model.addAttribute("form", form);
 
         /*
-         * Tìm kiếm trong bảng được xử lý phía client để chỉ số
-         * items[] luôn khớp đúng lô hàng.
+         * Chỉ đưa COUNT và DATE vào dropdown tạo mới.
+         * CONDITION vẫn được giữ trong constant và service để đọc
+         * các phiếu cũ.
          */
         model.addAttribute(
-                "candidates",
-                stockreviewService.listReviewableBatches(null)
-        );
-        model.addAttribute(
                 "typeLabels",
-                stockreviewService.typeLabels()
+                stockreviewService.creatableTypeLabels()
         );
+
         model.addAttribute(
-                "conditionLabels",
-                stockreviewService.conditionLabels()
+                "productTypes",
+                stockreviewService.productTypeOptions()
         );
+
+        model.addAttribute(
+                "positions",
+                stockreviewService.positionOptions()
+        );
+
         model.addAttribute(
                 "creatorName",
                 currentUserContext.getCurrentAccountName()
         );
+
         model.addAttribute("keyword", keyword);
-        model.addAttribute(
-                "basePath",
-                resolveBasePath(request)
-        );
+        model.addAttribute("basePath", resolveBasePath(request));
     }
 
     private String resolveBasePath(HttpServletRequest request) {
