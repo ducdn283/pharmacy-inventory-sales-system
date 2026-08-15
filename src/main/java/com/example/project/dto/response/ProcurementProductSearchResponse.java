@@ -36,4 +36,8 @@ public class ProcurementProductSearchResponse {
     private List<ProcurementProductUnitResponse> units;
     /** Giá bán của đơn vị nhập hiện tại ({@code Productunit.sellPrice}). */
     private BigDecimal currentSellPrice;
+    /** Nhà cung cấp ưu tiên (supplierproduct.isPreferred) — tự chọn khi thêm dòng. */
+    private Integer preferredSupplierId;
+    /** Giá nhập của NCC ưu tiên. */
+    private BigDecimal preferredSupplierCostPrice;
 }

@@ -15,6 +15,10 @@ public interface SupplierproductRepository extends JpaRepository<Supplierproduct
 
     Optional<Supplierproduct> findBySupplierID_IdAndProductID_ProductID(Integer supplierId, Integer productId);
 
+    List<Supplierproduct> findByProductID_ProductID(Integer productId);
+
+    List<Supplierproduct> findByIsPreferredTrue();
+
     @Query("SELECT COUNT(DISTINCT sp.supplierID.id) FROM Supplierproduct sp")
     long countDistinctSuppliers();
 }
