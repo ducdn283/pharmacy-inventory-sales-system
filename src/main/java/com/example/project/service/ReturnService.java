@@ -1025,7 +1025,7 @@ public class ReturnService {
                 + "-L" + (origBatchId != null ? origBatchId : 0), 50));
         batch.setBatchName(returnBatchName(original, ret));
         batch.setProductID(original != null ? original.getProductID() : null);
-        // Giữ liên kết về ĐÚNG dòng phiếu nhập đã mua hàng này: khách trả lại thì vẫn phải trả về NCC đó
+        // Giữ liên kết về ĐÚNG dòng phiếu nhập đã mua hàng này: khách trả lại thì vẫn có thể trả về NCC đó
         // được, mà để null là lô này vô hình với màn trả hàng NCC (bên đó chỉ nhìn lô có phiếu nhập).
         // KHÔNG phải "nhập hàng lần hai" — không cộng công nợ NCC, không sinh phiếu nhập mới.
         batch.setPurchaseDetailID(original != null ? original.getPurchaseDetailID() : null);
