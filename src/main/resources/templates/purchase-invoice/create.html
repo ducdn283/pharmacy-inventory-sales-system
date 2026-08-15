@@ -356,6 +356,8 @@
             </a>
         </div>
 
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
 
         <form th:action="${formAction}" th:object="${form}" method="post">
@@ -1549,7 +1551,7 @@
         const rows = document.querySelectorAll('#detailTable tbody.detail-item');
 
         if (rows.length <= 1) {
-            alert('Phiếu nhập phải có ít nhất một sản phẩm.');
+            pmToast('Phiếu nhập phải có ít nhất một sản phẩm.', 'error');
             return;
         }
 

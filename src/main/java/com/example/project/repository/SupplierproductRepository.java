@@ -18,6 +18,8 @@ public interface SupplierproductRepository extends JpaRepository<Supplierproduct
     /** Mọi nhà cung cấp đang gắn với một sản phẩm — dùng để giữ "mỗi sản phẩm chỉ MỘT NCC ưu tiên". */
     List<Supplierproduct> findByProductID_ProductID(Integer productId);
 
+    List<Supplierproduct> findByIsPreferredTrue();
+
     @Query("SELECT COUNT(DISTINCT sp.supplierID.id) FROM Supplierproduct sp")
     long countDistinctSuppliers();
 }

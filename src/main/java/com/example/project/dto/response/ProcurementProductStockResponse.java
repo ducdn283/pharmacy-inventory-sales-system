@@ -40,4 +40,8 @@ public class ProcurementProductStockResponse {
     private List<ProcurementProductUnitResponse> units;
     /** Giá bán đơn vị nhập hiện tại. */
     private BigDecimal currentSellPrice;
+    /** Nhà cung cấp ưu tiên (supplierproduct.isPreferred) — tự chọn khi thêm dòng. */
+    private Integer preferredSupplierId;
+    /** Giá nhập của NCC ưu tiên. */
+    private BigDecimal preferredSupplierCostPrice;
 }

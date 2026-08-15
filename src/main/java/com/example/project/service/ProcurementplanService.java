@@ -348,6 +348,7 @@ public class ProcurementplanService {
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
         Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
+        Map<Integer, PreferredSupplierOption> preferredSupplierByProduct = loadPreferredSupplierByProduct();
 
         return productRepository.findAllWithRelations()
                 .stream()
@@ -355,7 +356,8 @@ public class ProcurementplanService {
                 .filter(product -> matchesKeyword(product, normalizedKeyword))
                 .sorted(Comparator.comparing(product -> product.getName() == null ? "" : product.getName()))
                 .limit(maxResults)
-                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
+                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct,
+                        unitsByProduct, preferredSupplierByProduct))
                 .toList();
     }
 
@@ -366,6 +368,7 @@ public class ProcurementplanService {
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
         Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
+        Map<Integer, PreferredSupplierOption> preferredSupplierByProduct = loadPreferredSupplierByProduct();
         boolean ascending = "asc".equalsIgnoreCase(normalize(stockSort));
 
         Comparator<Product> byStock = ascending
@@ -376,7 +379,8 @@ public class ProcurementplanService {
                 .filter(product -> Boolean.TRUE.equals(product.getStatus()))
                 .sorted(byStock.thenComparing(product -> product.getName() == null ? "" : product.getName()))
                 .map(product -> toStockResponse(
-                        product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
+                        product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct,
+                        preferredSupplierByProduct))
                 .toList();
     }
 
@@ -397,9 +401,11 @@ public class ProcurementplanService {
                                                             Map<Integer, Long> stockByProduct,
                                                             Map<Integer, Productunit> mainUnitByProduct,
                                                             Map<Integer, Productunit> baseUnitByProduct,
-                                                            Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
+                                                            Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct,
+                                                            Map<Integer, PreferredSupplierOption> preferredSupplierByProduct) {
         ProcurementProductSearchResponse search = toSearchResponse(
-                product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct);
+                product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct,
+                preferredSupplierByProduct);
 
         return new ProcurementProductStockResponse(
                 search.getProductID(),
@@ -414,7 +420,9 @@ public class ProcurementplanService {
                 search.getUnitRatio(),
                 search.getEstimatedPrice(),
                 search.getUnits(),
-                search.getCurrentSellPrice()
+                search.getCurrentSellPrice(),
+                search.getPreferredSupplierId(),
+                search.getPreferredSupplierCostPrice()
         );
     }
 
@@ -462,10 +470,12 @@ public class ProcurementplanService {
         Map<Integer, Productunit> mainUnitByProduct = loadMainUnitByProduct();
         Map<Integer, Productunit> baseUnitByProduct = loadBaseUnitByProduct();
         Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct = loadUnitsByProduct();
+        Map<Integer, PreferredSupplierOption> preferredSupplierByProduct = loadPreferredSupplierByProduct();
 
         return productRepository.findAllById(productIds)
                 .stream()
-                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct, unitsByProduct))
+                .map(product -> toSearchResponse(product, stockByProduct, mainUnitByProduct, baseUnitByProduct,
+                        unitsByProduct, preferredSupplierByProduct))
                 .toList();
     }
 
@@ -538,11 +548,13 @@ public class ProcurementplanService {
                                                               Map<Integer, Long> stockByProduct,
                                                               Map<Integer, Productunit> mainUnitByProduct,
                                                               Map<Integer, Productunit> baseUnitByProduct,
-                                                              Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct) {
+                                                              Map<Integer, List<ProcurementProductUnitResponse>> unitsByProduct,
+                                                              Map<Integer, PreferredSupplierOption> preferredSupplierByProduct) {
         Productunit mainUnit = mainUnitByProduct.get(product.getProductID());
         Productunit baseUnit = baseUnitByProduct.get(product.getProductID());
         int stock = stockByProduct.getOrDefault(product.getProductID(), 0L).intValue();
         List<ProcurementProductUnitResponse> units = unitsByProduct.getOrDefault(product.getProductID(), List.of());
+        PreferredSupplierOption preferred = preferredSupplierByProduct.get(product.getProductID());
 
         return new ProcurementProductSearchResponse(
                 product.getProductID(),
@@ -555,9 +567,34 @@ public class ProcurementplanService {
                 mainUnit != null ? mainUnit.getRatio() : null,
                 mainUnit != null ? mainUnit.getSellPrice() : null,
                 units,
-                mainUnit != null ? mainUnit.getSellPrice() : null
+                mainUnit != null ? mainUnit.getSellPrice() : null,
+                preferred != null ? preferred.supplierId() : null,
+                preferred != null ? preferred.costPrice() : null
         );
     }
+
+    /** NCC ưu tiên (isPreferred) còn active theo sản phẩm — tự chọn khi thêm dòng dự trù. */
+    private Map<Integer, PreferredSupplierOption> loadPreferredSupplierByProduct() {
+        Map<Integer, PreferredSupplierOption> preferredByProduct = new HashMap<>();
+        for (Supplierproduct supplierProduct : supplierproductRepository.findByIsPreferredTrue()) {
+            if (!isActiveSupplierProduct(supplierProduct)) {
+                continue;
+            }
+
+            Product product = supplierProduct.getProductID();
+            Supplier supplier = supplierProduct.getSupplierID();
+            if (product == null || product.getProductID() == null || supplier == null || supplier.getId() == null) {
+                continue;
+            }
+
+            preferredByProduct.putIfAbsent(product.getProductID(), new PreferredSupplierOption(
+                    supplier.getId(),
+                    supplierProduct.getCostPrice()));
+        }
+        return preferredByProduct;
+    }
+
+    private record PreferredSupplierOption(Integer supplierId, BigDecimal costPrice) {}
 
     /** Kiểm tra sản phẩm khớp prefix mã, tên hoặc barcode. */
     private boolean matchesKeyword(Product product, String normalizedKeyword) {
@@ -614,15 +651,18 @@ public class ProcurementplanService {
                 .toList();
     }
 
-    /** Tìm nhà cung cấp theo tên; nếu có {@code productId} thì kèm giá nhập. */
+    /** Tìm nhà cung cấp theo tên; ẩn NCC có liên kết supplierproduct bị deactive với sản phẩm đã chọn. */
     @Transactional(readOnly = true)
     public List<ProcurementSupplierSearchResponse> searchSuppliersForProduct(Integer productId, String keyword) {
         String normalizedKeyword = normalize(keyword);
+        Set<Integer> deactivatedSupplierIds = loadDeactivatedSupplierIds(productId);
 
         return supplierRepository.findAll()
                 .stream()
                 .filter(supplier -> normalizedKeyword.isEmpty()
                         || containsNormalized(supplier.getName(), normalizedKeyword))
+                .filter(supplier -> supplier.getId() == null
+                        || !deactivatedSupplierIds.contains(supplier.getId()))
                 .sorted(Comparator.comparing(supplier -> supplier.getName() == null ? "" : supplier.getName()))
                 .map(supplier -> new ProcurementSupplierSearchResponse(
                         supplier.getId(),
@@ -630,6 +670,24 @@ public class ProcurementplanService {
                         productId != null ? getSupplierCostPrice(supplier.getId(), productId) : null
                 ))
                 .toList();
+    }
+
+    /** Id các NCC bị deactive (isActive = 0) cho sản phẩm — loại khỏi modal chọn NCC. */
+    private Set<Integer> loadDeactivatedSupplierIds(Integer productId) {
+        if (productId == null) {
+            return Set.of();
+        }
+
+        Set<Integer> deactivated = new HashSet<>();
+        for (Supplierproduct supplierProduct : supplierproductRepository.findByProductID_ProductID(productId)) {
+            if (Boolean.FALSE.equals(supplierProduct.getIsActive())) {
+                Supplier supplier = supplierProduct.getSupplierID();
+                if (supplier != null && supplier.getId() != null) {
+                    deactivated.add(supplier.getId());
+                }
+            }
+        }
+        return deactivated;
     }
 
     /** Tổng tồn kho theo sản phẩm — gom từ các lô ({@link com.example.project.entity.Batch}). */
