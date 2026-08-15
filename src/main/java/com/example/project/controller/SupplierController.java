@@ -128,10 +128,7 @@ public class SupplierController {
         return "redirect:/supplier";
     }
 
-    // Quick-add from the Purchase Invoice create form's "+" button (Owner or Accountant, whoever
-    // can create a supplier — see requireCanCreate()). Same JSON-in/JSON-out shape as the sale
-    // screen's "thêm khách hàng nhanh" endpoint (InvoiceController.createCustomerFromSelling) and
-    // the Product create form's "+" nhà sản xuất (ProducerController.quickCreateProducer).
+    // tạo supplier mới trong create new purchase invoice
     @PostMapping(value = "/quick-create",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
