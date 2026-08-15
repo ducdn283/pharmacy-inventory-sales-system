@@ -813,14 +813,10 @@
 
         // Kiểm tra hợp lệ phía client trước khi submit; server vẫn là nơi quyết định cuối cùng.
         document.getElementById('expenseForm').addEventListener('submit', function (event) {
-            // Chặn submit và hiện thông báo lỗi (toast nếu có, không thì alert).
+            // Chặn submit và hiện thông báo lỗi qua toast.
             function reject(message) {
                 event.preventDefault();
-                if (window.pmToast) {
-                    pmToast(message, 'error');
-                } else {
-                    alert(message);
-                }
+                pmToast(message, 'error');
             }
 
             if (isRefundPayout() && !document.getElementById('returnIdInput').value) {
