@@ -1,5 +1,6 @@
 package com.example.project.service;
 
+import com.example.project.dto.request.SupplierProductUpdateRequest;
 import com.example.project.dto.request.SupplierRequest;
 import com.example.project.dto.response.SupplierAvailableProductResponse;
 import com.example.project.dto.response.SupplierResponse;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -147,6 +149,74 @@ public class SupplierService {
             added++;
         }
         return added;
+    }
+
+    // ------------------------------------------------ sửa một dòng sản phẩm cung ứng
+
+    /**
+     * Cập nhật trạng thái cung ứng / cờ ưu tiên / ghi chú của MỘT dòng {@code supplierproduct}.
+     *
+     * <p><b>Mỗi sản phẩm chỉ có MỘT nhà cung cấp ưu tiên.</b> Bật cờ ưu tiên ở đây sẽ tự tắt cờ đó ở
+     * mọi nhà cung cấp khác của cùng sản phẩm — cờ này để trả lời "mua hàng này thì gọi ai trước",
+     * hai NCC cùng ưu tiên là không trả lời được gì.</p>
+     *
+     * <p>Dòng đã NGỪNG cung ứng thì không được là dòng ưu tiên: gợi ý mua từ một NCC đã ngừng cấp hàng
+     * là dẫn người dùng vào ngõ cụt.</p>
+     */
+    @Transactional
+    public void updateSupplierProduct(Integer supplierId,
+                                      Integer supplierProductId,
+                                      SupplierProductUpdateRequest request) {
+        Supplierproduct supplierProduct = supplierproductRepository.findById(supplierProductId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm cung ứng"));
+
+        // Id dòng đi qua URL nên phải kiểm nó đúng là của NCC đang mở, không thì sửa được dòng của NCC khác.
+        if (supplierProduct.getSupplierID() == null
+                || !Objects.equals(supplierProduct.getSupplierID().getId(), supplierId)) {
+            throw new IllegalArgumentException("Sản phẩm cung ứng này không thuộc nhà cung cấp đang xem");
+        }
+
+        boolean active = Boolean.TRUE.equals(request.getIsActive());
+        boolean preferred = Boolean.TRUE.equals(request.getIsPreferred());
+        if (preferred && !active) {
+            throw new IllegalArgumentException(
+                    "Không đặt được nhà cung cấp ưu tiên cho sản phẩm đã ngừng cung ứng");
+        }
+
+        supplierProduct.setIsActive(active);
+        supplierProduct.setIsPreferred(preferred);
+        supplierProduct.setNote(trimToNull(request.getNote()));
+
+        if (preferred) {
+            clearPreferredOnOtherSuppliers(supplierProduct);
+        }
+
+        supplierproductRepository.save(supplierProduct);
+    }
+
+    /** Tắt cờ ưu tiên ở các dòng cùng sản phẩm nhưng khác nhà cung cấp. */
+    private void clearPreferredOnOtherSuppliers(Supplierproduct preferredRow) {
+        Integer productId = preferredRow.getProductID() != null
+                ? preferredRow.getProductID().getProductID() : null;
+        if (productId == null) {
+            return;
+        }
+        for (Supplierproduct other : supplierproductRepository.findByProductID_ProductID(productId)) {
+            if (Objects.equals(other.getId(), preferredRow.getId())
+                    || !Boolean.TRUE.equals(other.getIsPreferred())) {
+                continue;
+            }
+            other.setIsPreferred(false);
+            supplierproductRepository.save(other);
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private Set<Integer> linkedProductIds(Integer supplierId) {

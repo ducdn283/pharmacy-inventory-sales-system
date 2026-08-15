@@ -80,6 +80,11 @@
     }
     .table tbody td { font-size: 13px; vertical-align: middle; }
     .badge-preferred { background: #fef3c7; color: #92400e; font-size: 11px; }
+    /* Ghi chú dài không được kéo giãn bảng — minmax(0) không áp được cho <td> nên chặn bằng max-width. */
+    .note-cell {
+      max-width: 220px; color: #6b7280;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
     .badge-active   { background: #dcfce7; color: #166534; font-size: 11px; }
     .badge-inactive { background: #fee2e2; color: #991b1b; font-size: 11px; }
   </style>
@@ -108,8 +113,9 @@
 
     <div class="row g-4">
 
-      <!-- Thông tin nhà cung cấp (read-only) -->
-      <div class="col-12">
+      <!-- Thông tin nhà cung cấp (read-only) — ẩn khi form cập nhật đang mở, xem JS cuối trang. -->
+      <div class="col-12" id="infoSection"
+           th:style="${showEditForm} ? 'display:none;' : ''">
         <div class="sup-card p-4 p-md-5">
 
           <!-- Header: tên/mã (trái) + nút (phải) -->
@@ -162,10 +168,13 @@
     </div>
 
     <!-- Form chỉnh sửa (ẩn, mở bằng nút "Cập nhật thông tin") -->
-    <div class="sup-card p-4 p-md-5 mt-4" id="editForm"
+    <div class="sup-card p-4 p-md-5" id="editForm"
          th:style="${showEditForm} ? 'display:block;' : 'display:none;'">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fs-6 mb-0">Cập nhật thông tin nhà cung cấp</h2>
+        <div>
+          <h2 class="fs-6 mb-1">Cập nhật thông tin nhà cung cấp</h2>
+          <span class="sup-code-badge" th:text="${supplier.supplierCode}">NCC-000001</span>
+        </div>
         <button type="button" class="btn-close" id="btnCloseEdit" aria-label="Đóng"></button>
       </div>
 
@@ -295,6 +304,8 @@
               <th>Loại hàng</th>
               <th class="text-end">Giá nhập cuối</th>
               <th class="text-center">Trạng thái</th>
+              <th class="text-center">Ưu tiên</th>
+              <th>Ghi chú</th>
               <th class="text-end">Thao tác</th>
             </tr>
           </thead>
@@ -316,15 +327,35 @@
                 <span th:if="${sp.isActive}" class="badge badge-active rounded-pill">Đang cung ứng</span>
                 <span th:unless="${sp.isActive}" class="badge badge-inactive rounded-pill">Ngừng</span>
               </td>
+              <td class="text-center">
+                <span th:if="${sp.isPreferred}" class="badge badge-preferred rounded-pill">
+                  <i class="ti ti-star-filled me-1"></i>Ưu tiên
+                </span>
+                <span th:unless="${sp.isPreferred}" class="text-secondary">—</span>
+              </td>
+              <td class="note-cell" th:text="${sp.note != null ? sp.note : '—'}">—</td>
               <td class="text-end">
-                <a th:href="@{/owner/products/{productId}(productId=${sp.productId}, backSupplierId=${supplier.id})}"
-                   class="btn btn-sm btn-outline-success"
-                   title="Xem chi tiết sản phẩm">Xem</a>
+                <div class="d-inline-flex gap-2">
+                  <!-- data-* mang sẵn giá trị hiện tại sang modal; xem JS "sửa sản phẩm cung ứng". -->
+                  <button th:if="${currentRole == 'OWNER'}" type="button"
+                          class="btn btn-sm btn-outline-secondary btn-edit-sp"
+                          data-bs-toggle="modal" data-bs-target="#editSupplierProductModal"
+                          th:attr="data-sp-id=${sp.id},
+                                   data-sp-name=${sp.productName},
+                                   data-sp-code=${sp.productCode},
+                                   data-sp-active=${sp.isActive},
+                                   data-sp-preferred=${sp.isPreferred},
+                                   data-sp-note=${sp.note}"
+                          title="Sửa trạng thái, ưu tiên, ghi chú">Sửa</button>
+                  <a th:href="@{/owner/products/{productId}(productId=${sp.productId}, backSupplierId=${supplier.id})}"
+                     class="btn btn-sm btn-outline-success"
+                     title="Xem chi tiết sản phẩm">Xem</a>
+                </div>
               </td>
             </tr>
 
             <tr th:if="${#lists.isEmpty(supplierProducts)}">
-              <td colspan="6" class="text-center text-secondary py-5">
+              <td colspan="8" class="text-center text-secondary py-5">
                 <i class="ti ti-package-off d-block fs-2 mb-2 text-muted"></i>
                 Chưa có sản phẩm cung ứng nào.
               </td>
@@ -451,25 +482,118 @@
   </div>
 </div>
 
+<!-- ===================== Modal: sửa một dòng sản phẩm cung ứng ===================== -->
+<div class="modal fade" id="editSupplierProductModal" tabindex="-1"
+     aria-labelledby="editSupplierProductLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <!-- action gắn theo dòng đang sửa, do JS điền. -->
+      <form method="post" id="editSupplierProductForm"
+            th:attr="data-action-base=@{/supplier/{id}/products(id=${supplier.id})}">
+        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title fs-6 mb-0" id="editSupplierProductLabel">Sửa sản phẩm cung ứng</h5>
+            <small class="text-secondary" id="espProductLabel">—</small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="espActive" class="form-label">Trạng thái cung ứng</label>
+            <select class="form-select form-control" id="espActive" name="isActive">
+              <option value="true">Đang cung ứng</option>
+              <option value="false">Ngừng cung ứng</option>
+            </select>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" value="true" id="espPreferred" name="isPreferred">
+            <label class="form-check-label" for="espPreferred">
+              Nhà cung cấp ưu tiên cho sản phẩm này
+            </label>
+            <div class="form-text">
+              Mỗi sản phẩm chỉ có một nhà cung cấp ưu tiên — bật ở đây sẽ tự tắt ở nhà cung cấp khác.
+            </div>
+          </div>
+
+          <div class="mb-1">
+            <label for="espNote" class="form-label">Ghi chú</label>
+            <textarea class="form-control" id="espNote" name="note" rows="3" maxlength="500"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sup-outline px-3" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-sup-primary px-4">
+            <i class="ti ti-device-floppy"></i>Lưu thay đổi
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script th:inline="javascript">
   (function () {
     var editForm = document.getElementById('editForm');
+    var infoSection = document.getElementById('infoSection');
     var btnToggle = document.getElementById('btnToggleEdit');
     var btnClose  = document.getElementById('btnCloseEdit');
 
+    // Ẩn hẳn khối thông tin khi sửa: để nguyên thì form nằm giữa trang, còn thông báo lỗi của server
+    // hiện ở đầu trang — người dùng không nhìn thấy nếu không cuộn lên.
     function openEdit() {
+      if (infoSection) infoSection.style.display = 'none';
       editForm.style.display = 'block';
-      editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    function closeEdit() { editForm.style.display = 'none'; }
+    function closeEdit() {
+      editForm.style.display = 'none';
+      if (infoSection) infoSection.style.display = '';
+    }
 
     if (btnToggle) btnToggle.addEventListener('click', openEdit);
     if (btnClose)  btnClose.addEventListener('click', closeEdit);
+  })();
 
-    // Nếu form mở sẵn do lỗi validate → cuộn tới
-    if (editForm && editForm.style.display === 'block') {
-      editForm.scrollIntoView({ block: 'start' });
+  // -------- Sửa sản phẩm cung ứng: nạp giá trị của dòng vừa bấm vào modal dùng chung
+  (function () {
+    var modal = document.getElementById('editSupplierProductModal');
+    if (!modal) return;
+
+    var form = document.getElementById('editSupplierProductForm');
+    var actionBase = form.getAttribute('data-action-base');
+
+    modal.addEventListener('show.bs.modal', function (event) {
+      var trigger = event.relatedTarget;
+      if (!trigger) return;
+
+      form.action = actionBase + '/' + trigger.getAttribute('data-sp-id');
+
+      var code = trigger.getAttribute('data-sp-code') || '';
+      var name = trigger.getAttribute('data-sp-name') || '';
+      document.getElementById('espProductLabel').textContent = (code ? code + ' — ' : '') + name;
+
+      document.getElementById('espActive').value =
+        trigger.getAttribute('data-sp-active') === 'true' ? 'true' : 'false';
+      document.getElementById('espPreferred').checked =
+        trigger.getAttribute('data-sp-preferred') === 'true';
+      document.getElementById('espNote').value = trigger.getAttribute('data-sp-note') || '';
+      syncPreferredAvailability();
+    });
+
+    // Ngừng cung ứng thì không đặt ưu tiên được (server cũng chặn) — khoá luôn ô tick cho khỏi bấm nhầm.
+    function syncPreferredAvailability() {
+      var active = document.getElementById('espActive').value === 'true';
+      var preferred = document.getElementById('espPreferred');
+      preferred.disabled = !active;
+      if (!active) preferred.checked = false;
     }
+
+    document.getElementById('espActive').addEventListener('change', syncPreferredAvailability);
   })();
 </script>
 

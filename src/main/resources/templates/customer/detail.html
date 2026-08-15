@@ -96,8 +96,9 @@
 
     <div class="row g-4">
 
-      <!-- Thông tin khách hàng (read-only) -->
-      <div class="col-12">
+      <!-- Thông tin khách hàng (read-only) — ẩn khi form cập nhật đang mở, xem JS cuối trang. -->
+      <div class="col-12" id="infoSection"
+           th:style="${showEditForm} ? 'display:none;' : ''">
         <div class="sup-card p-4 p-md-5">
 
           <!-- Header: tên/mã/loại (trái) + nút (phải) -->
@@ -331,14 +332,21 @@
   (function () {
     var editForm = document.getElementById('editForm');
     var editFormEl = document.getElementById('editFormEl');
+    var infoSection = document.getElementById('infoSection');
     var btnToggle = document.getElementById('btnToggleEdit');
     var btnClose  = document.getElementById('btnCloseEdit');
 
+    // Ẩn hẳn khối thông tin khi sửa: để nguyên thì form nằm giữa trang, còn thông báo lỗi của server
+    // (vd sai định dạng CCCD) hiện ở đầu trang — người dùng không nhìn thấy nếu không cuộn lên.
     function openEdit() {
+      if (infoSection) infoSection.style.display = 'none';
       editForm.style.display = 'block';
-      editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    function closeEdit() { editForm.style.display = 'none'; }
+    function closeEdit() {
+      editForm.style.display = 'none';
+      if (infoSection) infoSection.style.display = '';
+    }
 
     if (btnToggle) btnToggle.addEventListener('click', openEdit);
     if (btnClose)  btnClose.addEventListener('click', closeEdit);
@@ -375,10 +383,8 @@
     });
     applyType();
 
-    // Nếu form mở sẵn do lỗi validate → cuộn tới
-    if (editForm && editForm.style.display === 'block') {
-      editForm.scrollIntoView({ block: 'start' });
-    }
+    // Form mở sẵn do lỗi validate: KHÔNG cuộn tới form — khối thông tin đã ẩn nên form vốn ở đầu
+    // trang, cuộn thêm là đẩy chính thông báo lỗi ra khỏi tầm nhìn (đúng lỗi cần sửa).
   })();
 </script>
 

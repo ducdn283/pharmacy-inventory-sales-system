@@ -2,6 +2,7 @@ package com.example.project.controller;
 
 import com.example.project.constant.RoleConstants;
 import com.example.project.context.CurrentUserContext;
+import com.example.project.dto.request.SupplierProductUpdateRequest;
 import com.example.project.dto.request.SupplierRequest;
 import com.example.project.dto.response.SupplierResponse;
 import com.example.project.service.SupplierService;
@@ -226,6 +227,35 @@ public class SupplierController {
             redirectAttributes.addFlashAttribute("successMessage", "Đã thêm " + added + " sản phẩm cung ứng");
         } catch (IllegalArgumentException ex) {
             redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
+        }
+        return "redirect:/supplier/" + id;
+    }
+
+    /**
+     * Sửa một dòng sản phẩm cung ứng: trạng thái cung ứng, cờ ưu tiên, ghi chú. Owner-only như mọi
+     * thao tác ghi khác của màn này.
+     */
+    @PostMapping("/{id}/products/{supplierProductId}")
+    public String updateSupplierProduct(@PathVariable Integer id,
+                                        @PathVariable Integer supplierProductId,
+                                        @Valid @ModelAttribute("supplierProductForm")
+                                        SupplierProductUpdateRequest form,
+                                        BindingResult bindingResult,
+                                        RedirectAttributes redirectAttributes) {
+        requireOwner();
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("errorMessage", bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("Dữ liệu không hợp lệ"));
+            return "redirect:/supplier/" + id;
+        }
+
+        try {
+            supplierService.updateSupplierProduct(id, supplierProductId, form);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã cập nhật sản phẩm cung ứng");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
         }
         return "redirect:/supplier/" + id;
     }

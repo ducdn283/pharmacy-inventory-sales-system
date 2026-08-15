@@ -1,6 +1,7 @@
 package com.example.project.service;
 
 import com.example.project.constant.StockAdjustmentStatus;
+import com.example.project.constant.StockReviewStatus;
 import com.example.project.constant.StockReviewType;
 import com.example.project.dto.request.StockAdjustmentCreateRequest;
 import com.example.project.dto.request.StockAdjustmentItemRequest;
@@ -76,12 +77,12 @@ public class StockadjustmentService {
     private static final Set<String> EMPLOYEE_LIABLE_TYPES = Set.of(TYPE_DESTROY_EMPLOYEE_FAULT);
 
     /**
-     * Stock-review status strings we read/write. The Stock Review screen (another teammate) owns the
-     * canonical spelling; we mirror only the two we need and match them accent-insensitively, so a
-     * spelling difference is a one-line fix here.
+     * Hai trạng thái phiếu rà soát kho mà service này đọc/ghi. Lấy thẳng từ {@link StockReviewStatus}
+     * (hằng dùng chung với module Rà soát kho) thay vì chép chuỗi — chép chuỗi thì đổi chính tả một
+     * bên là hai bên lệch nhau âm thầm, phiếu không bao giờ được lật trạng thái mà chẳng có lỗi nào.
      */
-    private static final String REVIEW_STATUS_APPROVED = "Đã duyệt";
-    private static final String REVIEW_STATUS_ADJUSTED = "Đã điều chỉnh";
+    private static final String REVIEW_STATUS_APPROVED = StockReviewStatus.APPROVED;
+    private static final String REVIEW_STATUS_ADJUSTED = StockReviewStatus.ADJUSTED;
 
     /**
      * Khoảng thời gian coi hai phiếu trùng khít nội dung là MỘT lần bấm Tạo bị lặp — xem
@@ -911,6 +912,8 @@ public class StockadjustmentService {
 
         if (approvedNow) {
             applyStockEffect(savedAdjustment, savedDetails);
+            // Phiếu hủy hàng có gắn phiếu rà soát tình trạng: căn cứ đó coi như đã dùng xong.
+            markStockReviewAdjusted(conditionReview);
         }
 
         return SlipCreateOutcome.created(savedAdjustment.getId());
@@ -1136,6 +1139,9 @@ public class StockadjustmentService {
 
         if (StockAdjustmentStatus.COMPLETED.equals(status)) {
             applyStockEffect(savedAdjustment, savedDetails);
+            // "Tạo & thực hiện" không đi qua complete() nên phải tự lật phiếu rà soát ở đây, không thì
+            // phiếu nguồn nằm lại ở "Đã duyệt" mãi dù việc đã xử lý xong.
+            markStockReviewAdjusted(review);
         }
         return savedAdjustment.getId();
     }
@@ -1213,6 +1219,8 @@ public class StockadjustmentService {
 
         if (approvedNow) {
             applyStockEffect(savedAdjustment, savedDetails);
+            // Xem chú thích cùng chỗ trong persistDateSlip: "Tạo & thực hiện" không qua complete().
+            markStockReviewAdjusted(count);
         }
         return savedAdjustment.getId();
     }
@@ -1289,7 +1297,13 @@ public class StockadjustmentService {
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
-    /** Flips a linked count {@code Đã duyệt → Đã điều chỉnh}. No-op if it is not currently approved. */
+    /**
+     * Lật phiếu rà soát gắn kèm {@code Đã duyệt → Đã điều chỉnh}. Không làm gì nếu phiếu không ở trạng
+     * thái đã duyệt (đã xử lý rồi, hoặc bị từ chối).
+     *
+     * <p>Phải gọi ở MỌI đường phiếu điều chỉnh đạt {@code Hoàn thành}: {@link #complete} (Nháp →
+     * Hoàn thành) và cả 3 nhánh tạo thẳng ở trạng thái hoàn thành.</p>
+     */
     private void markStockReviewAdjusted(Stockreview count) {
         if (count == null) {
             return;
@@ -1467,6 +1481,7 @@ public class StockadjustmentService {
 
         return new StockAdjustmentBatchCandidateResponse(
                 batch.getId(),
+                batch.getBatchCode(),
                 product != null ? product.getProductID() : null,
                 product != null ? product.getName() : "Không rõ",
                 batch.getLotNumber(),
