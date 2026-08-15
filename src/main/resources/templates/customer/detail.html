@@ -295,11 +295,11 @@
     <div class="sup-card p-4 p-md-5 mt-4">
       <div class="d-flex justify-content-between align-items-start mb-3 gap-2 flex-wrap">
         <div>
-          <h2 class="fs-6 mb-1">Lịch sử mua hàng gần đây</h2>
-          <small class="text-secondary">5 hóa đơn gần nhất và mọi hóa đơn còn nợ. Bấm vào dòng để mở hóa đơn.</small>
+          <h2 class="fs-6 mb-1">Lịch sử mua hàng</h2>
+          <small class="text-secondary">Toàn bộ hóa đơn của khách, mới nhất trước. Bấm "Xem" để mở hóa đơn.</small>
         </div>
         <span class="badge bg-light text-dark border"
-              th:text="${(recentInvoices != null ? recentInvoices.size() : 0) + ' hóa đơn'}">0 hóa đơn</span>
+              th:text="${(invoiceHistory != null ? invoiceHistory.size() : 0) + ' hóa đơn'}">0 hóa đơn</span>
       </div>
 
       <div class="table-responsive">
@@ -314,8 +314,8 @@
               <th class="text-end">Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            <tr th:each="inv : ${recentInvoices}">
+          <tbody id="invoiceHistoryBody">
+            <tr th:each="inv : ${invoiceHistory}" class="inv-row">
               <td class="fw-semibold text-secondary small" th:text="${inv.invoiceCode}">00000001</td>
               <td th:text="${inv.date}">01/01/2026 10:00</td>
               <td class="text-end">
@@ -342,7 +342,7 @@
               </td>
             </tr>
 
-            <tr th:if="${recentInvoices == null or #lists.isEmpty(recentInvoices)}">
+            <tr th:if="${invoiceHistory == null or #lists.isEmpty(invoiceHistory)}">
               <td colspan="6" class="text-center text-secondary py-5">
                 <i class="ti ti-receipt-off d-block fs-2 mb-2 text-muted"></i>
                 Khách hàng chưa có hóa đơn mua hàng nào.
@@ -350,6 +350,14 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3"
+           id="invoicePagerWrap">
+        <span class="text-secondary small" id="invoicePageInfo"></span>
+        <nav>
+          <ul class="pagination pagination-sm mb-0" id="invoicePagination"></ul>
+        </nav>
       </div>
     </div>
 
@@ -417,6 +425,70 @@
 
     // Form mở sẵn do lỗi validate: KHÔNG cuộn tới form — khối thông tin đã ẩn nên form vốn ở đầu
     // trang, cuộn thêm là đẩy chính thông báo lỗi ra khỏi tầm nhìn (đúng lỗi cần sửa).
+  })();
+</script>
+
+<!-- Phân trang lịch sử mua hàng. ĐỂ RIÊNG một khối script: khối trên thoát sớm với vai trò không
+     được sửa khách hàng, gộp vào đó là Dược sĩ/Kế toán mất phân trang. -->
+<script>
+  (function () {
+    var PAGE_SIZE = 10;
+    var body       = document.getElementById('invoiceHistoryBody');
+    var pageInfo   = document.getElementById('invoicePageInfo');
+    var pagination = document.getElementById('invoicePagination');
+    var wrap       = document.getElementById('invoicePagerWrap');
+    if (!body || !pageInfo || !pagination || !wrap) return;
+
+    var rows = Array.prototype.slice.call(body.querySelectorAll('tr.inv-row'));
+    var currentPage = 1;
+
+    // Không có hóa đơn nào thì dòng trống của bảng đã nói đủ, ẩn hẳn thanh phân trang.
+    if (rows.length === 0) { wrap.style.display = 'none'; return; }
+
+    function render() {
+      var total = rows.length;
+      var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (currentPage > pages) currentPage = pages;
+
+      var start = (currentPage - 1) * PAGE_SIZE;
+      var end   = start + PAGE_SIZE;
+      rows.forEach(function (r, i) { r.style.display = (i >= start && i < end) ? '' : 'none'; });
+
+      pageInfo.textContent = 'Hiển thị ' + (start + 1) + '–' + Math.min(end, total) + ' / ' + total + ' hóa đơn';
+      renderPagination(pages);
+    }
+
+    function renderPagination(pages) {
+      pagination.innerHTML = '';
+      if (pages <= 1) return;
+
+      function pageItem(label, page, disabled, active) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        var a = document.createElement('a');
+        a.className = 'page-link'; a.href = '#'; a.innerHTML = label;
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (disabled || active) return;
+          currentPage = page;
+          render();
+        });
+        li.appendChild(a);
+        return li;
+      }
+
+      pagination.appendChild(pageItem('&laquo;', currentPage - 1, currentPage === 1, false));
+      // cửa sổ tối đa 5 số trang quanh trang hiện tại
+      var from = Math.max(1, currentPage - 2);
+      var to   = Math.min(pages, from + 4);
+      from = Math.max(1, to - 4);
+      for (var p = from; p <= to; p++) {
+        pagination.appendChild(pageItem(String(p), p, false, p === currentPage));
+      }
+      pagination.appendChild(pageItem('&raquo;', currentPage + 1, currentPage === pages, false));
+    }
+
+    render();
   })();
 </script>
 

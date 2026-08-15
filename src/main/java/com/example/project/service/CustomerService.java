@@ -81,35 +81,22 @@ public class CustomerService {
         return CustomerResponse.from(findOrThrow(id));
     }
 
-    /** Số hóa đơn gần nhất luôn hiển thị, kể cả khi đã thanh toán xong. */
-    private static final int RECENT_INVOICE_LIMIT = 5;
-
     /**
-     * Lịch sử mua hàng của khách: {@value #RECENT_INVOICE_LIMIT} hóa đơn gần nhất, CỘNG THÊM mọi
-     * hóa đơn còn nợ dù đã cũ.
+     * TOÀN BỘ lịch sử mua hàng của khách, mới nhất trước (BA chốt 2026-08-15 — trước đó cắt còn 5
+     * dòng gần nhất). Màn chi tiết tự phân trang ở phía client.
      *
-     * <p>Hóa đơn còn nợ không được rơi ra ngoài danh sách này: nếu chỉ hiện tổng công nợ thì người
-     * dùng biết khách nợ bao nhiêu nhưng không biết nợ ở hóa đơn nào, phải sang màn Hóa đơn rà lại
-     * từng phiếu — đúng việc mà màn này phải làm hộ.</p>
+     * <p>Không cắt danh sách vì hóa đơn còn nợ có thể là hóa đơn cũ: cắt bớt thì người dùng thấy
+     * tổng công nợ nhưng không biết nợ ở hóa đơn nào, phải sang màn Hóa đơn rà lại từng phiếu —
+     * đúng việc mà màn này phải làm hộ.</p>
      */
     @Transactional(readOnly = true)
-    public List<CustomerInvoiceResponse> getRecentInvoices(Integer customerId) {
-        List<Invoice> ofCustomer = invoiceRepository.findAll().stream()
+    public List<CustomerInvoiceResponse> getInvoiceHistory(Integer customerId) {
+        return invoiceRepository.findAll().stream()
                 .filter(i -> i.getCustomerID() != null && customerId.equals(i.getCustomerID().getId()))
                 .sorted(Comparator.comparing(Invoice::getDate,
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .toList();
-
-        List<Invoice> recent = ofCustomer.stream().limit(RECENT_INVOICE_LIMIT).toList();
-        return ofCustomer.stream()
-                .filter(i -> recent.contains(i) || hasDebt(i))
                 .map(CustomerInvoiceResponse::from)
                 .toList();
-    }
-
-    private boolean hasDebt(Invoice invoice) {
-        return invoice.getDebtAmount() != null
-                && invoice.getDebtAmount().compareTo(BigDecimal.ZERO) > 0;
     }
 
     /** Tổng công nợ hiện tại = tổng debtAmount trên các hóa đơn của khách hàng. */
