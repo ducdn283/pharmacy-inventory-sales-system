@@ -388,10 +388,10 @@
                                 </div>
                             </div>
 
-                            <!-- Ô "Phiếu rà soát tình trạng" đã BỎ khỏi màn này (yêu cầu 15/08/2026). Phần
-                                 server (resolveConditionReview) vẫn còn nguyên và vẫn chặn đúng luật, chỉ là
-                                 không còn đường nhập từ màn hình — hidden `stockReviewId` nay chỉ mang phiếu
-                                 rà soát kho của nguồn STOCK_REVIEW. -->
+                            <!-- KHÔNG có ô gắn riêng "Phiếu rà soát tình trạng" cho phiếu hủy lập TAY: phiếu
+                                 rà soát tình trạng nay chọn thẳng ở nguồn "Theo phiếu rà soát kho" và tự sinh
+                                 phiếu hủy hàng. Phần server (resolveConditionReview) vẫn còn nguyên cho dữ liệu
+                                 cũ; hidden `stockReviewId` chỉ mang phiếu rà soát của nguồn STOCK_REVIEW. -->
 
                             <div class="col-12 col-md-6">
                                 <!-- Bắt buộc nhập tay với phiếu thủ công; chỉ nguồn "theo phiếu rà soát kho" mới
@@ -1350,9 +1350,13 @@
     // ------------------------------------------------ modal chọn phiếu rà soát kho
 
     /**
-     * Loại phiếu rà soát kho được phép chọn. Danh sách server trả về gồm cả 3 loại, nhưng màn này chỉ
-     * lập được phiếu điều chỉnh từ 2 loại sinh ra dòng điều chỉnh — phiếu rà soát TÌNH TRẠNG không còn
-     * chọn được từ đây (ô gắn phiếu tình trạng đã bỏ 15/08/2026).
+     * Loại phiếu rà soát kho được phép chọn ở màn này.
+     *
+     * ⚠️ 'CONDITION' ĐANG BỊ ẨN (16/08/2026) — không phải vì màn điều chỉnh thiếu gì: phần server đã
+     * làm xong và chạy đúng (phiếu rà soát tình trạng → phiếu Hủy hàng, trừ đúng số lượng lô
+     * NON_COMPLIANT; xem StockadjustmentService.toConditionLine). Ẩn vì module Rà soát kho chưa lập
+     * nổi một phiếu tình trạng chạy được, nên không có đầu vào hợp lệ để chọn.
+     * Mở lại: thêm 'CONDITION' vào mảng này và trả nhãn ô chọn loại về "(số lượng / hạn dùng / tình trạng)".
      */
     const modalReviewTypes = ['COUNT', 'DATE'];
 
