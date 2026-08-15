@@ -359,7 +359,7 @@
     </div>
 </main>
 
-<!-- Invoice picker modal (self-written, no Bootstrap JS) -->
+<!-- Modal chọn hóa đơn, tự viết, không phụ thuộc Bootstrap JS -->
 <div class="pm-modal-backdrop" id="invoiceModal">
     <div class="pm-modal">
         <div class="pm-modal-header">
@@ -476,13 +476,13 @@
             return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';
         }
 
-        // ---- Modal open/close ----
+        // ---- Mở/đóng modal ----
         document.getElementById('pickInvoiceBtn').addEventListener('click', () => modal.classList.add('open'));
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.remove('open'));
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('open'); });
 
-        // ---- Modal client-side search ----
+        // ---- Tìm kiếm trong modal (phía client) ----
         // Bỏ dấu cả 2 vế: tìm sản phẩm mà bắt gõ đúng dấu thì gõ "thuoc" không ra "Thuốc" nào.
         function normalizeSearch(value) {
             return (value || '')
@@ -502,7 +502,7 @@
             });
         });
 
-        // ---- Pick an invoice ----
+        // ---- Chọn một hóa đơn ----
         document.querySelectorAll('#invoicePickBody .pick-row').forEach(row => {
             row.addEventListener('click', () => selectInvoice(row));
         });
@@ -528,7 +528,7 @@
             document.getElementById('invoiceInfo').classList.remove('d-none');
         }
 
-        // ---- Load returnable lines for the chosen invoice ----
+        // ---- Tải các dòng còn trả được của hóa đơn vừa chọn ----
         function loadLines(invoiceId) {
             lineBody.innerHTML = '<tr><td colspan="12" class="text-center text-secondary py-4">Đang tải...</td></tr>';
             fetch(basePath + '/invoices/' + invoiceId + '/lines', { headers: { 'Accept': 'application/json' } })
@@ -558,7 +558,7 @@
                 const qty = restoring
                     ? Math.min(Math.max(postedQty.get(String(line.invoiceDetailId)) || 0, 0), full)
                     : full;
-                // Restock is hard-coded by item type (server decides via productunit.isDefault); read-only badge.
+                // Nhập lại kho hay không do server quyết theo loại hàng (productunit.isDefault) — chỉ hiện badge, không cho sửa.
                 const canRestock = !!line.restockable;
                 const tr = document.createElement('tr');
                 tr.innerHTML =
@@ -708,12 +708,12 @@
                 ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
-        // ---- Distinguish "submit" vs "draft" without hijacking any other form (e.g. logout) ----
+        // ---- Phân biệt "gửi duyệt" và "lưu nháp" mà không ảnh hưởng tới form khác (vd đăng xuất) ----
         form.querySelectorAll('button[data-action]').forEach(btn => {
             btn.addEventListener('click', () => { actionField.value = btn.getAttribute('data-action'); });
         });
 
-        // Re-render any lines the server kept on validation error (invoice already chosen) và điền lại
+        // Vẽ lại các dòng server giữ nguyên sau lỗi validate (hóa đơn đã chọn từ trước) và điền lại
         // panel thông tin hóa đơn từ dòng tương ứng trong modal (tránh mất thông tin HĐ khi báo lỗi).
         if (invoiceIdField.value) {
             const chosen = document.querySelector('#invoicePickBody .pick-row[data-id="' + invoiceIdField.value + '"]');

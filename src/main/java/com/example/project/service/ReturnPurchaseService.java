@@ -26,27 +26,27 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Supplier-return feature: returning goods back to a supplier against an original purchase invoice.
- * It shares the {@code return} / {@code returndetail} tables with the customer return, distinguished
- * by {@code purchaseID != null} (and {@code invoiceID == null}).
+ * Trả hàng cho nhà cung cấp: trả lại hàng đã nhập theo một phiếu nhập gốc. Dùng chung 2 bảng
+ * {@code return} / {@code returndetail} với trả hàng khách, phân biệt bằng {@code purchaseID !=
+ * null} (và {@code invoiceID == null}).
  *
- * <p>Owner-only (the Pharmacist has no rights on the supplier side). The Owner either saves a draft
- * or approves; there is no "Chờ duyệt" hand-off. Statuses: {@link ReturnPurchaseStatus} —
+ * <p>Owner-only (Dược sĩ không có quyền ở phía nhà cung cấp). Owner chỉ lưu nháp hoặc duyệt luôn;
+ * không có bước bàn giao "Chờ duyệt". Trạng thái: {@link ReturnPurchaseStatus} —
  * Nháp → Đã duyệt / Từ chối.</p>
  *
- * <p><strong>Approval deducts stock</strong> (goods physically leave for the supplier): each line is
- * removed from the batches imported on the original purchase line ({@code batch.purchaseDetailID}),
- * FIFO by expiry, blocking negative stock. The value returned is netted against what the pharmacy
- * still owes on that purchase (see {@code applyDebtOffset}); only the remainder is real money the
- * supplier hands back, which the Income module collects.</p>
+ * <p><strong>Duyệt phiếu = trừ kho</strong> (hàng thật sự rời kho để trả NCC): mỗi dòng trừ từ đúng
+ * các lô đã nhập theo dòng phiếu nhập gốc ({@code batch.purchaseDetailID}), theo FIFO ưu tiên hạn
+ * dùng gần nhất, chặn tồn âm. Giá trị hàng trả được cấn trừ vào khoản nhà thuốc còn nợ phiếu nhập đó
+ * (xem {@code applyDebtOffset}); chỉ phần còn dư mới là tiền thật NCC hoàn lại, do module Thu ghi
+ * nhận.</p>
  *
- * <p>Per-line "already returned" is derived on the fly from {@code returndetail} — there is no
- * {@code returnedQty} column on {@code purchasedetail}.</p>
+ * <p>"Đã trả bao nhiêu" của từng dòng được TÍNH LẠI mỗi lần từ {@code returndetail} — bảng
+ * {@code purchasedetail} không có cột {@code returnedQty} riêng.</p>
  */
 @Service
 public class ReturnPurchaseService {
 
-    /** Only received purchases can be returned; a Nháp (draft) purchase has no stock yet. */
+    /** Chỉ phiếu nhập đã nhận hàng mới trả được; phiếu Nháp chưa có tồn kho nào để trả. */
     private static final String PURCHASE_STATUS_DRAFT = "Nháp";
 
     /**
@@ -59,8 +59,8 @@ public class ReturnPurchaseService {
     private static final String PURCHASE_RETURN_PARTIAL = "PARTIAL";
     private static final String PURCHASE_RETURN_FULL = "FULL";
 
-    // returnType no longer describes HOW the money comes back (the return screen does
-    // not touch cash at all) — it only says WHO the goods went back to. Customer slips use CUSTOMER.
+    // returnType nay KHÔNG còn mô tả tiền quay lại kiểu gì (màn trả hàng không đụng tới tiền mặt
+    // nữa) — chỉ còn nói HÀNG TRẢ VỀ ĐÂU. Phiếu trả khách dùng CUSTOMER.
     private static final String TYPE_SUPPLIER = "SUPPLIER";
 
     // Thời gian: lưu GIỜ VN gán lên UTC + đọc lại bằng UTC (cùng quy ước InvoiceService/purchase).
@@ -200,7 +200,7 @@ public class ReturnPurchaseService {
                 .divide(originalTotal, 2, RoundingMode.HALF_UP);
     }
 
-    // ------------------------------------------------------------------ list / search
+    // ------------------------------------------------------------------ danh sách / tìm kiếm
 
     @Transactional(readOnly = true)
     public Page<ReturnPurchaseListItemResponse> search(String keyword,
@@ -253,9 +253,9 @@ public class ReturnPurchaseService {
         return ReturnPurchaseStatus.ALL;
     }
 
-    // ------------------------------------------------------------------ create screen sources
+    // ------------------------------------------------------------------ nguồn dữ liệu màn tạo
 
-    /** All supplier-return slips (purchaseID set), read once. */
+    /** Mọi phiếu trả NCC (có gắn purchaseID), đọc một lần dùng chung. */
     private List<Return> supplierReturns() {
         return returnRepository.findAll().stream()
                 .filter(ret -> ret.getPurchaseID() != null)
@@ -263,8 +263,8 @@ public class ReturnPurchaseService {
     }
 
     /**
-     * Purchase invoices the store may still return goods against: received (not a draft purchase),
-     * not already fully returned, and with at least one line that still has on-hand stock.
+     * Các phiếu nhập nhà thuốc còn trả hàng được: đã nhận hàng (không phải phiếu Nháp), chưa trả
+     * hết, và còn ít nhất một dòng vẫn còn tồn kho.
      */
     @Transactional(readOnly = true)
     public List<ReturnPurchaseInvoiceResponse> listReturnablePurchases(String keyword) {
@@ -318,7 +318,7 @@ public class ReturnPurchaseService {
         return result;
     }
 
-    /** The still-returnable lines of one purchase, for the create screen (JSON). */
+    /** Các dòng còn trả được của một phiếu nhập, cho màn tạo phiếu (endpoint JSON). */
     @Transactional(readOnly = true)
     public List<ReturnPurchaseLineResponse> loadPurchaseLines(Integer purchaseId) {
         purchaseinvoiceRepository.findById(purchaseId)
@@ -383,16 +383,16 @@ public class ReturnPurchaseService {
         return 1;
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo phiếu
 
     /**
-     * Creates one supplier-return slip from a chosen purchase invoice. Owner-only.
+     * Tạo một phiếu trả hàng NCC từ phiếu nhập được chọn. Owner-only.
      *
      * <p>Trước khi ghi, phiếu được đối chiếu với các phiếu vừa lập để không tạo bản sao khi người
      * dùng bấm Tạo lần thứ hai — xem {@link #findRecentDuplicate}.</p>
      *
-     * @param asDraft when true the slip stays a draft; otherwise it is approved immediately, which
-     *                deducts stock and updates the purchase's return status.
+     * @param asDraft true thì phiếu giữ ở trạng thái nháp; ngược lại được duyệt ngay, trừ kho và
+     *                cập nhật trạng thái trả hàng của phiếu nhập.
      * @return id phiếu để chuyển hướng, kèm cờ cho biết đó là phiếu vừa tạo hay phiếu đã có.
      */
     @Transactional
@@ -416,7 +416,8 @@ public class ReturnPurchaseService {
                 .stream().collect(Collectors.toMap(Purchasedetail::getId, line -> line, (a, b) -> a));
         Map<Integer, List<Batch>> batchesByDetail = batchesByPurchaseDetail();
 
-        // Split each requested line across its batches (FIFO by expiry) into priced chunks.
+        // Tách mỗi dòng yêu cầu trả thành các phần theo lô (FIFO ưu tiên hạn dùng gần nhất), mỗi
+        // phần đã tính sẵn số tiền.
         List<Chunk> chunks = new ArrayList<>();
         for (ReturnPurchaseLineRequest item : request.getItems()) {
             if (item == null || item.getPurchaseDetailId() == null
@@ -599,7 +600,7 @@ public class ReturnPurchaseService {
         return left.compareTo(right) == 0;
     }
 
-    // ------------------------------------------------------------------ approve / reject
+    // ------------------------------------------------------------------ duyệt / từ chối
 
     /** Owner approves a draft → Đã duyệt, deducting stock and updating the purchase's return status. */
     @Transactional
@@ -627,10 +628,10 @@ public class ReturnPurchaseService {
     }
 
     /**
-     * Deducts stock for an approved supplier return: each line's quantity is removed from its batch
-     * (blocking negative), the value returned is netted against what the pharmacy still owes the supplier
-     * on that same purchase (see {@link #applyDebtOffset}), then the purchase invoice's
-     * {@code returnStatus} / {@code returnQty} are recomputed.
+     * Trừ kho cho một phiếu trả NCC vừa được duyệt: số lượng từng dòng bị trừ khỏi đúng lô của nó
+     * (chặn âm), giá trị hàng trả được cấn trừ vào khoản nhà thuốc còn nợ NCC trên chính phiếu nhập
+     * đó (xem {@link #applyDebtOffset}), rồi tính lại {@code returnStatus} / {@code returnQty} của
+     * phiếu nhập.
      *
      * <p>TODO(finance): chưa sinh cặp chứng từ đối ứng cho phần bù trừ (Income {@code SUPPLIER} + Expense
      * trỏ {@code purchaseID}) vì 2 bảng đó thuộc module Thu/Chi — công nợ đã trừ đúng, chỉ thiếu chứng từ.
@@ -795,7 +796,7 @@ public class ReturnPurchaseService {
         return map;
     }
 
-    // ------------------------------------------------------------------ detail
+    // ------------------------------------------------------------------ chi tiết
 
     @Transactional(readOnly = true)
     public ReturnPurchaseDetailPageResponse getDetail(Integer returnId) {
@@ -844,7 +845,7 @@ public class ReturnPurchaseService {
                 items);
     }
 
-    // ------------------------------------------------------------------ mapping helpers
+    // ------------------------------------------------------------------ hàm dựng DTO
 
     /** Tiền NCC còn phải hoàn — trừ các phiếu thu SUPPLIER đã hoàn thành (không đụng offsetDebtAmount). */
     private BigDecimal supplierCashRefundDue(Return ret) {
@@ -899,9 +900,9 @@ public class ReturnPurchaseService {
                 detail.getLineRefund());
     }
 
-    // ------------------------------------------------------------------ purchase read-only access
+    // ------------------------------------------------------------------ đọc phiếu nhập (chỉ đọc)
 
-    /** Batches grouped by their originating purchase-detail line, FIFO by expiry, in-stock & active only. */
+    /** Các lô gom theo dòng phiếu nhập gốc, sắp FIFO theo hạn dùng, chỉ lấy lô còn tồn và đang hoạt động. */
     private Map<Integer, List<Batch>> batchesByPurchaseDetail() {
         return batchRepository.findAll().stream()
                 .filter(batch -> batch.getPurchaseDetailID() != null)
@@ -971,7 +972,7 @@ public class ReturnPurchaseService {
         return total.subtract(paid).max(BigDecimal.ZERO);
     }
 
-    // ------------------------------------------------------------------ unit / price helpers
+    // ------------------------------------------------------------------ hàm phụ trợ đơn vị / giá
 
     private Productunit resolveUnit(Batch batch, Product product) {
         if (batch != null && batch.getImportUnitID() != null) {
@@ -1022,7 +1023,7 @@ public class ReturnPurchaseService {
         return line != null && line.getLotNumber() != null ? line.getLotNumber() : "";
     }
 
-    // ------------------------------------------------------------------ filtering / formatting
+    // ------------------------------------------------------------------ lọc / định dạng
 
     private boolean matchesKeyword(Return ret, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {
@@ -1192,8 +1193,9 @@ public class ReturnPurchaseService {
     }
 
     /**
-     * A validated, priced return chunk (one batch worth of a returned purchase line). The supplier refunds
-     * {@code refundRate}% of the import value; the rest is the pharmacy's loss (chi phí hợp lý, tính động).
+     * Một phần trả hàng đã tính đủ số tiền (giá trị hàng trả từ đúng MỘT lô của một dòng phiếu nhập).
+     * NCC hoàn {@code refundRate}% giá trị nhập; phần còn lại là khoản lỗ của nhà thuốc (chi phí hợp
+     * lý, tính động).
      *
      * <p>"Giá nhập" bên phiếu nhập là
      * GIÁ CUỐI ĐÃ GỒM THUẾ (gross) → {@code batch.importPricePerBase} lưu gross/đơn vị cơ sở → {@code

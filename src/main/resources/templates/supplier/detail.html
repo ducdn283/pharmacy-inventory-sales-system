@@ -87,6 +87,9 @@
     }
     .badge-active   { background: #dcfce7; color: #166534; font-size: 11px; }
     .badge-inactive { background: #fee2e2; color: #991b1b; font-size: 11px; }
+    .debt-amount    { color: #d97706; font-weight: 600; }
+    .badge-debt     { background: #fef3c7; color: #92400e; }
+    .badge-overdue  { background: #fee2e2; color: #991b1b; font-size: 11px; }
   </style>
 </head>
 
@@ -161,6 +164,11 @@
             <div class="full">
               <div class="info-label">Địa chỉ</div>
               <div class="info-value" th:text="${supplier.address != null ? supplier.address : '—'}">—</div>
+            </div>
+            <div>
+              <div class="info-label">Tổng công nợ phải trả</div>
+              <div class="info-value debt-amount"
+                   th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</div>
             </div>
           </div>
         </div>
@@ -281,12 +289,79 @@
       </form>
     </div>
 
+    <!-- Công nợ phải trả: từng phiếu nhập còn nợ, cùng nguồn số liệu với màn Công nợ -->
+    <div class="sup-card p-4 p-md-5 mt-4">
+      <div class="d-flex justify-content-between align-items-start gap-2 mb-3 flex-wrap">
+        <div>
+          <h2 class="fs-6 mb-1">Công nợ phải trả nhà cung cấp</h2>
+          <small class="text-secondary">Các phiếu nhập chưa thanh toán xong. Bấm "Xem" để mở phiếu nhập.</small>
+        </div>
+        <span class="badge fs-6 fw-semibold px-3 py-2"
+              th:classappend="${totalSupplierDebt != null and totalSupplierDebt.signum() > 0}
+                              ? 'badge-debt' : 'bg-light text-dark border'"
+              th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Mã phiếu nhập</th>
+              <th>Ngày nhập</th>
+              <th class="text-center">Trạng thái</th>
+              <th>Hạn thanh toán</th>
+              <th class="text-end">Tổng tiền</th>
+              <th class="text-end">Đã trả</th>
+              <th class="text-end">Còn nợ</th>
+              <th class="text-end">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="debt : ${supplierDebts}">
+              <td class="fw-semibold text-secondary small" th:text="${debt.code}">PINV-000001</td>
+              <td th:text="${debt.date}">01/01/2026 10:00</td>
+              <td class="text-center">
+                <span class="badge bg-light text-dark border" th:text="${debt.status}">Nợ</span>
+              </td>
+              <td>
+                <span th:if="${debt.dueDate == null}" class="text-secondary">—</span>
+                <span th:if="${debt.dueDate != null and debt.overdue}" class="badge badge-overdue rounded-pill"
+                      th:text="${debt.dueDate + ' — quá hạn'}">01/01/2026 — quá hạn</span>
+                <span th:if="${debt.dueDate != null and !debt.overdue}" th:text="${debt.dueDate}">01/01/2026</span>
+              </td>
+              <td class="text-end"
+                  th:text="${#numbers.formatInteger((debt.totalAmount != null ? debt.totalAmount : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
+              <td class="text-end"
+                  th:text="${#numbers.formatInteger((debt.paid != null ? debt.paid : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
+              <td class="text-end debt-amount"
+                  th:text="${#numbers.formatInteger(debt.remaining, 1, 'COMMA') + ' ₫'}">0 ₫</td>
+              <td class="text-end">
+                <!-- Dược sĩ không có màn phiếu nhập nên không dựng link (xem purchaseInvoiceBasePath). -->
+                <a th:if="${purchaseInvoiceBasePath != null}"
+                   th:href="@{{base}/{id}(base=${purchaseInvoiceBasePath}, id=${debt.id})}"
+                   class="btn btn-sm btn-outline-success" title="Xem chi tiết phiếu nhập">Xem</a>
+                <span th:unless="${purchaseInvoiceBasePath != null}" class="text-secondary">—</span>
+              </td>
+            </tr>
+
+            <tr th:if="${#lists.isEmpty(supplierDebts)}">
+              <td colspan="8" class="text-center text-secondary py-5">
+                <i class="ti ti-checkbox d-block fs-2 mb-2 text-muted"></i>
+                Không còn công nợ nào với nhà cung cấp này.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Bảng sản phẩm cung ứng -->
     <div class="sup-card p-4 p-md-5 mt-4">
       <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
         <h2 class="fs-6 mb-0">Sản phẩm cung ứng</h2>
         <div class="d-flex align-items-center gap-2">
-          <button th:if="${currentRole == 'OWNER'}" type="button" class="btn btn-sup-primary btn-sm px-3"
+          <button th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" type="button"
+                  class="btn btn-sup-primary btn-sm px-3"
                   data-bs-toggle="modal" data-bs-target="#addProductModal">
             <i class="ti ti-plus"></i>Thêm sản phẩm cung ứng
           </button>
@@ -337,7 +412,7 @@
               <td class="text-end">
                 <div class="d-inline-flex gap-2">
                   <!-- data-* mang sẵn giá trị hiện tại sang modal; xem JS "sửa sản phẩm cung ứng". -->
-                  <button th:if="${currentRole == 'OWNER'}" type="button"
+                  <button th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" type="button"
                           class="btn btn-sm btn-outline-secondary btn-edit-sp"
                           data-bs-toggle="modal" data-bs-target="#editSupplierProductModal"
                           th:attr="data-sp-id=${sp.id},
@@ -347,7 +422,8 @@
                                    data-sp-preferred=${sp.isPreferred},
                                    data-sp-note=${sp.note}"
                           title="Sửa trạng thái, ưu tiên, ghi chú">Sửa</button>
-                  <a th:href="@{/owner/products/{productId}(productId=${sp.productId}, backSupplierId=${supplier.id})}"
+                  <a th:if="${productBasePath != null}"
+                     th:href="@{{base}/{productId}(base=${productBasePath}, productId=${sp.productId}, backSupplierId=${supplier.id})}"
                      class="btn btn-sm btn-outline-success"
                      title="Xem chi tiết sản phẩm">Xem</a>
                 </div>
