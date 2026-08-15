@@ -416,13 +416,18 @@ public class SidebarMenuService {
                         )
                 ),
 
-                linkGroup(
+                menuGroup(
                         "Hàng hóa",
                         ICON_PRODUCTS,
                         i(
                                 "Hàng hóa",
                                 "/pharmacist/products",
                                 ICON_PRODUCTS
+                        ),
+                        i(
+                                "Danh sách vị trí",
+                                "/pharmacist/positions",
+                                "ti ti-map-pin"
                         )
                 ),
 
