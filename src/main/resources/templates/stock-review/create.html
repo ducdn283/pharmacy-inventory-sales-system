@@ -373,6 +373,19 @@
                                             </span>
                                         </td>
 
+                                        <!-- Ô ghi chú độc lập -->
+                                        <td>
+                                            <input type="text"
+                                                   class="form-control form-control-sm note-input"
+                                                   th:name="${'items[' + iterStat.index + '].note'}"
+                                                   th:value="${form.items != null
+               and form.items.size() > iterStat.index
+               and form.items[iterStat.index].note != null
+               ? form.items[iterStat.index].note
+               : ''}"
+                                                   placeholder="Nhập ghi chú nếu có">
+                                        </td>
+
                                         <!-- DATE: hạn dùng hệ thống -->
                                         <td class="date-column"
                                             th:text="${candidate.expirationDateDisplay
