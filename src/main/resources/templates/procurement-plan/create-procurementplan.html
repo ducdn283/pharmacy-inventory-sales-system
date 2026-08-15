@@ -1137,7 +1137,9 @@
             unitRatio: item.unitRatio,
             estimatedPrice: item.estimatedPrice,
             units: item.units || [],
-            currentSellPrice: item.currentSellPrice
+            currentSellPrice: item.currentSellPrice,
+            preferredSupplierId: item.preferredSupplierId,
+            preferredSupplierCostPrice: item.preferredSupplierCostPrice
         };
     }
 
@@ -1489,12 +1491,29 @@
     }
 
     function buildDetailFromProduct(product, overrides = {}) {
+        const quantity = overrides.requestedQuantity != null ? overrides.requestedQuantity : 1;
+        let supplierId = overrides.supplierId != null ? overrides.supplierId : null;
+        let unitCost = overrides.unitCost != null ? overrides.unitCost : null;
+        let estimatedPrice = overrides.estimatedPrice != null ? overrides.estimatedPrice : null;
+
+        if (supplierId == null && product.preferredSupplierId != null) {
+            supplierId = product.preferredSupplierId;
+            if (unitCost == null && product.preferredSupplierCostPrice != null) {
+                unitCost = Number(product.preferredSupplierCostPrice);
+            }
+        }
+
+        if (estimatedPrice == null && unitCost != null && Number.isFinite(unitCost) && quantity > 0) {
+            estimatedPrice = unitCost * quantity;
+        }
+
         return {
             productId: product.productID,
-            requestedQuantity: overrides.requestedQuantity != null ? overrides.requestedQuantity : 1,
+            requestedQuantity: quantity,
             unit: overrides.unit != null ? overrides.unit : (product.unit || ''),
-            estimatedPrice: overrides.estimatedPrice != null ? overrides.estimatedPrice : null,
-            supplierId: overrides.supplierId != null ? overrides.supplierId : null,
+            estimatedPrice: estimatedPrice,
+            unitCost: unitCost,
+            supplierId: supplierId,
             currentStock: overrides.currentStock != null ? overrides.currentStock : getStock(product.productID)
         };
     }
@@ -2155,14 +2174,22 @@
         .forEach(detail => {
             const product = productMap[detail.productId];
             if (!product) return;
-            addProductLine({
-                productId: detail.productId,
-                requestedQuantity: detail.requestedQuantity,
-                unit: detail.unit,
-                estimatedPrice: detail.estimatedPrice,
-                supplierId: detail.supplierId,
-                currentStock: product.currentStock
-            }, false);
+            const lineDetail = detail.supplierId != null
+                ? {
+                    productId: detail.productId,
+                    requestedQuantity: detail.requestedQuantity,
+                    unit: detail.unit,
+                    estimatedPrice: detail.estimatedPrice,
+                    supplierId: detail.supplierId,
+                    currentStock: product.currentStock
+                }
+                : buildDetailFromProduct(product, {
+                    requestedQuantity: detail.requestedQuantity,
+                    unit: detail.unit,
+                    estimatedPrice: detail.estimatedPrice,
+                    currentStock: product.currentStock
+                });
+            addProductLine(lineDetail, false);
         });
 
     initLineSupplierPrices();
