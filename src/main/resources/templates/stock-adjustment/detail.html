@@ -182,7 +182,9 @@
                             <div class="info-label">Phiếu rà soát kho căn cứ</div>
                             <div>
                                 <span class="fw-semibold" th:text="${detail.stockReviewCode}">KK-000001</span>
-                                <span class="badge bg-info-subtle text-info ms-1"
+                                <!-- Dùng primary (xanh #059669 của nhà thuốc) chứ không phải info: màu
+                                     info của theme là #00B8DB, đọc trên nền nhạt rất khó nhìn. -->
+                                <span class="badge bg-primary-subtle text-primary ms-1"
                                       th:text="${detail.stockReviewTypeDisplay}">Rà soát tình trạng</span>
                             </div>
                         </div>
@@ -211,11 +213,8 @@
                             <i class="ti ti-package text-success me-1"></i>
                             Hàng hóa điều chỉnh
                         </div>
-                        <p class="text-secondary small mb-0 mt-1">
-                            <i class="ti ti-info-circle me-1"></i>
-                            <strong>Giá vốn</strong> = giá nhập của đúng lô đó
-                             × số lượng điều chỉnh — không phải giá bán.
-                        </p>
+                        <!-- Cột "Giá vốn" đã bỏ khỏi bảng (15/08/2026) nên dòng chú thích giải nghĩa nó
+                             cũng bỏ theo. Giá vốn hàng mất vẫn còn ở khối "Đền bù thất thoát". -->
                     </div>
 
                     <div class="table-responsive">
@@ -227,14 +226,14 @@
                                 <th>Lô</th>
                                 <th>Hạn dùng</th>
                                 <th>Đơn vị</th>
-                                <th>Tồn hiện tại</th>
-                                <!-- Phiếu sửa hạn dùng không đổi tồn kho ⇒ cột "Chênh lệch" vô nghĩa,
-                                     thay bằng cặp hạn cũ → hạn mới. -->
+                                <!-- Phiếu sửa hạn dùng: hạn được sửa cho CẢ LÔ, bao nhiêu hàng trong lô
+                                     cũng không đổi cách xử lý ⇒ 2 cột số lượng đều vô nghĩa, ẩn hẳn. -->
+                                <th th:unless="${detail.dateAdjustment}">Tồn hiện tại</th>
                                 <th th:unless="${detail.dateAdjustment}">Chênh lệch</th>
                                 <th th:if="${detail.dateAdjustment}">Hạn cũ → Hạn mới</th>
-                                <th>Giá vốn</th>
                                 <!-- Cột "Thuế GTGT đầu ra" đã bỏ hẳn 04/08/2026: hộ kinh doanh tính GTGT bằng
-                                     doanh thu × tỷ lệ %, phiếu điều chỉnh kho không phát sinh thuế đầu ra. -->
+                                     doanh thu × tỷ lệ %, phiếu điều chỉnh kho không phát sinh thuế đầu ra.
+                                     Cột "Giá vốn" bỏ 15/08/2026 — chỉ còn ở khối "Đền bù thất thoát". -->
                                 <th th:if="${detail.employeeLiable}">Ước tính đền bù (giá bán)</th>
                                 <th>Ghi chú</th>
                             </tr>
@@ -250,7 +249,7 @@
                                 </td>
                                 <td th:text="${item.expirationDateDisplay}">12/05/2028</td>
                                 <td th:text="${item.unitName}">Hộp</td>
-                                <td th:text="${item.currentStock}">120</td>
+                                <td th:unless="${detail.dateAdjustment}" th:text="${item.currentStock}">120</td>
                                 <td th:unless="${detail.dateAdjustment}">
                                     <span class="fw-semibold"
                                           th:classappend="${item.direction == 'IN'} ? ' text-success' : ' text-danger'"
@@ -266,10 +265,6 @@
                                     <span class="badge bg-success-subtle text-success"
                                           th:text="${item.newExpirationDateDisplay != null and !item.newExpirationDateDisplay.isEmpty() ? item.newExpirationDateDisplay : '—'}">12/05/2029</span>
                                 </td>
-                                <td class="fw-semibold"
-                                    th:text="${#numbers.formatDecimal(item.lineCost, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    350.000đ
-                                </td>
                                 <td th:if="${detail.employeeLiable}">
                                     <span class="fw-semibold text-warning"
                                           th:text="${#numbers.formatDecimal(item.reimbursementValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
@@ -283,13 +278,11 @@
                                 <td th:text="${item.note}">Hết hạn sử dụng</td>
                             </tr>
 
-                            <tr class="fw-semibold">
+                            <!-- Phiếu sửa hạn dùng không có gì để cộng tổng (không đổi tồn, không tính giá
+                                 vốn) ⇒ bỏ hẳn dòng Tổng cộng thay vì để một hàng trống. -->
+                            <tr class="fw-semibold" th:unless="${detail.dateAdjustment}">
                                 <td colspan="6">Tổng cộng</td>
                                 <td th:text="${detail.totalQuantity}">9</td>
-                                <td class="text-success"
-                                    th:text="${#numbers.formatDecimal(detail.estimatedValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                    650.000đ
-                                </td>
                                 <td th:if="${detail.employeeLiable}" class="text-warning"
                                     th:text="${#numbers.formatDecimal(detail.totalReimbursementValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
                                     0đ
@@ -319,12 +312,23 @@
                             <strong th:text="${detail.totalItems}">2</strong>
                         </div>
 
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Tổng giá vốn</span>
-                            <strong class="text-success"
-                                    th:text="${#numbers.formatDecimal(detail.estimatedValue, 0, 'POINT', 0, 'COMMA') + 'đ'}">
-                                650.000đ
+                        <!-- Phiếu sửa hạn dùng: tóm tắt nói về HẠN, không phải số lượng — hạn được sửa
+                             cho cả lô nên tổng số lượng không nói lên điều gì. Phiếu một dòng thì nêu
+                             thẳng hạn cũ → hạn mới, nhiều dòng thì đếm số lô. -->
+                        <div class="d-flex justify-content-between mb-3" th:if="${detail.dateAdjustment}">
+                            <span class="text-secondary">Thay đổi hạn dùng</span>
+                            <strong th:if="${detail.totalItems == 1}" class="text-success">
+                                <span th:text="${detail.items[0].oldExpirationDateDisplay}">12/05/2028</span>
+                                <i class="ti ti-arrow-right mx-1 text-secondary"></i>
+                                <span th:text="${detail.items[0].newExpirationDateDisplay}">12/05/2029</span>
                             </strong>
+                            <strong th:unless="${detail.totalItems == 1}" class="text-success"
+                                    th:text="${detail.totalItems + ' lô'}">3 lô</strong>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3" th:unless="${detail.dateAdjustment}">
+                            <span class="text-secondary">Tổng số lượng</span>
+                            <strong th:text="${detail.totalQuantity}">9</strong>
                         </div>
 
                         <div class="d-flex justify-content-between mb-3">
@@ -417,11 +421,11 @@
                           method="post"
                           class="mb-3">
                         <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                        <label class="form-label small mb-1" for="cancelReason">
-                            Lý do hủy phiếu điều chỉnh nếu hủy <span class="text-secondary fw-normal">(không bắt buộc)</span>
-                        </label>
+                        <!-- Không có nhãn lẫn placeholder: ô nằm ngay trên nút "Hủy phiếu điều chỉnh" nên
+                             đã tự rõ nghĩa, và không có dấu * thì mặc nhiên là không bắt buộc.
+                             aria-label giữ lại cho trình đọc màn hình. -->
                         <input type="text" name="cancelReason" id="cancelReason" class="form-control mb-3"
-                               placeholder="VD: lập nhầm lô, nhầm số lượng…">
+                               aria-label="Lý do hủy phiếu điều chỉnh">
                         <button type="submit" class="btn btn-stock-warning w-100"
                                 th:data-confirm="${detail.statusName == 'Hoàn thành'}
                                     ? 'Hủy phiếu này? Phần tồn kho đã cộng/trừ sẽ được đảo lại.'

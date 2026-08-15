@@ -13,6 +13,13 @@ public class StockAdjustmentBatchCandidateResponse {
 
     private Integer batchId;
 
+    /**
+     * Mã lô do hệ thống cấp. Cần cho màn chọn lô: cùng một sản phẩm có thể có NHIỀU dòng lô mang y
+     * hệt số lô và hạn dùng (mỗi lần nhập / mỗi lần khách trả hàng là một dòng riêng), lúc đó mã lô
+     * là thứ DUY NHẤT phân biệt được chúng.
+     */
+    private String batchCode;
+
     private Integer productId;
     private String productName;
 
