@@ -128,7 +128,7 @@
               </div>
               <div class="col-12 col-md-6">
                 <label for="supplierEmail" class="form-label">
-                  Email <span class="text-danger">*</span>
+                  Email <span class="text-secondary fw-normal">(không bắt buộc)</span>
                 </label>
                 <input id="supplierEmail" type="email" class="form-control"
                        th:field="*{email}"
@@ -139,7 +139,6 @@
                        maxlength="100"
                        pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                        title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
-                       required
                        placeholder="supplier@example.com">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
               </div>
