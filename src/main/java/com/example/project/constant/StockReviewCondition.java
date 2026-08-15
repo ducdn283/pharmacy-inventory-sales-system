@@ -8,26 +8,30 @@ import java.util.Map;
 
 public final class StockReviewCondition {
 
-    public static final String GOOD = "GOOD";
-    public static final String DAMAGED = "DAMAGED";
-    public static final String SPOILED = "SPOILED";
-    public static final String OTHER = "OTHER";
+    public static final String COMPLIANT = "COMPLIANT";
+
+    public static final String NON_COMPLIANT = "NON_COMPLIANT";
 
     public static final List<String> ALL = List.of(
-            GOOD,
-            DAMAGED,
-            SPOILED,
-            OTHER
+            COMPLIANT,
+            NON_COMPLIANT
     );
 
     private static final Map<String, String> LABELS;
 
     static {
         Map<String, String> labels = new LinkedHashMap<>();
-        labels.put(GOOD, "Tốt");
-        labels.put(DAMAGED, "Hư hỏng");
-        labels.put(SPOILED, "Biến chất");
-        labels.put(OTHER, "Khác");
+
+        labels.put(
+                COMPLIANT,
+                "Đạt chuẩn"
+        );
+
+        labels.put(
+                NON_COMPLIANT,
+                "Không đạt chuẩn"
+        );
+
         LABELS = Collections.unmodifiableMap(labels);
     }
 
@@ -43,9 +47,12 @@ public final class StockReviewCondition {
 
     public static String label(String value) {
         String normalized = normalize(value);
+
         return LABELS.getOrDefault(
                 normalized,
-                normalized.isBlank() ? "Chưa ghi nhận" : value
+                normalized.isBlank()
+                        ? "Chưa ghi nhận"
+                        : value
         );
     }
 

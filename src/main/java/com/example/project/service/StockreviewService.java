@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -49,9 +50,13 @@ import java.util.stream.Collectors;
 public class StockreviewService {
 
     private final StockreviewRepository stockreviewRepository;
+
     private final StockreviewdetailRepository stockreviewdetailRepository;
+
     private final BatchRepository batchRepository;
+
     private final AccountRepository accountRepository;
+
     private final WorkflowNotificationService workflowNotificationService;
 
     public StockreviewService(
@@ -68,20 +73,6 @@ public class StockreviewService {
         this.workflowNotificationService = workflowNotificationService;
     }
 
-    private boolean isVisibleReviewType(
-            Stockreview review
-    ) {
-        if (review == null) {
-            return false;
-        }
-
-        return !StockReviewType.CONDITION.equals(
-                StockReviewType.normalize(
-                        review.getType()
-                )
-        );
-    }
-
     @Transactional(readOnly = true)
     public Page<StockReviewListItemResponse> search(
             String keyword,
@@ -92,6 +83,7 @@ public class StockreviewService {
             Pageable pageable
     ) {
         String normalizedKeyword = normalize(keyword);
+
         LocalDate from = parseDate(fromDate);
         LocalDate to = parseDate(toDate);
 
@@ -99,7 +91,8 @@ public class StockreviewService {
                 stockreviewRepository.findAllWithRelations();
 
         Map<Integer, List<Stockreviewdetail>> detailMap =
-                stockreviewdetailRepository.findAllWithRelations()
+                stockreviewdetailRepository
+                        .findAllWithRelations()
                         .stream()
                         .filter(detail ->
                                 detail.getStockReviewID() != null
@@ -112,7 +105,6 @@ public class StockreviewService {
 
         List<StockReviewListItemResponse> rows =
                 reviews.stream()
-                        .filter(this::isVisibleReviewType)
                         .filter(review -> matchesKeyword(
                                 review,
                                 detailMap.getOrDefault(
@@ -154,6 +146,7 @@ public class StockreviewService {
                         .toList();
 
         int start = (int) pageable.getOffset();
+
         int end = Math.min(
                 start + pageable.getPageSize(),
                 rows.size()
@@ -174,11 +167,7 @@ public class StockreviewService {
     @Transactional(readOnly = true)
     public StockReviewStatsResponse getStats() {
         List<Stockreview> reviews =
-                stockreviewRepository
-                        .findAllWithRelations()
-                        .stream()
-                        .filter(this::isVisibleReviewType)
-                        .toList();
+                stockreviewRepository.findAllWithRelations();
 
         return new StockReviewStatsResponse(
                 reviews.size(),
@@ -190,7 +179,10 @@ public class StockreviewService {
                         reviews,
                         StockReviewType.DATE
                 ),
-                0,
+                countByType(
+                        reviews,
+                        StockReviewType.CONDITION
+                ),
                 countByStatus(
                         reviews,
                         StockReviewStatus.DRAFT
@@ -215,24 +207,7 @@ public class StockreviewService {
     }
 
     public Map<String, String> typeLabels() {
-        Map<String, String> visibleTypes =
-                new LinkedHashMap<>();
-
-        visibleTypes.put(
-                StockReviewType.COUNT,
-                StockReviewType.label(
-                        StockReviewType.COUNT
-                )
-        );
-
-        visibleTypes.put(
-                StockReviewType.DATE,
-                StockReviewType.label(
-                        StockReviewType.DATE
-                )
-        );
-
-        return visibleTypes;
+        return StockReviewType.labels();
     }
 
     public Map<String, String> conditionLabels() {
@@ -253,13 +228,25 @@ public class StockreviewService {
                     new StockReviewItemRequest();
 
             item.setBatchId(batch.getBatchId());
-            item.setActualQty(batch.getSystemQty());
+
+            item.setActualQty(
+                    batch.getSystemQty()
+            );
+
             item.setActualExpirationDate(
                     batch.getExpirationDate()
             );
+
             item.setConditionStatus(
-                    StockReviewCondition.GOOD
+                    StockReviewCondition.COMPLIANT
             );
+
+            /*
+             * Không tự điền số lượng rà soát tình trạng.
+             * Người dùng phải nhập kết quả thực tế.
+             */
+            item.setCompliantQty(null);
+            item.setNonCompliantQty(null);
 
             form.getItems().add(item);
         }
@@ -273,7 +260,8 @@ public class StockreviewService {
 
         String normalizedKeyword = normalize(keyword);
 
-        return batchRepository.findAvailableBatchesForDestroy()
+        return batchRepository
+                .findAvailableBatchesForDestroy()
                 .stream()
                 .filter(batch -> matchesBatchKeyword(
                         batch,
@@ -284,11 +272,15 @@ public class StockreviewService {
     }
 
     /**
-     * Lưu một trong ba loại Stock Review mà không thay đổi entity
-     * hoặc cấu trúc database hiện có.
+     * Lưu một trong ba loại rà soát kho mà không thay đổi entity
+     * hoặc cấu trúc database hiện tại.
      *
-     * Với DATE và CONDITION, systemQty và actualQty vẫn được lưu
-     * bằng nhau để đáp ứng ràng buộc NOT NULL của database.
+     * Với DATE, systemQty và actualQty được lưu bằng nhau để đáp ứng
+     * ràng buộc NOT NULL.
+     *
+     * Với CONDITION, mỗi lô được lưu thành hai detail:
+     * COMPLIANT và NON_COMPLIANT. actualQty là số lượng tương ứng
+     * của từng tình trạng.
      */
     @Transactional
     public Integer create(
@@ -340,6 +332,17 @@ public class StockreviewService {
             );
         }
 
+        /*
+         * Kiểm tra sau khi đã tải Batch để có thể đối chiếu
+         * với storageQuantity hiện tại trong database.
+         */
+        if (StockReviewType.CONDITION.equals(reviewType)) {
+            validateConditionQuantities(
+                    itemMap,
+                    batchMap
+            );
+        }
+
         String status = resolveCreateStatus(
                 isOwner,
                 asDraft
@@ -353,18 +356,21 @@ public class StockreviewService {
         Stockreview review = new Stockreview();
 
         /*
-         * Entity vẫn giữ getter/setter tên stockCountCode.
-         * Không sửa entity vì đây là phần core hiện có.
-         *
-         * Mã tạm bảo đảm UNIQUE trong lần INSERT đầu tiên.
-         * Sau khi database cấp ID, mã được đổi thành SR-{ID}.
+         * Entity hiện tại vẫn sử dụng tên stockCountCode.
+         * Không thay đổi entity vì đây là phần core của dự án.
          */
-        review.setStockCountCode(temporaryCode());
+        review.setStockCountCode(
+                temporaryCode()
+        );
+
         review.setType(reviewType);
         review.setReviewDate(Instant.now());
         review.setCreatedBy(creator);
         review.setStatus(status);
-        review.setNote(trimToNull(request.getNote()));
+
+        review.setNote(
+                trimToNull(request.getNote())
+        );
 
         if (approvedNow) {
             review.setApprovedBy(creator);
@@ -390,6 +396,32 @@ public class StockreviewService {
             int systemQty =
                     safe(batch.getStorageQuantity());
 
+            /*
+             * Với rà soát tình trạng, một lô trên UI được tách thành
+             * hai bản ghi stockreviewdetail.
+             */
+            if (StockReviewType.CONDITION.equals(reviewType)) {
+                saveConditionDetail(
+                        saved,
+                        batch,
+                        systemQty,
+                        item.getCompliantQty(),
+                        StockReviewCondition.COMPLIANT,
+                        item.getNote()
+                );
+
+                saveConditionDetail(
+                        saved,
+                        batch,
+                        systemQty,
+                        item.getNonCompliantQty(),
+                        StockReviewCondition.NON_COMPLIANT,
+                        item.getNote()
+                );
+
+                continue;
+            }
+
             Stockreviewdetail detail =
                     new Stockreviewdetail();
 
@@ -397,21 +429,24 @@ public class StockreviewService {
             detail.setProductID(batch.getProductID());
             detail.setBatchID(batch);
             detail.setSystemQty(systemQty);
+
             detail.setNote(
                     trimToNull(item.getNote())
             );
 
             if (StockReviewType.COUNT.equals(reviewType)) {
-                int actualQty = item.getActualQty();
+                int actualQty =
+                        item.getActualQty();
 
                 detail.setActualQty(actualQty);
+
                 detail.setDiscrepancy(
                         actualQty - systemQty
                 );
             } else {
                 /*
-                 * Giữ đúng ràng buộc NOT NULL của database
-                 * đối với DATE và CONDITION.
+                 * Với DATE, actualQty vẫn phải có dữ liệu vì cột
+                 * actualQty trong database là NOT NULL.
                  */
                 detail.setActualQty(systemQty);
                 detail.setDiscrepancy(0);
@@ -421,16 +456,9 @@ public class StockreviewService {
                 detail.setRecordedExpirationDate(
                         batch.getExpirationDate()
                 );
+
                 detail.setActualExpirationDate(
                         item.getActualExpirationDate()
-                );
-            }
-
-            if (StockReviewType.CONDITION.equals(reviewType)) {
-                detail.setConditionStatus(
-                        StockReviewCondition.normalize(
-                                item.getConditionStatus()
-                        )
                 );
             }
 
@@ -448,6 +476,100 @@ public class StockreviewService {
         return saved.getId();
     }
 
+    /**
+     * Tổng số lượng đạt chuẩn và không đạt chuẩn phải bằng
+     * số lượng đang tồn tại của lô hàng.
+     */
+    private void validateConditionQuantities(
+            Map<Integer, StockReviewItemRequest> itemMap,
+            Map<Integer, Batch> batchMap
+    ) {
+        for (Map.Entry<Integer, StockReviewItemRequest> entry
+                : itemMap.entrySet()) {
+
+            Batch batch =
+                    batchMap.get(entry.getKey());
+
+            StockReviewItemRequest item =
+                    entry.getValue();
+
+            int systemQty =
+                    safe(batch.getStorageQuantity());
+
+            int compliantQty =
+                    safe(item.getCompliantQty());
+
+            int nonCompliantQty =
+                    safe(item.getNonCompliantQty());
+
+            if (compliantQty + nonCompliantQty != systemQty) {
+                throw new IllegalArgumentException(
+                        "Tổng số lượng đạt chuẩn và không đạt chuẩn của lô "
+                                + displayLotNumber(batch)
+                                + " phải bằng tồn hệ thống ("
+                                + systemQty
+                                + ")"
+                );
+            }
+        }
+    }
+
+    /**
+     * Lưu một bản ghi tình trạng của lô.
+     *
+     * Phương thức này được gọi hai lần cho mỗi lô:
+     * một lần với COMPLIANT và một lần với NON_COMPLIANT.
+     */
+    private void saveConditionDetail(
+            Stockreview review,
+            Batch batch,
+            int systemQty,
+            Integer actualQty,
+            String conditionStatus,
+            String note
+    ) {
+        Stockreviewdetail detail =
+                new Stockreviewdetail();
+
+        detail.setStockReviewID(review);
+        detail.setProductID(batch.getProductID());
+        detail.setBatchID(batch);
+        detail.setSystemQty(systemQty);
+
+        /*
+         * actualQty lưu số lượng của chính tình trạng này,
+         * không phải tổng số lượng của lô.
+         */
+        detail.setActualQty(
+                safe(actualQty)
+        );
+
+        /*
+         * Chênh lệch không áp dụng cho rà soát tình trạng.
+         */
+        detail.setDiscrepancy(null);
+
+        detail.setConditionStatus(
+                conditionStatus
+        );
+
+        detail.setNote(
+                trimToNull(note)
+        );
+
+        stockreviewdetailRepository.save(detail);
+    }
+
+    private String displayLotNumber(Batch batch) {
+        if (batch == null
+                || batch.getLotNumber() == null
+                || batch.getLotNumber().isBlank()) {
+            return "không xác định";
+        }
+
+        return batch.getLotNumber().trim();
+    }
+
     private String resolveCreateStatus(
             boolean isOwner,
             boolean asDraft
@@ -460,7 +582,6 @@ public class StockreviewService {
                 ? StockReviewStatus.APPROVED
                 : StockReviewStatus.PENDING;
     }
-
     @Transactional(readOnly = true)
     public StockReviewDetailPageResponse getDetail(
             Integer stockReviewId
@@ -482,25 +603,56 @@ public class StockreviewService {
                                 stockReviewId
                         );
 
+        /*
+         * Với CONDITION, luôn sắp xếp bản ghi đạt chuẩn ở trên
+         * và không đạt chuẩn ở dưới.
+         */
         List<StockReviewDetailItemResponse> items =
                 details.stream()
+                        .sorted(
+                                conditionDetailComparator(type)
+                        )
                         .map(detail ->
-                                toDetailItem(detail, type)
+                                toDetailItem(
+                                        detail,
+                                        type
+                                )
                         )
                         .toList();
 
         long issueItems = details.stream()
                 .filter(detail ->
-                        isIssue(detail, type)
+                        isIssue(
+                                detail,
+                                type
+                        )
                 )
                 .count();
 
-        int totalSystemQty = details.stream()
-                .map(Stockreviewdetail::getSystemQty)
-                .filter(Objects::nonNull)
-                .mapToInt(Integer::intValue)
-                .sum();
+        /*
+         * CONDITION có hai detail cho cùng một batch,
+         * nhưng totalItems chỉ được đếm một lần cho mỗi batch.
+         */
+        long totalItems =
+                countReviewedBatches(
+                        details,
+                        type
+                );
 
+        /*
+         * systemQty của CONDITION cũng chỉ cộng một lần
+         * cho mỗi batch để tránh tổng tồn bị nhân đôi.
+         */
+        int totalSystemQty =
+                totalSystemQty(
+                        details,
+                        type
+                );
+
+        /*
+         * actualQty được cộng cả hai bản ghi.
+         * Tổng này bằng compliantQty + nonCompliantQty.
+         */
         int totalActualQty = details.stream()
                 .map(Stockreviewdetail::getActualQty)
                 .filter(Objects::nonNull)
@@ -524,8 +676,8 @@ public class StockreviewService {
                 review.getStatus(),
                 statusCssClass(review.getStatus()),
                 review.getNote(),
-                details.size(),
-                details.size() - issueItems,
+                totalItems,
+                totalItems - issueItems,
                 issueItems,
                 totalSystemQty,
                 totalActualQty,
@@ -570,6 +722,7 @@ public class StockreviewService {
             review.setStatus(
                     StockReviewStatus.APPROVED
             );
+
             review.setApprovedBy(actor);
             review.setApprovedAt(Instant.now());
         } else {
@@ -617,7 +770,10 @@ public class StockreviewService {
                         )
                 );
 
-        review.setStatus(StockReviewStatus.APPROVED);
+        review.setStatus(
+                StockReviewStatus.APPROVED
+        );
+
         review.setApprovedBy(owner);
         review.setApprovedAt(Instant.now());
 
@@ -658,7 +814,10 @@ public class StockreviewService {
                         )
                 );
 
-        review.setStatus(StockReviewStatus.REJECTED);
+        review.setStatus(
+                StockReviewStatus.REJECTED
+        );
+
         review.setApprovedBy(owner);
         review.setApprovedAt(Instant.now());
 
@@ -746,6 +905,9 @@ public class StockreviewService {
 
         List<StockReviewVoucherPrintLineResponse> items =
                 details.stream()
+                        .sorted(
+                                conditionDetailComparator(type)
+                        )
                         .map(detail ->
                                 toVoucherPrintLine(
                                         detail,
@@ -754,11 +916,17 @@ public class StockreviewService {
                         )
                         .toList();
 
-        int totalSystemQty = details.stream()
-                .map(Stockreviewdetail::getSystemQty)
-                .filter(Objects::nonNull)
-                .mapToInt(Integer::intValue)
-                .sum();
+        long totalItems =
+                countReviewedBatches(
+                        details,
+                        type
+                );
+
+        int totalSystemQty =
+                totalSystemQty(
+                        details,
+                        type
+                );
 
         int totalActualQty = details.stream()
                 .map(Stockreviewdetail::getActualQty)
@@ -800,7 +968,10 @@ public class StockreviewService {
 
         long issueItems = details.stream()
                 .filter(detail ->
-                        isIssue(detail, type)
+                        isIssue(
+                                detail,
+                                type
+                        )
                 )
                 .count();
 
@@ -821,7 +992,7 @@ public class StockreviewService {
                         ? formatInstant(review.getApprovedAt())
                         : "Chưa có",
                 review.getNote(),
-                items.size(),
+                totalItems,
                 issueItems,
                 totalSystemQty,
                 totalActualQty,
@@ -842,7 +1013,10 @@ public class StockreviewService {
 
         long issueItems = details.stream()
                 .filter(detail ->
-                        isIssue(detail, type)
+                        isIssue(
+                                detail,
+                                type
+                        )
                 )
                 .count();
 
@@ -860,7 +1034,10 @@ public class StockreviewService {
                         ? review.getApprovedBy().getName()
                         : "Chưa có",
                 formatInstant(review.getApprovedAt()),
-                details.size(),
+                countReviewedBatches(
+                        details,
+                        type
+                ),
                 issueItems,
                 review.getStatus(),
                 statusCssClass(review.getStatus()),
@@ -872,14 +1049,17 @@ public class StockreviewService {
             Stockreviewdetail detail,
             String type
     ) {
-        Product product = detail.getProductID();
-        Batch batch = detail.getBatchID();
+        Product product =
+                detail.getProductID();
+
+        Batch batch =
+                detail.getBatchID();
 
         Integer discrepancy =
                 resolvedDiscrepancy(detail);
 
         /*
-         * recordedExpirationDate là snapshot tại lúc rà soát.
+         * recordedExpirationDate là snapshot tại thời điểm rà soát.
          * Không đọc lại hạn dùng hiện tại từ Batch.
          */
         LocalDate recordedExpirationDate =
@@ -891,7 +1071,10 @@ public class StockreviewService {
                 );
 
         boolean issue =
-                isIssue(detail, type);
+                isIssue(
+                        detail,
+                        type
+                );
 
         return new StockReviewDetailItemResponse(
                 product != null
@@ -934,8 +1117,11 @@ public class StockreviewService {
             Stockreviewdetail detail,
             String type
     ) {
-        Product product = detail.getProductID();
-        Batch batch = detail.getBatchID();
+        Product product =
+                detail.getProductID();
+
+        Batch batch =
+                detail.getBatchID();
 
         int systemQty =
                 safe(detail.getSystemQty());
@@ -1001,7 +1187,10 @@ public class StockreviewService {
                 discrepancyValue,
                 condition,
                 StockReviewCondition.label(condition),
-                isIssue(detail, type),
+                isIssue(
+                        detail,
+                        type
+                ),
                 detail.getNote()
         );
     }
@@ -1009,7 +1198,8 @@ public class StockreviewService {
     private StockReviewBatchCandidateResponse toBatchCandidate(
             Batch batch
     ) {
-        Product product = batch.getProductID();
+        Product product =
+                batch.getProductID();
 
         return new StockReviewBatchCandidateResponse(
                 batch.getId(),
@@ -1030,7 +1220,6 @@ public class StockreviewService {
                 batch.getStorageQuantity()
         );
     }
-
     private String validateCreateRequest(
             StockReviewCreateRequest request
     ) {
@@ -1041,7 +1230,9 @@ public class StockreviewService {
         }
 
         String type =
-                StockReviewType.normalize(request.getType());
+                StockReviewType.normalize(
+                        request.getType()
+                );
 
         if (!StockReviewType.isValid(type)) {
             throw new IllegalArgumentException(
@@ -1098,28 +1289,15 @@ public class StockreviewService {
             }
 
             if (StockReviewType.CONDITION.equals(type)
-                    && !StockReviewCondition.isValid(
-                    item.getConditionStatus()
-            )) {
-                throw new IllegalArgumentException(
-                        "Tình trạng thực tế của lô hàng "
-                                + "không hợp lệ"
-                );
-            }
-
-            if (StockReviewType.CONDITION.equals(type)
-                    && StockReviewCondition.OTHER.equals(
-                    StockReviewCondition.normalize(
-                            item.getConditionStatus()
-                    )
-            )
                     && (
-                    item.getNote() == null
-                            || item.getNote().isBlank()
+                    item.getCompliantQty() == null
+                            || item.getCompliantQty() < 0
+                            || item.getNonCompliantQty() == null
+                            || item.getNonCompliantQty() < 0
             )) {
                 throw new IllegalArgumentException(
-                        "Vui lòng nhập ghi chú khi tình trạng "
-                                + "lô hàng là Khác"
+                        "Số lượng đạt chuẩn và không đạt chuẩn "
+                                + "không được để trống hoặc âm"
                 );
             }
         }
@@ -1127,6 +1305,12 @@ public class StockreviewService {
         return type;
     }
 
+    /**
+     * Xác định một dòng rà soát có vấn đề hay không.
+     *
+     * Với CONDITION, chỉ dòng NON_COMPLIANT có actualQty > 0
+     * mới được tính là có vấn đề.
+     */
     private boolean isIssue(
             Stockreviewdetail detail,
             String type
@@ -1144,14 +1328,107 @@ public class StockreviewService {
                     );
 
             case StockReviewType.CONDITION ->
-                    !StockReviewCondition.GOOD.equals(
+                    StockReviewCondition.NON_COMPLIANT.equals(
                             StockReviewCondition.normalize(
                                     detail.getConditionStatus()
                             )
-                    );
+                    )
+                            && safe(detail.getActualQty()) > 0;
 
             default -> false;
         };
+    }
+
+    /**
+     * CONDITION tạo hai detail cho một batch nên phải đếm
+     * số batch riêng biệt, không sử dụng details.size().
+     */
+    private long countReviewedBatches(
+            List<Stockreviewdetail> details,
+            String type
+    ) {
+        if (!StockReviewType.CONDITION.equals(type)) {
+            return details.size();
+        }
+
+        return details.stream()
+                .map(Stockreviewdetail::getBatchID)
+                .filter(Objects::nonNull)
+                .map(Batch::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+    }
+
+    /**
+     * Với CONDITION, systemQty được lặp lại trong cả hai detail.
+     * Vì vậy chỉ được cộng systemQty một lần cho mỗi batch.
+     */
+    private int totalSystemQty(
+            List<Stockreviewdetail> details,
+            String type
+    ) {
+        if (!StockReviewType.CONDITION.equals(type)) {
+            return details.stream()
+                    .map(Stockreviewdetail::getSystemQty)
+                    .filter(Objects::nonNull)
+                    .mapToInt(Integer::intValue)
+                    .sum();
+        }
+
+        return details.stream()
+                .filter(detail ->
+                        detail.getBatchID() != null
+                                && detail.getBatchID().getId() != null
+                )
+                .collect(Collectors.toMap(
+                        detail ->
+                                detail.getBatchID().getId(),
+                        detail ->
+                                safe(detail.getSystemQty()),
+                        (first, ignored) -> first,
+                        LinkedHashMap::new
+                ))
+                .values()
+                .stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+    }
+
+    /**
+     * Sắp xếp hai bản ghi của cùng một batch:
+     *
+     * 1. COMPLIANT - Đạt chuẩn
+     * 2. NON_COMPLIANT - Không đạt chuẩn
+     */
+    private Comparator<Stockreviewdetail>
+    conditionDetailComparator(String type) {
+
+        if (!StockReviewType.CONDITION.equals(type)) {
+            /*
+             * Giữ nguyên thứ tự repository trả về
+             * đối với COUNT và DATE.
+             */
+            return (left, right) -> 0;
+        }
+
+        return Comparator
+                .comparing(
+                        (Stockreviewdetail detail) ->
+                                detail.getBatchID() == null
+                                        || detail.getBatchID().getId() == null
+                                        ? Integer.MAX_VALUE
+                                        : detail.getBatchID().getId()
+                )
+                .thenComparingInt(detail ->
+                        StockReviewCondition.COMPLIANT.equals(
+                                StockReviewCondition.normalize(
+                                        detail.getConditionStatus()
+                                )
+                        )
+                                ? 0
+                                : 1
+                );
     }
 
     private int resolvedDiscrepancy(
@@ -1168,7 +1445,8 @@ public class StockreviewService {
             List<Stockreviewdetail> details,
             String keyword
     ) {
-        if (keyword == null || keyword.isBlank()) {
+        if (keyword == null
+                || keyword.isBlank()) {
             return true;
         }
 
@@ -1244,11 +1522,13 @@ public class StockreviewService {
             Batch batch,
             String keyword
     ) {
-        if (keyword == null || keyword.isBlank()) {
+        if (keyword == null
+                || keyword.isBlank()) {
             return true;
         }
 
-        Product product = batch.getProductID();
+        Product product =
+                batch.getProductID();
 
         return containsNormalized(
                 batch.getLotNumber(),
@@ -1282,7 +1562,8 @@ public class StockreviewService {
             LocalDate from,
             LocalDate to
     ) {
-        if (from == null && to == null) {
+        if (from == null
+                && to == null) {
             return true;
         }
 
@@ -1291,7 +1572,9 @@ public class StockreviewService {
         }
 
         LocalDate reviewDate =
-                toLocalDate(review.getReviewDate());
+                toLocalDate(
+                        review.getReviewDate()
+                );
 
         if (from != null
                 && reviewDate.isBefore(from)) {
@@ -1329,7 +1612,9 @@ public class StockreviewService {
                 .count();
     }
 
-    private String statusCssClass(String status) {
+    private String statusCssClass(
+            String status
+    ) {
         if (isStatus(
                 status,
                 StockReviewStatus.APPROVED
@@ -1387,15 +1672,11 @@ public class StockreviewService {
         return switch (
                 StockReviewCondition.normalize(condition)
                 ) {
-            case StockReviewCondition.GOOD ->
+            case StockReviewCondition.COMPLIANT ->
                     "text-success";
 
-            case StockReviewCondition.DAMAGED,
-                 StockReviewCondition.SPOILED ->
+            case StockReviewCondition.NON_COMPLIANT ->
                     "text-danger";
-
-            case StockReviewCondition.OTHER ->
-                    "text-warning";
 
             default ->
                     "text-secondary";
@@ -1406,15 +1687,22 @@ public class StockreviewService {
         return "TMP-SR-" + UUID.randomUUID();
     }
 
-    private String formatReviewCode(Integer id) {
+    private String formatReviewCode(
+            Integer id
+    ) {
         return "SR-" + String.format(
                 "%06d",
-                id == null ? 0 : id
+                id == null
+                        ? 0
+                        : id
         );
     }
 
-    private LocalDate parseDate(String value) {
-        if (value == null || value.isBlank()) {
+    private LocalDate parseDate(
+            String value
+    ) {
+        if (value == null
+                || value.isBlank()) {
             return null;
         }
 
@@ -1425,13 +1713,17 @@ public class StockreviewService {
         }
     }
 
-    private LocalDate toLocalDate(Instant instant) {
+    private LocalDate toLocalDate(
+            Instant instant
+    ) {
         return instant.atZone(
                 ZoneId.systemDefault()
         ).toLocalDate();
     }
 
-    private String formatInstant(Instant instant) {
+    private String formatInstant(
+            Instant instant
+    ) {
         if (instant == null) {
             return "";
         }
@@ -1442,7 +1734,9 @@ public class StockreviewService {
                 .format(instant);
     }
 
-    private String formatLocalDate(LocalDate date) {
+    private String formatLocalDate(
+            LocalDate date
+    ) {
         return date == null
                 ? ""
                 : date.format(
@@ -1452,8 +1746,12 @@ public class StockreviewService {
         );
     }
 
-    private int safe(Integer value) {
-        return value == null ? 0 : value;
+    private int safe(
+            Integer value
+    ) {
+        return value == null
+                ? 0
+                : value;
     }
 
     private boolean isStatus(
@@ -1472,15 +1770,18 @@ public class StockreviewService {
                 && normalize(value).contains(keyword);
     }
 
-    private String normalize(String value) {
+    private String normalize(
+            String value
+    ) {
         if (value == null) {
             return "";
         }
 
-        String normalized = Normalizer.normalize(
-                value,
-                Normalizer.Form.NFD
-        );
+        String normalized =
+                Normalizer.normalize(
+                        value,
+                        Normalizer.Form.NFD
+                );
 
         normalized = normalized.replaceAll(
                 "\\p{M}",
@@ -1496,8 +1797,11 @@ public class StockreviewService {
                 .trim();
     }
 
-    private String trimToNull(String value) {
-        return value == null || value.isBlank()
+    private String trimToNull(
+            String value
+    ) {
+        return value == null
+                || value.isBlank()
                 ? null
                 : value.trim();
     }
