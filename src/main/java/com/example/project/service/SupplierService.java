@@ -270,7 +270,7 @@ public class SupplierService {
         Supplier supplier = new Supplier();
         supplier.setName(request.getName().trim());
         supplier.setPhone(request.getPhone().trim());
-        supplier.setEmail(request.getEmail().trim());
+        supplier.setEmail(trimToNull(request.getEmail()));
         supplier.setAddress(request.getAddress().trim());
         supplier.setTaxCode(request.getTaxCode().trim());
 
@@ -288,7 +288,7 @@ public class SupplierService {
 
         supplier.setName(request.getName().trim());
         supplier.setPhone(request.getPhone().trim());
-        supplier.setEmail(request.getEmail().trim());
+        supplier.setEmail(trimToNull(request.getEmail()));
         supplier.setAddress(request.getAddress().trim());
         supplier.setTaxCode(request.getTaxCode().trim());
 

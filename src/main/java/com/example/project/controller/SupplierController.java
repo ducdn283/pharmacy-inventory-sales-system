@@ -23,13 +23,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.Map;
 
 /**
- * Module Nhà cung cấp dùng chung: Owner toàn quyền; Kế toán được xem danh sách/chi tiết, tạo NCC
- * mới và quản lý danh sách sản phẩm cung ứng (BA, 2026-08-11/15 — Kế toán là người trực tiếp làm
- * việc với NCC khi lập Phiếu nhập, nên cần tự thêm NCC và tự cập nhật hàng NCC đó còn cấp hay đã
- * ngừng ngay tại chỗ); Dược sĩ chỉ xem. Sửa THÔNG TIN NCC (tên, MST, liên hệ) vẫn Owner-only.
+ * Module Nhà cung cấp dùng chung: Owner toàn quyền; Kế toán được xem danh sách/chi tiết và tạo NCC
+ * mới (BA, 2026-08-11 — Kế toán là người trực tiếp làm việc với NCC khi lập Phiếu nhập, nên cần tự
+ * thêm NCC ngay tại chỗ); Dược sĩ chỉ xem. Sửa NCC đã có và mọi thao tác trên danh sách sản phẩm
+ * cung ứng vẫn Owner-only — danh sách đó là căn cứ lập dự trù mua hàng, không phải dữ liệu thao tác
+ * hằng ngày của Kế toán (BA chốt 2026-08-15).
  * Cả 3 role dùng chung một đường dẫn {@code /supplier/**}, nên giới hạn quyền ghi được chặn ở đây
- * bằng {@link #requireOwner()}/{@link #requireCanCreate()}/{@link #requireCanManageProducts()}
- * thay vì ở tầng route.
+ * bằng {@link #requireOwner()}/{@link #requireCanCreate()} thay vì ở tầng route.
  */
 @Controller
 @RequestMapping("/supplier")
@@ -54,18 +54,6 @@ public class SupplierController {
         String role = currentUserContext.getCurrentRole();
         if (!RoleConstants.OWNER.equals(role) && !RoleConstants.ACCOUNTANT.equals(role)) {
             throw new AccessDeniedException("Chỉ Chủ nhà thuốc hoặc Kế toán được tạo nhà cung cấp");
-        }
-    }
-
-    /**
-     * Thêm/sửa dòng sản phẩm cung ứng (gồm cả đổi trạng thái sang "Ngừng cung ứng"): Owner hoặc
-     * Kế toán. Đây là dữ liệu Kế toán chạm tới hằng ngày khi lập phiếu nhập, khác với thông tin
-     * định danh NCC ({@link #requireOwner()}).
-     */
-    private void requireCanManageProducts() {
-        String role = currentUserContext.getCurrentRole();
-        if (!RoleConstants.OWNER.equals(role) && !RoleConstants.ACCOUNTANT.equals(role)) {
-            throw new AccessDeniedException("Chỉ Chủ nhà thuốc hoặc Kế toán được sửa sản phẩm cung ứng");
         }
     }
 
@@ -267,7 +255,7 @@ public class SupplierController {
     public String addProducts(@PathVariable Integer id,
                               @RequestParam(name = "productIds", required = false) java.util.List<Integer> productIds,
                               RedirectAttributes redirectAttributes) {
-        requireCanManageProducts();
+        requireOwner();
         if (productIds == null || productIds.isEmpty()) {
             redirectAttributes.addFlashAttribute("errorMessage", "Vui lòng chọn ít nhất một sản phẩm để thêm");
             return "redirect:/supplier/" + id;
@@ -283,7 +271,8 @@ public class SupplierController {
     }
 
     /**
-     * Sửa một dòng sản phẩm cung ứng: trạng thái cung ứng, cờ ưu tiên, ghi chú.
+     * Sửa một dòng sản phẩm cung ứng: trạng thái cung ứng, cờ ưu tiên, ghi chú. Owner-only như mọi
+     * thao tác ghi khác của màn này.
      */
     @PostMapping("/{id}/products/{supplierProductId}")
     public String updateSupplierProduct(@PathVariable Integer id,
@@ -292,7 +281,7 @@ public class SupplierController {
                                         SupplierProductUpdateRequest form,
                                         BindingResult bindingResult,
                                         RedirectAttributes redirectAttributes) {
-        requireCanManageProducts();
+        requireOwner();
         if (bindingResult.hasErrors()) {
             redirectAttributes.addFlashAttribute("errorMessage", bindingResult.getFieldErrors().stream()
                     .map(FieldError::getDefaultMessage)

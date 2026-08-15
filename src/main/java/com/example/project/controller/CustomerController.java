@@ -169,7 +169,7 @@ public class CustomerController {
             model.addAttribute("form", toForm(customer));
         }
 
-        model.addAttribute("recentInvoices", customerService.getRecentInvoices(id));
+        model.addAttribute("invoiceHistory", customerService.getInvoiceHistory(id));
         model.addAttribute("totalDebt", customerService.getTotalDebt(id));
         model.addAttribute("invoiceBasePath", invoiceBasePath());
         model.addAttribute("pageTitle", "Chi tiết khách hàng");
@@ -206,7 +206,7 @@ public class CustomerController {
 
     private void populateDetail(Model model, Integer id) {
         model.addAttribute("customer", customerService.getById(id));
-        model.addAttribute("recentInvoices", customerService.getRecentInvoices(id));
+        model.addAttribute("invoiceHistory", customerService.getInvoiceHistory(id));
         model.addAttribute("totalDebt", customerService.getTotalDebt(id));
         model.addAttribute("invoiceBasePath", invoiceBasePath());
         model.addAttribute("pageTitle", "Chi tiết khách hàng");

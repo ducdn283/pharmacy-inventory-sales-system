@@ -165,10 +165,21 @@
               <div class="info-label">Địa chỉ</div>
               <div class="info-value" th:text="${supplier.address != null ? supplier.address : '—'}">—</div>
             </div>
+            <!-- Chi tiết từng phiếu nằm trong modal, không trải thẳng ra trang: NCC nợ vài chục
+                 phiếu là bảng dài hơn cả phần thông tin chính của màn. -->
             <div>
               <div class="info-label">Tổng công nợ phải trả</div>
               <div class="info-value debt-amount"
                    th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</div>
+              <button th:if="${not #lists.isEmpty(supplierDebts)}" type="button"
+                      class="btn btn-sm btn-outline-success mt-2"
+                      data-bs-toggle="modal" data-bs-target="#supplierDebtModal">
+                <i class="ti ti-receipt me-1"></i>
+                <span th:text="'Xem ' + ${#lists.size(supplierDebts)} + ' phiếu chưa thanh toán'">Xem công nợ</span>
+              </button>
+              <div th:if="${#lists.isEmpty(supplierDebts)}" class="text-secondary small mt-1">
+                Không còn phiếu nhập nào chưa thanh toán.
+              </div>
             </div>
           </div>
         </div>
@@ -248,7 +259,7 @@
           </div>
           <div class="col-12 col-md-6">
             <label for="editEmail" class="form-label">
-              Email <span class="text-danger">*</span>
+              Email <span class="text-secondary fw-normal">(không bắt buộc)</span>
             </label>
             <input id="editEmail" type="email" class="form-control"
                    th:field="*{email}"
@@ -260,7 +271,6 @@
                    maxlength="100"
                    pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                    title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
-                   required
                    placeholder="supplier@example.com">
             <div class="invalid-feedback" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
           </div>
@@ -289,79 +299,12 @@
       </form>
     </div>
 
-    <!-- Công nợ phải trả: từng phiếu nhập còn nợ, cùng nguồn số liệu với màn Công nợ -->
-    <div class="sup-card p-4 p-md-5 mt-4">
-      <div class="d-flex justify-content-between align-items-start gap-2 mb-3 flex-wrap">
-        <div>
-          <h2 class="fs-6 mb-1">Công nợ phải trả nhà cung cấp</h2>
-          <small class="text-secondary">Các phiếu nhập chưa thanh toán xong. Bấm "Xem" để mở phiếu nhập.</small>
-        </div>
-        <span class="badge fs-6 fw-semibold px-3 py-2"
-              th:classappend="${totalSupplierDebt != null and totalSupplierDebt.signum() > 0}
-                              ? 'badge-debt' : 'bg-light text-dark border'"
-              th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</span>
-      </div>
-
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Mã phiếu nhập</th>
-              <th>Ngày nhập</th>
-              <th class="text-center">Trạng thái</th>
-              <th>Hạn thanh toán</th>
-              <th class="text-end">Tổng tiền</th>
-              <th class="text-end">Đã trả</th>
-              <th class="text-end">Còn nợ</th>
-              <th class="text-end">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr th:each="debt : ${supplierDebts}">
-              <td class="fw-semibold text-secondary small" th:text="${debt.code}">PINV-000001</td>
-              <td th:text="${debt.date}">01/01/2026 10:00</td>
-              <td class="text-center">
-                <span class="badge bg-light text-dark border" th:text="${debt.status}">Nợ</span>
-              </td>
-              <td>
-                <span th:if="${debt.dueDate == null}" class="text-secondary">—</span>
-                <span th:if="${debt.dueDate != null and debt.overdue}" class="badge badge-overdue rounded-pill"
-                      th:text="${debt.dueDate + ' — quá hạn'}">01/01/2026 — quá hạn</span>
-                <span th:if="${debt.dueDate != null and !debt.overdue}" th:text="${debt.dueDate}">01/01/2026</span>
-              </td>
-              <td class="text-end"
-                  th:text="${#numbers.formatInteger((debt.totalAmount != null ? debt.totalAmount : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
-              <td class="text-end"
-                  th:text="${#numbers.formatInteger((debt.paid != null ? debt.paid : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
-              <td class="text-end debt-amount"
-                  th:text="${#numbers.formatInteger(debt.remaining, 1, 'COMMA') + ' ₫'}">0 ₫</td>
-              <td class="text-end">
-                <!-- Dược sĩ không có màn phiếu nhập nên không dựng link (xem purchaseInvoiceBasePath). -->
-                <a th:if="${purchaseInvoiceBasePath != null}"
-                   th:href="@{{base}/{id}(base=${purchaseInvoiceBasePath}, id=${debt.id})}"
-                   class="btn btn-sm btn-outline-success" title="Xem chi tiết phiếu nhập">Xem</a>
-                <span th:unless="${purchaseInvoiceBasePath != null}" class="text-secondary">—</span>
-              </td>
-            </tr>
-
-            <tr th:if="${#lists.isEmpty(supplierDebts)}">
-              <td colspan="8" class="text-center text-secondary py-5">
-                <i class="ti ti-checkbox d-block fs-2 mb-2 text-muted"></i>
-                Không còn công nợ nào với nhà cung cấp này.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
     <!-- Bảng sản phẩm cung ứng -->
     <div class="sup-card p-4 p-md-5 mt-4">
       <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
         <h2 class="fs-6 mb-0">Sản phẩm cung ứng</h2>
         <div class="d-flex align-items-center gap-2">
-          <button th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" type="button"
-                  class="btn btn-sup-primary btn-sm px-3"
+          <button th:if="${currentRole == 'OWNER'}" type="button" class="btn btn-sup-primary btn-sm px-3"
                   data-bs-toggle="modal" data-bs-target="#addProductModal">
             <i class="ti ti-plus"></i>Thêm sản phẩm cung ứng
           </button>
@@ -412,7 +355,7 @@
               <td class="text-end">
                 <div class="d-inline-flex gap-2">
                   <!-- data-* mang sẵn giá trị hiện tại sang modal; xem JS "sửa sản phẩm cung ứng". -->
-                  <button th:if="${currentRole == 'OWNER' or currentRole == 'ACCOUNTANT'}" type="button"
+                  <button th:if="${currentRole == 'OWNER'}" type="button"
                           class="btn btn-sm btn-outline-secondary btn-edit-sp"
                           data-bs-toggle="modal" data-bs-target="#editSupplierProductModal"
                           th:attr="data-sp-id=${sp.id},
@@ -443,6 +386,93 @@
 
   </div>
 </main>
+
+<!-- ===================== Modal: công nợ phải trả nhà cung cấp ===================== -->
+<div class="modal fade" id="supplierDebtModal" tabindex="-1" aria-labelledby="supplierDebtModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+    <div class="modal-content" style="border-radius:16px;">
+
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title fs-6 mb-0" id="supplierDebtModalLabel">Công nợ phải trả nhà cung cấp</h5>
+          <small class="text-secondary">Các phiếu nhập chưa thanh toán xong, mới nhất trước.</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <span class="text-secondary small">
+            Tổng còn phải trả:
+            <span class="debt-amount fs-6"
+                  th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</span>
+          </span>
+          <span class="badge bg-light text-dark border"
+                th:text="${#lists.size(supplierDebts)} + ' phiếu'">0 phiếu</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Mã phiếu nhập</th>
+                <th>Ngày nhập</th>
+                <th class="text-center">Trạng thái</th>
+                <th>Hạn thanh toán</th>
+                <th class="text-end">Tổng tiền</th>
+                <th class="text-end">Đã trả</th>
+                <th class="text-end">Còn nợ</th>
+                <th class="text-end">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="debtBody">
+              <tr th:each="debt : ${supplierDebts}" class="debt-row">
+                <td class="fw-semibold text-secondary small" th:text="${debt.code}">PINV-000001</td>
+                <td th:text="${debt.date}">01/01/2026 10:00</td>
+                <td class="text-center">
+                  <span class="badge bg-light text-dark border" th:text="${debt.status}">Nợ</span>
+                </td>
+                <td>
+                  <span th:if="${debt.dueDate == null}" class="text-secondary">—</span>
+                  <span th:if="${debt.dueDate != null and debt.overdue}" class="badge badge-overdue rounded-pill"
+                        th:text="${debt.dueDate + ' — quá hạn'}">01/01/2026 — quá hạn</span>
+                  <span th:if="${debt.dueDate != null and !debt.overdue}" th:text="${debt.dueDate}">01/01/2026</span>
+                </td>
+                <td class="text-end"
+                    th:text="${#numbers.formatInteger((debt.totalAmount != null ? debt.totalAmount : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
+                <td class="text-end"
+                    th:text="${#numbers.formatInteger((debt.paid != null ? debt.paid : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
+                <td class="text-end debt-amount"
+                    th:text="${#numbers.formatInteger(debt.remaining, 1, 'COMMA') + ' ₫'}">0 ₫</td>
+                <td class="text-end">
+                  <!-- Dược sĩ không có màn phiếu nhập nên không dựng link (xem purchaseInvoiceBasePath). -->
+                  <a th:if="${purchaseInvoiceBasePath != null}"
+                     th:href="@{{base}/{id}(base=${purchaseInvoiceBasePath}, id=${debt.id})}"
+                     class="btn btn-sm btn-outline-success" title="Xem chi tiết phiếu nhập">Xem</a>
+                  <span th:unless="${purchaseInvoiceBasePath != null}" class="text-secondary">—</span>
+                </td>
+              </tr>
+
+              <tr th:if="${#lists.isEmpty(supplierDebts)}">
+                <td colspan="8" class="text-center text-secondary py-5">
+                  <i class="ti ti-checkbox d-block fs-2 mb-2 text-muted"></i>
+                  Không còn công nợ nào với nhà cung cấp này.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer justify-content-between flex-wrap gap-2">
+        <span class="text-secondary small" id="debtPageInfo"></span>
+        <nav>
+          <ul class="pagination pagination-sm mb-0" id="debtPagination"></ul>
+        </nav>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ===================== Modal: chọn sản phẩm chưa cung ứng ===================== -->
 <div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
@@ -670,6 +700,67 @@
     }
 
     document.getElementById('espActive').addEventListener('change', syncPreferredAvailability);
+  })();
+</script>
+
+<!-- Phân trang bảng công nợ trong modal. Chỉ ẩn/hiện dòng đã render sẵn — không gọi thêm server,
+     và không phụ thuộc vai trò (mọi role đều xem được công nợ). -->
+<script>
+  (function () {
+    var PAGE_SIZE = 8;
+    var body       = document.getElementById('debtBody');
+    var pageInfo   = document.getElementById('debtPageInfo');
+    var pagination = document.getElementById('debtPagination');
+    if (!body || !pageInfo || !pagination) return;
+
+    var rows = Array.prototype.slice.call(body.querySelectorAll('tr.debt-row'));
+    var currentPage = 1;
+    if (rows.length === 0) return;
+
+    function render() {
+      var total = rows.length;
+      var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (currentPage > pages) currentPage = pages;
+
+      var start = (currentPage - 1) * PAGE_SIZE;
+      var end   = start + PAGE_SIZE;
+      rows.forEach(function (r, i) { r.style.display = (i >= start && i < end) ? '' : 'none'; });
+
+      pageInfo.textContent = 'Hiển thị ' + (start + 1) + '–' + Math.min(end, total) + ' / ' + total + ' phiếu';
+      renderPagination(pages);
+    }
+
+    function renderPagination(pages) {
+      pagination.innerHTML = '';
+      if (pages <= 1) return;
+
+      function pageItem(label, page, disabled, active) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        var a = document.createElement('a');
+        a.className = 'page-link'; a.href = '#'; a.innerHTML = label;
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (disabled || active) return;
+          currentPage = page;
+          render();
+        });
+        li.appendChild(a);
+        return li;
+      }
+
+      pagination.appendChild(pageItem('&laquo;', currentPage - 1, currentPage === 1, false));
+      // cửa sổ tối đa 5 số trang quanh trang hiện tại
+      var from = Math.max(1, currentPage - 2);
+      var to   = Math.min(pages, from + 4);
+      from = Math.max(1, to - 4);
+      for (var p = from; p <= to; p++) {
+        pagination.appendChild(pageItem(String(p), p, false, p === currentPage));
+      }
+      pagination.appendChild(pageItem('&raquo;', currentPage + 1, currentPage === pages, false));
+    }
+
+    render();
   })();
 </script>
 
