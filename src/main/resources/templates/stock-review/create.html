@@ -595,19 +595,21 @@
     }
 
     function currentType() {
-        return document
-            .getElementById('reviewType')
-            .value || 'COUNT';
+        const reviewTypeElement =
+            document.getElementById('reviewType');
+
+        if (!reviewTypeElement) {
+            return 'COUNT';
+        }
+
+        return reviewTypeElement.value || 'COUNT';
     }
 
-    /**
-     * Ẩn/hiện các cột theo loại rà soát.
-     */
     function changeReviewType() {
         const type = currentType();
 
         document.querySelectorAll('.count-column')
-            .forEach(element => {
+            .forEach(function (element) {
                 element.style.display =
                     type === 'COUNT'
                         ? ''
@@ -615,7 +617,7 @@
             });
 
         document.querySelectorAll('.date-column')
-            .forEach(element => {
+            .forEach(function (element) {
                 element.style.display =
                     type === 'DATE'
                         ? ''
@@ -623,45 +625,50 @@
             });
 
         document.querySelectorAll('.condition-column')
-            .forEach(element => {
+            .forEach(function (element) {
                 element.style.display =
                     type === 'CONDITION'
                         ? ''
                         : 'none';
             });
 
-        /*
-         * Khi rà soát tình trạng, các cột mã hàng hóa,
-         * tên hàng hóa, số lô và ghi chú sẽ chiếm hai hàng.
-         */
-
         document.querySelectorAll('.actual-input')
-            .forEach(input => {
+            .forEach(function (input) {
                 input.required =
                     type === 'COUNT';
             });
 
         document.querySelectorAll('.date-input')
-            .forEach(input => {
+            .forEach(function (input) {
                 input.required =
                     type === 'DATE';
             });
 
         document.querySelectorAll('.condition-qty-input')
-            .forEach(input => {
+            .forEach(function (input) {
                 input.required =
                     type === 'CONDITION';
             });
 
-        document.getElementById('countSummary').style.display =
-            type === 'COUNT'
-                ? ''
-                : 'none';
+        const countSummary =
+            document.getElementById('countSummary');
 
-        document.getElementById('reviewTypeHelp').textContent =
-            TYPE_HELP[type] || '';
+        if (countSummary) {
+            countSummary.style.display =
+                type === 'COUNT'
+                    ? ''
+                    : 'none';
+        }
 
-        const review reviewHelp = {
+        const reviewTypeHelp =
+            document.getElementById('reviewTypeHelp');
+
+        if (reviewTypeHelp) {
+            reviewTypeHelp.textContent =
+                TYPE_HELP[type] || '';
+        }
+
+        const reviewHelp = {
             COUNT:
                 'Sau khi phiếu được duyệt, Chủ nhà thuốc có thể tạo phiếu điều chỉnh tồn cho các dòng có chênh lệch.',
 
@@ -672,16 +679,18 @@
                 'Tổng số lượng Đạt chuẩn và Không đạt chuẩn phải bằng tồn hệ thống của từng lô.'
         };
 
-        document.getElementById('reviewWarning').innerHTML =
-            '<i class="ti ti-info-circle me-1"></i>'
-            + reviewHelp[type];
+        const reviewWarning =
+            document.getElementById('reviewWarning');
+
+        if (reviewWarning) {
+            reviewWarning.innerHTML =
+                '<i class="ti ti-info-circle me-1"></i>'
+                + (reviewHelp[type] || '');
+        }
 
         calculateSummary();
     }
 
-    /**
-     * Tính số liệu tóm tắt đang hiển thị trên màn hình.
-     */
     function calculateSummary() {
         const type = currentType();
 
@@ -692,7 +701,7 @@
         let totalActual = 0;
 
         document.querySelectorAll('.review-row')
-            .forEach(row => {
+            .forEach(function (row) {
                 totalItems++;
 
                 let issue = false;
@@ -706,10 +715,15 @@
                     const actualInput =
                         row.querySelector('.actual-input');
 
+                    const actualValue =
+                        actualInput
+                            ? actualInput.value.trim()
+                            : '';
+
                     const actualQty =
-                        Number(
-                            actualInput.value || 0
-                        );
+                        actualValue === ''
+                            ? 0
+                            : Number(actualValue);
 
                     const difference =
                         actualQty - systemQty;
@@ -719,51 +733,68 @@
                             '.difference-value'
                         );
 
-                    differenceElement.textContent =
-                        difference > 0
-                            ? '+' + difference
-                            : difference;
-
-                    differenceElement.className =
-                        'difference-value '
-                        + (
+                    if (differenceElement) {
+                        differenceElement.textContent =
                             difference > 0
-                                ? 'diff-plus'
-                                : difference < 0
-                                    ? 'diff-minus'
-                                    : 'text-secondary'
-                        );
+                                ? '+' + difference
+                                : difference;
+
+                        differenceElement.className =
+                            'difference-value '
+                            + (
+                                difference > 0
+                                    ? 'diff-plus'
+                                    : difference < 0
+                                        ? 'diff-minus'
+                                        : 'text-secondary'
+                            );
+                    }
 
                     totalSystem += systemQty;
                     totalActual += actualQty;
 
                     issue =
-                        difference !== 0;
+                        actualValue === ''
+                        || difference !== 0;
                 } else if (type === 'DATE') {
                     const recordedDate =
                         row.dataset.recordedDate || '';
 
+                    const dateInput =
+                        row.querySelector('.date-input');
+
                     const actualDate =
-                        row.querySelector('.date-input')
-                            .value || '';
+                        dateInput
+                            ? dateInput.value
+                            : '';
 
                     issue =
                         recordedDate !== actualDate;
                 } else if (type === 'CONDITION') {
                     const systemQty =
-                        Number(row.dataset.systemQty || 0);
+                        Number(
+                            row.dataset.systemQty || 0
+                        );
 
                     const compliantInput =
-                        row.querySelector('.compliant-qty-input');
+                        row.querySelector(
+                            '.compliant-qty-input'
+                        );
 
                     const nonCompliantInput =
-                        row.querySelector('.non-compliant-qty-input');
+                        row.querySelector(
+                            '.non-compliant-qty-input'
+                        );
 
                     const compliantValue =
-                        compliantInput?.value?.trim() || '';
+                        compliantInput
+                            ? compliantInput.value.trim()
+                            : '';
 
                     const nonCompliantValue =
-                        nonCompliantInput?.value?.trim() || '';
+                        nonCompliantInput
+                            ? nonCompliantInput.value.trim()
+                            : '';
 
                     const compliantQty =
                         compliantValue === ''
@@ -778,13 +809,16 @@
                     totalSystem += systemQty;
 
                     totalActual +=
-                        compliantQty + nonCompliantQty;
+                        compliantQty
+                        + nonCompliantQty;
 
                     issue =
                         compliantValue === ''
                         || nonCompliantValue === ''
                         || nonCompliantQty > 0
-                        || compliantQty + nonCompliantQty !== systemQty;
+                        || compliantQty
+                        + nonCompliantQty
+                        !== systemQty;
                 }
 
                 if (issue) {
@@ -794,40 +828,54 @@
                 }
             });
 
-        const totalDiff =
+        const totalDifference =
             totalActual - totalSystem;
 
-        document.getElementById(
-            'totalItemsDisplay'
-        ).textContent = totalItems;
+        setTextContent(
+            'totalItemsDisplay',
+            totalItems
+        );
 
-        document.getElementById(
-            'matchedItemsDisplay'
-        ).textContent = matchedItems;
+        setTextContent(
+            'matchedItemsDisplay',
+            matchedItems
+        );
 
-        document.getElementById(
-            'issueItemsDisplay'
-        ).textContent = issueItems;
+        setTextContent(
+            'issueItemsDisplay',
+            issueItems
+        );
 
-        document.getElementById(
-            'totalSystemDisplay'
-        ).textContent = totalSystem;
+        setTextContent(
+            'totalSystemDisplay',
+            totalSystem
+        );
 
-        document.getElementById(
-            'totalActualDisplay'
-        ).textContent = totalActual;
+        setTextContent(
+            'totalActualDisplay',
+            totalActual
+        );
 
-        document.getElementById(
-            'totalDiffDisplay'
-        ).textContent =
-            totalDiff > 0
-                ? '+' + totalDiff
-                : totalDiff;
+        setTextContent(
+            'totalDiffDisplay',
+            totalDifference > 0
+                ? '+' + totalDifference
+                : totalDifference
+        );
     }
 
-    /**
-     * Kiểm tra tổng số lượng của từng lô trước khi submit.
-     */
+    function setTextContent(
+        elementId,
+        value
+    ) {
+        const element =
+            document.getElementById(elementId);
+
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
     function validateConditionQuantities() {
         if (currentType() !== 'CONDITION') {
             return true;
@@ -836,35 +884,50 @@
         const rows =
             document.querySelectorAll('.review-row');
 
-        for (const row of rows) {
+        for (let index = 0;
+             index < rows.length;
+             index++) {
+
+            const row =
+                rows[index];
+
             const systemQty =
                 Number(
                     row.dataset.systemQty || 0
                 );
 
             const compliantInput =
-                row.querySelector('.compliant-qty-input');
-
-            const conditionSubRow =
-                row.nextElementSibling;
+                row.querySelector(
+                    '.compliant-qty-input'
+                );
 
             const nonCompliantInput =
-                row.querySelector('.non-compliant-qty-input');
+                row.querySelector(
+                    '.non-compliant-qty-input'
+                );
 
             if (!compliantInput
                 || compliantInput.value.trim() === '') {
-                alert('Vui lòng nhập số lượng hàng Đạt chuẩn.');
+                alert(
+                    'Vui lòng nhập số lượng hàng Đạt chuẩn.'
+                );
 
-                compliantInput?.focus();
+                if (compliantInput) {
+                    compliantInput.focus();
+                }
 
                 return false;
             }
 
             if (!nonCompliantInput
                 || nonCompliantInput.value.trim() === '') {
-                alert('Vui lòng nhập số lượng hàng Không đạt chuẩn.');
+                alert(
+                    'Vui lòng nhập số lượng hàng Không đạt chuẩn.'
+                );
 
-                nonCompliantInput?.focus();
+                if (nonCompliantInput) {
+                    nonCompliantInput.focus();
+                }
 
                 return false;
             }
@@ -875,11 +938,24 @@
             const nonCompliantQty =
                 Number(nonCompliantInput.value);
 
-            if (compliantQty < 0
+            if (!Number.isInteger(compliantQty)
+                || compliantQty < 0) {
+                alert(
+                    'Số lượng hàng Đạt chuẩn phải là số nguyên không âm.'
+                );
+
+                compliantInput.focus();
+
+                return false;
+            }
+
+            if (!Number.isInteger(nonCompliantQty)
                 || nonCompliantQty < 0) {
                 alert(
-                    'Số lượng đạt chuẩn và không đạt chuẩn không được âm.'
+                    'Số lượng hàng Không đạt chuẩn phải là số nguyên không âm.'
                 );
+
+                nonCompliantInput.focus();
 
                 return false;
             }
@@ -888,11 +964,15 @@
                 + nonCompliantQty
                 !== systemQty) {
 
+                const productNameCell =
+                    row.children.length > 1
+                        ? row.children[1]
+                        : null;
+
                 const productName =
-                    row.children[1]
-                        ?.textContent
-                        ?.trim()
-                    || 'lô hàng';
+                    productNameCell
+                        ? productNameCell.textContent.trim()
+                        : 'lô hàng';
 
                 alert(
                     'Tổng số lượng Đạt chuẩn và Không đạt chuẩn của '
@@ -902,66 +982,73 @@
                     + ').'
                 );
 
-                compliantInput?.focus();
+                compliantInput.focus();
 
                 return false;
             }
-
         }
 
         return true;
     }
 
-    /**
-     * Lọc hàng chính và hàng tình trạng bên dưới cùng nhau.
-     */
     function filterRows() {
+        const searchInput =
+            document.getElementById('tableSearch');
+
         const keyword = normalizeText(
-            document.getElementById(
-                'tableSearch'
-            ).value
+            searchInput
+                ? searchInput.value
+                : ''
         );
 
         document.querySelectorAll('.review-row')
-            .forEach(row => {
+            .forEach(function (row) {
+                const rowKeyword =
+                    normalizeText(
+                        row.dataset.keyword || ''
+                    );
+
                 const matched =
-                    !keyword
-                    || normalizeText(
-                        row.dataset.keyword
-                    ).includes(keyword);
+                    keyword === ''
+                    || rowKeyword.includes(keyword);
 
                 row.style.display =
                     matched
                         ? ''
                         : 'none';
-
-
             });
     }
 
     document.addEventListener(
         'DOMContentLoaded',
         function () {
-            document.getElementById(
-                'todayDisplay'
-            ).value =
-                new Date()
-                    .toLocaleDateString('vi-VN');
+            const todayDisplay =
+                document.getElementById(
+                    'todayDisplay'
+                );
+
+            if (todayDisplay) {
+                todayDisplay.value =
+                    new Date()
+                        .toLocaleDateString('vi-VN');
+            }
 
             const form =
                 document.getElementById(
                     'stockReviewForm'
                 );
 
-            form.addEventListener(
-                'submit',
-                function (event) {
-                    if (!validateConditionQuantities()) {
-                        event.preventDefault();
-                        event.stopImmediatePropagation();
+            if (form) {
+                form.addEventListener(
+                    'submit',
+                    function (event) {
+                        if (!validateConditionQuantities()) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
                     }
-                }
-            );
+                );
+            }
 
             changeReviewType();
         }
