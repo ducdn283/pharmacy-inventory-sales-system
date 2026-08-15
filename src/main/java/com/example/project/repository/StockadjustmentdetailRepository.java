@@ -8,7 +8,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.List;
 
 public interface StockadjustmentdetailRepository extends JpaRepository<Stockadjustmentdetail, Integer> {
@@ -68,33 +67,6 @@ public interface StockadjustmentdetailRepository extends JpaRepository<Stockadju
            left join fetch d.batchID
            """)
     List<Stockadjustmentdetail> findAllWithRelations();
-
-    /**
-     * Giá trị (theo GIÁ BÁN) của hàng xuất đi mà không qua bán hàng — {@code GIFT}/{@code SAMPLE}/
-     * {@code INTERNAL_USE}, xem {@code StockadjustmentService.REF_SELL_PRICE_TYPES} — trong
-     * {@code [from, to)}, feeding tax-period revenue (mục C.2). Chỉ phiếu đã
-     * {@code StockAdjustmentStatus.COMPLETED} mới thật sự xảy ra; phiếu nháp hoặc đã hủy không phải
-     * doanh thu.
-     *
-     * <p><b>04/08/2026 — đổi nguồn tính:</b> trước đây cộng {@code preTaxAmount + vatAmount} để dựng
-     * lại giá trị gộp. Hai cột đó đã bị BỎ khỏi bảng (hộ kinh doanh không khấu trừ GTGT nên phiếu điều
-     * chỉnh kho không còn tách net/thuế), nên câu truy vấn cũ khiến ứng dụng không khởi động được.
-     * Nay tính thẳng {@code refSellPrice × quantity} — đúng bằng con số mà hai cột kia từng cộng lại
-     * thành, và {@code refSellPrice} vẫn được snapshot y như trước cho đúng 3 loại phiếu này.</p>
-     */
-    @Query("""
-           select coalesce(sum(d.refSellPrice * d.quantity), 0)
-           from Stockadjustmentdetail d
-           where d.stockAdjustmentID.adjustmentType in :adjustmentTypes
-             and d.stockAdjustmentID.status = :status
-             and d.stockAdjustmentID.date >= :from
-             and d.stockAdjustmentID.date < :to
-             and d.refSellPrice is not null
-           """)
-    BigDecimal sumGrossValueInPeriod(@Param("adjustmentTypes") Collection<String> adjustmentTypes,
-                                     @Param("status") String status,
-                                     @Param("from") Instant from,
-                                     @Param("to") Instant to);
 
     /**
      * Cost of surplus stock-review lines whose batch was created as unknown-origin, in {@code [from, to)}
