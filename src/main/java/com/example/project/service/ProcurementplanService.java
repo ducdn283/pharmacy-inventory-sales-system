@@ -614,15 +614,18 @@ public class ProcurementplanService {
                 .toList();
     }
 
-    /** Tìm nhà cung cấp theo tên; nếu có {@code productId} thì kèm giá nhập. */
+    /** Tìm nhà cung cấp theo tên; ẩn NCC có liên kết supplierproduct bị deactive với sản phẩm đã chọn. */
     @Transactional(readOnly = true)
     public List<ProcurementSupplierSearchResponse> searchSuppliersForProduct(Integer productId, String keyword) {
         String normalizedKeyword = normalize(keyword);
+        Set<Integer> deactivatedSupplierIds = loadDeactivatedSupplierIds(productId);
 
         return supplierRepository.findAll()
                 .stream()
                 .filter(supplier -> normalizedKeyword.isEmpty()
                         || containsNormalized(supplier.getName(), normalizedKeyword))
+                .filter(supplier -> supplier.getId() == null
+                        || !deactivatedSupplierIds.contains(supplier.getId()))
                 .sorted(Comparator.comparing(supplier -> supplier.getName() == null ? "" : supplier.getName()))
                 .map(supplier -> new ProcurementSupplierSearchResponse(
                         supplier.getId(),
@@ -630,6 +633,24 @@ public class ProcurementplanService {
                         productId != null ? getSupplierCostPrice(supplier.getId(), productId) : null
                 ))
                 .toList();
+    }
+
+    /** Id các NCC bị deactive (isActive = 0) cho sản phẩm — loại khỏi modal chọn NCC. */
+    private Set<Integer> loadDeactivatedSupplierIds(Integer productId) {
+        if (productId == null) {
+            return Set.of();
+        }
+
+        Set<Integer> deactivated = new HashSet<>();
+        for (Supplierproduct supplierProduct : supplierproductRepository.findByProductID_ProductID(productId)) {
+            if (Boolean.FALSE.equals(supplierProduct.getIsActive())) {
+                Supplier supplier = supplierProduct.getSupplierID();
+                if (supplier != null && supplier.getId() != null) {
+                    deactivated.add(supplier.getId());
+                }
+            }
+        }
+        return deactivated;
     }
 
     /** Tổng tồn kho theo sản phẩm — gom từ các lô ({@link com.example.project.entity.Batch}). */
