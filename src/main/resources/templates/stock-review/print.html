@@ -1,10 +1,14 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi"
+      xmlns:th="http://www.thymeleaf.org">
 
 <head>
     <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
     <title>In mẫu rà soát kho | PharmaManager</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <script type="module"
             crossorigin
@@ -27,7 +31,7 @@
             background: #ffffff;
             padding: 32px;
             border-radius: 16px;
-            box-shadow: 0 1px 4px rgba(16, 24, 40, .08);
+            box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
         }
 
         .print-title {
@@ -76,6 +80,24 @@
             font-size: 13px;
             border: 1px solid #d1d5db;
             vertical-align: middle;
+        }
+
+        .condition-compliant-row {
+            background: #f8fffb;
+        }
+
+        .condition-non-compliant-row {
+            background: #fff8f8;
+        }
+
+        .condition-label-compliant {
+            color: #047857;
+            font-weight: 700;
+        }
+
+        .condition-label-non-compliant {
+            color: #dc2626;
+            font-weight: 700;
         }
 
         .signature-grid {
@@ -127,6 +149,7 @@
 
 <body>
 
+<!-- Các nút không xuất hiện khi in -->
 <div class="no-print flex-wrap">
     <a th:href="${basePath}"
        class="btn btn-outline-secondary">
@@ -137,15 +160,25 @@
 
     <div class="d-flex gap-2 flex-wrap">
         <a class="btn btn-outline-success"
-           th:href="@{${basePath + '/print'}(type='COUNT')}">
+           th:href="@{${basePath + '/print'}(
+               type='COUNT'
+           )}">
             Mẫu số lượng
         </a>
 
         <a class="btn btn-outline-success"
-           th:href="@{${basePath + '/print'}(type='DATE')}">
+           th:href="@{${basePath + '/print'}(
+               type='DATE'
+           )}">
             Mẫu hạn dùng
         </a>
 
+        <a class="btn btn-outline-success"
+           th:href="@{${basePath + '/print'}(
+               type='CONDITION'
+           )}">
+            Mẫu tình trạng
+        </a>
 
         <button type="button"
                 class="btn btn-success"
@@ -167,9 +200,12 @@
         Kiểm đếm số lượng
     </div>
 
+    <!-- Thông tin chung -->
     <div class="meta-grid">
         <div class="meta-row">
-            <div class="meta-label">Ngày in:</div>
+            <div class="meta-label">
+                Ngày in:
+            </div>
 
             <div th:text="${printData.printDateDisplay}">
                 01/06/2026
@@ -177,7 +213,9 @@
         </div>
 
         <div class="meta-row">
-            <div class="meta-label">Người in:</div>
+            <div class="meta-label">
+                Người in:
+            </div>
 
             <div th:text="${printData.printedByName}">
                 Nguyễn Văn A
@@ -185,7 +223,9 @@
         </div>
 
         <div class="meta-row">
-            <div class="meta-label">Tổng lô hàng:</div>
+            <div class="meta-label">
+                Tổng lô hàng:
+            </div>
 
             <div th:text="${printData.totalItems}">
                 0
@@ -193,20 +233,38 @@
         </div>
 
         <div class="meta-row">
-            <div class="meta-label">Ghi chú:</div>
-            <div>Rà soát theo từng lô hàng</div>
+            <div class="meta-label">
+                Ghi chú:
+            </div>
+
+            <div>
+                Rà soát theo từng lô hàng
+            </div>
         </div>
     </div>
 
+    <!-- Danh sách lô hàng -->
     <div class="table-responsive">
         <table class="table table-bordered align-middle">
             <thead>
             <tr>
-                <th style="width: 48px;">STT</th>
-                <th style="width: 100px;">Mã hàng</th>
-                <th>Tên hàng hóa</th>
-                <th style="width: 130px;">Số lô</th>
+                <th style="width: 48px;">
+                    STT
+                </th>
 
+                <th style="width: 100px;">
+                    Mã hàng hóa
+                </th>
+
+                <th>
+                    Tên hàng hóa
+                </th>
+
+                <th style="width: 130px;">
+                    Số lô
+                </th>
+
+                <!-- COUNT -->
                 <th th:if="${printData.type == 'COUNT'}"
                     style="width: 110px;">
                     Tồn hệ thống
@@ -222,6 +280,7 @@
                     Chênh lệch
                 </th>
 
+                <!-- DATE -->
                 <th th:if="${printData.type == 'DATE'}"
                     style="width: 120px;">
                     Hạn dùng hệ thống
@@ -237,14 +296,15 @@
                     Kết quả
                 </th>
 
+                <!-- CONDITION -->
                 <th th:if="${printData.type == 'CONDITION'}"
-                    style="width: 110px;">
-                    Số lượng hiện có
+                    style="width: 150px;">
+                    Tình trạng
                 </th>
 
                 <th th:if="${printData.type == 'CONDITION'}"
-                    style="width: 150px;">
-                    Tình trạng thực tế
+                    style="width: 130px;">
+                    Số lượng thực tế
                 </th>
 
                 <th th:if="${printData.type == 'CONDITION'}"
@@ -252,67 +312,118 @@
                     Kết quả
                 </th>
 
-                <th style="width: 180px;">Ghi chú</th>
+                <th style="width: 180px;">
+                    Ghi chú
+                </th>
             </tr>
             </thead>
 
             <tbody>
-            <tr th:each="item, iterStat : ${printData.items}">
-                <td class="text-center"
-                    th:text="${iterStat.index + 1}">
-                    1
-                </td>
+            <th:block th:each="item, iterStat : ${printData.items}">
 
-                <td th:text="${item.productCode}">
-                    MED-001
-                </td>
+                <!--
+                    Hàng chính.
 
-                <td th:text="${item.productName}">
-                    Paracetamol 500mg
-                </td>
+                    Với CONDITION, các cột thông tin cơ bản được
+                    gộp hai hàng bằng rowspan="2".
+                -->
+                <tr th:classappend="${printData.type == 'CONDITION'
+                        ? ' condition-compliant-row'
+                        : ''}">
 
-                <td th:text="${item.lotNumber ?: 'Không có'}">
-                    LOT-001
-                </td>
+                    <td class="text-center"
+                        th:attr="rowspan=${printData.type == 'CONDITION'
+                            ? 2
+                            : 1}"
+                        th:text="${iterStat.index + 1}">
+                        1
+                    </td>
 
-                <td th:if="${printData.type == 'COUNT'}"
-                    class="text-center"
-                    th:text="${item.systemQty}">
-                    0
-                </td>
+                    <td th:attr="rowspan=${printData.type == 'CONDITION'
+                            ? 2
+                            : 1}"
+                        th:text="${item.productCode}">
+                        MED-001
+                    </td>
 
-                <td th:if="${printData.type == 'COUNT'}"
-                    style="height: 36px;">
-                </td>
+                    <td th:attr="rowspan=${printData.type == 'CONDITION'
+                            ? 2
+                            : 1}"
+                        th:text="${item.productName}">
+                        Paracetamol 500mg
+                    </td>
 
-                <td th:if="${printData.type == 'COUNT'}"></td>
+                    <td th:attr="rowspan=${printData.type == 'CONDITION'
+                            ? 2
+                            : 1}"
+                        th:text="${item.lotNumber ?: 'Không có'}">
+                        LOT-001
+                    </td>
 
-                <td th:if="${printData.type == 'DATE'}"
-                    class="text-center"
-                    th:text="${item.expirationDateDisplay ?: 'Chưa có'}">
-                    01/06/2028
-                </td>
+                    <!-- COUNT -->
+                    <td th:if="${printData.type == 'COUNT'}"
+                        class="text-center"
+                        th:text="${item.systemQty}">
+                        0
+                    </td>
 
-                <td th:if="${printData.type == 'DATE'}"
-                    style="height: 36px;">
-                </td>
+                    <td th:if="${printData.type == 'COUNT'}"
+                        style="height: 36px;">
+                    </td>
 
-                <td th:if="${printData.type == 'DATE'}"></td>
+                    <td th:if="${printData.type == 'COUNT'}">
+                    </td>
 
-                <td th:if="${printData.type == 'CONDITION'}"
-                    class="text-center"
-                    th:text="${item.systemQty}">
-                    0
-                </td>
+                    <!-- DATE -->
+                    <td th:if="${printData.type == 'DATE'}"
+                        class="text-center"
+                        th:text="${item.expirationDateDisplay
+                            ?: 'Chưa có'}">
+                        01/06/2028
+                    </td>
 
-                <td th:if="${printData.type == 'CONDITION'}"
-                    style="height: 36px;">
-                </td>
+                    <td th:if="${printData.type == 'DATE'}"
+                        style="height: 36px;">
+                    </td>
 
-                <td th:if="${printData.type == 'CONDITION'}"></td>
+                    <td th:if="${printData.type == 'DATE'}">
+                    </td>
 
-                <td></td>
-            </tr>
+                    <!-- CONDITION: đạt chuẩn -->
+                    <td th:if="${printData.type == 'CONDITION'}"
+                        class="condition-label-compliant">
+                        Đạt chuẩn
+                    </td>
+
+                    <td th:if="${printData.type == 'CONDITION'}"
+                        style="height: 36px;">
+                    </td>
+
+                    <td th:if="${printData.type == 'CONDITION'}">
+                    </td>
+
+                    <!-- Ghi chú -->
+                    <td th:attr="rowspan=${printData.type == 'CONDITION'
+                            ? 2
+                            : 1}">
+                    </td>
+                </tr>
+
+                <!-- CONDITION: không đạt chuẩn -->
+                <tr th:if="${printData.type == 'CONDITION'}"
+                    class="condition-non-compliant-row">
+
+                    <td class="condition-label-non-compliant">
+                        Không đạt chuẩn
+                    </td>
+
+                    <td style="height: 36px;">
+                    </td>
+
+                    <td>
+                    </td>
+                </tr>
+            </th:block>
 
             <tr th:if="${#lists.isEmpty(printData.items)}">
                 <td colspan="8"
@@ -324,20 +435,36 @@
         </table>
     </div>
 
+    <!-- Chữ ký -->
     <div class="signature-grid">
         <div>
-            <div class="signature-title">Người rà soát</div>
-            <div>.................................</div>
+            <div class="signature-title">
+                Người rà soát
+            </div>
+
+            <div>
+                .................................
+            </div>
         </div>
 
         <div>
-            <div class="signature-title">Người đối chiếu</div>
-            <div>.................................</div>
+            <div class="signature-title">
+                Người đối chiếu
+            </div>
+
+            <div>
+                .................................
+            </div>
         </div>
 
         <div>
-            <div class="signature-title">Chủ nhà thuốc</div>
-            <div>.................................</div>
+            <div class="signature-title">
+                Chủ nhà thuốc
+            </div>
+
+            <div>
+                .................................
+            </div>
         </div>
     </div>
 </div>

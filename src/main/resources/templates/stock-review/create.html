@@ -3,10 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <title>Tạo phiếu rà soát kho | PharmaManager</title>
 
-    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
-    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+    <script type="module"
+            crossorigin
+            th:src="@{/assets/js/main.js}">
+    </script>
+
+    <link rel="stylesheet"
+          crossorigin
+          th:href="@{/assets/css/main.css}">
 
     <style>
         .stock-review-content {
@@ -17,8 +24,8 @@
         .stock-card {
             border: 1px solid #e5e7eb;
             border-radius: 16px;
-            background: #fff;
-            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
         }
 
         .section-title {
@@ -29,14 +36,14 @@
         .btn-stock-primary {
             background: #059669;
             border-color: #059669;
-            color: #fff;
+            color: #ffffff;
             border-radius: 12px;
         }
 
         .btn-stock-primary:hover {
             background: #047857;
             border-color: #047857;
-            color: #fff;
+            color: #ffffff;
         }
 
         .table thead th {
@@ -73,6 +80,18 @@
             font-weight: 700;
         }
 
+        .condition-status {
+            font-weight: 700;
+        }
+
+        .condition-status.compliant {
+            color: #059669;
+        }
+
+        .condition-status.non-compliant {
+            color: #dc2626;
+        }
+
         @media (max-width: 991.98px) {
             .stock-review-content {
                 padding-top: 84px !important;
@@ -83,25 +102,35 @@
 
 <body>
 <div th:replace="~{fragments/topbar :: topbar}"></div>
+
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 
-<main id="content" class="content stock-review-content">
+<main id="content"
+      class="content stock-review-content">
+
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
             <div>
-                <h1 class="fs-4 mb-1">Tạo phiếu rà soát kho</h1>
+                <h1 class="fs-4 mb-1">
+                    Tạo phiếu rà soát kho
+                </h1>
+
                 <p class="text-secondary mb-0">
-                    Chọn loại rà soát và ghi nhận dữ liệu thực tế của từng lô
+                    Chọn loại rà soát và ghi nhận dữ liệu thực tế
+                    của từng lô hàng
                 </p>
             </div>
 
-            <a th:href="${basePath}" class="btn btn-outline-secondary">
+            <a th:href="${basePath}"
+               class="btn btn-outline-secondary">
+
                 <i class="ti ti-arrow-left me-1"></i>
                 Quay lại danh sách
             </a>
         </div>
 
         <div th:replace="~{fragments/toast :: flash}"></div>
+
         <div th:replace="~{fragments/confirm :: confirm}"></div>
 
         <form th:action="${basePath + '/create'}"
@@ -116,6 +145,8 @@
 
             <div class="row g-4">
                 <div class="col-12 col-xl-9">
+
+                    <!-- Thông tin chung của phiếu -->
                     <div class="stock-card p-4 mb-4">
                         <div class="section-title mb-4">
                             <i class="ti ti-clipboard-list text-success me-1"></i>
@@ -124,7 +155,10 @@
 
                         <div class="row g-3">
                             <div class="col-12 col-md-3">
-                                <label class="form-label">Mã phiếu</label>
+                                <label class="form-label">
+                                    Mã phiếu
+                                </label>
+
                                 <input type="text"
                                        class="form-control"
                                        value="SR-NEW"
@@ -132,7 +166,10 @@
                             </div>
 
                             <div class="col-12 col-md-3">
-                                <label class="form-label">Ngày tạo</label>
+                                <label class="form-label">
+                                    Ngày tạo
+                                </label>
+
                                 <input type="text"
                                        id="todayDisplay"
                                        class="form-control"
@@ -140,7 +177,10 @@
                             </div>
 
                             <div class="col-12 col-md-3">
-                                <label class="form-label">Người tạo</label>
+                                <label class="form-label">
+                                    Người tạo
+                                </label>
+
                                 <input type="text"
                                        class="form-control"
                                        th:value="${creatorName}"
@@ -173,7 +213,10 @@
                             </div>
 
                             <div class="col-12">
-                                <label class="form-label">Ghi chú chung</label>
+                                <label class="form-label">
+                                    Ghi chú chung
+                                </label>
+
                                 <textarea class="form-control"
                                           rows="3"
                                           th:field="*{note}"
@@ -182,6 +225,7 @@
                         </div>
                     </div>
 
+                    <!-- Danh sách lô hàng -->
                     <div class="stock-card">
                         <div class="p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3">
                             <div class="section-title">
@@ -202,125 +246,213 @@
                             <table class="table table-hover align-middle mb-0">
                                 <thead>
                                 <tr>
-                                    <th>Mã hàng</th>
+                                    <th>Mã hàng hóa</th>
+
                                     <th>Tên hàng hóa</th>
+
                                     <th>Số lô</th>
-                                    <th class="count-column">Tồn hệ thống</th>
-                                    <th class="count-column" style="min-width: 130px;">
+
+                                    <th class="count-column">
+                                        Tồn hệ thống
+                                    </th>
+
+                                    <th class="count-column"
+                                        style="min-width: 130px;">
                                         Tồn thực tế
                                     </th>
-                                    <th class="count-column">Chênh lệch</th>
-                                    <th class="date-column">Hạn dùng hệ thống</th>
-                                    <th class="date-column" style="min-width: 155px;">
+
+                                    <th class="count-column">
+                                        Chênh lệch
+                                    </th>
+
+                                    <th class="date-column">
+                                        Hạn dùng hệ thống
+                                    </th>
+
+                                    <th class="date-column"
+                                        style="min-width: 155px;">
                                         Hạn dùng thực tế
                                     </th>
-                                    <th class="condition-column" style="min-width: 155px;">
-                                        Tình trạng thực tế
+
+                                    <th class="condition-column"
+                                        style="min-width: 155px;">
+                                        Tình trạng
                                     </th>
-                                    <th style="min-width: 190px;">Ghi chú</th>
+
+                                    <th class="condition-column"
+                                        style="min-width: 145px;">
+                                        Số lượng
+                                    </th>
+
+                                    <th style="min-width: 190px;">
+                                        Ghi chú
+                                    </th>
                                 </tr>
                                 </thead>
 
                                 <tbody>
-                                <tr th:each="candidate, iterStat : ${candidates}"
-                                    class="review-row"
-                                    th:data-keyword="${candidate.productCode + ' ' + candidate.productName + ' ' + candidate.lotNumber}"
-                                    th:data-system-qty="${candidate.systemQty}"
-                                    th:data-recorded-date="${candidate.expirationDate}">
+                                <!--
+                                    Mỗi candidate vẫn chỉ có một request item.
 
-                                    <td>
-                                        <span class="fw-semibold text-success"
-                                              th:text="${candidate.productCode}">
-                                            MED-001
-                                        </span>
+                                    Khi chọn CONDITION, một candidate được
+                                    hiển thị thành hai hàng nhỏ:
 
-                                        <input type="hidden"
-                                               th:name="${'items[' + iterStat.index + '].batchId'}"
-                                               th:value="${candidate.batchId}">
-                                    </td>
+                                    - Hàng trên: Đạt chuẩn
+                                    - Hàng dưới: Không đạt chuẩn
 
-                                    <td th:text="${candidate.productName}">
-                                        Paracetamol 500mg
-                                    </td>
+                                    Service sẽ chuyển một request item này
+                                    thành hai bản ghi stockreviewdetail.
+                                -->
+                                <th:block th:each="candidate, iterStat : ${candidates}">
 
-                                    <td>
-                                        <span class="badge bg-secondary-subtle text-secondary"
-                                              th:text="${candidate.lotNumber ?: 'Không có'}">
-                                            LOT-001
-                                        </span>
-                                    </td>
+                                    <!-- Hàng chính -->
+                                    <tr class="review-row"
+                                        th:data-keyword="${candidate.productCode
+                                            + ' '
+                                            + candidate.productName
+                                            + ' '
+                                            + candidate.lotNumber}"
+                                        th:data-system-qty="${candidate.systemQty}"
+                                        th:data-recorded-date="${candidate.expirationDate}">
 
-                                    <td class="count-column fw-semibold"
-                                        th:text="${candidate.systemQty}">
-                                        0
-                                    </td>
+                                        <!-- Mã hàng hóa -->
+                                        <td>
+                                            <span class="fw-semibold text-success"
+                                                  th:text="${candidate.productCode}">
+                                                MED-001
+                                            </span>
 
-                                    <td class="count-column">
-                                        <input type="number"
-                                               min="0"
-                                               class="form-control form-control-sm actual-input"
-                                               th:name="${'items[' + iterStat.index + '].actualQty'}"
-                                               th:value="${form.items != null
-                                                   and form.items.size() > iterStat.index
-                                                   and form.items[iterStat.index].actualQty != null
-                                                   ? form.items[iterStat.index].actualQty
-                                                   : candidate.systemQty}"
-                                               oninput="calculateSummary()">
-                                    </td>
+                                            <input type="hidden"
+                                                   th:name="${'items['
+                                                       + iterStat.index
+                                                       + '].batchId'}"
+                                                   th:value="${candidate.batchId}">
+                                        </td>
 
-                                    <td class="count-column">
-                                        <span class="difference-value text-secondary">
+                                        <!-- Tên hàng hóa -->
+                                        <td
+                                            th:text="${candidate.productName}">
+                                            Paracetamol 500mg
+                                        </td>
+
+                                        <!-- Số lô -->
+                                        <td>
+                                            <span class="badge bg-secondary-subtle text-secondary"
+                                                  th:text="${candidate.lotNumber
+                                                      ?: 'Không có'}">
+                                                LOT-001
+                                            </span>
+                                        </td>
+
+                                        <!-- COUNT: tồn hệ thống -->
+                                        <td class="count-column fw-semibold"
+                                            th:text="${candidate.systemQty}">
                                             0
-                                        </span>
-                                    </td>
+                                        </td>
 
-                                    <td class="date-column"
-                                        th:text="${candidate.expirationDateDisplay ?: 'Chưa có'}">
-                                        01/06/2028
-                                    </td>
+                                        <!-- COUNT: tồn thực tế -->
+                                        <td class="count-column">
+                                            <input type="number"
+                                                   min="0"
+                                                   class="form-control form-control-sm actual-input"
+                                                   th:name="${'items['
+                                                       + iterStat.index
+                                                       + '].actualQty'}"
+                                                   th:value="${form.items != null
+                                                       and form.items.size() > iterStat.index
+                                                       and form.items[iterStat.index].actualQty != null
+                                                       ? form.items[iterStat.index].actualQty
+                                                       : candidate.systemQty}"
+                                                   oninput="calculateSummary()">
+                                        </td>
 
-                                    <td class="date-column">
-                                        <input type="date"
-                                               class="form-control form-control-sm date-input"
-                                               th:name="${'items[' + iterStat.index + '].actualExpirationDate'}"
-                                               th:value="${form.items != null
-                                                   and form.items.size() > iterStat.index
-                                                   and form.items[iterStat.index].actualExpirationDate != null
-                                                   ? form.items[iterStat.index].actualExpirationDate
-                                                   : candidate.expirationDate}"
-                                               onchange="calculateSummary()">
-                                    </td>
+                                        <!-- COUNT: chênh lệch -->
+                                        <td class="count-column">
+                                            <span class="difference-value text-secondary">
+                                                0
+                                            </span>
+                                        </td>
 
-                                    <td class="condition-column">
-                                        <select class="form-select form-select-sm condition-input"
-                                                th:name="${'items[' + iterStat.index + '].conditionStatus'}"
-                                                onchange="calculateSummary()">
+                                        <!-- DATE: hạn dùng hệ thống -->
+                                        <td class="date-column"
+                                            th:text="${candidate.expirationDateDisplay
+                                                ?: 'Chưa có'}">
+                                            01/06/2028
+                                        </td>
 
-                                            <option th:each="conditionItem : ${conditionLabels}"
-                                                    th:value="${conditionItem.key}"
-                                                    th:text="${conditionItem.value}"
-                                                    th:selected="${form.items == null
-                                                        or form.items.size() <= iterStat.index
-                                                        ? conditionItem.key == 'GOOD'
-                                                        : conditionItem.key == form.items[iterStat.index].conditionStatus}">
-                                            </option>
-                                        </select>
-                                    </td>
+                                        <!-- DATE: hạn dùng thực tế -->
+                                        <td class="date-column">
+                                            <input type="date"
+                                                   class="form-control form-control-sm date-input"
+                                                   th:name="${'items['
+                                                       + iterStat.index
+                                                       + '].actualExpirationDate'}"
+                                                   th:value="${form.items != null
+                                                       and form.items.size() > iterStat.index
+                                                       and form.items[iterStat.index].actualExpirationDate != null
+                                                       ? form.items[iterStat.index].actualExpirationDate
+                                                       : candidate.expirationDate}"
+                                                   onchange="calculateSummary()">
+                                        </td>
 
-                                    <td>
-                                        <input type="text"
-                                               class="form-control form-control-sm note-input"
-                                               th:name="${'items[' + iterStat.index + '].note'}"
-                                               th:value="${form.items != null
-                                                   and form.items.size() > iterStat.index
-                                                   ? form.items[iterStat.index].note
-                                                   : ''}"
-                                               placeholder="Ghi chú nếu có">
-                                    </td>
-                                </tr>
+                                        <td class="condition-column condition-split-cell"
+                                            colspan="2">
+
+                                            <div class="condition-split-table">
+
+                                                <!-- Hàng đạt chuẩn -->
+                                                <div class="condition-split-status condition-split-row-top">
+            <span class="condition-status compliant">
+                Đạt chuẩn
+            </span>
+                                                </div>
+
+                                                <div class="condition-split-quantity condition-split-row-top">
+                                                    <input type="number"
+                                                           min="0"
+                                                           step="1"
+                                                           class="form-control form-control-sm condition-qty-input compliant-qty-input"
+                                                           th:name="${'items['
+                       + iterStat.index
+                       + '].compliantQty'}"
+                                                           th:value="${form.items != null
+                       and form.items.size() > iterStat.index
+                       and form.items[iterStat.index].compliantQty != null
+                       ? form.items[iterStat.index].compliantQty
+                       : ''}"
+                                                           placeholder="Nhập số lượng"
+                                                           oninput="calculateSummary()">
+                                                </div>
+
+                                                <!-- Hàng không đạt chuẩn -->
+                                                <div class="condition-split-status condition-split-row-bottom">
+            <span class="condition-status non-compliant">
+                Không đạt chuẩn
+            </span>
+                                                </div>
+
+                                                <div class="condition-split-quantity condition-split-row-bottom">
+                                                    <input type="number"
+                                                           min="0"
+                                                           step="1"
+                                                           class="form-control form-control-sm condition-qty-input non-compliant-qty-input"
+                                                           th:name="${'items['
+                       + iterStat.index
+                       + '].nonCompliantQty'}"
+                                                           th:value="${form.items != null
+                       and form.items.size() > iterStat.index
+                       and form.items[iterStat.index].nonCompliantQty != null
+                       ? form.items[iterStat.index].nonCompliantQty
+                       : ''}"
+                                                           placeholder="Nhập số lượng"
+                                                           oninput="calculateSummary()">
+                                                </div>
+                                            </div>
+                                        </td>
+                                </th:block>
 
                                 <tr th:if="${#lists.isEmpty(candidates)}">
-                                    <td colspan="10"
+                                    <td colspan="11"
                                         class="text-center text-secondary py-4">
                                         Không có lô hàng khả dụng để rà soát.
                                     </td>
@@ -330,44 +462,76 @@
                         </div>
                     </div>
                 </div>
-
+                <!-- Khu vực tóm tắt -->
                 <div class="col-12 col-xl-3">
                     <div class="stock-card p-4 mb-4">
-                        <div class="section-title mb-4">Tóm tắt rà soát</div>
-
-                        <div class="summary-row">
-                            <span class="text-secondary">Tổng lô hàng</span>
-                            <strong id="totalItemsDisplay">0</strong>
+                        <div class="section-title mb-4">
+                            Tóm tắt rà soát
                         </div>
 
                         <div class="summary-row">
-                            <span class="text-secondary">Khớp / Tốt</span>
+                            <span class="text-secondary">
+                                Tổng lô hàng
+                            </span>
+
+                            <strong id="totalItemsDisplay">
+                                0
+                            </strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">
+                                Khớp / Tốt
+                            </span>
+
                             <strong class="text-success"
-                                    id="matchedItemsDisplay">0</strong>
+                                    id="matchedItemsDisplay">
+                                0
+                            </strong>
                         </div>
 
                         <div class="summary-row">
-                            <span class="text-secondary">Có vấn đề</span>
+                            <span class="text-secondary">
+                                Có vấn đề
+                            </span>
+
                             <strong class="text-danger"
-                                    id="issueItemsDisplay">0</strong>
+                                    id="issueItemsDisplay">
+                                0
+                            </strong>
                         </div>
 
                         <div id="countSummary">
                             <hr>
 
                             <div class="summary-row">
-                                <span class="text-secondary">Tổng tồn hệ thống</span>
-                                <strong id="totalSystemDisplay">0</strong>
+                                <span class="text-secondary">
+                                    Tổng tồn hệ thống
+                                </span>
+
+                                <strong id="totalSystemDisplay">
+                                    0
+                                </strong>
                             </div>
 
                             <div class="summary-row">
-                                <span class="text-secondary">Tổng tồn thực tế</span>
-                                <strong id="totalActualDisplay">0</strong>
+                                <span class="text-secondary">
+                                    Tổng tồn thực tế
+                                </span>
+
+                                <strong id="totalActualDisplay">
+                                    0
+                                </strong>
                             </div>
 
                             <div class="summary-row">
-                                <span class="text-secondary">Tổng chênh lệch</span>
-                                <strong id="totalDiffDisplay">0</strong>
+                                <span class="text-secondary">
+                                    Tổng chênh lệch
+                                </span>
+
+                                <strong id="totalDiffDisplay">
+                                    0
+                                </strong>
                             </div>
                         </div>
                     </div>
@@ -416,7 +580,7 @@
             'Đối chiếu hạn dùng in trên lô với hạn dùng đang được lưu trong hệ thống.',
 
         CONDITION:
-            'Đánh giá tình trạng thực tế: Tốt, Hư hỏng, Biến chất hoặc Khác.'
+            'Phân loại toàn bộ số lượng của mỗi lô thành Đạt chuẩn và Không đạt chuẩn.'
     };
 
     function normalizeText(value) {
@@ -431,49 +595,73 @@
     }
 
     function currentType() {
-        return document.getElementById('reviewType').value || 'COUNT';
+        return document
+            .getElementById('reviewType')
+            .value || 'COUNT';
     }
 
+    /**
+     * Ẩn/hiện các cột theo loại rà soát.
+     */
     function changeReviewType() {
         const type = currentType();
 
         document.querySelectorAll('.count-column')
             .forEach(element => {
-                element.style.display = type === 'COUNT' ? '' : 'none';
+                element.style.display =
+                    type === 'COUNT'
+                        ? ''
+                        : 'none';
             });
 
         document.querySelectorAll('.date-column')
             .forEach(element => {
-                element.style.display = type === 'DATE' ? '' : 'none';
+                element.style.display =
+                    type === 'DATE'
+                        ? ''
+                        : 'none';
             });
 
         document.querySelectorAll('.condition-column')
             .forEach(element => {
-                element.style.display = type === 'CONDITION' ? '' : 'none';
+                element.style.display =
+                    type === 'CONDITION'
+                        ? ''
+                        : 'none';
             });
+
+        /*
+         * Khi rà soát tình trạng, các cột mã hàng hóa,
+         * tên hàng hóa, số lô và ghi chú sẽ chiếm hai hàng.
+         */
 
         document.querySelectorAll('.actual-input')
             .forEach(input => {
-                input.required = type === 'COUNT';
+                input.required =
+                    type === 'COUNT';
             });
 
         document.querySelectorAll('.date-input')
             .forEach(input => {
-                input.required = type === 'DATE';
+                input.required =
+                    type === 'DATE';
             });
 
-        document.querySelectorAll('.condition-input')
+        document.querySelectorAll('.condition-qty-input')
             .forEach(input => {
-                input.required = type === 'CONDITION';
+                input.required =
+                    type === 'CONDITION';
             });
 
         document.getElementById('countSummary').style.display =
-            type === 'COUNT' ? '' : 'none';
+            type === 'COUNT'
+                ? ''
+                : 'none';
 
         document.getElementById('reviewTypeHelp').textContent =
             TYPE_HELP[type] || '';
 
-        const reviewHelp = {
+        const review reviewHelp = {
             COUNT:
                 'Sau khi phiếu được duyệt, Chủ nhà thuốc có thể tạo phiếu điều chỉnh tồn cho các dòng có chênh lệch.',
 
@@ -481,16 +669,19 @@
                 'Phiếu chỉ lưu kết quả đối chiếu hạn dùng và không tự động thay đổi hạn dùng của lô hàng.',
 
             CONDITION:
-                'Phiếu chỉ lưu kết quả đánh giá tình trạng và không tự động tạo phiếu hủy hoặc thay đổi tồn kho.'
+                'Tổng số lượng Đạt chuẩn và Không đạt chuẩn phải bằng tồn hệ thống của từng lô.'
         };
 
         document.getElementById('reviewWarning').innerHTML =
-            '<i class="ti ti-info-circle me-1"></i>' +
-            reviewHelp[type];
+            '<i class="ti ti-info-circle me-1"></i>'
+            + reviewHelp[type];
 
         calculateSummary();
     }
 
+    /**
+     * Tính số liệu tóm tắt đang hiển thị trên màn hình.
+     */
     function calculateSummary() {
         const type = currentType();
 
@@ -508,19 +699,25 @@
 
                 if (type === 'COUNT') {
                     const systemQty =
-                        Number(row.dataset.systemQty || 0);
+                        Number(
+                            row.dataset.systemQty || 0
+                        );
 
                     const actualInput =
                         row.querySelector('.actual-input');
 
                     const actualQty =
-                        Number(actualInput.value || 0);
+                        Number(
+                            actualInput.value || 0
+                        );
 
                     const difference =
                         actualQty - systemQty;
 
                     const differenceElement =
-                        row.querySelector('.difference-value');
+                        row.querySelector(
+                            '.difference-value'
+                        );
 
                     differenceElement.textContent =
                         difference > 0
@@ -528,8 +725,8 @@
                             : difference;
 
                     differenceElement.className =
-                        'difference-value ' +
-                        (
+                        'difference-value '
+                        + (
                             difference > 0
                                 ? 'diff-plus'
                                 : difference < 0
@@ -539,15 +736,55 @@
 
                     totalSystem += systemQty;
                     totalActual += actualQty;
-                    issue = difference !== 0;
+
+                    issue =
+                        difference !== 0;
                 } else if (type === 'DATE') {
+                    const recordedDate =
+                        row.dataset.recordedDate || '';
+
+                    const actualDate =
+                        row.querySelector('.date-input')
+                            .value || '';
+
                     issue =
-                        (row.dataset.recordedDate || '') !==
-                        (row.querySelector('.date-input').value || '');
-                } else {
+                        recordedDate !== actualDate;
+                } else if (type === 'CONDITION') {
+                    const systemQty =
+                        Number(row.dataset.systemQty || 0);
+
+                    const compliantInput =
+                        row.querySelector('.compliant-qty-input');
+
+                    const nonCompliantInput =
+                        row.querySelector('.non-compliant-qty-input');
+
+                    const compliantValue =
+                        compliantInput?.value?.trim() || '';
+
+                    const nonCompliantValue =
+                        nonCompliantInput?.value?.trim() || '';
+
+                    const compliantQty =
+                        compliantValue === ''
+                            ? 0
+                            : Number(compliantValue);
+
+                    const nonCompliantQty =
+                        nonCompliantValue === ''
+                            ? 0
+                            : Number(nonCompliantValue);
+
+                    totalSystem += systemQty;
+
+                    totalActual +=
+                        compliantQty + nonCompliantQty;
+
                     issue =
-                        row.querySelector('.condition-input').value !==
-                        'GOOD';
+                        compliantValue === ''
+                        || nonCompliantValue === ''
+                        || nonCompliantQty > 0
+                        || compliantQty + nonCompliantQty !== systemQty;
                 }
 
                 if (issue) {
@@ -557,48 +794,178 @@
                 }
             });
 
-        const totalDiff = totalActual - totalSystem;
+        const totalDiff =
+            totalActual - totalSystem;
 
-        document.getElementById('totalItemsDisplay').textContent =
-            totalItems;
+        document.getElementById(
+            'totalItemsDisplay'
+        ).textContent = totalItems;
 
-        document.getElementById('matchedItemsDisplay').textContent =
-            matchedItems;
+        document.getElementById(
+            'matchedItemsDisplay'
+        ).textContent = matchedItems;
 
-        document.getElementById('issueItemsDisplay').textContent =
-            issueItems;
+        document.getElementById(
+            'issueItemsDisplay'
+        ).textContent = issueItems;
 
-        document.getElementById('totalSystemDisplay').textContent =
-            totalSystem;
+        document.getElementById(
+            'totalSystemDisplay'
+        ).textContent = totalSystem;
 
-        document.getElementById('totalActualDisplay').textContent =
-            totalActual;
+        document.getElementById(
+            'totalActualDisplay'
+        ).textContent = totalActual;
 
-        document.getElementById('totalDiffDisplay').textContent =
-            totalDiff > 0 ? '+' + totalDiff : totalDiff;
+        document.getElementById(
+            'totalDiffDisplay'
+        ).textContent =
+            totalDiff > 0
+                ? '+' + totalDiff
+                : totalDiff;
     }
 
+    /**
+     * Kiểm tra tổng số lượng của từng lô trước khi submit.
+     */
+    function validateConditionQuantities() {
+        if (currentType() !== 'CONDITION') {
+            return true;
+        }
+
+        const rows =
+            document.querySelectorAll('.review-row');
+
+        for (const row of rows) {
+            const systemQty =
+                Number(
+                    row.dataset.systemQty || 0
+                );
+
+            const compliantInput =
+                row.querySelector('.compliant-qty-input');
+
+            const conditionSubRow =
+                row.nextElementSibling;
+
+            const nonCompliantInput =
+                row.querySelector('.non-compliant-qty-input');
+
+            if (!compliantInput
+                || compliantInput.value.trim() === '') {
+                alert('Vui lòng nhập số lượng hàng Đạt chuẩn.');
+
+                compliantInput?.focus();
+
+                return false;
+            }
+
+            if (!nonCompliantInput
+                || nonCompliantInput.value.trim() === '') {
+                alert('Vui lòng nhập số lượng hàng Không đạt chuẩn.');
+
+                nonCompliantInput?.focus();
+
+                return false;
+            }
+
+            const compliantQty =
+                Number(compliantInput.value);
+
+            const nonCompliantQty =
+                Number(nonCompliantInput.value);
+
+            if (compliantQty < 0
+                || nonCompliantQty < 0) {
+                alert(
+                    'Số lượng đạt chuẩn và không đạt chuẩn không được âm.'
+                );
+
+                return false;
+            }
+
+            if (compliantQty
+                + nonCompliantQty
+                !== systemQty) {
+
+                const productName =
+                    row.children[1]
+                        ?.textContent
+                        ?.trim()
+                    || 'lô hàng';
+
+                alert(
+                    'Tổng số lượng Đạt chuẩn và Không đạt chuẩn của '
+                    + productName
+                    + ' phải bằng tồn hệ thống ('
+                    + systemQty
+                    + ').'
+                );
+
+                compliantInput?.focus();
+
+                return false;
+            }
+
+        }
+
+        return true;
+    }
+
+    /**
+     * Lọc hàng chính và hàng tình trạng bên dưới cùng nhau.
+     */
     function filterRows() {
         const keyword = normalizeText(
-            document.getElementById('tableSearch').value
+            document.getElementById(
+                'tableSearch'
+            ).value
         );
 
         document.querySelectorAll('.review-row')
             .forEach(row => {
+                const matched =
+                    !keyword
+                    || normalizeText(
+                        row.dataset.keyword
+                    ).includes(keyword);
+
                 row.style.display =
-                    !keyword ||
-                    normalizeText(row.dataset.keyword).includes(keyword)
+                    matched
                         ? ''
                         : 'none';
+
+
             });
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        document.getElementById('todayDisplay').value =
-            new Date().toLocaleDateString('vi-VN');
+    document.addEventListener(
+        'DOMContentLoaded',
+        function () {
+            document.getElementById(
+                'todayDisplay'
+            ).value =
+                new Date()
+                    .toLocaleDateString('vi-VN');
 
-        changeReviewType();
-    });
+            const form =
+                document.getElementById(
+                    'stockReviewForm'
+                );
+
+            form.addEventListener(
+                'submit',
+                function (event) {
+                    if (!validateConditionQuantities()) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                    }
+                }
+            );
+
+            changeReviewType();
+        }
+    );
 </script>
 
 </body>
