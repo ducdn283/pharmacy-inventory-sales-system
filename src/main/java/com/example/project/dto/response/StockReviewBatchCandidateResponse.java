@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @AllArgsConstructor
@@ -24,4 +25,10 @@ public class StockReviewBatchCandidateResponse {
     private String expirationDateDisplay;
 
     private Integer systemQty;
+
+    private Integer typeId;
+
+    private String typeName;
+
+    private List<String> positions;
 }
