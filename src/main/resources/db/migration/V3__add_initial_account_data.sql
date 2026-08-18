@@ -21,7 +21,7 @@ ON DUPLICATE KEY UPDATE
     phoneNumber = VALUES(phoneNumber),
     email = VALUES(email);
 
-INSERT INTO accountpermission (accountPermissionID, accountID, role)
+INSERT INTO account_permission (accountPermissionID, accountID, role)
 VALUES
     (1, 1, 'OWNER'),
     (3, 2, 'PHARMACIST'),
