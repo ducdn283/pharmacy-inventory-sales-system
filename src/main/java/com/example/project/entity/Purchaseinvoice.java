@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "purchaseinvoice")
+@Table(name = "purchase_invoice")
 public class Purchaseinvoice {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
