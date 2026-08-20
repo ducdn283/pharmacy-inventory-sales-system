@@ -21,6 +21,7 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -333,8 +334,7 @@ public class StockadjustmentService {
                 totalReimbursementValue,
                 linkedIncome != null ? linkedIncome.getId() : null,
                 linkedIncome != null ? linkedIncome.getIncomeCode() : null,
-                cancelBlockedReason(adjustment, statusName, details) == null,
-                cancelBlockedReason(adjustment, statusName, details)
+                cancelBlockedReason(adjustment, statusName, details) == null
         );
     }
 
@@ -508,12 +508,20 @@ public class StockadjustmentService {
         // INTERNAL_USE / SAMPLE / GIFT: không kiểm gì thêm — hàng vẫn còn, đảo ngược chỉ cộng lại tồn.
     }
 
-    /** Câu từ chối theo LOẠI phiếu, hoặc {@code null} nếu loại này đảo ngược được. */
+    /**
+     * Câu từ chối theo LOẠI phiếu, hoặc {@code null} nếu loại này đảo ngược được.
+     *
+     * <p><b>Chỉ nêu LÝ DO từ chối, KHÔNG gợi ý cách đi vòng (21/08/2026).</b> Hai câu này trước có thêm
+     * vế <i>"hãy lập một phiếu điều chỉnh mới..."</i> — vừa trái quy ước bỏ gợi ý của màn này, vừa
+     * <b>chỉ sai đường</b>: cách duy nhất để ghi TĂNG tồn bằng phiếu điều chỉnh là dòng {@code IN} của
+     * phiếu {@link #TYPE_COUNT}, mà phiếu đó phải sinh từ một lần kiểm đếm có hàng thừa đếm được ngoài
+     * đời. Bảo người dùng làm thế để gỡ một phiếu hủy lập nhầm chính là dựng kho ảo — đúng thứ hai
+     * câu chặn này sinh ra để ngăn.</p>
+     */
     private String typeBlocksReversal(String type, List<Stockadjustmentdetail> details) {
         if (TYPE_DESTROY.equals(type) || TYPE_DESTROY_EMPLOYEE_FAULT.equals(type)) {
             return "Không thể hủy phiếu " + formatAdjustmentType(type)
-                    + ": hàng đã được tiêu hủy nên không thể nhập trở lại kho. "
-                    + "Nếu cần ghi tăng tồn kho, hãy lập một phiếu điều chỉnh mới theo phiếu rà soát kho.";
+                    + ": hàng đã được tiêu hủy nên không thể nhập trở lại kho.";
         }
         if (isCountType(type)) {
             boolean hasDecreaseLine = details.stream().anyMatch(
@@ -521,16 +529,17 @@ public class StockadjustmentService {
                             && !DIRECTION_NONE.equals(detail.getDirection()));
             if (hasDecreaseLine) {
                 return "Không thể hủy phiếu " + formatAdjustmentType(type)
-                        + ": phiếu có dòng ghi GIẢM tồn kho (hàng đã thất thoát) nên không nhập lại được. "
-                        + "Hãy lập một phiếu điều chỉnh mới nếu số liệu cần sửa.";
+                        + ": phiếu có dòng ghi GIẢM tồn kho (hàng đã thất thoát) nên không nhập lại được.";
             }
         }
         return null;
     }
 
     /**
-     * Vì sao phiếu này không hủy được — dùng cho MÀN HÌNH, để ẩn nút Hủy kèm lời giải thích thay vì
-     * để người dùng bấm rồi mới ăn lỗi. {@code null} nghĩa là hủy được.
+     * Vì sao phiếu này không hủy được. Màn hình chỉ dùng để quyết định CÓ HIỆN nút Hủy hay không
+     * ({@code null} = hủy được); bản thân câu chữ KHÔNG được hiện lên màn chi tiết nữa (21/08/2026)
+     * — màn đó không còn thao tác hủy thì nói thêm về hủy chỉ làm người đọc rối. Câu này vẫn được
+     * ném ra từ {@link #typeBlocksReversal} khi ai đó gửi thẳng lên server.
      *
      * <p>Chỉ soi phần phụ thuộc LOẠI phiếu. Phiếu rà soát toàn dòng tăng vẫn có thể bị
      * {@link #assertBatchesUntouchedSince} chặn lúc bấm — điều kiện đó phụ thuộc dữ liệu thay đổi
@@ -1073,11 +1082,7 @@ public class StockadjustmentService {
      *   <li>{@code type = CONDITION} → phiếu {@link #TYPE_DESTROY}, trừ kho đúng phần hàng
      *       <b>không đạt chuẩn</b> ({@code conditionStatus = NON_COMPLIANT}). Mặc định là hủy hàng
      *       khách quan, KHÔNG phải {@link #TYPE_DESTROY_EMPLOYEE_FAULT} — rà soát tình trạng chỉ nói
-     *       hàng hỏng, không nói hỏng vì ai, quy lỗi nhân viên phải có biên bản riêng.
-     *       <p><b>⚠️ Nhánh này ĐANG BỊ ẨN khỏi màn tạo (16/08/2026)</b> — code đã chạy đúng, chỉ là
-     *       module Rà soát kho chưa lập nổi một phiếu tình trạng dùng được nên không có đầu vào.
-     *       GIỮ NGUYÊN, đừng xoá: mở lại chỉ cần thêm {@code 'CONDITION'} vào {@code modalReviewTypes}
-     *       trong {@code stock-adjustment/create.html}.</p></li>
+     *       hàng hỏng, không nói hỏng vì ai, quy lỗi nhân viên phải có biên bản riêng.</li>
      * </ul>
      *
      * <p>Dòng do client gửi lên bị BỎ QUA — số lượng chỉ tin từ phiếu rà soát kho. Khi phiếu được lập thẳng
@@ -1550,6 +1555,7 @@ public class StockadjustmentService {
                 formatLocalDate(batch.getExpirationDate()),
                 isExpired(batch),
                 isNearExpiry(batch),
+                daysToExpiry(batch),
                 batch.getStorageQuantity(),
                 unit != null ? unit.getId() : null,
                 unit != null ? unit.getUnitName() : "Đơn vị",
@@ -1758,6 +1764,15 @@ public class StockadjustmentService {
             return false;
         }
         return !expiry.isAfter(LocalDate.now().plusDays(NEAR_EXPIRY_DAYS));
+    }
+
+    /**
+     * Số ngày còn lại tới hạn dùng: {@code null} nếu lô không khai hạn, âm nếu đã quá hạn. Màn tạo phiếu
+     * dùng để lọc theo ngưỡng tùy ý — xem {@code StockAdjustmentBatchCandidateResponse.daysToExpiry}.
+     */
+    private Integer daysToExpiry(Batch batch) {
+        LocalDate expiry = batch.getExpirationDate();
+        return expiry == null ? null : (int) ChronoUnit.DAYS.between(LocalDate.now(), expiry);
     }
 
     private String formatCode(Integer id) {

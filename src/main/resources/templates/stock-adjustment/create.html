@@ -368,7 +368,7 @@
                                     <optgroup label="Theo phiếu rà soát kho">
                                         <!-- Loại phiếu sinh ra (điều chỉnh tồn kho hay sửa hạn dùng) do
                                              LOẠI phiếu rà soát kho được chọn quyết định, không gõ tay. -->
-                                        <option value="STOCK_REVIEW">Theo phiếu rà soát kho (số lượng / hạn dùng)</option>
+                                        <option value="STOCK_REVIEW">Theo phiếu rà soát kho (số lượng / hạn dùng / tình trạng)</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -460,9 +460,16 @@
                                     <th>Tên hàng hóa</th>
                                     <th>Số lô</th>
                                     <th>Hạn dùng</th>
+                                    <!-- Kèm đơn vị: đơn vị cơ sở khác nhau theo từng sản phẩm (sản phẩm này là Hộp,
+                                         sản phẩm kia là Viên) nên số trần không đọc được — 100 và 2970 trông như
+                                         cùng thang đo trong khi không phải. -->
                                     <th>Tồn hiện tại</th>
                                     <th style="min-width: 120px;">Số lượng</th>
-                                    <th style="min-width: 160px;">Lý do</th>
+                                    <!-- "Ghi chú" chứ không phải "Lý do": ô này KHÔNG bắt buộc và lưu vào
+                                         stockadjustmentdetail.note — màn chi tiết cũng gọi là Ghi chú. Lý do
+                                         bắt buộc là ô "Lý do" ở đầu phiếu; để hai ô cùng tên là người dùng tưởng
+                                         dòng nào cũng phải điền. -->
+                                    <th style="min-width: 160px;">Ghi chú</th>
                                     <!-- Cột "Thuế GTGT đầu ra" bỏ hẳn 04/08/2026 — xem StockadjustmentService.
                                          Cột "Giá vốn" bỏ 15/08/2026; tổng giá vốn vẫn ở khối Tóm tắt. -->
                                     <th class="text-end">Thao tác</th>
@@ -517,6 +524,18 @@
                                         <th>Hạn đang lưu</th>
                                         <th>Hạn thực tế</th>
                                     </tr>
+                                    <!-- Rà soát tình trạng: không có khái niệm "lệch" nào cả. Mỗi dòng là phần
+                                         KHÔNG ĐẠT CHUẨN của một lô — phần đạt chuẩn vẫn bán được nên không được
+                                         bày cột "Chênh lệch" (SL không đạt − tồn lô) — số đó âm và vô nghĩa. -->
+                                    <tr id="reviewPreviewHeadCondition" style="display: none;">
+                                        <th>Mã hàng</th>
+                                        <th>Tên hàng hóa</th>
+                                        <th>Số lô</th>
+                                        <th>Hạn dùng</th>
+                                        <th>Tồn lô</th>
+                                        <th>SL không đạt chuẩn</th>
+                                        <th>Đơn vị</th>
+                                    </tr>
                                     </thead>
                                     <tbody id="reviewPreviewBody">
                                     <tr id="reviewEmptyRow">
@@ -544,7 +563,7 @@
                         <!-- Phiếu sửa hạn dùng: hạn sửa cho CẢ LÔ nên tổng số lượng vô nghĩa — đổi sang
                              nêu thay đổi hạn. Hai dòng loại trừ nhau, xem applySummaryMode(). -->
                         <div class="summary-row" id="quantitySummaryRow">
-                            <span class="text-secondary">Tổng số lượng</span>
+                            <span class="text-secondary" id="quantitySummaryLabel">Tổng số lượng</span>
                             <strong id="totalQuantityDisplay">0</strong>
                         </div>
 
@@ -680,12 +699,24 @@
                     <div class="stock-modal-toolbar">
                         <input type="text" class="form-control" id="stockModalSearch"
                                placeholder="Tìm theo tên hàng, mã hàng, số lô" oninput="renderStockModalRows()">
+                        <!-- Hai mốc cận hạn là CỐ Ý: 30 ngày là "phải xử lý ngay" (cùng mốc với thông báo
+                             hết hạn của hệ thống), 90 ngày là "để biết mà cân nhắc" và cũng là ngưỡng của
+                             nhãn vàng "Cận hạn" trên dòng lô. -->
                         <select class="form-select" id="stockModalExpiryFilter" onchange="renderStockModalRows()">
                             <option value="">Tất cả hạn dùng</option>
                             <option value="EXPIRED">Đã hết hạn</option>
+                            <option value="NEAR30">Cận hạn (trong 30 ngày)</option>
                             <option value="NEAR">Cận hạn (trong 90 ngày)</option>
                             <option value="VALID">Còn hạn</option>
                             <option value="NONE">Không có hạn dùng</option>
+                        </select>
+                        <select class="form-select" id="stockModalSort" onchange="renderStockModalRows()">
+                            <option value="">Sắp xếp mặc định</option>
+                            <option value="NAME_ASC">Tên A → Z</option>
+                            <option value="NAME_DESC">Tên Z → A</option>
+                            <option value="QTY_ASC">Tồn ít → nhiều</option>
+                            <option value="QTY_DESC">Tồn nhiều → ít</option>
+                            <option value="EXPIRY_ASC">Hạn gần nhất trước</option>
                         </select>
                         <button type="button" class="btn btn-destroy-primary ms-auto"
                                 id="addStockSelectionBtn" disabled onclick="addStockModalSelection()">
@@ -940,6 +971,7 @@
         stockSelection.clear();
         document.getElementById('stockModalSearch').value = '';
         document.getElementById('stockModalExpiryFilter').value = '';
+        document.getElementById('stockModalSort').value = '';
         renderStockModalRows();
         document.getElementById('stockModal').style.display = 'flex';
     }
@@ -948,9 +980,15 @@
         document.getElementById('stockModal').style.display = 'none';
     }
 
+    /**
+     * NEAR30 đếm từ daysToExpiry (số ngày còn lại, server tính) chứ không từ cờ nearExpiry — cờ đó là
+     * ngưỡng 90 ngày dùng chung toàn hệ thống, không hạ xuống 30 được.
+     */
     function matchesExpiryFilter(candidate, filter) {
+        const days = candidate.daysToExpiry;
         switch (filter) {
             case 'EXPIRED': return !!candidate.expired;
+            case 'NEAR30':  return !candidate.expired && days !== null && days !== undefined && days <= 30;
             case 'NEAR':    return !candidate.expired && !!candidate.nearExpiry;
             case 'VALID':   return !candidate.expired && !candidate.nearExpiry && !!candidate.expirationDateDisplay;
             case 'NONE':    return !candidate.expirationDateDisplay;
@@ -958,12 +996,36 @@
         }
     }
 
+    /** Lô không khai hạn luôn xếp cuối khi sắp theo hạn — không có hạn thì không phải việc gấp. */
+    function sortStockRows(rows, order) {
+        const byName = (a, b) => (a.productName || '').localeCompare(b.productName || '', 'vi');
+        const byQty = (a, b) => Number(a.storageQuantity || 0) - Number(b.storageQuantity || 0);
+        const byExpiry = (a, b) => {
+            const da = a.daysToExpiry, db = b.daysToExpiry;
+            if (da === null || da === undefined) return (db === null || db === undefined) ? byName(a, b) : 1;
+            if (db === null || db === undefined) return -1;
+            return da - db;
+        };
+        switch (order) {
+            case 'NAME_ASC':   return rows.sort(byName);
+            case 'NAME_DESC':  return rows.sort((a, b) => byName(b, a));
+            case 'QTY_ASC':    return rows.sort(byQty);
+            case 'QTY_DESC':   return rows.sort((a, b) => byQty(b, a));
+            case 'EXPIRY_ASC': return rows.sort(byExpiry);
+            default:           return rows;
+        }
+    }
+
     function stockModalRows() {
         const keyword = normalizeText(document.getElementById('stockModalSearch').value);
         const filter = document.getElementById('stockModalExpiryFilter').value;
-        return availableCandidates()
-            .filter(candidate => matchesKeyword(candidate, keyword))
-            .filter(candidate => matchesExpiryFilter(candidate, filter));
+        const order = document.getElementById('stockModalSort').value;
+        // sort() sửa tại chỗ — filter() ở trên đã trả mảng mới nên không đụng vào candidates gốc.
+        return sortStockRows(
+            availableCandidates()
+                .filter(candidate => matchesKeyword(candidate, keyword))
+                .filter(candidate => matchesExpiryFilter(candidate, filter)),
+            order);
     }
 
     function renderStockModalRows() {
@@ -1013,23 +1075,39 @@
         syncStockSelectionUi();
     }
 
-    function toggleStockRow(input) {
-        const batchId = Number(input.value);
-        if (input.checked) {
+    /** Đặt trạng thái cho MỘT dòng: ô tick, vùng đang chọn và màu nền dòng đi liền nhau. */
+    function applyStockRowState(check, checked) {
+        check.checked = checked;
+        const batchId = Number(check.value);
+        if (checked) {
             stockSelection.add(batchId);
         } else {
             stockSelection.delete(batchId);
         }
-        const row = input.closest('tr');
-        if (row) row.classList.toggle('stock-row-selected', input.checked);
+        const row = check.closest('tr');
+        if (row) row.classList.toggle('stock-row-selected', checked);
+    }
+
+    function toggleStockRow(input) {
+        applyStockRowState(input, input.checked);
         syncStockSelectionUi();
     }
 
+    /**
+     * Ô tick ở đầu bảng: chọn tất cả / bỏ chọn tất cả các dòng ĐANG HIỆN.
+     *
+     * <b>Đọc input.checked ĐÚNG MỘT LẦN trước vòng lặp</b> — đây là chỗ từng hỏng (sửa 21/08/2026):
+     * syncStockSelectionUi() tự GHI LẠI chính ô này (nó tính lại "đã tick hết chưa"), nên nếu vừa
+     * đọc input.checked ở mỗi vòng vừa gọi sync trong vòng thì: tick dòng 1 xong, sync thấy mới 1/N
+     * nên đặt ô đầu bảng về false ⇒ các dòng sau nhận false và bị bỏ chọn ngay sau khi vừa chọn.
+     * Triệu chứng: bấm "chọn tất cả" từ trạng thái trống thì chỉ chọn được đúng dòng ĐẦU TIÊN.
+     * Vì vậy cũng chỉ sync MỘT lần sau vòng lặp, không sync từng dòng.
+     */
     function toggleStockSelectAll(input) {
-        document.querySelectorAll('#stockModalBody .stock-row-check:not(:disabled)').forEach(check => {
-            check.checked = input.checked;
-            toggleStockRow(check);
-        });
+        const shouldCheck = input.checked;
+        document.querySelectorAll('#stockModalBody .stock-row-check:not(:disabled)')
+            .forEach(check => applyStockRowState(check, shouldCheck));
+        syncStockSelectionUi();
     }
 
     function syncStockSelectionUi() {
@@ -1088,12 +1166,21 @@
         }
     }
 
-    /** Nút "Thêm hàng đã hết hạn" chỉ có nghĩa với phiếu hủy hàng. */
+    /**
+     * Nút "Thêm hàng đã hết hạn" chỉ hiện với phiếu Hủy hàng thông thường.
+     *
+     * <b>CỐ Ý KHÔNG hiện với DESTROY_EMPLOYEE_FAULT (21/08/2026):</b> hết hạn là chuyện của thời gian,
+     * không phải lỗi của ai. Nút này đổ MỌI lô quá hạn vào phiếu chỉ bằng một cú bấm — làm thế trên
+     * phiếu lỗi nhân viên là quy trách nhiệm cho người trực toàn bộ hàng hết hạn của nhà thuốc, mà
+     * loại phiếu đó còn kèm khối ước tính đền bù theo GIÁ BÁN.
+     * Lô hết hạn vẫn chọn tay được cho loại phiếu đó — chỉ bỏ đường thêm hàng loạt.
+     */
     function syncExpiredButton() {
         const button = document.getElementById('addExpiredBtn');
         if (!button) return;
         const expiredCount = availableCandidates().filter(candidate => candidate.expired).length;
-        button.style.display = isDestroyType() ? '' : 'none';
+        const type = document.getElementById('adjustmentTypeSelect').value;
+        button.style.display = type === 'DESTROY' ? '' : 'none';
         button.innerHTML = '<i class="ti ti-alert-triangle me-1"></i>Thêm hàng đã hết hạn'
             + (expiredCount > 0 ? ' (' + expiredCount + ')' : '');
     }
@@ -1144,7 +1231,7 @@
                 ${expiryNote(candidate)}
             </td>
 
-            <td>${candidate.storageQuantity}</td>
+            <td>${candidate.storageQuantity}${candidate.unitName ? ' ' + escapeHtml(candidate.unitName) : ''}</td>
 
             <td>
                 <input type="number"
@@ -1223,6 +1310,8 @@
         document.getElementById('selectedCountBadge').textContent = totalItems;
         document.getElementById('totalItemsDisplay').textContent = totalItems;
         document.getElementById('totalQuantityDisplay').textContent = totalQuantity;
+        // Phải trả nhãn về mặc định: đổi từ nguồn tình trạng sang lập tay thì "Tổng SL hủy" còn dính lại.
+        document.getElementById('quantitySummaryLabel').textContent = 'Tổng số lượng';
         applySummaryMode(false);
     }
 
@@ -1246,7 +1335,10 @@
         document.getElementById('sourceModeInput').value = isCount ? 'STOCK_REVIEW' : 'MANUAL';
     }
 
-    /** Hai loại hủy hàng — cũng là 2 loại duy nhất được thêm nhanh hàng đã hết hạn. */
+    /**
+     * Hai loại hủy hàng — hai loại duy nhất được phép chọn lô đã hết hạn.
+     * (Riêng nút thêm hàng loạt thì chỉ DESTROY — xem {@code syncExpiredButton}.)
+     */
     function isDestroyType() {
         const type = document.getElementById('adjustmentTypeSelect').value;
         return type === 'DESTROY' || type === 'DESTROY_EMPLOYEE_FAULT';
@@ -1350,15 +1442,13 @@
     // ------------------------------------------------ modal chọn phiếu rà soát kho
 
     /**
-     * Loại phiếu rà soát kho được phép chọn ở màn này.
+     * Loại phiếu rà soát kho được phép chọn ở màn này — đủ cả 3 loại.
      *
-     * ⚠️ 'CONDITION' ĐANG BỊ ẨN (16/08/2026) — không phải vì màn điều chỉnh thiếu gì: phần server đã
-     * làm xong và chạy đúng (phiếu rà soát tình trạng → phiếu Hủy hàng, trừ đúng số lượng lô
-     * NON_COMPLIANT; xem StockadjustmentService.toConditionLine). Ẩn vì module Rà soát kho chưa lập
-     * nổi một phiếu tình trạng chạy được, nên không có đầu vào hợp lệ để chọn.
-     * Mở lại: thêm 'CONDITION' vào mảng này và trả nhãn ô chọn loại về "(số lượng / hạn dùng / tình trạng)".
+     * 'CONDITION' từng bị ẩn (16/08/2026) vì module Rà soát kho chưa lập nổi phiếu tình trạng dùng
+     * được; mở lại 20/08/2026 sau khi họ làm xong. Phần server của màn này không đổi dòng nào
+     * suốt thời gian ẩn — xem StockadjustmentService.toConditionLine.
      */
-    const modalReviewTypes = ['COUNT', 'DATE'];
+    const modalReviewTypes = ['COUNT', 'DATE', 'CONDITION'];
 
     function openReviewModal() {
         document.getElementById('reviewModalTitle').textContent = 'Chọn phiếu rà soát kho đã duyệt';
@@ -1439,18 +1529,45 @@
         return reviewLines.length > 0 && reviewLines[0].adjustmentType === 'DATE_ADJUSTMENT';
     }
 
+    /**
+     * Nguồn đang chọn là phiếu rà soát TÌNH TRẠNG. Nhận diện qua adjustmentType của dòng
+     * (server trả DESTROY) chứ không qua loại phiếu rà soát — cùng cách đang dùng cho isDatePreview().
+     */
+    function isConditionPreview() {
+        return reviewLines.length > 0 && reviewLines[0].adjustmentType === 'DESTROY';
+    }
+
     function renderReviewPreview() {
         const body = document.getElementById('reviewPreviewBody');
         const dateMode = isDatePreview();
+        const conditionMode = isConditionPreview();
 
-        document.getElementById('reviewPreviewHeadCount').style.display = dateMode ? 'none' : '';
+        document.getElementById('reviewPreviewHeadCount').style.display =
+            (dateMode || conditionMode) ? 'none' : '';
         document.getElementById('reviewPreviewHeadDate').style.display = dateMode ? '' : 'none';
+        document.getElementById('reviewPreviewHeadCondition').style.display = conditionMode ? '' : 'none';
         document.getElementById('reviewPreviewTitle').textContent = dateMode
-            ? 'Lô cần sửa hạn dùng' : 'Dòng điều chỉnh từ phiếu rà soát kho';
+            ? 'Lô cần sửa hạn dùng'
+            : (conditionMode ? 'Lô có hàng không đạt chuẩn' : 'Dòng điều chỉnh từ phiếu rà soát kho');
 
         if (!reviewLines.length) {
             body.innerHTML = '<tr id="reviewEmptyRow"><td colspan="9" class="text-center text-secondary py-4">'
                 + 'Phiếu rà soát kho chưa có dòng nào cần điều chỉnh.</td></tr>';
+            updateReviewSummary();
+            return;
+        }
+
+        if (conditionMode) {
+            body.innerHTML = reviewLines.map(line => `
+                <tr>
+                    <td class="fw-semibold text-success">${line.productId ?? ''}</td>
+                    <td>${escapeHtml(line.productName || '')}</td>
+                    <td><span class="badge bg-secondary-subtle text-secondary">${escapeHtml(line.lotNumber || 'Không có')}</span></td>
+                    <td><span class="badge bg-warning-subtle text-warning">${escapeHtml(line.expirationDateDisplay || 'Không có')}</span></td>
+                    <td>${line.systemQty}</td>
+                    <td class="fw-semibold text-danger">${line.quantity}</td>
+                    <td>${escapeHtml(line.unitName || '')}</td>
+                </tr>`).join('');
             updateReviewSummary();
             return;
         }
@@ -1480,7 +1597,7 @@
                     <td>${line.productName || ''}</td>
                     <td><span class="badge bg-secondary-subtle text-secondary">${line.lotNumber || 'Không có'}</span></td>
                     <td><span class="badge bg-warning-subtle text-warning">${line.expirationDateDisplay || 'Không có'}</span></td>
-                    <td>${line.systemQty}</td>
+                    <td>${line.systemQty}${line.unitName ? ' ' + escapeHtml(line.unitName) : ''}</td>
                     <td>${line.actualQty}</td>
                     <td class="fw-semibold">${sign}${discrepancy}</td>
                     <td><span class="badge ${badgeClass}">${directionLabel(line.direction)}</span></td>
@@ -1521,6 +1638,10 @@
         document.getElementById('totalQuantityDisplay').textContent =
             reviewLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
         document.getElementById('expiryChangeDisplay').innerHTML = expiryChangeSummary();
+
+        // "Tổng số lượng" ở nguồn tình trạng là số sắp bị HỦY, không phải tồn đang rà soát.
+        document.getElementById('quantitySummaryLabel').textContent =
+            isConditionPreview() ? 'Tổng SL hủy' : 'Tổng số lượng';
 
         applySummaryMode(dateMode);
     }

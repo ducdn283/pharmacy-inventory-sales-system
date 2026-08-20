@@ -40,6 +40,16 @@ public class StockAdjustmentBatchCandidateResponse {
     /** Lô còn hạn nhưng sắp hết (trong 90 ngày — cùng ngưỡng cảnh báo hết hạn F-08 của hệ thống). */
     private boolean nearExpiry;
 
+    /**
+     * Số ngày còn lại tới hạn dùng ({@code null} khi lô không khai hạn, âm khi đã quá hạn).
+     *
+     * <p>Có trường này để màn hình tự lọc được theo bất kỳ ngưỡng nào mà không phải thêm cờ mới cho mỗi
+     * mốc — ô lọc đang dùng nó cho mục "cận hạn trong 30 ngày". <b>Không dùng để thay {@link #nearExpiry}:</b>
+     * cờ đó là ngưỡng 90 ngày dùng chung với {@code ProductService} và {@code InventoryNotificationService},
+     * quyết định nhãn vàng "Cận hạn" trên dòng lô.</p>
+     */
+    private Integer daysToExpiry;
+
     private Integer storageQuantity;
 
     private Integer productUnitId;
