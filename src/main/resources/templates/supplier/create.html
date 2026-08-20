@@ -85,7 +85,7 @@
                      th:field="*{name}"
                      th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
                      required
-                     placeholder="Nhập tên nhà cung cấp">
+                    >
               <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
             </div>
 
@@ -104,7 +104,7 @@
                      maxlength="20" required
                      pattern="[0-9]{10}(-[0-9]{3})?"
                      title="10 chữ số, hoặc 10 chữ số kèm 3 số chi nhánh (vd 0101234567-001)"
-                     placeholder="VD: 0101234567 hoặc 0101234567-001">
+                    >
               <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
             </div>
 
@@ -123,7 +123,7 @@
                        pattern="0(2|3|5|7|8|9)[0-9]{8}"
                        title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                        required
-                       placeholder="0900000000">
+                      >
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('phone')}" th:errors="*{phone}"></div>
               </div>
               <div class="col-12 col-md-6">
@@ -139,7 +139,7 @@
                        maxlength="100"
                        pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                        title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
-                       placeholder="supplier@example.com">
+                      >
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
               </div>
             </div>
@@ -152,7 +152,7 @@
                         th:field="*{address}"
                         th:classappend="${#fields.hasErrors('address')} ? ' is-invalid'"
                         rows="3" required
-                        placeholder="Nhập địa chỉ nhà cung cấp"></textarea>
+                       ></textarea>
               <div class="invalid-feedback" th:if="${#fields.hasErrors('address')}" th:errors="*{address}"></div>
             </div>
 

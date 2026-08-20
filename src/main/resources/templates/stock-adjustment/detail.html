@@ -411,11 +411,9 @@
                     <!-- Hủy: phiếu đã Hoàn thành thì tồn kho được đảo lại đúng phần đã cộng/trừ.
                          Ô dưới đây là LÝ DO HỦY, không phải sửa lý do điều chỉnh — nó được ghi thêm vào
                          Ghi chú của phiếu, trường reason gốc giữ nguyên (xem StockadjustmentService.cancel). -->
-                    <!-- Không hủy được thì hiện luôn lý do, đừng để người dùng bấm rồi mới ăn lỗi. -->
-                    <div th:if="${detail.statusName != 'Đã hủy' and !detail.cancellable}"
-                         class="alert alert-secondary small mb-3"
-                         th:text="${detail.cancelBlockedReason}">Không thể hủy phiếu này.</div>
-
+                    <!-- Phiếu không hủy được thì chỉ ẨN nút, KHÔNG hiện lời giải thích (21/08/2026): màn
+                         này không còn thao tác hủy nên nói thêm về hủy chỉ làm người đọc rối. Lý do đầy đủ
+                         vẫn được ném ra nếu ai gửi thẳng lên server — xem StockadjustmentService.typeBlocksReversal. -->
                     <form th:if="${detail.statusName != 'Đã hủy' and detail.cancellable}"
                           th:action="${basePath + '/' + detail.id + '/cancel'}"
                           method="post"

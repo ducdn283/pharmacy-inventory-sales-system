@@ -2,6 +2,7 @@ package com.example.project.service;
 
 import com.example.project.constant.StockAdjustmentStatus;
 import com.example.project.constant.StockReviewStatus;
+import com.example.project.constant.StockReviewCondition;
 import com.example.project.constant.StockReviewType;
 import com.example.project.dto.request.StockAdjustmentCreateRequest;
 import com.example.project.dto.request.StockAdjustmentItemRequest;
@@ -20,6 +21,7 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -332,8 +334,7 @@ public class StockadjustmentService {
                 totalReimbursementValue,
                 linkedIncome != null ? linkedIncome.getId() : null,
                 linkedIncome != null ? linkedIncome.getIncomeCode() : null,
-                cancelBlockedReason(adjustment, statusName, details) == null,
-                cancelBlockedReason(adjustment, statusName, details)
+                cancelBlockedReason(adjustment, statusName, details) == null
         );
     }
 
@@ -507,12 +508,20 @@ public class StockadjustmentService {
         // INTERNAL_USE / SAMPLE / GIFT: không kiểm gì thêm — hàng vẫn còn, đảo ngược chỉ cộng lại tồn.
     }
 
-    /** Câu từ chối theo LOẠI phiếu, hoặc {@code null} nếu loại này đảo ngược được. */
+    /**
+     * Câu từ chối theo LOẠI phiếu, hoặc {@code null} nếu loại này đảo ngược được.
+     *
+     * <p><b>Chỉ nêu LÝ DO từ chối, KHÔNG gợi ý cách đi vòng (21/08/2026).</b> Hai câu này trước có thêm
+     * vế <i>"hãy lập một phiếu điều chỉnh mới..."</i> — vừa trái quy ước bỏ gợi ý của màn này, vừa
+     * <b>chỉ sai đường</b>: cách duy nhất để ghi TĂNG tồn bằng phiếu điều chỉnh là dòng {@code IN} của
+     * phiếu {@link #TYPE_COUNT}, mà phiếu đó phải sinh từ một lần kiểm đếm có hàng thừa đếm được ngoài
+     * đời. Bảo người dùng làm thế để gỡ một phiếu hủy lập nhầm chính là dựng kho ảo — đúng thứ hai
+     * câu chặn này sinh ra để ngăn.</p>
+     */
     private String typeBlocksReversal(String type, List<Stockadjustmentdetail> details) {
         if (TYPE_DESTROY.equals(type) || TYPE_DESTROY_EMPLOYEE_FAULT.equals(type)) {
             return "Không thể hủy phiếu " + formatAdjustmentType(type)
-                    + ": hàng đã được tiêu hủy nên không thể nhập trở lại kho. "
-                    + "Nếu cần ghi tăng tồn kho, hãy lập một phiếu điều chỉnh mới theo phiếu rà soát kho.";
+                    + ": hàng đã được tiêu hủy nên không thể nhập trở lại kho.";
         }
         if (isCountType(type)) {
             boolean hasDecreaseLine = details.stream().anyMatch(
@@ -520,16 +529,17 @@ public class StockadjustmentService {
                             && !DIRECTION_NONE.equals(detail.getDirection()));
             if (hasDecreaseLine) {
                 return "Không thể hủy phiếu " + formatAdjustmentType(type)
-                        + ": phiếu có dòng ghi GIẢM tồn kho (hàng đã thất thoát) nên không nhập lại được. "
-                        + "Hãy lập một phiếu điều chỉnh mới nếu số liệu cần sửa.";
+                        + ": phiếu có dòng ghi GIẢM tồn kho (hàng đã thất thoát) nên không nhập lại được.";
             }
         }
         return null;
     }
 
     /**
-     * Vì sao phiếu này không hủy được — dùng cho MÀN HÌNH, để ẩn nút Hủy kèm lời giải thích thay vì
-     * để người dùng bấm rồi mới ăn lỗi. {@code null} nghĩa là hủy được.
+     * Vì sao phiếu này không hủy được. Màn hình chỉ dùng để quyết định CÓ HIỆN nút Hủy hay không
+     * ({@code null} = hủy được); bản thân câu chữ KHÔNG được hiện lên màn chi tiết nữa (21/08/2026)
+     * — màn đó không còn thao tác hủy thì nói thêm về hủy chỉ làm người đọc rối. Câu này vẫn được
+     * ném ra từ {@link #typeBlocksReversal} khi ai đó gửi thẳng lên server.
      *
      * <p>Chỉ soi phần phụ thuộc LOẠI phiếu. Phiếu rà soát toàn dòng tăng vẫn có thể bị
      * {@link #assertBatchesUntouchedSince} chặn lúc bấm — điều kiện đó phụ thuộc dữ liệu thay đổi
@@ -702,10 +712,30 @@ public class StockadjustmentService {
     private boolean isAdjustableDetail(Stockreviewdetail detail, String reviewType) {
         return switch (reviewType) {
             case REVIEW_TYPE_DATE -> isAdjustableDateDetail(detail);
-            case REVIEW_TYPE_CONDITION -> detail.getConditionStatus() != null
-                    && !detail.getConditionStatus().isBlank();
+            case REVIEW_TYPE_CONDITION -> isAdjustableConditionDetail(detail);
             default -> isAdjustableCountDetail(detail);
         };
+    }
+
+    /**
+     * Dòng rà soát tình trạng đáng điều chỉnh: có lô, tình trạng {@code NON_COMPLIANT} và số lượng
+     * không đạt chuẩn &gt; 0 — chỉ hàng không đạt chuẩn mới bị hủy.
+     *
+     * <p>Hai điều kiện sau đều bắt buộc vì {@code StockreviewService} tách MỖI lô thành HAI dòng
+     * ({@code COMPLIANT} và {@code NON_COMPLIANT}) và ghi cả hai kể cả khi số lượng bằng 0. Bỏ điều
+     * kiện tình trạng là hủy luôn hàng đạt chuẩn; bỏ điều kiện số lượng là đẻ ra dòng hủy 0 hộp.</p>
+     *
+     * <p>{@code actualQty} ở đây là số lượng của CHÍNH tình trạng đó, không phải tồn của cả lô.</p>
+     */
+    private boolean isAdjustableConditionDetail(Stockreviewdetail detail) {
+        if (detail.getBatchID() == null || detail.getBatchID().getId() == null) {
+            return false;
+        }
+        if (!StockReviewCondition.NON_COMPLIANT.equals(
+                StockReviewCondition.normalize(detail.getConditionStatus()))) {
+            return false;
+        }
+        return detail.getActualQty() != null && detail.getActualQty() > 0;
     }
 
     /**
@@ -722,17 +752,48 @@ public class StockadjustmentService {
             throw new IllegalArgumentException("Chỉ chọn được phiếu rà soát kho đã duyệt");
         }
         String reviewType = reviewTypeOf(count);
-        if (REVIEW_TYPE_CONDITION.equals(reviewType)) {
-            throw new IllegalArgumentException("Phiếu rà soát tình trạng không sinh dòng điều chỉnh nào");
-        }
-        boolean dateSource = REVIEW_TYPE_DATE.equals(reviewType);
 
         return stockreviewdetailRepository.findAll().stream()
                 .filter(detail -> detail.getStockReviewID() != null
                         && stockReviewId.equals(detail.getStockReviewID().getId()))
                 .filter(detail -> isAdjustableDetail(detail, reviewType))
-                .map(detail -> dateSource ? toDateLine(detail) : toCountLine(detail))
+                .map(detail -> switch (reviewType) {
+                    case REVIEW_TYPE_DATE -> toDateLine(detail);
+                    case REVIEW_TYPE_CONDITION -> toConditionLine(detail);
+                    default -> toCountLine(detail);
+                })
                 .toList();
+    }
+
+    /**
+     * Dòng hủy hàng dựng từ một dòng rà soát tình trạng không đạt chuẩn: trừ kho đúng số lượng KHÔNG
+     * ĐẠT CHUẨN của lô đó ({@code actualQty}), không phải toàn bộ tồn lô — phần đạt chuẩn vẫn bán được.
+     */
+    private StockAdjustmentReviewLineResponse toConditionLine(Stockreviewdetail detail) {
+        Batch batch = detail.getBatchID();
+        Product product = batch.getProductID() != null ? batch.getProductID() : detail.getProductID();
+        Productunit unit = resolveCandidateUnit(batch, product);
+
+        int quantity = detail.getActualQty();
+        BigDecimal unitCost = resolveUnitCost(batch);
+
+        return new StockAdjustmentReviewLineResponse(
+                batch.getId(),
+                product != null ? product.getProductID() : null,
+                product != null ? product.getName() : "Không rõ",
+                batch.getLotNumber(),
+                batch.getExpirationDate(),
+                formatLocalDate(batch.getExpirationDate()),
+                unit != null ? unit.getUnitName() : "Đơn vị",
+                batch.getStorageQuantity() != null ? batch.getStorageQuantity() : 0,
+                quantity,
+                quantity,
+                TYPE_DESTROY,
+                DIRECTION_OUT,
+                unitCost,
+                unitCost.multiply(BigDecimal.valueOf(quantity)),
+                null,
+                null);
     }
 
     /** Dòng xem trước của phiếu sửa hạn dùng: không đụng tồn, chỉ nêu hạn cũ → hạn mới. */
@@ -1018,8 +1079,10 @@ public class StockadjustmentService {
      *   <li>{@code type = COUNT} → <b>MỘT</b> phiếu {@link #TYPE_COUNT} chứa cả dòng thừa ({@code IN})
      *       lẫn dòng thiếu ({@code OUT}).</li>
      *   <li>{@code type = DATE} → phiếu {@link #TYPE_DATE_ADJUSTMENT}, sửa hạn dùng, không đụng tồn.</li>
-     *   <li>{@code type = CONDITION} → KHÔNG tự sinh phiếu: kiểm tình trạng chỉ ghi nhận hàng hỏng, còn
-     *       hủy hay không là quyết định riêng ⇒ người lập tự chọn loại hủy và gắn phiếu này vào.</li>
+     *   <li>{@code type = CONDITION} → phiếu {@link #TYPE_DESTROY}, trừ kho đúng phần hàng
+     *       <b>không đạt chuẩn</b> ({@code conditionStatus = NON_COMPLIANT}). Mặc định là hủy hàng
+     *       khách quan, KHÔNG phải {@link #TYPE_DESTROY_EMPLOYEE_FAULT} — rà soát tình trạng chỉ nói
+     *       hàng hỏng, không nói hỏng vì ai, quy lỗi nhân viên phải có biên bản riêng.</li>
      * </ul>
      *
      * <p>Dòng do client gửi lên bị BỎ QUA — số lượng chỉ tin từ phiếu rà soát kho. Khi phiếu được lập thẳng
@@ -1037,20 +1100,21 @@ public class StockadjustmentService {
         }
 
         String reviewType = reviewTypeOf(count);
-        if (REVIEW_TYPE_CONDITION.equals(reviewType)) {
-            throw new IllegalArgumentException("Phiếu rà soát tình trạng không tự sinh phiếu điều chỉnh — "
-                    + "hãy chọn loại Hủy hàng rồi gắn phiếu kiểm tra này vào.");
-        }
         boolean dateSource = REVIEW_TYPE_DATE.equals(reviewType);
-        String adjustmentType = dateSource ? TYPE_DATE_ADJUSTMENT : TYPE_COUNT;
+        boolean conditionSource = REVIEW_TYPE_CONDITION.equals(reviewType);
+        String adjustmentType = dateSource ? TYPE_DATE_ADJUSTMENT
+                : (conditionSource ? TYPE_DESTROY : TYPE_COUNT);
 
         // Lý do là TÙY CHỌN với phiếu nguồn từ rà soát kho: để trống thì tự điền theo phiếu rà soát.
         String reviewCode = count.getStockCountCode() != null ? count.getStockCountCode() : "";
         String reason = (request.getReason() != null && !request.getReason().isBlank())
                 ? request.getReason().trim()
-                : (dateSource
-                        ? "Điều chỉnh hạn dùng theo phiếu kiểm tra hạn dùng " + reviewCode
-                        : "Điều chỉnh tồn kho theo chênh lệch rà soát kho " + reviewCode);
+                : switch (reviewType) {
+                    case REVIEW_TYPE_DATE -> "Điều chỉnh hạn dùng theo phiếu kiểm tra hạn dùng " + reviewCode;
+                    case REVIEW_TYPE_CONDITION ->
+                            "Hủy hàng không đạt chuẩn theo phiếu rà soát tình trạng " + reviewCode;
+                    default -> "Điều chỉnh tồn kho theo chênh lệch rà soát kho " + reviewCode;
+                };
 
         boolean alreadyConsumed = stockadjustmentRepository.findAllWithRelations().stream()
                 .anyMatch(adj -> adj.getStockReviewID() != null
@@ -1491,6 +1555,7 @@ public class StockadjustmentService {
                 formatLocalDate(batch.getExpirationDate()),
                 isExpired(batch),
                 isNearExpiry(batch),
+                daysToExpiry(batch),
                 batch.getStorageQuantity(),
                 unit != null ? unit.getId() : null,
                 unit != null ? unit.getUnitName() : "Đơn vị",
@@ -1699,6 +1764,15 @@ public class StockadjustmentService {
             return false;
         }
         return !expiry.isAfter(LocalDate.now().plusDays(NEAR_EXPIRY_DAYS));
+    }
+
+    /**
+     * Số ngày còn lại tới hạn dùng: {@code null} nếu lô không khai hạn, âm nếu đã quá hạn. Màn tạo phiếu
+     * dùng để lọc theo ngưỡng tùy ý — xem {@code StockAdjustmentBatchCandidateResponse.daysToExpiry}.
+     */
+    private Integer daysToExpiry(Batch batch) {
+        LocalDate expiry = batch.getExpirationDate();
+        return expiry == null ? null : (int) ChronoUnit.DAYS.between(LocalDate.now(), expiry);
     }
 
     private String formatCode(Integer id) {
