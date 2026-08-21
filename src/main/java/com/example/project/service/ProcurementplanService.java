@@ -562,6 +562,7 @@ public class ProcurementplanService {
                 product.getCode(),
                 product.getBarcode(),
                 stock,
+                product.getMaxStock(),
                 baseUnit != null ? baseUnit.getUnitName() : null,
                 mainUnit != null ? mainUnit.getUnitName() : null,
                 mainUnit != null ? mainUnit.getRatio() : null,

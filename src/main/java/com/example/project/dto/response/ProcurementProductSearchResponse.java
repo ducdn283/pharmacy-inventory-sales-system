@@ -24,6 +24,8 @@ public class ProcurementProductSearchResponse {
     private String barcode;
     /** Tồn kho hiện tại (đơn vị cơ sở). */
     private Integer currentStock;
+    /** Tồn kho tối đa (đơn vị cơ sở). */
+    private Integer maxStock;
     /** Tên đơn vị cơ sở — hiển thị tồn. */
     private String stockUnit;
     /** Đơn vị nhập mặc định. */

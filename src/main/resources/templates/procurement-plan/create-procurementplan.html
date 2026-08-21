@@ -877,6 +877,25 @@
             width: 100%;
         }
 
+        .quantity-stock-warning {
+            grid-column: 3 / -1;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-top: 2px;
+            padding: 7px 10px;
+            color: #b42318;
+            font-size: 12px;
+            line-height: 1.4;
+            background: #fff5f5;
+            border: 1px solid #fecaca;
+            border-left: 3px solid #ef4444;
+            border-radius: 6px;
+        }
+
+        .quantity-stock-warning.d-none { display: none; }
+        .quantity-stock-warning::before { content: "⚠"; font-size: 16px; font-weight: 700; }
+
         .field-input {
             width: 100%;
             min-width: 0;
@@ -1306,6 +1325,7 @@
             code: item.code,
             barcode: item.barcode,
             currentStock: item.currentStock,
+            maxStock: item.maxStock,
             stockUnit: item.stockUnit,
             unit: item.unit,
             unitRatio: item.unitRatio,
@@ -1756,8 +1776,28 @@
         if (!row) {
             return;
         }
+        updateStockLimitWarning(row);
         syncEstimatedFromUnitQty(row);
         calculateSummary();
+    }
+
+    function updateStockLimitWarning(row) {
+        const warning = row.querySelector('.quantity-stock-warning');
+        const productId = Number(row.querySelector('[data-field="productId"]')?.value);
+        const product = productMap[productId];
+        if (!warning || !product) return;
+
+        const maxStock = Number(product.maxStock);
+        const currentStock = Number(product.currentStock) || 0;
+        const quantity = numberValue(row.querySelector('.quantity-input'));
+        const unitRatio = Number(product.unitRatio) || 1;
+        const projectedStock = currentStock + quantity * unitRatio;
+
+        const exceedsMaximum = Number.isFinite(maxStock) && maxStock >= 0 && projectedStock > maxStock;
+        warning.classList.toggle('d-none', !exceedsMaximum);
+        warning.textContent = exceedsMaximum
+            ? `Tồn dự kiến sau khi nhập: ${projectedStock.toLocaleString('vi-VN')} ${product.stockUnit || ''}, tồn tối đa là ${maxStock.toLocaleString('vi-VN')} ${product.stockUnit || ''}.`
+            : '';
     }
 
     function syncLineAmountsBeforeSubmit() {
@@ -2097,6 +2137,7 @@
                         </div>
                     </div>
                 </div>
+                <div class="quantity-stock-warning d-none"></div>
             </div>
         `;
     }
@@ -2109,6 +2150,7 @@
         const row = atTop ? container.querySelector('.product-line') : container.lastElementChild;
         if (row) {
             row.dataset.lineOrder = String(nextLineOrder++);
+            updateStockLimitWarning(row);
         }
         sortDetailLinesBySupplier();
     }
