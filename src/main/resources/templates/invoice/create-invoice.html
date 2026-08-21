@@ -87,10 +87,56 @@
             }
         }
 
+        .sell-page-header {
+            gap: 12px;
+        }
+
+        @media (max-width: 575.98px) {
+            .sell-page-header {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+
+            .sell-page-header .btn {
+                width: 100%;
+            }
+        }
+
+        .sell-form-actions .btn {
+            min-height: 44px;
+        }
+
+        @media (max-width: 575.98px) {
+            .sell-form-actions {
+                flex-direction: column;
+            }
+
+            .sell-form-actions .btn {
+                width: 100%;
+            }
+        }
+
+        @media (min-width: 1400px) {
+            .sell-sidebar-sticky {
+                position: sticky;
+                top: 96px;
+            }
+        }
+
         .product-search-wrap {
             position: relative;
             width: 100%;
             max-width: 420px;
+        }
+
+        @media (max-width: 767.98px) {
+            .product-search-wrap {
+                max-width: none;
+            }
+
+            .sell-card .p-4 {
+                padding: 16px !important;
+            }
         }
 
         .product-search-field {
@@ -612,7 +658,7 @@
             flex-direction: column;
             gap: 5px;
             min-width: 0;
-            max-width: 220px;
+            max-width: 100%;
         }
 
         .product-batch-line {
@@ -718,9 +764,21 @@
             border-bottom: 1px solid #dee2e6;
         }
 
+        .sell-items-table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
         .sell-items-table {
             margin-bottom: 0;
             width: 100%;
+            table-layout: fixed;
+        }
+
+        .sell-items-table th,
+        .sell-items-table td {
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
 
         .sell-items-table thead th {
@@ -748,20 +806,15 @@
         }
 
         .sell-items-table .col-product {
-            width: 22%;
-            min-width: 148px;
-            max-width: 240px;
+            width: 24%;
         }
 
         .sell-items-table .col-unit-select {
-            width: 16%;
-            min-width: 108px;
+            width: 14%;
         }
 
         .sell-items-table .col-qty {
-            width: 96px;
-            min-width: 96px;
-            max-width: 96px;
+            width: 8%;
             text-align: right;
         }
 
@@ -781,24 +834,22 @@
         }
 
         .sell-items-table .col-price {
-            width: 136px;
-            min-width: 136px;
-            max-width: 136px;
+            width: 14%;
             text-align: right;
         }
 
         .unit-price-cell .unit-price-input {
             width: 100%;
-            min-width: 112px;
+            min-width: 0;
         }
 
         .sell-items-table .col-line-total {
-            width: 100px;
+            width: 11%;
             text-align: right;
         }
 
         .sell-items-table .col-total {
-            width: 100px;
+            width: 11%;
             text-align: right;
         }
 
@@ -959,7 +1010,119 @@
         }
 
         .sell-items-table .col-delete {
-            width: 84px;
+            width: 10%;
+        }
+
+        /* Màn hẹp: mỗi mặt hàng thành card, tránh bảng tràn ngang */
+        @media (max-width: 1199.98px) {
+            .sell-items-table-wrap {
+                overflow: visible;
+                padding: 0 16px 16px;
+            }
+
+            .sell-items-table thead {
+                display: none;
+            }
+
+            .sell-entry-group {
+                display: block;
+                margin-bottom: 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                overflow: hidden;
+                background: #fff;
+            }
+
+            .sell-entry-group:last-child {
+                margin-bottom: 0;
+            }
+
+            .sell-entry-group tr {
+                display: block;
+                width: 100%;
+            }
+
+            .sell-entry-group tr.unit-line-row {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px 12px;
+                padding: 12px 14px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+
+            .sell-entry-group tr.unit-line-row td {
+                display: block;
+                padding: 0;
+                border: 0;
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                text-align: left !important;
+            }
+
+            .sell-entry-group tr.unit-line-row td::before {
+                content: attr(data-label);
+                display: block;
+                margin-bottom: 4px;
+                color: #6b7280;
+                font-size: 11px;
+                font-weight: 600;
+            }
+
+            .sell-entry-group tr.unit-line-row td.product-cell {
+                grid-column: 1 / -1;
+                padding-bottom: 10px;
+                margin-bottom: 2px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+
+            .sell-entry-group tr.unit-line-row td.product-cell::before {
+                display: none;
+            }
+
+            .sell-entry-group tr.unit-line-row td.col-total,
+            .sell-entry-group tr.unit-line-row td.col-delete {
+                grid-column: span 1;
+            }
+
+            .sell-entry-group tr.unit-line-row td.unit-qty-cell .unit-qty-input {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            .sell-entry-group tr.unit-line-row td.col-delete .entry-actions {
+                justify-content: flex-start;
+            }
+
+            .sell-entry-group tr.entry-note-row td {
+                display: block;
+                padding: 0 14px 14px;
+                border-bottom: 0;
+                background: #fff;
+            }
+
+            tr.unit-line-row:has(+ tr.entry-note-row) td {
+                border-bottom: none;
+            }
+
+            tr.entry-note-row td {
+                border-bottom: 0;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .sell-entry-group tr.unit-line-row {
+                grid-template-columns: 1fr;
+            }
+
+            .sell-entry-group tr.unit-line-row td.col-total,
+            .sell-entry-group tr.unit-line-row td.col-delete {
+                grid-column: 1 / -1;
+            }
+
+            .product-unit-chain-text {
+                white-space: normal;
+            }
         }
 
         .entry-actions {
@@ -1191,7 +1354,7 @@
 <main id="content" class="content sell-page-content">
     <div class="container-fluid">
 
-        <div class="d-flex justify-content-between align-items-start mb-4">
+        <div class="d-flex justify-content-between align-items-start mb-4 sell-page-header">
             <div>
                 <h1 class="fs-4 mb-1">Bán hàng</h1>
                 <p class="text-secondary mb-0">Tạo hóa đơn bán hàng và tự động trừ tồn kho theo hạn dùng gần nhất</p>
@@ -1220,7 +1383,7 @@
             <input type="hidden" name="printAfterSave" id="printAfterSave" value="false">
 
             <div class="row g-4">
-                <div class="col-12 col-xl-8">
+                <div class="col-12 col-xxl-8">
 
                     <div class="sell-card">
                         <div class="p-4 border-bottom">
@@ -1241,7 +1404,8 @@
                             </div>
                         </div>
 
-                        <table class="table align-middle sell-items-table mb-0">
+                        <div class="sell-items-table-wrap">
+                        <table id="sellItemsTable" class="table align-middle sell-items-table mb-0">
                             <thead>
                             <tr>
                                 <th class="col-product">Sản phẩm</th>
@@ -1253,9 +1417,8 @@
                                 <th class="col-delete text-end">Thao tác</th>
                             </tr>
                             </thead>
-
-                            <tbody id="detailRows"></tbody>
                         </table>
+                        </div>
 
                         <div id="emptyProductState" class="empty-product-state">
                             <div><i class="ti ti-package"></i></div>
@@ -1264,7 +1427,7 @@
                         </div>
                     </div>
 
-                    <div class="mt-4 d-flex gap-3 flex-wrap">
+                    <div class="mt-4 d-flex gap-3 flex-wrap sell-form-actions">
                         <button type="submit" id="submitInvoiceBtn" class="btn btn-sell-primary px-4" disabled>
                             Lưu hóa đơn
                         </button>
@@ -1277,7 +1440,8 @@
 
                 </div>
 
-                <div class="col-12 col-xl-4">
+                <div class="col-12 col-xxl-4">
+                    <div class="sell-sidebar-sticky">
                     <div class="sell-card p-4 mb-4">
                         <div class="section-title mb-4">
                             <i class="ti ti-user text-success me-1"></i>
@@ -1482,6 +1646,7 @@
                             <p class="mb-2" th:unless="${debtAllowed}">3. Phải thu đủ tiền, không được ghi nợ.</p>
                             <p class="mb-0">4. Tick "Hóa đơn thuốc kê đơn", nhập đúng mã thì mới tìm và bán được thuốc kê đơn.</p>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -2011,9 +2176,10 @@
     }
 
     const SELL_TABLE_COLS = 7;
+    const SELL_ITEMS_TABLE = '#sellItemsTable';
 
     function findEntryRows(entryId) {
-        return Array.from(document.querySelectorAll(`#detailRows tr.unit-line-row[data-entry-id="${entryId}"]`));
+        return Array.from(document.querySelectorAll(`${SELL_ITEMS_TABLE} tr.unit-line-row[data-entry-id="${entryId}"]`));
     }
 
     function findEntryRow(entryId) {
@@ -2022,7 +2188,7 @@
     }
 
     function findProductRows(productId) {
-        return Array.from(document.querySelectorAll(`#detailRows tr[data-product-id="${productId}"]`));
+        return Array.from(document.querySelectorAll(`${SELL_ITEMS_TABLE} tr[data-product-id="${productId}"]`));
     }
 
     function findProductRow(productId) {
@@ -2031,13 +2197,25 @@
     }
 
     function getEntryIdsInTable() {
-        return [...new Set(Array.from(document.querySelectorAll('#detailRows tr.unit-line-row[data-entry-id]'))
+        return [...new Set(Array.from(document.querySelectorAll(`${SELL_ITEMS_TABLE} tr.unit-line-row[data-entry-id]`))
             .map(row => row.dataset.entryId))];
     }
 
     function getProductIdsInTable() {
-        return [...new Set(Array.from(document.querySelectorAll('#detailRows tr[data-product-id]'))
+        return [...new Set(Array.from(document.querySelectorAll(`${SELL_ITEMS_TABLE} tr[data-product-id]`))
             .map(row => row.dataset.productId))];
+    }
+
+    function getOrCreateEntryGroup(entryId) {
+        const table = document.getElementById('sellItemsTable');
+        let group = table.querySelector(`tbody.sell-entry-group[data-entry-id="${entryId}"]`);
+        if (!group) {
+            group = document.createElement('tbody');
+            group.className = 'sell-entry-group';
+            group.dataset.entryId = entryId;
+            table.appendChild(group);
+        }
+        return group;
     }
 
     function unitLineCellsHtml(product, unit, preset, multiUnit) {
@@ -2054,7 +2232,7 @@
             : '—';
 
         return `
-            <td class="unit-select-cell">
+            <td class="unit-select-cell" data-label="Đơn vị bán">
                 <div class="unit-select-wrap">
                     <input type="checkbox" class="unit-check-input"
                            ${isChecked ? 'checked' : ''}
@@ -2062,15 +2240,15 @@
                     <span class="unit-line-name">${escapeHtml(unit.unitName)}</span>
                 </div>
             </td>
-            <td class="unit-qty-cell">
+            <td class="unit-qty-cell" data-label="SL">
                 <input type="number" min="1" class="form-control unit-qty-input"
                        value="${isChecked ? qty : ''}" ${isChecked ? '' : 'disabled'}>
             </td>
-            <td class="unit-price-cell">
+            <td class="unit-price-cell" data-label="Giá bán">
                 <input type="text" class="form-control unit-price-input"
                        value="${priceText}" readonly tabindex="-1">
             </td>
-            <td class="unit-total-cell">
+            <td class="unit-total-cell" data-label="Thành tiền">
                 <span class="unit-line-total">${lineTotal}</span>
             </td>
         `;
@@ -2382,7 +2560,7 @@
     }
 
     function getEntryNote(entryId) {
-        const noteRow = document.querySelector(`#detailRows tr.entry-note-row[data-entry-id="${entryId}"]`);
+        const noteRow = document.querySelector(`${SELL_ITEMS_TABLE} tr.entry-note-row[data-entry-id="${entryId}"]`);
         if (!noteRow) return '';
         const input = noteRow.querySelector('.entry-note-input');
         return input ? input.value.trim() : '';
@@ -2548,7 +2726,7 @@
             selectedBatchByEntry[entryId] = entryOptions.batchId;
         }
 
-        const tbody = document.getElementById('detailRows');
+        const entryGroup = getOrCreateEntryGroup(entryId);
         const presets = unitPresets || {};
         const multiUnit = product.units.length > 1;
         const unitCount = product.units.length;
@@ -2572,7 +2750,7 @@
             let rowHtml = '';
             if (index === 0) {
                 rowHtml += `
-                    <td rowspan="${unitCount}" class="product-cell">
+                    <td rowspan="${unitCount}" class="product-cell" data-label="Sản phẩm">
                         <div class="product-cell-inner">
                             <div>
                                 <div class="product-title-code">${escapeHtml(product.code)}</div>
@@ -2589,10 +2767,10 @@
             rowHtml += unitLineCellsHtml(product, unit, preset, multiUnit);
             if (index === 0) {
                 rowHtml += `
-                    <td rowspan="${unitCount}" class="col-total">
+                    <td rowspan="${unitCount}" class="col-total" data-label="Tổng">
                         <span class="product-line-total">0đ</span>
                     </td>
-                    <td rowspan="${unitCount}" class="text-end col-delete">
+                    <td rowspan="${unitCount}" class="text-end col-delete" data-label="Thao tác">
                         <div class="entry-actions">
                             <button type="button" class="btn-add-batch-line" title="Thêm lô khác"
                                     onclick="addProductEntryBatch(${productId})">
@@ -2608,7 +2786,7 @@
             }
 
             row.innerHTML = rowHtml;
-            tbody.appendChild(row);
+            entryGroup.appendChild(row);
             wireUnitLineRow(row);
         });
 
@@ -2627,7 +2805,7 @@
                 </div>
             </td>
         `;
-        tbody.appendChild(noteRow);
+        entryGroup.appendChild(noteRow);
 
         renderBatchLine(entryId);
         getEntryIdsInTable().forEach(eid => renderBatchLine(eid));
@@ -2676,8 +2854,7 @@
 
     function removeItemRow(button) {
         const entryId = button.closest('tr').dataset.entryId;
-        findEntryRows(entryId).forEach(row => row.remove());
-        document.querySelector(`#detailRows tr.entry-note-row[data-entry-id="${entryId}"]`)?.remove();
+        document.querySelector(`${SELL_ITEMS_TABLE} tbody.sell-entry-group[data-entry-id="${entryId}"]`)?.remove();
         delete selectedBatchByEntry[entryId];
         delete batchManualByEntry[entryId];
         getEntryIdsInTable().forEach(eid => renderBatchLine(eid));
@@ -3347,7 +3524,7 @@
                 const entryNote = group.lines.map(d => d.note).find(n => n && String(n).trim()) || '';
                 if (entryNote) {
                     const noteInput = document.querySelector(
-                        `#detailRows tr.entry-note-row[data-entry-id="${entryId}"] .entry-note-input`);
+                        `${SELL_ITEMS_TABLE} tr.entry-note-row[data-entry-id="${entryId}"] .entry-note-input`);
                     if (noteInput) noteInput.value = entryNote;
                 }
             });
