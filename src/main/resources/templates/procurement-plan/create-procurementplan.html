@@ -1135,7 +1135,7 @@
                 </div>
 
                 <div class="p-4 pt-0">
-                    <div class="text-danger small"
+                    <div id="detailListError" class="text-danger small"
                          th:if="${#fields.hasErrors('details')}"
                          th:errors="*{details}"></div>
                 </div>
@@ -1994,6 +1994,7 @@
         const hasLines = document.querySelectorAll('#detailLines .product-line').length > 0;
         document.getElementById('emptyProductState').style.display = hasLines ? 'none' : 'block';
         document.getElementById('productLinesHeader').classList.toggle('hidden', !hasLines);
+        document.getElementById('detailListError')?.classList.toggle('d-none', hasLines);
     }
 
     function reindexDetailLines() {

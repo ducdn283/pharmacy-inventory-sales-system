@@ -940,7 +940,7 @@
                     <div id="detailLines"></div>
                 </div>
                 <div id="emptyProductState" class="empty-product-state"><div><i class="ti ti-package"></i></div><div class="fw-semibold mb-1">Chưa có hàng hóa nào</div><div class="small">Gõ từ đầu tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div></div>
-                <div class="p-4 pt-0"><div class="text-danger small" th:if="${#fields.hasErrors('details')}" th:errors="*{details}"></div></div>
+                <div class="p-4 pt-0"><div id="detailListError" class="text-danger small" th:if="${#fields.hasErrors('details')}" th:errors="*{details}"></div></div>
             </div>
         </form>
     </div>
@@ -1538,6 +1538,7 @@
         const hasLines = document.querySelectorAll('#detailLines .product-line').length > 0;
         document.getElementById('emptyProductState').style.display = hasLines ? 'none' : 'block';
         document.getElementById('productLinesHeader').classList.toggle('hidden', !hasLines);
+        document.getElementById('detailListError')?.classList.toggle('d-none', hasLines);
     }
 
     function reindexDetailLines() {
