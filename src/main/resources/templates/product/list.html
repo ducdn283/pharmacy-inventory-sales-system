@@ -276,26 +276,52 @@
                 <h1 class="fs-4 mb-1">Danh sách hàng hóa</h1>
                 <p class="text-secondary mb-0">Quản lý thông tin và tồn kho hàng hóa của nhà thuốc</p>
             </div>
-            <div th:if="${basePath == '/owner/products'}" class="product-header-actions">
-                <button th:if="${!#lists.isEmpty(restockProducts)}"
+            <div class="product-header-actions">
+
+                <button type="button"
+                        id="openBarcodeModalBtn"
+                        class="btn btn-outline-primary
+                   d-inline-flex align-items-center
+                   justify-content-center px-3">
+
+                    <i class="ti ti-barcode me-1"></i>
+                    In tem mã
+                </button>
+
+                <button th:if="${basePath == '/owner/products'
+                    and !#lists.isEmpty(restockProducts)}"
                         type="button"
                         id="openRestockModalBtn"
                         class="btn-restock-plan"
                         title="Chọn sản phẩm sắp hết/hết hàng để thêm vào dự trù">
-                    <span class="restock-plan-icon" aria-hidden="true">
-                        <i class="ti ti-clipboard-list"></i>
-                    </span>
+
+        <span class="restock-plan-icon"
+              aria-hidden="true">
+            <i class="ti ti-clipboard-list"></i>
+        </span>
+
                     <span class="restock-plan-copy">
-                        <span class="restock-plan-title">Lập phiếu dự trù</span>
-                        <span class="restock-plan-meta"
-                              th:text="${#lists.size(restockProducts) + ' mặt hàng cần nhập'}">
-                            0 mặt hàng cần nhập
-                        </span>
-                    </span>
+            <span class="restock-plan-title">
+                Lập phiếu dự trù
+            </span>
+
+            <span class="restock-plan-meta"
+                  th:text="${#lists.size(restockProducts)
+                            + ' mặt hàng cần nhập'}">
+                0 mặt hàng cần nhập
+            </span>
+        </span>
                 </button>
-                <a th:href="@{/owner/products/create}"
-                   class="btn btn-stock-primary product-create-button d-inline-flex align-items-center justify-content-center px-3">
-                    <i class="ti ti-plus me-1"></i> Tạo hàng hóa
+
+                <a th:if="${basePath == '/owner/products'}"
+                   th:href="@{/owner/products/create}"
+                   class="btn btn-stock-primary
+              product-create-button
+              d-inline-flex align-items-center
+              justify-content-center px-3">
+
+                    <i class="ti ti-plus me-1"></i>
+                    Tạo hàng hóa
                 </a>
             </div>
         </div>
@@ -556,7 +582,11 @@
 
     </div>
 </main>
-
+<div th:replace="~{
+        product/barcode-modal
+        :: barcodeModal(${basePath})
+     }">
+</div>
 <div id="restockProductModal"
      class="restock-modal-overlay"
      role="dialog"
