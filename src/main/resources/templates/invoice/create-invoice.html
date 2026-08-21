@@ -1125,6 +1125,28 @@
             }
         }
 
+        /* Khi DevTools làm hẹp vùng nội dung nhưng vẫn ở màn hình desktop,
+           giữ bảng để các ô rowspan (sản phẩm/tổng/thao tác) không bị vỡ. */
+        @media (max-width: 1399.98px) {
+            .sell-items-table-wrap {
+                overflow-x: auto;
+                padding: 0;
+            }
+
+            .sell-items-table {
+                min-width: 980px;
+            }
+
+            .sell-items-table thead { display: table-header-group; }
+            .sell-entry-group { display: table-row-group; margin: 0; border: 0; border-radius: 0; overflow: visible; background: transparent; }
+            .sell-entry-group tr,
+            .sell-entry-group tr.unit-line-row { display: table-row; width: auto; padding: 0; border: 0; }
+            .sell-entry-group tr.unit-line-row td { display: table-cell; padding: 8px; border: 0; width: auto !important; min-width: auto !important; max-width: none !important; text-align: inherit !important; }
+            .sell-entry-group tr.unit-line-row td::before { display: none; }
+            .sell-entry-group tr.unit-line-row td.product-cell { grid-column: auto; padding: 8px !important; margin: 0; border-bottom: 0; }
+            .sell-entry-group tr.entry-note-row td { display: table-cell; padding: 0 14px 14px; border-bottom: 10px solid #f3f4f6; background: #fff; }
+        }
+
         .entry-actions {
             display: inline-flex;
             align-items: center;
