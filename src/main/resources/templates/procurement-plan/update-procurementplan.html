@@ -160,20 +160,21 @@
         .product-line {
             --procurement-cols:
                 28px 28px
-                minmax(0, 1.45fr)
+                minmax(0, 1.3fr)
+                minmax(0, 0.5fr)
                 minmax(0, 0.52fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.88fr)
-                minmax(0, 1.1fr)
-                minmax(0, 0.72fr)
-                minmax(0, 0.76fr);
+                minmax(0, 0.52fr)
+                minmax(0, 0.82fr)
+                minmax(0, 1fr)
+                minmax(130px, 1fr)
+                minmax(140px, 1.1fr);
             display: grid;
             grid-template-columns: var(--procurement-cols);
             column-gap: 8px;
             row-gap: 0;
             align-items: center;
             width: 100%;
+            min-width: 980px;
         }
 
         .product-lines-header {
@@ -802,14 +803,14 @@
         .product-line.view-only-line {
             --procurement-cols:
                 28px
-                minmax(0, 1.45fr)
+                minmax(0, 1.3fr)
+                minmax(0, 0.5fr)
                 minmax(0, 0.52fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.88fr)
-                minmax(0, 1.1fr)
-                minmax(0, 0.72fr)
-                minmax(0, 0.76fr);
+                minmax(0, 0.52fr)
+                minmax(0, 0.82fr)
+                minmax(0, 1fr)
+                minmax(130px, 1fr)
+                minmax(140px, 1.1fr);
             grid-template-columns: var(--procurement-cols);
         }
 
@@ -823,6 +824,31 @@
                 white-space: normal;
             }
         }
+        /* Keep the update page aligned with the create-procurement-plan layout. */
+        .procurement-top-bar { margin-bottom: 1rem; }
+        .procurement-top-bar-inner { display: flex; align-items: stretch; }
+        .procurement-top-section { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; min-width: 0; }
+        .procurement-top-section + .procurement-top-section { border-left: 1px solid #eef0f3; }
+        .procurement-top-summary { flex: 1 1 0; min-width: 280px; max-width: 420px; }
+        .procurement-top-note { flex: 1.35 1 0; }
+        .procurement-top-actions { flex: 0 0 170px; justify-content: center; gap: 8px; }
+        .procurement-top-meta-actions { flex: 0 0 150px; justify-content: center; gap: 8px; }
+        .procurement-top-label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #64748b; white-space: nowrap; }
+        .procurement-top-label i { color: #059669; font-size: 14px; line-height: 1; }
+        .procurement-stat-grid { display: flex; flex: 1; align-items: stretch; min-height: 56px; border: 1px solid #e2e8f0; border-radius: 8px; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
+        .procurement-stat { flex: 1 1 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 10px; min-width: 0; }
+        .procurement-stat-total { flex: 1.35 1 0; }
+        .procurement-stat + .procurement-stat { border-left: 1px solid #e2e8f0; }
+        .procurement-stat-label { font-size: 11px; color: #64748b; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-end; }
+        .procurement-stat-value { font-size: clamp(11px, 1.1vw, 16px); font-weight: 700; color: #111827; line-height: 1.25; overflow-wrap: anywhere; }
+        .procurement-stat-total .procurement-stat-value { color: #059669; }
+        .procurement-note-panel { display: flex; align-items: stretch; flex: 1; min-height: 56px; padding: 8px 10px; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 8px; border-left: 3px solid #059669; }
+        .procurement-note-panel .order-note-input { flex: 1; min-width: 0; min-height: 40px; max-height: 72px; border: 1px solid #dbeafe; border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.4; background: #fff; resize: vertical; }
+        .procurement-top-actions .btn { min-height: 38px; padding-top: 6px; padding-bottom: 6px; font-size: 13px; font-weight: 600; }
+        .procurement-status-control { min-height: 28px; display: flex; align-items: center; }
+        .product-lines-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 991.98px) { .procurement-top-bar-inner { flex-direction: column; } .procurement-top-section { padding: 12px 14px; } .procurement-top-section + .procurement-top-section { border-left: none; border-top: 1px solid #eef0f3; } .procurement-top-summary, .procurement-top-actions, .procurement-top-meta-actions { flex: none; width: 100%; } .procurement-top-actions, .procurement-top-meta-actions { flex-direction: row; } .procurement-top-actions .btn, .procurement-top-meta-actions .btn { flex: 1; } }
+        @media (max-width: 575.98px) { .procurement-stat-grid { flex-direction: column; } .procurement-stat + .procurement-stat { border-left: none; border-top: 1px solid #e2e8f0; } .procurement-stat-label { min-height: auto; } .procurement-top-actions { flex-direction: column; } }
     </style>
 </head>
 
@@ -851,119 +877,50 @@
               th:method="${viewOnly ? 'get' : 'post'}"
               novalidate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <div class="row g-4">
-                <div class="col-12 col-lg-9">
-                    <div class="owner-card">
-                        <div th:unless="${viewOnly}" class="p-4 border-bottom">
-                            <div class="product-search-wrap">
-                                <div class="product-search-field">
-                                    <i class="ti ti-search product-search-icon"></i>
-                                    <input type="text" id="productSearchInput"
-                                           class="form-control product-search-input"
-                                           placeholder="Tìm hàng theo tên, mã hoặc barcode"
-                                           autocomplete="off">
-                                    <div id="productSearchResults" class="product-search-results"></div>
-                                </div>
-                            </div>
+            <div class="procurement-top-bar owner-card">
+                <div class="procurement-top-bar-inner">
+                    <div class="procurement-top-section procurement-top-summary">
+                        <div class="procurement-top-label"><i class="ti ti-report-analytics"></i>Tổng hợp</div>
+                        <div class="procurement-stat-grid">
+                            <div class="procurement-stat"><span class="procurement-stat-label">Số mặt hàng</span><strong class="procurement-stat-value" id="itemCountDisplay">0</strong></div>
+                            <div class="procurement-stat procurement-stat-total"><span class="procurement-stat-label">Tổng giá trị dự kiến</span><strong class="procurement-stat-value" id="totalAmountDisplay">0đ</strong></div>
                         </div>
-
-                        <div id="productLinesHeader" class="product-lines-header hidden" th:classappend="${viewOnly} ? ' view-only-header' : ''">
-                            <div></div>
-                            <div th:unless="${viewOnly}"></div>
-                            <div>Hàng hóa</div>
-                            <div class="text-center">Tồn</div>
-                            <div class="text-center">Đơn vị tồn</div>
-                            <div class="text-center">Số lượng</div>
-                            <div class="text-center">Đơn vị nhập</div>
-                            <div>Nhà cung cấp</div>
-                            <div class="text-end">Giá từng đơn vị</div>
-                            <div class="text-end">Giá ước tính</div>
+                    </div>
+                    <div class="procurement-top-section procurement-top-note">
+                        <div class="procurement-top-label"><i class="ti ti-notes"></i>Ghi chú dự trù</div>
+                        <div class="procurement-note-panel"><textarea id="procurementNote" class="order-note-input" th:field="*{note}" th:readonly="${viewOnly}" rows="2" placeholder="Nhập ghi chú cho dự trù mua hàng (nếu có)"></textarea></div>
+                    </div>
+                    <div class="procurement-top-section procurement-top-actions">
+                        <button th:unless="${viewOnly}" type="submit" class="btn btn-owner-primary w-100 btn-procurement-submit"><i class="ti ti-check me-1"></i>Cập nhật</button>
+                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100 btn-procurement-cancel" th:text="${viewOnly} ? 'Quay lại danh sách' : 'Hủy'">Hủy</a>
+                    </div>
+                    <div class="procurement-top-section procurement-top-meta-actions">
+                        <div th:if="${viewOnly}" class="plan-status-badge procurement-status-control" th:classappend="${procurementPlan.status == 'Đã hoàn thành'} ? ' status-completed-view' : ''" th:text="${procurementPlan.status}">Đã hoàn thành</div>
+                        <div th:unless="${viewOnly}" class="procurement-status-control">
+                            <input type="hidden" th:field="*{status}" id="procurementStatusInput">
+                            <label class="status-check-toggle"><input type="checkbox" id="statusCompletedToggle" th:checked="${procurementPlanForm.status == 'Đã hoàn thành'}"><span class="status-check-box" title="Đánh dấu hoàn thành"><i class="ti ti-check"></i></span><span class="status-check-text" id="statusCheckText">Đang thực hiện</span></label>
                         </div>
-
-                        <div id="detailLines"></div>
-
-                        <div id="emptyProductState" class="empty-product-state">
-                            <div><i class="ti ti-package"></i></div>
-                            <div class="fw-semibold mb-1">Chưa có hàng hóa nào</div>
-                            <div class="small">Gõ từ đầu tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div>
-                        </div>
-
-                        <div class="p-4 pt-0">
-                            <div class="text-danger small"
-                                 th:if="${#fields.hasErrors('details')}"
-                                 th:errors="*{details}"></div>
-                        </div>
+                        <button type="button" id="printProcurementPlanBtn" th:data-print-url="${basePath + '/' + procurementPlan.id + '/print'}" class="btn btn-outline-secondary w-100 btn-procurement-print"><i class="ti ti-printer me-1"></i>In dự trù</button>
                     </div>
                 </div>
+            </div>
 
-                <div class="col-12 col-lg-3 procurement-sidebar">
-                    <div class="owner-card p-4 mb-4">
-                        <h2 class="fs-6 mb-3">Thông tin dự trù</h2>
-                        <div class="plan-info-row">
-                            <span class="plan-info-label">Mã dự trù</span>
-                            <span class="plan-info-value" th:text="${procurementPlan.procurementCode}">DT-000001</span>
-                        </div>
-                        <div class="plan-info-row mb-0">
-                            <span class="plan-info-label">Trạng thái</span>
-                            <div>
-                                <span th:if="${viewOnly}"
-                                      class="plan-status-badge"
-                                      th:classappend="${procurementPlan.status == 'Đã hoàn thành'} ? ' status-completed-view' : ''"
-                                      th:text="${procurementPlan.status}">Đã hoàn thành</span>
-                                <div th:unless="${viewOnly}">
-                                    <input type="hidden" th:field="*{status}" id="procurementStatusInput">
-                                    <label class="status-check-toggle">
-                                        <input type="checkbox"
-                                               id="statusCompletedToggle"
-                                               th:checked="${procurementPlanForm.status == 'Đã hoàn thành'}">
-                                        <span class="status-check-box" title="Đánh dấu hoàn thành">
-                                            <i class="ti ti-check"></i>
-                                        </span>
-                                        <span class="status-check-text" id="statusCheckText">Đang thực hiện</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="owner-card p-4 mb-4">
-                        <h2 class="fs-6 mb-3">Tổng hợp</h2>
-                        <div class="summary-row mb-0">
-                            <span class="text-secondary">Số mặt hàng</span>
-                            <strong id="itemCountDisplay">0</strong>
-                        </div>
-                        <div class="summary-row mb-0">
-                            <span class="text-secondary">Tổng giá trị dự kiến</span>
-                            <strong class="text-success" id="totalAmountDisplay">0đ</strong>
-                        </div>
-                    </div>
-
-                    <div class="owner-card p-4 mb-4">
-                        <div class="order-note-wrap">
-                            <i class="ti ti-pencil order-note-icon"></i>
-                            <textarea id="procurementNote"
-                                      class="order-note-input"
-                                      th:field="*{note}"
-                                      th:readonly="${viewOnly}"
-                                      rows="4"
-                                      placeholder="Ghi chú dự trù"></textarea>
-                        </div>
-                    </div>
-
-                    <div class="owner-card p-4">
-                        <button type="button" id="printProcurementPlanBtn"
-                                th:data-print-url="${basePath + '/' + procurementPlan.id + '/print'}"
-                                class="btn btn-outline-secondary w-100 mb-2">
-                            <i class="ti ti-printer me-1"></i>
-                            In dự trù
-                        </button>
-                        <button th:unless="${viewOnly}" type="submit" class="btn btn-owner-primary w-100 mb-2">
-                            Cập nhật dự trù mua hàng
-                        </button>
-                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100"
-                           th:text="${viewOnly} ? 'Quay lại danh sách' : 'Hủy'">Hủy</a>
-                    </div>
+            <div class="owner-card">
+                <div th:unless="${viewOnly}" class="p-4 border-bottom">
+                    <div class="product-search-wrap"><div class="product-search-field">
+                        <i class="ti ti-search product-search-icon"></i>
+                        <input type="text" id="productSearchInput" class="form-control product-search-input" placeholder="Tìm hàng theo tên, mã hoặc barcode" autocomplete="off">
+                        <div id="productSearchResults" class="product-search-results"></div>
+                    </div></div>
                 </div>
+                <div class="product-lines-scroll">
+                    <div id="productLinesHeader" class="product-lines-header hidden" th:classappend="${viewOnly} ? ' view-only-header' : ''">
+                        <div></div><div th:unless="${viewOnly}"></div><div>Hàng hóa</div><div class="text-center">Tồn</div><div class="text-center">Đơn vị tồn</div><div class="text-center">Số lượng</div><div class="text-center">Đơn vị nhập</div><div>Nhà cung cấp</div><div class="text-end">Giá từng đơn vị</div><div class="text-end">Giá ước tính</div>
+                    </div>
+                    <div id="detailLines"></div>
+                </div>
+                <div id="emptyProductState" class="empty-product-state"><div><i class="ti ti-package"></i></div><div class="fw-semibold mb-1">Chưa có hàng hóa nào</div><div class="small">Gõ từ đầu tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div></div>
+                <div class="p-4 pt-0"><div class="text-danger small" th:if="${#fields.hasErrors('details')}" th:errors="*{details}"></div></div>
             </div>
         </form>
     </div>
