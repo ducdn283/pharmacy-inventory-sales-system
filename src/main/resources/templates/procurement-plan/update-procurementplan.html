@@ -75,6 +75,23 @@
             position: relative;
         }
 
+        .product-search-toolbar { display: flex; gap: 12px; align-items: stretch; }
+        .product-search-toolbar .product-search-wrap { flex: 1; min-width: 0; }
+        .btn-view-stock { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; min-height: 48px; padding: 0 18px; border: 1px solid #6ee7b7; border-radius: 10px; background: #ecfdf5; color: #047857; font-size: 14px; font-weight: 600; white-space: nowrap; }
+        .btn-view-stock:hover { background: #d1fae5; border-color: #059669; color: #065f46; }
+        .stock-overview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .stock-overview-table th, .stock-overview-table td { padding: 10px 12px; border-bottom: 1px solid #eef0f3; }
+        .stock-overview-table th { background: #f8fafc; color: #64748b; font-weight: 600; white-space: nowrap; }
+        .stock-overview-empty { padding: 24px !important; text-align: center; color: #6b7280; }
+        .stock-modal { max-width: 920px; }
+        .stock-modal-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+        .stock-modal-toolbar label { color: #64748b; font-size: 13px; white-space: nowrap; }
+        .stock-search-input { flex: 1; }
+        .stock-sort-select { width: 130px; }
+        .btn-add-selected-stock { white-space: nowrap; }
+        .stock-row-selected { background: #ecfdf5; }
+        @media (max-width: 575.98px) { .product-search-toolbar, .stock-modal-toolbar { flex-direction: column; } .btn-view-stock, .stock-sort-select { width: 100%; } }
+
         .product-search-field {
             position: relative;
         }
@@ -907,11 +924,14 @@
 
             <div class="owner-card">
                 <div th:unless="${viewOnly}" class="p-4 border-bottom">
-                    <div class="product-search-wrap"><div class="product-search-field">
-                        <i class="ti ti-search product-search-icon"></i>
-                        <input type="text" id="productSearchInput" class="form-control product-search-input" placeholder="Tìm hàng theo tên, mã hoặc barcode" autocomplete="off">
-                        <div id="productSearchResults" class="product-search-results"></div>
-                    </div></div>
+                    <div class="product-search-toolbar">
+                        <div class="product-search-wrap"><div class="product-search-field">
+                            <i class="ti ti-search product-search-icon"></i>
+                            <input type="text" id="productSearchInput" class="form-control product-search-input" placeholder="Tìm hàng theo tên, mã hoặc barcode" autocomplete="off">
+                            <div id="productSearchResults" class="product-search-results"></div>
+                        </div></div>
+                        <button type="button" id="viewProductStockBtn" class="btn-view-stock"><i class="ti ti-stack-2"></i><span>Xem tồn sản phẩm</span></button>
+                    </div>
                 </div>
                 <div class="product-lines-scroll">
                     <div id="productLinesHeader" class="product-lines-header hidden" th:classappend="${viewOnly} ? ' view-only-header' : ''">
@@ -950,6 +970,24 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="supplier-modal-backdrop" id="productStockModal" th:if="${!viewOnly}">
+    <div class="supplier-modal stock-modal">
+        <div class="supplier-modal-header">
+            <h2 class="fs-6 mb-0">Tồn kho sản phẩm</h2>
+            <button type="button" class="supplier-modal-close" id="closeProductStockModalBtn">&times;</button>
+        </div>
+        <div class="supplier-modal-body">
+            <div class="stock-modal-toolbar">
+                <input type="text" id="productStockSearchInput" class="form-control stock-search-input" placeholder="Gõ từ đầu tên, mã hoặc barcode" autocomplete="off">
+                <label for="productStockSortSelect">Sắp xếp tồn:</label>
+                <select id="productStockSortSelect" class="form-select stock-sort-select"><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select>
+                <button type="button" id="addSelectedStockProductsBtn" class="btn btn-owner-primary btn-add-selected-stock" disabled>Thêm vào dự trù</button>
+            </div>
+            <div class="table-responsive"><table class="stock-overview-table"><thead><tr><th class="text-center"><input type="checkbox" id="productStockSelectAll" class="form-check-input" title="Chọn tất cả"></th><th>STT</th><th>Mã</th><th>Tên sản phẩm</th><th class="text-end">Tồn tối thiểu</th><th class="text-end">Tồn tối đa</th><th class="text-end">Tồn hiện tại</th></tr></thead><tbody id="productStockModalBody"><tr><td colspan="7" class="stock-overview-empty">Đang tải...</td></tr></tbody></table></div>
         </div>
     </div>
 </div>
@@ -1891,6 +1929,85 @@
         searchInput.focus();
     }
 
+    let productStockItems = [];
+    let selectedStockProductIds = new Set();
+
+    function updateStockSelectionUi() {
+        const addButton = document.getElementById('addSelectedStockProductsBtn');
+        const selectAll = document.getElementById('productStockSelectAll');
+        if (addButton) {
+            const count = selectedStockProductIds.size;
+            addButton.disabled = count === 0;
+            addButton.textContent = count ? `Thêm vào dự trù (${count})` : 'Thêm vào dự trù';
+        }
+        if (selectAll) {
+            const visibleRows = Array.from(document.querySelectorAll('#productStockModalBody .stock-product-checkbox'));
+            selectAll.checked = visibleRows.length > 0 && visibleRows.every(input => input.checked);
+            selectAll.indeterminate = !selectAll.checked && visibleRows.some(input => input.checked);
+        }
+    }
+
+    function renderProductStockRows() {
+        const body = document.getElementById('productStockModalBody');
+        const keyword = (document.getElementById('productStockSearchInput')?.value || '').trim().toLowerCase();
+        if (!body) return;
+        const rows = productStockItems.filter(item => !keyword || [item.code, item.name, item.barcode]
+            .some(value => String(value || '').toLowerCase().includes(keyword)));
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="7" class="stock-overview-empty">Không có sản phẩm phù hợp</td></tr>';
+            return;
+        }
+        body.innerHTML = rows.map((item, index) => {
+            const selected = selectedStockProductIds.has(Number(item.productID));
+            return `<tr class="${selected ? 'stock-row-selected' : ''}"><td class="text-center"><input type="checkbox" class="form-check-input stock-product-checkbox" data-product-id="${item.productID}" ${selected ? 'checked' : ''}></td><td>${index + 1}</td><td>${escapeHtml(item.code || '—')}</td><td>${escapeHtml(item.name || '—')}</td><td class="text-end">${Number(item.minStock || 0).toLocaleString('vi-VN')}</td><td class="text-end">${Number(item.maxStock || 0).toLocaleString('vi-VN')}</td><td class="text-end text-success fw-semibold">${Number(item.currentStock || 0).toLocaleString('vi-VN')}${item.stockUnit ? ' ' + escapeHtml(item.stockUnit) : ''}</td></tr>`;
+        }).join('');
+        body.querySelectorAll('.stock-product-checkbox').forEach(input => input.addEventListener('change', function () {
+            const id = Number(this.dataset.productId);
+            this.checked ? selectedStockProductIds.add(id) : selectedStockProductIds.delete(id);
+            this.closest('tr').classList.toggle('stock-row-selected', this.checked);
+            updateStockSelectionUi();
+        }));
+        updateStockSelectionUi();
+    }
+
+    async function openProductStockModal() {
+        const modal = document.getElementById('productStockModal');
+        const body = document.getElementById('productStockModalBody');
+        if (!modal || !body) return;
+        modal.classList.add('open');
+        selectedStockProductIds.clear();
+        body.innerHTML = '<tr><td colspan="7" class="stock-overview-empty">Đang tải...</td></tr>';
+        try {
+            const sort = document.getElementById('productStockSortSelect').value;
+            const response = await fetch(`${basePath}/products/stock-overview?sort=${encodeURIComponent(sort)}`);
+            if (!response.ok) throw new Error('Unable to load stock');
+            productStockItems = await response.json();
+            renderProductStockRows();
+        } catch (error) {
+            body.innerHTML = '<tr><td colspan="7" class="stock-overview-empty">Không thể tải danh sách tồn kho</td></tr>';
+        }
+    }
+
+    function closeProductStockModal() {
+        document.getElementById('productStockModal')?.classList.remove('open');
+    }
+
+    function addSelectedStockProductsToPlan() {
+        productStockItems.filter(item => selectedStockProductIds.has(Number(item.productID))).forEach(item => {
+            const product = { productID: item.productID, name: item.name, code: item.code, barcode: item.barcode,
+                currentStock: item.currentStock, stockUnit: item.stockUnit, unit: item.unit, unitRatio: item.unitRatio,
+                units: item.units || [], currentSellPrice: item.currentSellPrice,
+                preferredSupplierId: item.preferredSupplierId, preferredSupplierCostPrice: item.preferredSupplierCostPrice };
+            cacheSearchProducts([product]);
+            addProductById(product.productID, productMap[product.productID]);
+        });
+        selectedStockProductIds.clear();
+        initLineSupplierPrices();
+        toggleEmptyState();
+        calculateSummary();
+        closeProductStockModal();
+    }
+
     if (!viewOnly) {
     document.getElementById('closeSupplierModalBtn').addEventListener('click', closeSupplierModal);
     document.getElementById('supplierModal').addEventListener('click', function (event) {
@@ -1898,6 +2015,23 @@
     });
     document.getElementById('supplierSearchInput').addEventListener('input', function (event) {
         scheduleSupplierSearch(event.target.value);
+    });
+    document.getElementById('viewProductStockBtn').addEventListener('click', openProductStockModal);
+    document.getElementById('closeProductStockModalBtn').addEventListener('click', closeProductStockModal);
+    document.getElementById('productStockModal').addEventListener('click', function (event) {
+        if (event.target === this) closeProductStockModal();
+    });
+    document.getElementById('productStockSearchInput').addEventListener('input', renderProductStockRows);
+    document.getElementById('productStockSortSelect').addEventListener('change', openProductStockModal);
+    document.getElementById('addSelectedStockProductsBtn').addEventListener('click', addSelectedStockProductsToPlan);
+    document.getElementById('productStockSelectAll').addEventListener('change', function () {
+        document.querySelectorAll('#productStockModalBody .stock-product-checkbox').forEach(input => {
+            input.checked = this.checked;
+            const id = Number(input.dataset.productId);
+            this.checked ? selectedStockProductIds.add(id) : selectedStockProductIds.delete(id);
+            input.closest('tr').classList.toggle('stock-row-selected', this.checked);
+        });
+        updateStockSelectionUi();
     });
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') closeSupplierModal();
