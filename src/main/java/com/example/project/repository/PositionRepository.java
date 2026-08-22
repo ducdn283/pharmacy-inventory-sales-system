@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Truy vấn dữ liệu vị trí lưu kho ({@link Position}) cho màn quản lý Owner và màn hàng hóa.
@@ -21,6 +22,28 @@ public interface PositionRepository extends JpaRepository<Position, Integer> {
             ORDER BY p.id ASC
             """)
     List<Position> findByProductId(@Param("productId") Integer productId);
+
+    /** Kiểm tra sản phẩm đã được gắn vị trí chưa — ràng buộc 1 sản phẩm / 1 vị trí. */
+    @Query("""
+            SELECT COUNT(p) > 0 FROM Position p
+            WHERE p.productID.productID = :productId
+            """)
+    boolean existsByProductId(@Param("productId") Integer productId);
+
+    /** Kiểm tra sản phẩm đã có vị trí khác (trừ bản ghi đang sửa). */
+    @Query("""
+            SELECT COUNT(p) > 0 FROM Position p
+            WHERE p.productID.productID = :productId AND p.id <> :positionId
+            """)
+    boolean existsByProductIdAndIdNot(@Param("productId") Integer productId,
+                                      @Param("positionId") Integer positionId);
+
+    /** Tập id sản phẩm đã có vị trí — lọc dropdown form tạo vị trí. */
+    @Query("""
+            SELECT p.productID.productID FROM Position p
+            WHERE p.productID IS NOT NULL
+            """)
+    Set<Integer> findAllAssignedProductIds();
 
     /** Toàn bộ vị trí kèm thông tin hàng hóa — danh sách Owner và màn bán hàng. */
     @Query("""

@@ -45,17 +45,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Shift reports are created lazily (see {@link #ensureOpenShiftFor}) at the moment a real
- * transaction happens (a Return is approved, or — once the Sales module hooks it — an Invoice is
- * saved), not at login. Only Owner/Pharmacist accounts get shifts; Accountant never triggers one.
+ * Ca được tạo LƯỜI (xem {@link #ensureOpenShiftFor}), chỉ đúng lúc có giao dịch thật xảy ra (một
+ * phiếu Trả hàng được duyệt, một Hóa đơn được lưu, một phiếu Thu được lập...), KHÔNG phải lúc đăng
+ * nhập. Chỉ tài khoản Owner/Dược sĩ mới mở được ca; Kế toán không bao giờ tự tạo ca.
  */
 @Service
 public class ShiftreportService {
 
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
-    // Income.status vocabulary lives inline in IncomeService (teammate's module, no constant class
-    // yet) — mirror just the two states excluded from register cash: drafts and rejected slips.
+    // Bộ trạng thái của Income nằm trực tiếp trong IncomeService (module của teammate, chưa có lớp
+    // hằng riêng) — chỉ mirror lại đúng 2 trạng thái bị loại khỏi tiền mặt trong ca: phiếu nháp và
+    // phiếu bị từ chối.
     private static final String INCOME_STATUS_DRAFT = "Nháp";
     private static final String INCOME_STATUS_REJECTED = "Từ chối";
 
@@ -493,8 +494,8 @@ public class ShiftreportService {
         Shiftreport shift = shiftreportRepository.findByIdWithRelations(shiftReportId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy báo cáo ca"));
 
-        // Only the shift's own cashier reconciles their own physical cash count — an Owner reviewing
-        // someone else's shift approves/rejects it (separate action) instead of closing it for them.
+        // Chỉ đúng người trực ca mới được đối chiếu tiền mặt thực tế của chính ca đó — Owner xem ca
+        // của người khác chỉ duyệt/từ chối (một hành động khác), không được nộp thay.
         if (shift.getCashierID() == null || !shift.getCashierID().getId().equals(currentAccountId)) {
             throw new IllegalArgumentException("Chỉ người trực ca mới có thể nộp báo cáo ca này");
         }
@@ -673,10 +674,10 @@ public class ShiftreportService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Incomes (phiếu thu) attached to this shift by IncomeService's hook. Drafts never get
-        // attached; rejected slips are excluded. A still-pending slip DOES count: the cash already
-        // physically entered the register when the pharmacist recorded it — the register
-        // reconciliation must reflect that even before the Owner reviews the slip.
+        // Phiếu thu (Income) được gắn vào ca này qua hook của IncomeService. Phiếu Nháp không bao
+        // giờ được gắn; phiếu Từ chối bị loại. Phiếu còn ĐANG CHỜ DUYỆT vẫn được TÍNH: tiền đã thật
+        // sự vào két ngay lúc dược sĩ ghi nhận — bản đối chiếu két phải phản ánh đúng điều đó, dù
+        // Owner chưa kịp duyệt phiếu.
         List<Income> incomes = incomeRepository.findAll()
                 .stream()
                 .filter(inc -> inc.getShiftReportID() != null && shiftId.equals(inc.getShiftReportID().getId()))
@@ -865,8 +866,9 @@ public class ShiftreportService {
         return date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
     }
 
-    // nowVn() stores VN wall-clock digits inside a UTC-labelled Instant (see its own doc) — so reading
-    // it back must use ZoneOffset.UTC, not VN_ZONE, or the +7h gets applied twice (matches ReturnService).
+    // nowVn() nhét giờ tường VN vào một Instant gắn nhãn UTC (xem javadoc của chính nó) — nên đọc
+    // lại PHẢI dùng ZoneOffset.UTC, không phải VN_ZONE, không thì bị cộng thêm 7 tiếng hai lần
+    // (giống hệt ReturnService).
     private String formatInstant(Instant instant) {
         if (instant == null) {
             return "";

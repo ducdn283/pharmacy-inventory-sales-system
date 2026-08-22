@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="barcodeModal(basePath)">
+    <style>
+        .barcode-modal-overlay{position:fixed;inset:0;z-index:1065;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.58)}
+        .barcode-modal-overlay.show{display:flex}.barcode-modal-dialog{width:min(1060px,100%);max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden;border-radius:16px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.28)}
+        .barcode-modal-header,.barcode-modal-footer{padding:16px 20px}.barcode-modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid #e5e7eb}.barcode-modal-body{overflow:auto;padding:18px 20px}.barcode-modal-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid #e5e7eb;background:#fff}
+        .barcode-search-area{position:relative}.barcode-search-results{position:absolute;z-index:8;top:calc(100% + 4px);left:0;right:0;display:none;max-height:310px;overflow:auto;border:1px solid #d1d5db;border-radius:10px;background:#fff;box-shadow:0 14px 32px rgba(15,23,42,.16)}.barcode-search-results.show{display:block}
+        .barcode-result-item{width:100%;padding:11px 14px;border:0;border-bottom:1px solid #f1f5f9;background:#fff;text-align:left}.barcode-result-item:hover:not(:disabled){background:#ecfdf5}.barcode-result-item:disabled{cursor:not-allowed;opacity:.6}.barcode-result-item:last-child{border-bottom:0}
+        .barcode-invoice-panel{display:none;margin-top:14px;padding:14px;border:1px solid #dbeafe;border-radius:12px;background:#f8fbff}.barcode-invoice-panel.show{display:block}.barcode-invoice-results{max-height:260px;overflow:auto}.barcode-invoice-item{display:grid;grid-template-columns:1.1fr .8fr 1.2fr .8fr auto;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #e5e7eb}.barcode-invoice-item:last-child{border-bottom:0}
+        .barcode-selected-table th{font-size:12px;color:#64748b;background:#f8fafc;white-space:nowrap}.barcode-selected-table td{vertical-align:middle}.barcode-quantity-input{width:96px;text-align:right}.barcode-empty-state{padding:42px 16px;text-align:center;color:#64748b}.barcode-total{font-size:14px;color:#475569}.barcode-total strong{font-size:20px;color:#0f172a}
+        @media(max-width:767.98px){.barcode-modal-footer{align-items:stretch;flex-direction:column}.barcode-modal-footer>div{width:100%}.barcode-invoice-item{grid-template-columns:1fr}.barcode-toolbar{flex-direction:column}.barcode-toolbar>*{width:100%}}
+    </style>
+
+    <div id="barcodePrintModal" class="barcode-modal-overlay" role="dialog" aria-modal="true"
+         aria-labelledby="barcodePrintModalTitle" aria-hidden="true" th:attr="data-base-path=${basePath}">
+        <form id="barcodePrintForm" class="barcode-modal-dialog" method="post" th:action="${basePath + '/barcode/print'}" target="_blank">
+            <input th:if="${_csrf != null}" type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div class="barcode-modal-header">
+                <div><h2 id="barcodePrintModalTitle" class="fs-5 mb-1">In tem mã</h2><p class="small text-secondary mb-0">Tìm hàng hóa hoặc thêm toàn bộ hàng từ hóa đơn nhập.</p></div>
+                <button id="closeBarcodeModalBtn" type="button" class="btn-close" aria-label="Đóng"></button>
+            </div>
+            <div class="barcode-modal-body">
+                <div id="barcodeModalAlert" class="alert d-none mb-3" role="alert"></div>
+                <div class="d-flex gap-2 barcode-toolbar">
+                    <div class="barcode-search-area flex-grow-1">
+                        <div class="input-group"><span class="input-group-text bg-white"><i class="ti ti-search"></i></span><input id="barcodeProductSearch" type="search" class="form-control" placeholder="Tìm theo mã hoặc tên hàng hóa..." autocomplete="off"></div>
+                        <div id="barcodeProductSearchResults" class="barcode-search-results"></div>
+                    </div>
+                    <button id="toggleInvoicePanelBtn" type="button" class="btn btn-outline-primary text-nowrap"><i class="ti ti-file-invoice me-1"></i>Thêm theo hóa đơn nhập</button>
+                </div>
+
+                <div id="barcodeInvoicePanel" class="barcode-invoice-panel">
+                    <div class="d-flex justify-content-between align-items-center gap-2 mb-3"><div><div class="fw-semibold">Chọn hóa đơn nhập</div><div class="small text-secondary">Số lượng tem mặc định bằng số lượng đã nhập.</div></div><button id="closeInvoicePanelBtn" type="button" class="btn-close" aria-label="Đóng"></button></div>
+                    <div class="input-group mb-3"><span class="input-group-text bg-white"><i class="ti ti-search"></i></span><input id="barcodeInvoiceSearch" type="search" class="form-control" placeholder="Tìm mã hóa đơn hoặc nhà cung cấp..." autocomplete="off"></div>
+                    <div id="barcodeInvoiceResults" class="barcode-invoice-results"><div class="text-secondary small py-3 text-center">Nhập từ khóa để tìm hóa đơn nhập.</div></div>
+                </div>
+
+                <div class="table-responsive mt-4 border rounded-3">
+                    <table class="table barcode-selected-table align-middle mb-0">
+                        <thead><tr><th style="width:44px"></th><th>Mã hàng</th><th>Tên hàng</th><th>Đơn vị</th><th class="text-end">Giá bán</th><th class="text-end" style="width:120px">Số lượng</th></tr></thead>
+                        <tbody id="barcodeSelectedRows"></tbody>
+                    </table>
+                    <div id="barcodeEmptyState" class="barcode-empty-state"><i class="ti ti-barcode fs-1 d-block mb-2"></i>Chưa có hàng hóa nào trong danh sách in.</div>
+                </div>
+            </div>
+            <div class="barcode-modal-footer">
+                <div class="barcode-total">Tổng số tem: <strong id="barcodeTotalLabels">0</strong><div class="small text-secondary">Khổ giấy A5 nằm ngang</div></div>
+                <div class="d-flex gap-2 justify-content-end">
+                    <button id="cancelBarcodeModalBtn" type="button" class="btn btn-outline-secondary">Bỏ qua</button>
+                    <button id="exportBarcodePdfBtn" type="submit" class="btn btn-outline-danger"
+                            th:formaction="${basePath + '/barcode/pdf'}" disabled>
+                        <i class="ti ti-file-type-pdf me-1"></i>Xuất PDF A5
+                    </button>
+                    <button id="submitBarcodePrintBtn" type="submit" class="btn btn-stock-primary" disabled>
+                        <i class="ti ti-printer me-1"></i>Xem trước &amp; in
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script th:inline="none">
+        (function(){
+            const openBtn=document.getElementById('openBarcodeModalBtn'),modal=document.getElementById('barcodePrintModal');
+            if(!openBtn||!modal)return;
+            const basePath=modal.dataset.basePath,form=document.getElementById('barcodePrintForm'),productSearch=document.getElementById('barcodeProductSearch'),productResults=document.getElementById('barcodeProductSearchResults'),invoicePanel=document.getElementById('barcodeInvoicePanel'),invoiceSearch=document.getElementById('barcodeInvoiceSearch'),invoiceResults=document.getElementById('barcodeInvoiceResults'),selectedRows=document.getElementById('barcodeSelectedRows'),emptyState=document.getElementById('barcodeEmptyState'),totalLabels=document.getElementById('barcodeTotalLabels'),submitBtn=document.getElementById('submitBarcodePrintBtn'),pdfBtn=document.getElementById('exportBarcodePdfBtn'),alertBox=document.getElementById('barcodeModalAlert');
+            const selected=new Map();let productTimer,invoiceTimer;
+            const escapeHtml=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+            const money=v=>v==null?'—':new Intl.NumberFormat('vi-VN').format(v)+' ₫';
+            function message(text,type='danger'){alertBox.className='alert alert-'+type+' mb-3';alertBox.textContent=text;}
+            function clearMessage(){alertBox.className='alert d-none mb-3';alertBox.textContent='';}
+            async function getJson(url){const response=await fetch(url,{headers:{Accept:'application/json'}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||'Không thể tải dữ liệu.');return data;}
+            function renderSelected(){selectedRows.innerHTML='';let total=0;selected.forEach(item=>{total+=item.quantity;const tr=document.createElement('tr');tr.innerHTML=`<td><button type="button" class="btn btn-sm btn-outline-danger remove-barcode-item" data-id="${item.productId}" title="Xóa"><i class="ti ti-trash"></i></button></td><td class="fw-semibold text-success">${escapeHtml(item.code||'—')}<input type="hidden" name="productIds" value="${item.productId}"></td><td><div class="fw-semibold">${escapeHtml(item.name)}</div><div class="small text-secondary">Barcode được sinh từ mã: ${escapeHtml(item.code||'—')}</div></td><td>${escapeHtml(item.unitName||'—')}</td><td class="text-end">${money(item.sellPrice)}</td><td class="text-end"><input class="form-control form-control-sm barcode-quantity-input ms-auto" type="number" name="quantities" min="1" max="1000" value="${item.quantity}" data-id="${item.productId}" aria-label="Số lượng tem"></td>`;selectedRows.appendChild(tr);});emptyState.style.display=selected.size?'none':'';totalLabels.textContent=total;const disabled=!selected.size||total<1||total>5000||Array.from(selected.values()).some(x=>!x.code);submitBtn.disabled=disabled;pdfBtn.disabled=disabled;}
+            function addItem(item){const id=Number(item.productId),quantity=Math.max(1,Number(item.quantity)||1);if(!id)return;if(!item.code){message('Sản phẩm "'+item.name+'" chưa có mã sản phẩm nên không thể sinh barcode.');return;}const old=selected.get(id);if(old)old.quantity=Math.min(1000,old.quantity+quantity);else selected.set(id,{...item,productId:id,quantity:Math.min(1000,quantity)});clearMessage();renderSelected();}
+            async function searchProducts(){const keyword=productSearch.value.trim();if(!keyword){productResults.classList.remove('show');productResults.innerHTML='';return;}productResults.classList.add('show');productResults.innerHTML='<div class="p-3 text-secondary small">Đang tìm...</div>';try{const items=await getJson(basePath+'/barcode/search-products?keyword='+encodeURIComponent(keyword));productResults.innerHTML=items.length?items.map((item,index)=>`<button type="button" class="barcode-result-item" data-index="${index}"><div class="d-flex justify-content-between gap-3"><div><div class="fw-semibold">${escapeHtml(item.code||'—')} — ${escapeHtml(item.name)}</div><div class="small text-secondary">Barcode tự sinh từ mã sản phẩm</div></div><div class="small text-end text-nowrap">${escapeHtml(item.unitName||'—')}<br>${money(item.sellPrice)}</div></div></button>`).join(''):'<div class="p-3 text-secondary small">Không tìm thấy sản phẩm phù hợp.</div>';productResults.querySelectorAll('[data-index]').forEach(btn=>btn.addEventListener('click',()=>{addItem(items[Number(btn.dataset.index)]);productSearch.value='';productResults.classList.remove('show');productSearch.focus();}));}catch(e){productResults.innerHTML='<div class="p-3 text-danger small">'+escapeHtml(e.message)+'</div>';}}
+            async function searchInvoices(){const keyword=invoiceSearch.value.trim();invoiceResults.innerHTML='<div class="text-secondary small py-3 text-center">Đang tìm...</div>';try{const items=await getJson(basePath+'/barcode/search-purchase-invoices?keyword='+encodeURIComponent(keyword));invoiceResults.innerHTML=items.length?items.map((item,index)=>`<div class="barcode-invoice-item"><strong>${escapeHtml(item.purchaseInvoiceCode)}</strong><span>${escapeHtml(item.dateDisplay||'—')}</span><span>${escapeHtml(item.supplierName||'—')}</span><span>${escapeHtml(item.status||'—')}</span><button type="button" class="btn btn-sm btn-outline-primary" data-invoice-index="${index}">Thêm</button></div>`).join(''):'<div class="text-secondary small py-3 text-center">Không tìm thấy hóa đơn nhập phù hợp.</div>';invoiceResults.querySelectorAll('[data-invoice-index]').forEach(btn=>btn.addEventListener('click',()=>addInvoice(items[Number(btn.dataset.invoiceIndex)].purchaseId)));}catch(e){invoiceResults.innerHTML='<div class="text-danger small py-3 text-center">'+escapeHtml(e.message)+'</div>';}}
+            async function addInvoice(id){clearMessage();try{const items=await getJson(basePath+'/barcode/purchase-invoices/'+id+'/products');items.forEach(addItem);invoicePanel.classList.remove('show');message('Đã thêm sản phẩm từ hóa đơn nhập.','success');}catch(e){message(e.message);}}
+            function openModal(){modal.classList.add('show');modal.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';productSearch.focus();}
+            function closeModal(){modal.classList.remove('show');modal.setAttribute('aria-hidden','true');document.body.style.overflow='';productResults.classList.remove('show');invoicePanel.classList.remove('show');openBtn.focus();}
+            openBtn.addEventListener('click',openModal);document.getElementById('closeBarcodeModalBtn').addEventListener('click',closeModal);document.getElementById('cancelBarcodeModalBtn').addEventListener('click',closeModal);modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+            document.getElementById('toggleInvoicePanelBtn').addEventListener('click',()=>{invoicePanel.classList.toggle('show');if(invoicePanel.classList.contains('show')){invoiceSearch.focus();searchInvoices();}});document.getElementById('closeInvoicePanelBtn').addEventListener('click',()=>invoicePanel.classList.remove('show'));
+            productSearch.addEventListener('input',()=>{clearTimeout(productTimer);productTimer=setTimeout(searchProducts,300);});invoiceSearch.addEventListener('input',()=>{clearTimeout(invoiceTimer);invoiceTimer=setTimeout(searchInvoices,300);});
+            selectedRows.addEventListener('click',e=>{const btn=e.target.closest('.remove-barcode-item');if(btn){selected.delete(Number(btn.dataset.id));renderSelected();}});selectedRows.addEventListener('input',e=>{if(e.target.classList.contains('barcode-quantity-input')){const item=selected.get(Number(e.target.dataset.id));if(item){item.quantity=Math.max(1,Math.min(1000,Number(e.target.value)||1));renderSelected();}}});
+            document.addEventListener('click',e=>{if(!e.target.closest('.barcode-search-area'))productResults.classList.remove('show');});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('show'))closeModal();});
+            form.addEventListener('submit',e=>{const total=Array.from(selected.values()).reduce((s,x)=>s+x.quantity,0);if(!selected.size||total<1||total>5000){e.preventDefault();message('Danh sách in phải có từ 1 đến 5.000 tem.');return;}setTimeout(closeModal,250);});renderSelected();
+        })();
+    </script>
+</th:block>
+</body>
+</html>

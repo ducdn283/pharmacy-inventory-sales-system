@@ -1,12 +1,24 @@
 <!DOCTYPE html>
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Tạo phiếu rà soát kho | PharmaManager</title>
 
-    <script type="module" crossorigin th:src="@{/assets/js/main.js}"></script>
-    <link rel="stylesheet" crossorigin th:href="@{/assets/css/main.css}">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title th:text="${pageTitle + ' | PharmaManager'}">
+        Phiếu rà soát kho | PharmaManager
+    </title>
+
+    <script type="module"
+            crossorigin
+            th:src="@{/assets/js/main.js}">
+    </script>
+
+    <link rel="stylesheet"
+          crossorigin
+          th:href="@{/assets/css/main.css}">
 
     <style>
         .stock-review-content {
@@ -17,8 +29,8 @@
         .stock-card {
             border: 1px solid #e5e7eb;
             border-radius: 16px;
-            background: #fff;
-            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
         }
 
         .section-title {
@@ -27,22 +39,22 @@
         }
 
         .btn-stock-primary {
+            color: #ffffff;
             background: #059669;
             border-color: #059669;
-            color: #fff;
-            border-radius: 12px;
+            border-radius: 10px;
         }
 
         .btn-stock-primary:hover {
+            color: #ffffff;
             background: #047857;
             border-color: #047857;
-            color: #fff;
         }
 
         .table thead th {
-            font-size: 12px;
             color: #6b7280;
             background: #f9fafb;
+            font-size: 12px;
             font-weight: 600;
             white-space: nowrap;
         }
@@ -59,8 +71,27 @@
             font-size: 14px;
         }
 
-        .review-type-help {
-            min-height: 24px;
+        .result-panel {
+            max-height: 330px;
+            overflow: auto;
+        }
+
+        .empty-state {
+            padding: 34px 16px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        .remove-item {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            border-radius: 50%;
+        }
+
+        .positions {
+            max-width: 180px;
+            white-space: normal;
         }
 
         .diff-plus {
@@ -69,6 +100,23 @@
         }
 
         .diff-minus {
+            color: #dc2626;
+            font-weight: 700;
+        }
+
+        .condition-stack {
+            display: grid;
+            grid-template-rows: repeat(2, minmax(38px, auto));
+            gap: 8px;
+            align-items: center;
+        }
+
+        .condition-compliant {
+            color: #059669;
+            font-weight: 700;
+        }
+
+        .condition-non-compliant {
             color: #dc2626;
             font-weight: 700;
         }
@@ -82,29 +130,45 @@
 </head>
 
 <body>
+
 <div th:replace="~{fragments/topbar :: topbar}"></div>
+
 <aside th:replace="~{fragments/sidebar :: sidebar}"></aside>
 
-<main id="content" class="content stock-review-content">
-    <div class="container-fluid">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+<main id="content"
+      class="content stock-review-content">
+
+    <div class="container-fluid"
+         id="pageData"
+         th:data-candidate-url="${basePath + '/candidates'}">
+
+        <div class="d-flex justify-content-between
+                    align-items-start flex-wrap gap-3 mb-4">
+
             <div>
-                <h1 class="fs-4 mb-1">Tạo phiếu rà soát kho</h1>
+                <h1 class="fs-4 mb-1"
+                    th:text="${pageTitle}">
+                    Phiếu rà soát kho
+                </h1>
+
                 <p class="text-secondary mb-0">
-                    Chọn loại rà soát và ghi nhận dữ liệu thực tế của từng lô
+                    Tìm kiếm và thêm những lô cần rà soát vào phiếu
                 </p>
             </div>
 
-            <a th:href="${basePath}" class="btn btn-outline-secondary">
+            <a th:href="${basePath}"
+               class="btn btn-outline-secondary">
+
                 <i class="ti ti-arrow-left me-1"></i>
                 Quay lại danh sách
             </a>
         </div>
 
         <div th:replace="~{fragments/toast :: flash}"></div>
+
         <div th:replace="~{fragments/confirm :: confirm}"></div>
 
-        <form th:action="${basePath + '/create'}"
+        <form th:action="${formAction}"
               th:object="${form}"
               method="post"
               id="stockReviewForm">
@@ -115,24 +179,42 @@
                    th:value="${_csrf.token}">
 
             <div class="row g-4">
+
                 <div class="col-12 col-xl-9">
+
+                    <!-- Thông tin phiếu -->
                     <div class="stock-card p-4 mb-4">
+
                         <div class="section-title mb-4">
-                            <i class="ti ti-clipboard-list text-success me-1"></i>
+                            <i class="ti ti-clipboard-list
+                                      text-success me-1"></i>
+
                             Thông tin phiếu rà soát
                         </div>
 
                         <div class="row g-3">
+
                             <div class="col-12 col-md-3">
-                                <label class="form-label">Mã phiếu</label>
+                                <label class="form-label">
+                                    Mã phiếu
+                                </label>
+
                                 <input type="text"
                                        class="form-control"
-                                       value="SR-NEW"
+                                       th:value="${editMode
+                                            ? 'SR-' + #numbers.formatInteger(
+                                                stockReviewId,
+                                                6
+                                            )
+                                            : 'SR-NEW'}"
                                        readonly>
                             </div>
 
                             <div class="col-12 col-md-3">
-                                <label class="form-label">Ngày tạo</label>
+                                <label class="form-label">
+                                    Ngày tạo
+                                </label>
+
                                 <input type="text"
                                        id="todayDisplay"
                                        class="form-control"
@@ -140,7 +222,10 @@
                             </div>
 
                             <div class="col-12 col-md-3">
-                                <label class="form-label">Người tạo</label>
+                                <label class="form-label">
+                                    Người tạo
+                                </label>
+
                                 <input type="text"
                                        class="form-control"
                                        th:value="${creatorName}"
@@ -150,224 +235,268 @@
                             <div class="col-12 col-md-3">
                                 <label class="form-label">
                                     Loại rà soát
+
                                     <span class="text-danger">*</span>
                                 </label>
 
                                 <select class="form-select"
                                         th:field="*{type}"
                                         id="reviewType"
-                                        onchange="changeReviewType()"
                                         required>
 
-                                    <option th:each="typeItem : ${typeLabels}"
-                                            th:value="${typeItem.key}"
-                                            th:text="${typeItem.value}">
+                                    <option th:each="item : ${typeLabels}"
+                                            th:value="${item.key}"
+                                            th:text="${item.value}">
                                     </option>
                                 </select>
                             </div>
 
                             <div class="col-12">
                                 <div id="reviewTypeHelp"
-                                     class="review-type-help small text-secondary">
+                                     class="small text-secondary">
                                 </div>
                             </div>
 
                             <div class="col-12">
-                                <label class="form-label">Ghi chú chung</label>
+                                <label class="form-label">
+                                    Ghi chú chung
+                                </label>
+
                                 <textarea class="form-control"
                                           rows="3"
                                           th:field="*{note}"
-                                          placeholder="Nhập ghi chú cho phiếu nếu có"></textarea>
+                                          placeholder="Nhập ghi chú cho phiếu nếu có">
+                                </textarea>
                             </div>
                         </div>
                     </div>
 
-                    <div class="stock-card">
-                        <div class="p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3">
-                            <div class="section-title">
-                                <i class="ti ti-package text-success me-1"></i>
-                                Danh sách lô hàng
+                    <!-- Tìm lô hàng -->
+                    <div class="stock-card mb-4">
+
+                        <div class="p-4 border-bottom">
+
+                            <div class="section-title mb-3">
+                                <i class="ti ti-search
+                                          text-success me-1"></i>
+
+                                Tìm lô hàng
                             </div>
 
-                            <div style="min-width: 280px;">
-                                <input type="text"
-                                       id="tableSearch"
-                                       class="form-control"
-                                       placeholder="Tìm sản phẩm hoặc số lô"
-                                       oninput="filterRows()">
+                            <div class="row g-2">
+
+                                <div class="col-12 col-lg-4">
+                                    <input type="text"
+                                           id="candidateKeyword"
+                                           class="form-control"
+                                           placeholder="Mã hàng, tên hàng, barcode hoặc số lô">
+                                </div>
+
+                                <div class="col-12 col-md-4 col-lg-3">
+                                    <select id="productTypeFilter"
+                                            class="form-select">
+
+                                        <option value="">
+                                            Tất cả loại hàng
+                                        </option>
+
+                                        <option th:each="item : ${productTypes}"
+                                                th:value="${item.key}"
+                                                th:text="${item.value}">
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="col-12 col-md-4 col-lg-2">
+                                    <select id="positionFilter"
+                                            class="form-select">
+
+                                        <option value="">
+                                            Tất cả vị trí
+                                        </option>
+
+                                        <option th:each="position : ${positions}"
+                                                th:value="${position}"
+                                                th:text="${position}">
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="col-6 col-md-2 col-lg-1 d-grid">
+                                    <button type="button"
+                                            class="btn btn-stock-primary"
+                                            id="searchButton"
+                                            title="Tìm kiếm">
+
+                                        <i class="ti ti-search"></i>
+                                    </button>
+                                </div>
+
+                                <div class="col-6 col-md-2 col-lg-2 d-grid">
+                                    <button type="button"
+                                            class="btn btn-outline-success"
+                                            id="addAllButton"
+                                            title="Thêm tất cả kết quả tìm kiếm"
+                                            disabled>
+
+                                        <i class="ti ti-plus me-1"></i>
+                                        Thêm tất cả
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="small text-secondary mt-2">
+                                Chọn loại hàng hoặc vị trí, sau đó nhấn
+                                nút thêm tất cả để đưa toàn bộ lô phù hợp
+                                vào phiếu.
                             </div>
                         </div>
 
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
+                        <div class="table-responsive result-panel">
+
+                            <table class="table table-hover
+                                          align-middle mb-0">
+
                                 <thead>
                                 <tr>
                                     <th>Mã hàng</th>
                                     <th>Tên hàng hóa</th>
                                     <th>Số lô</th>
-                                    <th class="count-column">Tồn hệ thống</th>
-                                    <th class="count-column" style="min-width: 130px;">
-                                        Tồn thực tế
-                                    </th>
-                                    <th class="count-column">Chênh lệch</th>
-                                    <th class="date-column">Hạn dùng hệ thống</th>
-                                    <th class="date-column" style="min-width: 155px;">
-                                        Hạn dùng thực tế
-                                    </th>
-                                    <th class="condition-column" style="min-width: 155px;">
-                                        Tình trạng thực tế
-                                    </th>
-                                    <th style="min-width: 190px;">Ghi chú</th>
+                                    <th>Tồn hệ thống</th>
+                                    <th>Hạn dùng</th>
+                                    <th>Loại hàng</th>
+                                    <th>Vị trí</th>
+                                    <th>Thao tác</th>
                                 </tr>
                                 </thead>
 
-                                <tbody>
-                                <tr th:each="candidate, iterStat : ${candidates}"
-                                    class="review-row"
-                                    th:data-keyword="${candidate.productCode + ' ' + candidate.productName + ' ' + candidate.lotNumber}"
-                                    th:data-system-qty="${candidate.systemQty}"
-                                    th:data-recorded-date="${candidate.expirationDate}">
+                                <tbody id="candidateBody">
+                                <tr>
+                                    <td colspan="8"
+                                        class="empty-state">
 
-                                    <td>
-                                        <span class="fw-semibold text-success"
-                                              th:text="${candidate.productCode}">
-                                            MED-001
-                                        </span>
-
-                                        <input type="hidden"
-                                               th:name="${'items[' + iterStat.index + '].batchId'}"
-                                               th:value="${candidate.batchId}">
-                                    </td>
-
-                                    <td th:text="${candidate.productName}">
-                                        Paracetamol 500mg
-                                    </td>
-
-                                    <td>
-                                        <span class="badge bg-secondary-subtle text-secondary"
-                                              th:text="${candidate.lotNumber ?: 'Không có'}">
-                                            LOT-001
-                                        </span>
-                                    </td>
-
-                                    <td class="count-column fw-semibold"
-                                        th:text="${candidate.systemQty}">
-                                        0
-                                    </td>
-
-                                    <td class="count-column">
-                                        <input type="number"
-                                               min="0"
-                                               class="form-control form-control-sm actual-input"
-                                               th:name="${'items[' + iterStat.index + '].actualQty'}"
-                                               th:value="${form.items != null
-                                                   and form.items.size() > iterStat.index
-                                                   and form.items[iterStat.index].actualQty != null
-                                                   ? form.items[iterStat.index].actualQty
-                                                   : candidate.systemQty}"
-                                               oninput="calculateSummary()">
-                                    </td>
-
-                                    <td class="count-column">
-                                        <span class="difference-value text-secondary">
-                                            0
-                                        </span>
-                                    </td>
-
-                                    <td class="date-column"
-                                        th:text="${candidate.expirationDateDisplay ?: 'Chưa có'}">
-                                        01/06/2028
-                                    </td>
-
-                                    <td class="date-column">
-                                        <input type="date"
-                                               class="form-control form-control-sm date-input"
-                                               th:name="${'items[' + iterStat.index + '].actualExpirationDate'}"
-                                               th:value="${form.items != null
-                                                   and form.items.size() > iterStat.index
-                                                   and form.items[iterStat.index].actualExpirationDate != null
-                                                   ? form.items[iterStat.index].actualExpirationDate
-                                                   : candidate.expirationDate}"
-                                               onchange="calculateSummary()">
-                                    </td>
-
-                                    <td class="condition-column">
-                                        <select class="form-select form-select-sm condition-input"
-                                                th:name="${'items[' + iterStat.index + '].conditionStatus'}"
-                                                onchange="calculateSummary()">
-
-                                            <option th:each="conditionItem : ${conditionLabels}"
-                                                    th:value="${conditionItem.key}"
-                                                    th:text="${conditionItem.value}"
-                                                    th:selected="${form.items == null
-                                                        or form.items.size() <= iterStat.index
-                                                        ? conditionItem.key == 'GOOD'
-                                                        : conditionItem.key == form.items[iterStat.index].conditionStatus}">
-                                            </option>
-                                        </select>
-                                    </td>
-
-                                    <td>
-                                        <input type="text"
-                                               class="form-control form-control-sm note-input"
-                                               th:name="${'items[' + iterStat.index + '].note'}"
-                                               th:value="${form.items != null
-                                                   and form.items.size() > iterStat.index
-                                                   ? form.items[iterStat.index].note
-                                                   : ''}"
-                                               placeholder="Ghi chú nếu có">
-                                    </td>
-                                </tr>
-
-                                <tr th:if="${#lists.isEmpty(candidates)}">
-                                    <td colspan="10"
-                                        class="text-center text-secondary py-4">
-                                        Không có lô hàng khả dụng để rà soát.
+                                        Nhập từ khóa hoặc chọn bộ lọc
+                                        để tìm lô hàng.
                                     </td>
                                 </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
+
+                    <!-- Danh sách lô đã chọn -->
+                    <div class="stock-card">
+
+                        <div class="p-4 border-bottom
+                                    d-flex justify-content-between
+                                    align-items-center">
+
+                            <div class="section-title">
+                                <i class="ti ti-package
+                                          text-success me-1"></i>
+
+                                Các lô đã chọn
+                            </div>
+
+                            <span class="badge
+                                         bg-success-subtle
+                                         text-success"
+                                  id="selectedBadge">
+                                0 lô
+                            </span>
+                        </div>
+
+                        <div class="table-responsive">
+
+                            <table class="table table-hover
+                                          align-middle mb-0">
+
+                                <thead id="selectedHead"></thead>
+
+                                <tbody id="selectedBody"></tbody>
+                            </table>
+
+                            <div id="selectedEmpty"
+                                 class="empty-state">
+
+                                Chưa có lô hàng nào trong phiếu.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Cột tóm tắt -->
                 <div class="col-12 col-xl-3">
+
                     <div class="stock-card p-4 mb-4">
-                        <div class="section-title mb-4">Tóm tắt rà soát</div>
 
-                        <div class="summary-row">
-                            <span class="text-secondary">Tổng lô hàng</span>
-                            <strong id="totalItemsDisplay">0</strong>
+                        <div class="section-title mb-4">
+                            Tóm tắt rà soát
                         </div>
 
                         <div class="summary-row">
-                            <span class="text-secondary">Khớp / Tốt</span>
+                            <span class="text-secondary">
+                                Tổng lô đã chọn
+                            </span>
+
+                            <strong id="totalItemsDisplay">
+                                0
+                            </strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span class="text-secondary">
+                                Khớp
+                            </span>
+
                             <strong class="text-success"
-                                    id="matchedItemsDisplay">0</strong>
+                                    id="matchedItemsDisplay">
+                                0
+                            </strong>
                         </div>
 
                         <div class="summary-row">
-                            <span class="text-secondary">Có vấn đề</span>
+                            <span class="text-secondary">
+                                Có chênh lệch
+                            </span>
+
                             <strong class="text-danger"
-                                    id="issueItemsDisplay">0</strong>
+                                    id="issueItemsDisplay">
+                                0
+                            </strong>
                         </div>
 
                         <div id="countSummary">
                             <hr>
 
                             <div class="summary-row">
-                                <span class="text-secondary">Tổng tồn hệ thống</span>
-                                <strong id="totalSystemDisplay">0</strong>
+                                <span class="text-secondary">
+                                    Tổng tồn hệ thống
+                                </span>
+
+                                <strong id="totalSystemDisplay">
+                                    0
+                                </strong>
                             </div>
 
                             <div class="summary-row">
-                                <span class="text-secondary">Tổng tồn thực tế</span>
-                                <strong id="totalActualDisplay">0</strong>
+                                <span class="text-secondary">
+                                    Tổng tồn thực tế
+                                </span>
+
+                                <strong id="totalActualDisplay">
+                                    0
+                                </strong>
                             </div>
 
                             <div class="summary-row">
-                                <span class="text-secondary">Tổng chênh lệch</span>
-                                <strong id="totalDiffDisplay">0</strong>
+                                <span class="text-secondary">
+                                    Tổng chênh lệch
+                                </span>
+
+                                <strong id="totalDiffDisplay">
+                                    0
+                                </strong>
                             </div>
                         </div>
                     </div>
@@ -377,10 +506,12 @@
                     </div>
 
                     <div class="stock-card p-4">
+
                         <button type="submit"
                                 name="action"
                                 value="submit"
-                                class="btn btn-stock-primary w-100 mb-3"
+                                class="btn btn-stock-primary
+                                       w-100 mb-3"
                                 data-confirm="Bạn có chắc chắn muốn gửi phiếu rà soát kho không?">
 
                             <i class="ti ti-send me-1"></i>
@@ -390,7 +521,9 @@
                         <button type="submit"
                                 name="action"
                                 value="draft"
-                                class="btn btn-outline-secondary w-100 mb-3">
+                                formnovalidate
+                                class="btn btn-outline-secondary
+                                       w-100 mb-3">
 
                             <i class="ti ti-device-floppy me-1"></i>
                             Lưu nháp
@@ -398,6 +531,7 @@
 
                         <a th:href="${basePath}"
                            class="btn btn-outline-danger w-100">
+
                             Hủy
                         </a>
                     </div>
@@ -407,198 +541,1253 @@
     </div>
 </main>
 
-<script>
-    const TYPE_HELP = {
-        COUNT:
-            'Ghi nhận số lượng thực tế và tự động tính chênh lệch so với tồn hệ thống.',
+<script th:inline="javascript">
+    /*
+     * Dữ liệu được backend cung cấp khi:
+     * - Người dùng mở màn hình chỉnh sửa phiếu nháp.
+     * - Backend trả lại form sau lỗi validation.
+     */
+    const initialCandidates =
+        /*[[${initialCandidates}]]*/ [];
 
-        DATE:
-            'Đối chiếu hạn dùng in trên lô với hạn dùng đang được lưu trong hệ thống.',
+    const initialItems =
+        /*[[${initialItems}]]*/ [];
 
-        CONDITION:
-            'Đánh giá tình trạng thực tế: Tốt, Hư hỏng, Biến chất hoặc Khác.'
-    };
+    const selectedBatches = new Map();
 
-    function normalizeText(value) {
-        return (value || '')
-            .toString()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/đ/g, 'd')
-            .replace(/Đ/g, 'D')
-            .toLowerCase()
-            .trim();
+    let currentCandidates = [];
+
+    function escapeHtml(value) {
+        return String(value ?? "").replace(
+            /[&<>'"]/g,
+            character => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "'": "&#39;",
+                "\"": "&quot;"
+            })[character]
+        );
     }
 
     function currentType() {
-        return document.getElementById('reviewType').value || 'COUNT';
+        return document
+            .getElementById("reviewType")
+            .value || "COUNT";
     }
 
-    function changeReviewType() {
-        const type = currentType();
+    function normalizeDateValue(value) {
+        if (!value) {
+            return "";
+        }
 
-        document.querySelectorAll('.count-column')
-            .forEach(element => {
-                element.style.display = type === 'COUNT' ? '' : 'none';
+        if (Array.isArray(value)
+            && value.length >= 3) {
+            return `${value[0]}-${
+                String(value[1]).padStart(2, "0")
+            }-${
+                String(value[2]).padStart(2, "0")
+            }`;
+        }
+
+        return String(value).substring(0, 10);
+    }
+
+    function loadInitialSelectedBatches() {
+        const itemByBatchId = new Map(
+            (initialItems || []).map(
+                item => [
+                    Number(item.batchId),
+                    item
+                ]
+            )
+        );
+
+        (initialCandidates || []).forEach(
+            candidate => {
+                const item =
+                    itemByBatchId.get(
+                        Number(candidate.batchId)
+                    ) || {};
+
+                selectedBatches.set(
+                    Number(candidate.batchId),
+                    {
+                        ...candidate,
+
+                        enteredActualQty:
+                            item.actualQty ?? "",
+
+                        enteredActualDate:
+                            normalizeDateValue(
+                                item.actualExpirationDate
+                            ),
+
+                        enteredCompliantQty:
+                            item.compliantQty ?? "",
+
+                        enteredNonCompliantQty:
+                            item.nonCompliantQty ?? "",
+
+                        enteredNote:
+                            item.note ?? ""
+                    }
+                );
+            }
+        );
+    }
+
+    function candidateUrl() {
+        return document
+            .getElementById("pageData")
+            .dataset
+            .candidateUrl;
+    }
+    async function searchCandidates() {
+        const keyword = document
+            .getElementById("candidateKeyword")
+            .value
+            .trim();
+
+        const typeId = document
+            .getElementById("productTypeFilter")
+            .value;
+
+        const position = document
+            .getElementById("positionFilter")
+            .value;
+
+        const body =
+            document.getElementById("candidateBody");
+
+        const addAllButton =
+            document.getElementById("addAllButton");
+
+        if (!keyword && !typeId && !position) {
+            currentCandidates = [];
+
+            body.innerHTML = `
+                <tr>
+                    <td colspan="8"
+                        class="empty-state">
+
+                        Vui lòng nhập từ khóa hoặc chọn ít nhất
+                        một bộ lọc.
+                    </td>
+                </tr>
+            `;
+
+            addAllButton.disabled = true;
+            return;
+        }
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="8"
+                    class="empty-state">
+
+                    <span class="spinner-border
+                                 spinner-border-sm me-2">
+                    </span>
+
+                    Đang tìm kiếm...
+                </td>
+            </tr>
+        `;
+
+        const parameters =
+            new URLSearchParams();
+
+        if (keyword) {
+            parameters.set(
+                "keyword",
+                keyword
+            );
+        }
+
+        if (typeId) {
+            parameters.set(
+                "typeId",
+                typeId
+            );
+        }
+
+        if (position) {
+            parameters.set(
+                "position",
+                position
+            );
+        }
+
+        try {
+            const response = await fetch(
+                candidateUrl()
+                + "?"
+                + parameters.toString(),
+                {
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Không thể tải danh sách lô hàng"
+                );
+            }
+
+            currentCandidates =
+                await response.json();
+
+            renderCandidates();
+        } catch (error) {
+            currentCandidates = [];
+
+            body.innerHTML = `
+                <tr>
+                    <td colspan="8"
+                        class="empty-state text-danger">
+
+                        ${escapeHtml(error.message)}
+                    </td>
+                </tr>
+            `;
+
+            addAllButton.disabled = true;
+        }
+    }
+
+    function renderCandidates() {
+        const body =
+            document.getElementById("candidateBody");
+
+        const addAllButton =
+            document.getElementById("addAllButton");
+
+        addAllButton.disabled =
+            currentCandidates.length === 0;
+
+        if (currentCandidates.length === 0) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="8"
+                        class="empty-state">
+
+                        Không tìm thấy lô hàng phù hợp.
+                    </td>
+                </tr>
+            `;
+
+            return;
+        }
+
+        body.innerHTML = currentCandidates
+            .map(item => {
+                const batchId =
+                    Number(item.batchId);
+
+                const added =
+                    selectedBatches.has(batchId);
+
+                const positions =
+                    (item.positions || []).join(", ")
+                    || "Chưa có";
+
+                return `
+                    <tr>
+                        <td class="fw-semibold text-success">
+                            ${escapeHtml(item.productCode)}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(item.productName)}
+                        </td>
+
+                        <td>
+                            <span class="badge
+                                         bg-secondary-subtle
+                                         text-secondary">
+
+                                ${escapeHtml(
+                    item.lotNumber || "Không có"
+                )}
+                            </span>
+                        </td>
+
+                        <td class="fw-semibold">
+                            ${item.systemQty ?? 0}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                    item.expirationDateDisplay
+                    || "Chưa có"
+                )}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                    item.typeName
+                    || "Chưa phân loại"
+                )}
+                        </td>
+
+                        <td class="positions">
+                            ${escapeHtml(positions)}
+                        </td>
+
+                        <td>
+                            <button type="button"
+                                    class="btn btn-sm ${
+                    added
+                        ? "btn-secondary"
+                        : "btn-outline-success"
+                }"
+                                    onclick="addBatch(${batchId})"
+                                    ${added ? "disabled" : ""}>
+
+                                <i class="ti ${
+                    added
+                        ? "ti-check"
+                        : "ti-plus"
+                } me-1"></i>
+
+                                ${added ? "Đã thêm" : "Thêm"}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            })
+            .join("");
+    }
+
+    /*
+     * Lưu dữ liệu đang nhập trước khi render lại bảng,
+     * tránh mất dữ liệu khi thêm, xóa hoặc đổi loại phiếu.
+     */
+    function captureSelectedValues() {
+        document
+            .querySelectorAll(".selected-row")
+            .forEach(row => {
+                const batchIdInput =
+                    row.querySelector(
+                        'input[type="hidden"]'
+                    );
+
+                if (!batchIdInput) {
+                    return;
+                }
+
+                const batchId =
+                    Number(batchIdInput.value);
+
+                const item =
+                    selectedBatches.get(batchId);
+
+                if (!item) {
+                    return;
+                }
+
+                const actualQtyInput =
+                    row.querySelector(
+                        ".actual-input"
+                    );
+
+                const actualDateInput =
+                    row.querySelector(
+                        ".date-input"
+                    );
+
+                const compliantQtyInput =
+                    row.querySelector(
+                        ".compliant-input"
+                    );
+
+                const nonCompliantQtyInput =
+                    row.querySelector(
+                        ".non-compliant-input"
+                    );
+
+                const noteInput =
+                    row.querySelector(
+                        'input[name$=".note"]'
+                    );
+
+                if (actualQtyInput) {
+                    item.enteredActualQty =
+                        actualQtyInput.value;
+                }
+
+                if (actualDateInput) {
+                    item.enteredActualDate =
+                        actualDateInput.value;
+                }
+
+                if (compliantQtyInput) {
+                    item.enteredCompliantQty =
+                        compliantQtyInput.value;
+                }
+
+                if (nonCompliantQtyInput) {
+                    item.enteredNonCompliantQty =
+                        nonCompliantQtyInput.value;
+                }
+
+                if (noteInput) {
+                    item.enteredNote =
+                        noteInput.value;
+                }
             });
+    }
 
-        document.querySelectorAll('.date-column')
-            .forEach(element => {
-                element.style.display = type === 'DATE' ? '' : 'none';
-            });
+    function addBatch(batchId) {
+        const normalizedBatchId =
+            Number(batchId);
 
-        document.querySelectorAll('.condition-column')
-            .forEach(element => {
-                element.style.display = type === 'CONDITION' ? '' : 'none';
-            });
+        const item =
+            currentCandidates.find(
+                candidate =>
+                    Number(candidate.batchId)
+                    === normalizedBatchId
+            );
 
-        document.querySelectorAll('.actual-input')
+        if (!item
+            || selectedBatches.has(
+                normalizedBatchId
+            )) {
+            return;
+        }
+
+        captureSelectedValues();
+
+        selectedBatches.set(
+            normalizedBatchId,
+            {
+                ...item,
+                batchId: normalizedBatchId
+            }
+        );
+
+        renderCandidates();
+        renderSelected();
+    }
+
+    function addAllCandidates() {
+        captureSelectedValues();
+
+        currentCandidates.forEach(item => {
+            const batchId =
+                Number(item.batchId);
+
+            /*
+             * Không ghi đè dữ liệu người dùng đã nhập
+             * nếu lô đã có trong danh sách.
+             */
+            if (!selectedBatches.has(batchId)) {
+                selectedBatches.set(
+                    batchId,
+                    {
+                        ...item,
+                        batchId: batchId
+                    }
+                );
+            }
+        });
+
+        renderCandidates();
+        renderSelected();
+    }
+
+    function removeBatch(batchId) {
+        captureSelectedValues();
+
+        selectedBatches.delete(
+            Number(batchId)
+        );
+
+        renderCandidates();
+        renderSelected();
+    }
+
+    function baseCells(item, index) {
+        return `
+            <td class="fw-semibold text-success">
+                ${escapeHtml(item.productCode)}
+            </td>
+
+            <td>
+                ${escapeHtml(item.productName)}
+            </td>
+
+            <td>
+                <span class="badge
+                             bg-secondary-subtle
+                             text-secondary">
+
+                    ${escapeHtml(
+            item.lotNumber || "Không có"
+        )}
+                </span>
+
+                <input type="hidden"
+                       name="items[${index}].batchId"
+                       value="${item.batchId}">
+            </td>
+        `;
+    }
+
+    function tailCells(item, index) {
+        return `
+            <td>
+                <input type="text"
+                       class="form-control form-control-sm"
+                       name="items[${index}].note"
+                       value="${escapeHtml(
+            item.enteredNote || ""
+        )}"
+                       placeholder="Ghi chú nếu có">
+            </td>
+
+            <td>
+                <button type="button"
+                        class="btn btn-outline-danger
+                               btn-sm remove-item"
+                        onclick="removeBatch(${item.batchId})"
+                        title="Xóa khỏi phiếu">
+
+                    <i class="ti ti-x"></i>
+                </button>
+            </td>
+        `;
+    }
+
+    function renderSelected() {
+        const reviewType =
+            currentType();
+
+        const items =
+            Array.from(
+                selectedBatches.values()
+            );
+
+        const head =
+            document.getElementById("selectedHead");
+
+        const body =
+            document.getElementById("selectedBody");
+
+        document
+            .getElementById("selectedEmpty")
+            .style
+            .display =
+            items.length > 0
+                ? "none"
+                : "";
+
+        document
+            .getElementById("selectedBadge")
+            .textContent =
+            `${items.length} lô`;
+
+        if (reviewType === "COUNT") {
+            head.innerHTML = `
+                <tr>
+                    <th>Mã hàng</th>
+                    <th>Tên hàng hóa</th>
+                    <th>Số lô</th>
+                    <th>Tồn hệ thống</th>
+
+                    <th style="min-width: 140px;">
+                        Tồn thực tế
+                    </th>
+
+                    <th>Chênh lệch</th>
+
+                    <th style="min-width: 180px;">
+                        Ghi chú
+                    </th>
+
+                    <th></th>
+                </tr>
+            `;
+        } else if (reviewType === "DATE") {
+            head.innerHTML = `
+                <tr>
+                    <th>Mã hàng</th>
+                    <th>Tên hàng hóa</th>
+                    <th>Số lô</th>
+                    <th>Hạn dùng hệ thống</th>
+
+                    <th style="min-width: 160px;">
+                        Hạn dùng thực tế
+                    </th>
+
+                    <th style="min-width: 180px;">
+                        Ghi chú
+                    </th>
+
+                    <th></th>
+                </tr>
+            `;
+        } else {
+            head.innerHTML = `
+                <tr>
+                    <th>Mã hàng</th>
+                    <th>Tên hàng hóa</th>
+                    <th>Số lô</th>
+                    <th>Tồn hệ thống</th>
+
+                    <th style="min-width: 150px;">
+                        Tình trạng
+                    </th>
+
+                    <th style="min-width: 170px;">
+                        Số lượng
+                    </th>
+
+                    <th style="min-width: 180px;">
+                        Ghi chú
+                    </th>
+
+                    <th></th>
+                </tr>
+            `;
+        }
+
+        body.innerHTML = items
+            .map((item, index) => {
+                if (reviewType === "COUNT") {
+                    return `
+                        <tr class="selected-row"
+                            data-system-qty="${
+                        item.systemQty ?? 0
+                    }">
+
+                            ${baseCells(item, index)}
+
+                            <td class="fw-semibold">
+                                ${item.systemQty ?? 0}
+                            </td>
+
+                            <td>
+                                <input type="number"
+                                       min="0"
+                                       class="form-control
+                                              form-control-sm
+                                              actual-input"
+                                       name="items[${index}].actualQty"
+                                       value="${escapeHtml(
+                        item.enteredActualQty
+                        ?? ""
+                    )}"
+                                       placeholder="Nhập số lượng"
+                                       required>
+                            </td>
+
+                            <td>
+                                <span class="difference-value
+                                             text-secondary">
+                                    —
+                                </span>
+                            </td>
+
+                            ${tailCells(item, index)}
+                        </tr>
+                    `;
+                }
+
+                if (reviewType === "DATE") {
+                    return `
+                        <tr class="selected-row"
+                            data-recorded-date="${escapeHtml(
+                        item.expirationDate || ""
+                    )}">
+
+                            ${baseCells(item, index)}
+
+                            <td>
+                                ${escapeHtml(
+                        item.expirationDateDisplay
+                        || "Chưa có"
+                    )}
+                            </td>
+
+                            <td>
+                                <input type="date"
+                                       class="form-control
+                                              form-control-sm
+                                              date-input"
+                                       name="items[${index}].actualExpirationDate"
+                                       value="${escapeHtml(
+                        item.enteredActualDate
+                        || ""
+                    )}"
+                                       required>
+                            </td>
+
+                            ${tailCells(item, index)}
+                        </tr>
+                    `;
+                }
+
+                /*
+                 * Rà soát tình trạng:
+                 * mỗi lô hiển thị hai dòng nhỏ trong cùng một hàng.
+                 */
+                return `
+                    <tr class="selected-row"
+                        data-system-qty="${
+                    item.systemQty ?? 0
+                }">
+
+                        ${baseCells(item, index)}
+
+                        <td class="fw-semibold">
+                            ${item.systemQty ?? 0}
+                        </td>
+
+                        <td>
+                            <div class="condition-stack">
+                                <div class="condition-compliant">
+                                    Đạt chuẩn
+                                </div>
+
+                                <div class="condition-non-compliant">
+                                    Không đạt chuẩn
+                                </div>
+                            </div>
+                        </td>
+
+                        <td>
+                            <div class="condition-stack">
+                                <input type="number"
+                                       min="0"
+                                       class="form-control
+                                              form-control-sm
+                                              compliant-input"
+                                       name="items[${index}].compliantQty"
+                                       value="${escapeHtml(
+                    item.enteredCompliantQty
+                    ?? ""
+                )}"
+                                       placeholder="SL đạt chuẩn"
+                                       required>
+
+                                <input type="number"
+                                       min="0"
+                                       class="form-control
+                                              form-control-sm
+                                              non-compliant-input"
+                                       name="items[${index}].nonCompliantQty"
+                                       value="${escapeHtml(
+                    item.enteredNonCompliantQty
+                    ?? ""
+                )}"
+                                       placeholder="SL không đạt"
+                                       required>
+                            </div>
+                        </td>
+
+                        ${tailCells(item, index)}
+                    </tr>
+                `;
+            })
+            .join("");
+
+        body
+            .querySelectorAll("input")
             .forEach(input => {
-                input.required = type === 'COUNT';
+                input.addEventListener(
+                    "input",
+                    calculateSummary
+                );
             });
-
-        document.querySelectorAll('.date-input')
-            .forEach(input => {
-                input.required = type === 'DATE';
-            });
-
-        document.querySelectorAll('.condition-input')
-            .forEach(input => {
-                input.required = type === 'CONDITION';
-            });
-
-        document.getElementById('countSummary').style.display =
-            type === 'COUNT' ? '' : 'none';
-
-        document.getElementById('reviewTypeHelp').textContent =
-            TYPE_HELP[type] || '';
-
-        const reviewHelp = {
-            COUNT:
-                'Sau khi phiếu được duyệt, Chủ nhà thuốc có thể tạo phiếu điều chỉnh tồn cho các dòng có chênh lệch.',
-
-            DATE:
-                'Phiếu chỉ lưu kết quả đối chiếu hạn dùng và không tự động thay đổi hạn dùng của lô hàng.',
-
-            CONDITION:
-                'Phiếu chỉ lưu kết quả đánh giá tình trạng và không tự động tạo phiếu hủy hoặc thay đổi tồn kho.'
-        };
-
-        document.getElementById('reviewWarning').innerHTML =
-            '<i class="ti ti-info-circle me-1"></i>' +
-            reviewHelp[type];
 
         calculateSummary();
     }
-
     function calculateSummary() {
-        const type = currentType();
+        const reviewType =
+            currentType();
 
-        let totalItems = 0;
         let matchedItems = 0;
         let issueItems = 0;
         let totalSystem = 0;
         let totalActual = 0;
 
-        document.querySelectorAll('.review-row')
+        document
+            .querySelectorAll(".selected-row")
             .forEach(row => {
-                totalItems++;
-
-                let issue = false;
-
-                if (type === 'COUNT') {
+                if (reviewType === "COUNT") {
                     const systemQty =
-                        Number(row.dataset.systemQty || 0);
+                        Number(
+                            row.dataset.systemQty || 0
+                        );
 
                     const actualInput =
-                        row.querySelector('.actual-input');
+                        row.querySelector(
+                            ".actual-input"
+                        );
+
+                    const hasValue =
+                        actualInput
+                        && actualInput.value !== "";
 
                     const actualQty =
-                        Number(actualInput.value || 0);
+                        hasValue
+                            ? Number(actualInput.value)
+                            : 0;
 
                     const difference =
                         actualQty - systemQty;
 
-                    const differenceElement =
-                        row.querySelector('.difference-value');
-
-                    differenceElement.textContent =
-                        difference > 0
-                            ? '+' + difference
-                            : difference;
-
-                    differenceElement.className =
-                        'difference-value ' +
-                        (
-                            difference > 0
-                                ? 'diff-plus'
-                                : difference < 0
-                                    ? 'diff-minus'
-                                    : 'text-secondary'
+                    const differenceOutput =
+                        row.querySelector(
+                            ".difference-value"
                         );
 
+                    if (differenceOutput) {
+                        if (!hasValue) {
+                            differenceOutput.textContent =
+                                "—";
+
+                            differenceOutput.className =
+                                "difference-value "
+                                + "text-secondary";
+                        } else {
+                            differenceOutput.textContent =
+                                difference > 0
+                                    ? `+${difference}`
+                                    : String(difference);
+
+                            differenceOutput.className =
+                                "difference-value "
+                                + (
+                                    difference > 0
+                                        ? "diff-plus"
+                                        : difference < 0
+                                            ? "diff-minus"
+                                            : "text-secondary"
+                                );
+                        }
+                    }
+
                     totalSystem += systemQty;
-                    totalActual += actualQty;
-                    issue = difference !== 0;
-                } else if (type === 'DATE') {
-                    issue =
-                        (row.dataset.recordedDate || '') !==
-                        (row.querySelector('.date-input').value || '');
-                } else {
-                    issue =
-                        row.querySelector('.condition-input').value !==
-                        'GOOD';
+
+                    if (hasValue) {
+                        totalActual += actualQty;
+
+                        if (difference === 0) {
+                            matchedItems++;
+                        } else {
+                            issueItems++;
+                        }
+                    }
+
+                    return;
                 }
 
-                if (issue) {
-                    issueItems++;
-                } else {
-                    matchedItems++;
+                if (reviewType === "DATE") {
+                    const actualDateInput =
+                        row.querySelector(
+                            ".date-input"
+                        );
+
+                    const actualDate =
+                        actualDateInput
+                            ? actualDateInput.value
+                            : "";
+
+                    const systemDate =
+                        row.dataset.recordedDate || "";
+
+                    if (actualDate) {
+                        if (actualDate === systemDate) {
+                            matchedItems++;
+                        } else {
+                            issueItems++;
+                        }
+                    }
+
+                    return;
+                }
+
+                /*
+                 * CONDITION:
+                 * Tổng thực tế là tổng số lượng đạt chuẩn
+                 * và không đạt chuẩn.
+                 */
+                const systemQty =
+                    Number(
+                        row.dataset.systemQty || 0
+                    );
+
+                const compliantInput =
+                    row.querySelector(
+                        ".compliant-input"
+                    );
+
+                const nonCompliantInput =
+                    row.querySelector(
+                        ".non-compliant-input"
+                    );
+
+                const completed =
+                    compliantInput
+                    && nonCompliantInput
+                    && compliantInput.value !== ""
+                    && nonCompliantInput.value !== "";
+
+                totalSystem += systemQty;
+
+                if (completed) {
+                    const compliantQty =
+                        Number(
+                            compliantInput.value
+                        );
+
+                    const nonCompliantQty =
+                        Number(
+                            nonCompliantInput.value
+                        );
+
+                    const reviewedQty =
+                        compliantQty
+                        + nonCompliantQty;
+
+                    totalActual += reviewedQty;
+
+                    /*
+                     * Chỉ được tính là khớp/tốt khi:
+                     * - Tổng số lượng bằng tồn hệ thống.
+                     * - Không có hàng không đạt chuẩn.
+                     */
+                    if (reviewedQty === systemQty
+                        && nonCompliantQty === 0) {
+                        matchedItems++;
+                    } else {
+                        issueItems++;
+                    }
                 }
             });
 
-        const totalDiff = totalActual - totalSystem;
+        document
+            .getElementById("totalItemsDisplay")
+            .textContent =
+            selectedBatches.size;
 
-        document.getElementById('totalItemsDisplay').textContent =
-            totalItems;
-
-        document.getElementById('matchedItemsDisplay').textContent =
+        document
+            .getElementById("matchedItemsDisplay")
+            .textContent =
             matchedItems;
 
-        document.getElementById('issueItemsDisplay').textContent =
+        document
+            .getElementById("issueItemsDisplay")
+            .textContent =
             issueItems;
 
-        document.getElementById('totalSystemDisplay').textContent =
+        document
+            .getElementById("totalSystemDisplay")
+            .textContent =
             totalSystem;
 
-        document.getElementById('totalActualDisplay').textContent =
+        document
+            .getElementById("totalActualDisplay")
+            .textContent =
             totalActual;
 
-        document.getElementById('totalDiffDisplay').textContent =
-            totalDiff > 0 ? '+' + totalDiff : totalDiff;
+        const totalDifference =
+            totalActual - totalSystem;
+
+        document
+            .getElementById("totalDiffDisplay")
+            .textContent =
+            totalDifference > 0
+                ? `+${totalDifference}`
+                : String(totalDifference);
     }
 
-    function filterRows() {
-        const keyword = normalizeText(
-            document.getElementById('tableSearch').value
-        );
+    function changeReviewType() {
+        /*
+         * Lưu lại dữ liệu của loại hiện tại trước khi
+         * thay đổi cấu trúc bảng.
+         */
+        captureSelectedValues();
 
-        document.querySelectorAll('.review-row')
-            .forEach(row => {
-                row.style.display =
-                    !keyword ||
-                    normalizeText(row.dataset.keyword).includes(keyword)
-                        ? ''
-                        : 'none';
-            });
+        const type =
+            currentType();
+
+        const help = {
+            COUNT:
+                "Ghi nhận số lượng thực tế và đối chiếu "
+                + "với tồn hệ thống của từng lô.",
+
+            DATE:
+                "Đối chiếu hạn dùng in trên lô với hạn "
+                + "dùng đang lưu trong hệ thống.",
+
+            CONDITION:
+                "Phân loại tồn của từng lô thành số lượng "
+                + "đạt chuẩn và không đạt chuẩn."
+        };
+
+        const warning = {
+            COUNT:
+                "Chênh lệch chỉ được ghi nhận trong phiếu; "
+                + "việc điều chỉnh kho được thực hiện ở "
+                + "nghiệp vụ riêng.",
+
+            DATE:
+                "Phiếu chỉ lưu kết quả đối chiếu và không "
+                + "tự động thay đổi hạn dùng của lô.",
+
+            CONDITION:
+                "Khi gửi phiếu, tổng số lượng đạt chuẩn "
+                + "và không đạt chuẩn phải bằng tồn hệ "
+                + "thống của từng lô."
+        };
+
+        document
+            .getElementById("reviewTypeHelp")
+            .textContent =
+            help[type] || "";
+
+        document
+            .getElementById("reviewWarning")
+            .innerHTML =
+            '<i class="ti ti-info-circle me-1"></i>'
+            + (warning[type] || "");
+
+        /*
+         * Rà soát số lượng và tình trạng đều có phần
+         * tổng tồn hệ thống/tổng thực tế.
+         */
+        document
+            .getElementById("countSummary")
+            .style
+            .display =
+            type === "DATE"
+                ? "none"
+                : "";
+
+        renderSelected();
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        document.getElementById('todayDisplay').value =
-            new Date().toLocaleDateString('vi-VN');
+    function validateBeforeSubmit(event) {
+        if (selectedBatches.size === 0) {
+            event.preventDefault();
 
-        changeReviewType();
-    });
+            alert(
+                "Vui lòng thêm ít nhất một lô hàng "
+                + "vào phiếu rà soát."
+            );
+
+            return;
+        }
+
+        const action =
+            event.submitter?.value || "submit";
+
+        /*
+         * Lưu nháp không bắt buộc nhập các trường
+         * kết quả rà soát.
+         */
+        if (action === "draft") {
+            return;
+        }
+
+        const type =
+            currentType();
+
+        if (type === "COUNT") {
+            const incomplete =
+                Array.from(
+                    document.querySelectorAll(
+                        ".actual-input"
+                    )
+                )
+                    .some(input =>
+                        input.value === ""
+                    );
+
+            if (incomplete) {
+                event.preventDefault();
+
+                alert(
+                    "Vui lòng nhập đầy đủ số lượng thực tế "
+                    + "trước khi gửi phiếu."
+                );
+            }
+
+            return;
+        }
+
+        if (type === "DATE") {
+            const incomplete =
+                Array.from(
+                    document.querySelectorAll(
+                        ".date-input"
+                    )
+                )
+                    .some(input =>
+                        input.value === ""
+                    );
+
+            if (incomplete) {
+                event.preventDefault();
+
+                alert(
+                    "Vui lòng nhập đầy đủ hạn dùng thực tế "
+                    + "trước khi gửi phiếu."
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * Validation khi gửi phiếu CONDITION.
+         */
+        for (const row of document.querySelectorAll(
+            ".selected-row"
+        )) {
+            const compliant =
+                row.querySelector(
+                    ".compliant-input"
+                );
+
+            const nonCompliant =
+                row.querySelector(
+                    ".non-compliant-input"
+                );
+
+            if (!compliant
+                || !nonCompliant
+                || compliant.value === ""
+                || nonCompliant.value === "") {
+                event.preventDefault();
+
+                alert(
+                    "Vui lòng nhập đầy đủ số lượng đạt chuẩn "
+                    + "và không đạt chuẩn trước khi gửi phiếu."
+                );
+
+                return;
+            }
+
+            const compliantQty =
+                Number(compliant.value);
+
+            const nonCompliantQty =
+                Number(nonCompliant.value);
+
+            if (compliantQty < 0
+                || nonCompliantQty < 0) {
+                event.preventDefault();
+
+                alert(
+                    "Số lượng đạt chuẩn và không đạt chuẩn "
+                    + "không được âm."
+                );
+
+                return;
+            }
+
+            const reviewedQty =
+                compliantQty
+                + nonCompliantQty;
+
+            const systemQty =
+                Number(
+                    row.dataset.systemQty || 0
+                );
+
+            if (reviewedQty !== systemQty) {
+                event.preventDefault();
+
+                alert(
+                    "Tổng số lượng đạt chuẩn và không đạt "
+                    + "chuẩn phải bằng tồn hệ thống của "
+                    + "từng lô."
+                );
+
+                return;
+            }
+        }
+    }
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+            document
+                .getElementById("todayDisplay")
+                .value =
+                new Date()
+                    .toLocaleDateString("vi-VN");
+
+            document
+                .getElementById("reviewType")
+                .addEventListener(
+                    "change",
+                    changeReviewType
+                );
+
+            document
+                .getElementById("searchButton")
+                .addEventListener(
+                    "click",
+                    searchCandidates
+                );
+
+            document
+                .getElementById("addAllButton")
+                .addEventListener(
+                    "click",
+                    addAllCandidates
+                );
+
+            document
+                .getElementById("productTypeFilter")
+                .addEventListener(
+                    "change",
+                    searchCandidates
+                );
+
+            document
+                .getElementById("positionFilter")
+                .addEventListener(
+                    "change",
+                    searchCandidates
+                );
+
+            document
+                .getElementById("candidateKeyword")
+                .addEventListener(
+                    "keydown",
+                    function (event) {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            searchCandidates();
+                        }
+                    }
+                );
+
+            document
+                .getElementById("stockReviewForm")
+                .addEventListener(
+                    "submit",
+                    validateBeforeSubmit
+                );
+
+            /*
+             * Khôi phục lô và dữ liệu đã nhập khi
+             * mở lại phiếu nháp.
+             */
+            loadInitialSelectedBatches();
+
+            changeReviewType();
+        }
+    );
 </script>
 
 </body>

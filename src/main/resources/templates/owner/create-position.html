@@ -72,7 +72,11 @@
                     <div class="owner-card p-4 p-md-5">
                         <h2 class="form-section-title">Thông tin vị trí</h2>
 
-                        <div class="mb-4">
+                        <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger py-2 px-3 small" role="alert">
+                            <span th:each="err : ${#fields.globalErrors()}" th:text="${err}">Lỗi</span>
+                        </div>
+
+                        <div class="mb-4" th:if="${hasAvailableProducts}">
                             <label for="productId" class="form-label">Sản phẩm <span class="text-danger">*</span></label>
                             <select id="productId" class="form-select" th:field="*{productId}">
                                 <option value="">-- Chọn sản phẩm --</option>
@@ -80,10 +84,15 @@
                                         th:value="${product.productID}"
                                         th:text="|${product.code} - ${product.name}|">SP001 - Paracetamol</option>
                             </select>
+                            <div class="form-text">Chỉ hiển thị sản phẩm chưa có vị trí.</div>
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('productId')}" th:errors="*{productId}"></div>
                         </div>
 
-                        <div class="mb-0">
+                        <div class="alert alert-info mb-4" th:unless="${hasAvailableProducts}">
+                            Tất cả sản phẩm đã có vị trí. Không thể tạo thêm vị trí mới.
+                        </div>
+
+                        <div class="mb-0" th:if="${hasAvailableProducts}">
                             <label for="positionName" class="form-label">Tên vị trí <span class="text-danger">*</span></label>
                             <input id="positionName" type="text" class="form-control" th:field="*{name}"
                                    placeholder="VD: Kệ A1, Tủ B2">
@@ -97,7 +106,7 @@
                     <div class="action-panel">
                         <h2 class="form-section-title mb-3">Thao tác</h2>
                         <p class="action-note">Kiểm tra kỹ sản phẩm và tên vị trí trước khi lưu.</p>
-                        <button type="submit" class="btn btn-owner-primary w-100 mb-2">
+                        <button type="submit" class="btn btn-owner-primary w-100 mb-2" th:disabled="${!hasAvailableProducts}">
                             <i class="ti ti-plus me-1"></i>Tạo vị trí
                         </button>
                         <a th:href="${basePath}" class="btn btn-outline-secondary w-100 btn-back">Hủy</a>

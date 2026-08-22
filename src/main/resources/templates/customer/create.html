@@ -124,7 +124,7 @@
                      th:field="*{name}"
                      th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
                      required
-                     placeholder="Nhập tên khách hàng">
+                    >
               <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
             </div>
 
@@ -141,7 +141,7 @@
                        pattern="0(2|3|5|7|8|9)[0-9]{8}"
                        title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                        required
-                       placeholder="0900000000">
+                      >
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}"></div>
               </div>
               <div class="col-12 col-md-6">
@@ -157,7 +157,7 @@
                        data-unique-field="taxCode"
                        data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
                        required
-                       maxlength="100" placeholder="Nhập mã số thuế">
+                       maxlength="100">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
               </div>
             </div>
@@ -168,7 +168,7 @@
                      th:field="*{address}"
                      th:classappend="${#fields.hasErrors('address')} ? ' is-invalid'"
                      required
-                     maxlength="100" placeholder="Nhập địa chỉ khách hàng">
+                     maxlength="100">
               <div class="invalid-feedback" th:if="${#fields.hasErrors('address')}" th:errors="*{address}"></div>
             </div>
 
@@ -180,7 +180,7 @@
                        th:field="*{bankAccountNumber}"
                        th:classappend="${#fields.hasErrors('bankAccountNumber')} ? ' is-invalid'"
                        inputmode="numeric" data-digits
-                       maxlength="100" placeholder="Nhập số tài khoản">
+                       maxlength="100">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('bankAccountNumber')}" th:errors="*{bankAccountNumber}"></div>
               </div>
               <div class="col-12 col-md-6">
@@ -189,7 +189,7 @@
                 <input id="cusBankName" type="text" class="form-control"
                        th:field="*{bankName}"
                        th:classappend="${#fields.hasErrors('bankName')} ? ' is-invalid'"
-                       maxlength="100" placeholder="Nhập tên ngân hàng">
+                       maxlength="100">
                 <div class="invalid-feedback" th:if="${#fields.hasErrors('bankName')}" th:errors="*{bankName}"></div>
               </div>
             </div>
@@ -237,7 +237,6 @@
     var optIndividual = document.getElementById('optIndividual');
     var optCompany = document.getElementById('optCompany');
     var taxLabel = document.getElementById('cusTaxLabel');
-    var taxInput = document.getElementById('cusTax');
     // 2 ô ngân hàng chỉ TỒN TẠI với khách doanh nghiệp: hiện thì bắt buộc, ẩn thì gỡ `required`.
     // Không gỡ thì submit bị chặn bởi một ô người dùng không nhìn thấy — bế tắc hoàn toàn.
     var bankInputs = [document.getElementById('cusBankAcc'), document.getElementById('cusBankName')];
@@ -254,7 +253,6 @@
       optCompany.classList.toggle('active', isCompany);
       // taxCode dùng cho cả 2 loại: doanh nghiệp = Mã số thuế, cá nhân = số CCCD/CMND.
       if (taxLabel) { taxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND'; }
-      if (taxInput) { taxInput.setAttribute('placeholder', isCompany ? 'Nhập mã số thuế' : 'Nhập số CCCD/CMND'); }
       // Ô mã định danh và địa chỉ BẮT BUỘC với cả 2 loại (`required` viết thẳng trong HTML, không
       // bật/tắt theo loại) — đổi loại khách chỉ đổi tên gọi của mã, không đổi việc phải nhập.
       bankInputs.forEach(function (input) {

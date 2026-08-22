@@ -3,21 +3,31 @@ package com.example.project.controller;
 import com.example.project.dto.request.ProductCreateRequest;
 import com.example.project.dto.request.ProductUnitCreateRequest;
 import com.example.project.dto.response.ProductDetailResponse;
+import com.example.project.dto.response.ProductBarcodeOptionResponse;
+import com.example.project.dto.response.ProductBarcodePrintResponse;
 import com.example.project.dto.response.ProductRowResponse;
+import com.example.project.dto.response.PurchaseInvoiceBarcodeOptionResponse;
 import com.example.project.entity.Type;
 import com.example.project.service.ProductService;
+import com.example.project.service.ProductBarcodeService;
+import com.example.project.service.ProductBarcodePdfService;
 import com.example.project.service.ProductValidationException;
 import com.example.project.service.ProcurementplanService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
@@ -32,11 +42,17 @@ public class ProductPageController {
 
     private final ProductService productService;
     private final ProcurementplanService procurementplanService;
+    private final ProductBarcodeService productBarcodeService;
+    private final ProductBarcodePdfService productBarcodePdfService;
 
     public ProductPageController(ProductService productService,
-                                 ProcurementplanService procurementplanService) {
+                                 ProcurementplanService procurementplanService,
+                                 ProductBarcodeService productBarcodeService,
+                                 ProductBarcodePdfService productBarcodePdfService) {
         this.productService = productService;
         this.procurementplanService = procurementplanService;
+        this.productBarcodeService = productBarcodeService;
+        this.productBarcodePdfService = productBarcodePdfService;
     }
 
     // Hiển thị danh sách hàng hóa có tìm kiếm/lọc/phân trang, dùng chung cho cả 3 role.
@@ -223,6 +239,95 @@ public class ProductPageController {
         model.addAttribute("backSupplierId", backSupplierId);
 
         return "product/detail";
+    }
+
+    @GetMapping({
+            "/owner/products/barcode/search-products",
+            "/pharmacist/products/barcode/search-products",
+            "/accountant/products/barcode/search-products"
+    })
+    @ResponseBody
+    public List<ProductBarcodeOptionResponse> searchBarcodeProducts(
+            @RequestParam(name = "keyword", required = false) String keyword) {
+        return productBarcodeService.searchProducts(keyword);
+    }
+
+    @GetMapping({
+            "/owner/products/barcode/search-purchase-invoices",
+            "/pharmacist/products/barcode/search-purchase-invoices",
+            "/accountant/products/barcode/search-purchase-invoices"
+    })
+    @ResponseBody
+    public List<PurchaseInvoiceBarcodeOptionResponse> searchBarcodePurchaseInvoices(
+            @RequestParam(name = "keyword", required = false) String keyword) {
+        return productBarcodeService.searchPurchaseInvoices(keyword);
+    }
+
+    @GetMapping({
+            "/owner/products/barcode/purchase-invoices/{purchaseId}/products",
+            "/pharmacist/products/barcode/purchase-invoices/{purchaseId}/products",
+            "/accountant/products/barcode/purchase-invoices/{purchaseId}/products"
+    })
+    @ResponseBody
+    public List<ProductBarcodeOptionResponse> getPurchaseInvoiceBarcodeProducts(
+            @PathVariable Integer purchaseId) {
+        return productBarcodeService.getProductsFromPurchaseInvoice(purchaseId);
+    }
+
+    /** Trang xem trước A5 của toàn bộ sản phẩm đã chọn trong modal. */
+    @PostMapping({
+            "/owner/products/barcode/print",
+            "/pharmacist/products/barcode/print",
+            "/accountant/products/barcode/print"
+    })
+    public String previewBarcodes(@RequestParam("productIds") List<Integer> productIds,
+                                  @RequestParam("quantities") List<Integer> quantities,
+                                  HttpServletRequest request,
+                                  Model model) {
+        List<ProductBarcodePrintResponse> items =
+                productBarcodeService.buildPrintItems(productIds, quantities);
+        model.addAttribute("barcodeItems", items);
+        model.addAttribute("basePath", resolveBasePath(request));
+        model.addAttribute("totalLabels", items.stream()
+                .mapToInt(ProductBarcodePrintResponse::getQuantity).sum());
+        return "product/barcode-print";
+    }
+
+    /** Tải file PDF A5 để kiểm tra hoặc in sau. */
+    @PostMapping(value = {
+            "/owner/products/barcode/pdf",
+            "/pharmacist/products/barcode/pdf",
+            "/accountant/products/barcode/pdf"
+    }, produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportBarcodePdf(
+            @RequestParam("productIds") List<Integer> productIds,
+            @RequestParam("quantities") List<Integer> quantities) {
+        List<ProductBarcodePrintResponse> items =
+                productBarcodeService.buildPrintItems(productIds, quantities);
+        byte[] pdf = productBarcodePdfService.generateA5Pdf(items);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=barcode-a5.pdf; filename*=UTF-8''barcode-a5.pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(pdf.length)
+                .body(pdf);
+    }
+
+    /** Trả ảnh barcode PNG được sinh từ Product.code. */
+    @GetMapping(value = {
+            "/owner/products/barcode/image/{productId}",
+            "/pharmacist/products/barcode/image/{productId}",
+            "/accountant/products/barcode/image/{productId}"
+    }, produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> barcodeImage(@PathVariable Integer productId) {
+        try {
+            return ResponseEntity.ok()
+                    .cacheControl(CacheControl.noCache())
+                    .contentType(MediaType.IMAGE_PNG)
+                    .body(productBarcodeService.generateBarcodePng(productId));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     // Xác định basePath (/owner, /pharmacist, /accountant) từ URL để dựng link/redirect đúng role.

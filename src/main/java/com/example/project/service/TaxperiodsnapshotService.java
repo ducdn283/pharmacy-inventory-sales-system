@@ -86,9 +86,6 @@ public class TaxperiodsnapshotService {
     private static final List<String> DISBURSED_EXPENSE_STATUSES =
             List.of(ExpenseStatus.AWAITING_PAYMENT, ExpenseStatus.COMPLETED);
 
-    /** Loại điều chỉnh kho khiến hàng ra khỏi kho mà không phải bán (biếu tặng/dùng nội bộ/hàng mẫu) — tính là doanh thu. */
-    private static final List<String> GIVEN_AWAY_ADJUSTMENT_TYPES = List.of("INTERNAL_USE", "GIFT", "SAMPLE");
-
     /** Trạng thái Income coi là đã thu tiền thật — gồm nhãn hiện tại và nhãn cũ trước khi đổi tên. */
     private static final List<String> INCOME_COMPLETED_STATUSES = List.of("Hoàn thành", "Duyệt");
 
@@ -329,7 +326,7 @@ public class TaxperiodsnapshotService {
         }
         TaxPeriod span = new TaxPeriod(from + " → " + to, from, to);
         List<Invoice> invoices = invoiceRepository.findValidInPeriod(localStart(span), localEndExclusive(span));
-        return scaled(revenueOf(invoices, span));
+        return scaled(revenueOf(invoices));
     }
 
     /** Doanh thu cả năm — dùng so sánh với {@link TaxRevenueGroup#THRESHOLD_1}/{@link TaxRevenueGroup#THRESHOLD_2} (ngưỡng tính theo năm). */
@@ -339,16 +336,17 @@ public class TaxperiodsnapshotService {
     }
 
     /**
-     * Doanh thu tính thuế GTGT: hóa đơn "còn hiệu lực" (xem {@link
-     * InvoiceRepository#findValidInPeriod}) cộng giá trị (đã gồm VAT) của hàng cho đi thay vì bán
-     * (biếu tặng/dùng nội bộ/hàng mẫu). Không bao giờ âm.
+     * Doanh thu tính thuế GTGT: tổng {@code Invoice.total} của các hóa đơn "còn hiệu lực" trong kỳ
+     * (xem {@link InvoiceRepository#findValidInPeriod}). Không bao giờ âm.
+     *
+     * <p><strong>BA quyết định 2026-08-15: hàng cho đi thay vì bán (biếu tặng/dùng nội bộ/hàng mẫu)
+     * KHÔNG còn tính là doanh thu</strong> — trước đây cộng thêm giá trị gross của các phiếu điều
+     * chỉnh kho {@code INTERNAL_USE}/{@code GIFT}/{@code SAMPLE}, đã bỏ hoàn toàn khỏi cả doanh thu
+     * GTGT lẫn doanh thu TNCN (xem {@link #taxableIncomeRevenueOf}, vốn cộng thêm dựa trên kết quả
+     * hàm này).</p>
      */
-    private BigDecimal revenueOf(List<Invoice> validInvoices, TaxPeriod period) {
-        BigDecimal invoiceRevenue = sum(validInvoices, Invoice::getTotal);
-        BigDecimal givenAwayGrossValue = safe(stockadjustmentdetailRepository.sumGrossValueInPeriod(
-                GIVEN_AWAY_ADJUSTMENT_TYPES, StockAdjustmentStatus.COMPLETED,
-                instantStart(period), instantEndExclusive(period)));
-        return invoiceRevenue.add(givenAwayGrossValue).max(BigDecimal.ZERO);
+    private BigDecimal revenueOf(List<Invoice> validInvoices) {
+        return sum(validInvoices, Invoice::getTotal).max(BigDecimal.ZERO);
     }
 
     /**
@@ -453,7 +451,7 @@ public class TaxperiodsnapshotService {
                 .filter(purchaseinvoiceService::isDeductible)
                 .toList();
 
-        BigDecimal revenue = exempt ? BigDecimal.ZERO : revenueOf(invoices, period);
+        BigDecimal revenue = exempt ? BigDecimal.ZERO : revenueOf(invoices);
         // Tính riêng để hiển thị trên tax-period/preview.html, không tính lại lần hai trong taxableIncomeRevenueOf.
         BigDecimal customerReturnRetained = exempt ? BigDecimal.ZERO : customerReturnRetainedOf(period);
         BigDecimal taxableIncomeRevenue = exempt ? BigDecimal.ZERO

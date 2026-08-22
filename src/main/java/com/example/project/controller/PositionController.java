@@ -2,6 +2,7 @@ package com.example.project.controller;
 
 import com.example.project.dto.request.PositionCreateRequest;
 import com.example.project.dto.response.PositionResponse;
+import com.example.project.entity.Product;
 import com.example.project.service.PositionService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -18,8 +19,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.List;
+
 /**
- * Màn quản lý vị trí lưu kho (danh sách / tạo / sửa) — chỉ Owner.
+ * Màn quản lý vị trí lưu kho — danh sách / tạo / sửa chỉ Owner; Pharmacist chỉ xem danh sách
+ * (không có route tạo/sửa nào ứng với {@code /pharmacist/positions}).
  */
 @Controller
 public class PositionController {
@@ -29,12 +33,25 @@ public class PositionController {
         this.positionService = positionService;
     }
 
-    /** Danh sách vị trí có phân trang và tìm kiếm. */
+    /** Danh sách vị trí có phân trang và tìm kiếm — Owner (có nút Tạo/Sửa, xem template). */
     @GetMapping("/owner/positions")
     public String positionList(@RequestParam(name = "search", required = false) String search,
                                @RequestParam(name = "page", defaultValue = "0") int page,
                                @RequestParam(name = "size", defaultValue = "5") int size,
                                Model model) {
+        return renderPositionList(search, page, size, "/owner/positions", model);
+    }
+
+    /** Cùng danh sách, chỉ-xem cho Pharmacist — template đã tự ẩn nút Tạo/Sửa theo {@code currentRole}. */
+    @GetMapping("/pharmacist/positions")
+    public String positionListForPharmacist(@RequestParam(name = "search", required = false) String search,
+                                            @RequestParam(name = "page", defaultValue = "0") int page,
+                                            @RequestParam(name = "size", defaultValue = "5") int size,
+                                            Model model) {
+        return renderPositionList(search, page, size, "/pharmacist/positions", model);
+    }
+
+    private String renderPositionList(String search, int page, int size, String basePath, Model model) {
         if (page < 0) {
             page = 0;
         }
@@ -54,7 +71,7 @@ public class PositionController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalItems", positionPage.getTotalElements());
         model.addAttribute("pageTitle", "Danh sách vị trí");
-        model.addAttribute("basePath", "/owner/positions");
+        model.addAttribute("basePath", basePath);
         return "owner/position-list";
     }
 
@@ -79,7 +96,13 @@ public class PositionController {
             return "owner/create-position";
         }
 
-        positionService.create(form);
+        try {
+            positionService.create(form);
+        } catch (IllegalArgumentException exception) {
+            bindingResult.reject("positionForm", exception.getMessage());
+            populateCreateForm(model);
+            return "owner/create-position";
+        }
         redirectAttributes.addFlashAttribute("success", "Tạo vị trí thành công");
         return "redirect:/owner/positions";
     }
@@ -97,7 +120,7 @@ public class PositionController {
             model.addAttribute("positionForm", form);
         }
 
-        populateForm(model, "Cập nhật vị trí");
+        populateForm(model, "Cập nhật vị trí", id);
         return "owner/update-position";
     }
 
@@ -110,23 +133,34 @@ public class PositionController {
                                  RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             model.addAttribute("position", positionService.getById(id));
-            populateForm(model, "Cập nhật vị trí");
+            populateForm(model, "Cập nhật vị trí", id);
             return "owner/update-position";
         }
 
-        positionService.update(id, form);
+        try {
+            positionService.update(id, form);
+        } catch (IllegalArgumentException exception) {
+            bindingResult.reject("positionForm", exception.getMessage());
+            model.addAttribute("position", positionService.getById(id));
+            populateForm(model, "Cập nhật vị trí", id);
+            return "owner/update-position";
+        }
         redirectAttributes.addFlashAttribute("success", "Cập nhật vị trí thành công");
         return "redirect:/owner/positions";
     }
 
     /** Chuẩn bị model cho form tạo vị trí. */
     private void populateCreateForm(Model model) {
-        populateForm(model, "Tạo vị trí");
+        populateForm(model, "Tạo vị trí", null);
     }
 
     /** Nạp dropdown hàng hóa và metadata chung cho form tạo/sửa. */
-    private void populateForm(Model model, String pageTitle) {
-        model.addAttribute("products", positionService.listProducts());
+    private void populateForm(Model model, String pageTitle, Integer positionId) {
+        List<Product> products = positionId == null
+                ? positionService.listProductsWithoutPosition()
+                : positionService.listProductsForUpdate(positionId);
+        model.addAttribute("products", products);
+        model.addAttribute("hasAvailableProducts", !products.isEmpty());
         model.addAttribute("pageTitle", pageTitle);
         model.addAttribute("basePath", "/owner/positions");
     }

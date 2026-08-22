@@ -8,7 +8,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "accountpermission")
+@Table(name = "account_permission")
 public class Accountpermission {
     @Id
     @Column(name = "accountPermissionID", nullable = false)

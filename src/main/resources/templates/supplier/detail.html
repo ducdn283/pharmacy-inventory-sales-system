@@ -80,8 +80,16 @@
     }
     .table tbody td { font-size: 13px; vertical-align: middle; }
     .badge-preferred { background: #fef3c7; color: #92400e; font-size: 11px; }
+    /* Ghi chú dài không được kéo giãn bảng — minmax(0) không áp được cho <td> nên chặn bằng max-width. */
+    .note-cell {
+      max-width: 220px; color: #6b7280;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
     .badge-active   { background: #dcfce7; color: #166534; font-size: 11px; }
     .badge-inactive { background: #fee2e2; color: #991b1b; font-size: 11px; }
+    .debt-amount    { color: #d97706; font-weight: 600; }
+    .badge-debt     { background: #fef3c7; color: #92400e; }
+    .badge-overdue  { background: #fee2e2; color: #991b1b; font-size: 11px; }
   </style>
 </head>
 
@@ -108,8 +116,9 @@
 
     <div class="row g-4">
 
-      <!-- Thông tin nhà cung cấp (read-only) -->
-      <div class="col-12">
+      <!-- Thông tin nhà cung cấp (read-only) — ẩn khi form cập nhật đang mở, xem JS cuối trang. -->
+      <div class="col-12" id="infoSection"
+           th:style="${showEditForm} ? 'display:none;' : ''">
         <div class="sup-card p-4 p-md-5">
 
           <!-- Header: tên/mã (trái) + nút (phải) -->
@@ -156,16 +165,35 @@
               <div class="info-label">Địa chỉ</div>
               <div class="info-value" th:text="${supplier.address != null ? supplier.address : '—'}">—</div>
             </div>
+            <!-- Chi tiết từng phiếu nằm trong modal, không trải thẳng ra trang: NCC nợ vài chục
+                 phiếu là bảng dài hơn cả phần thông tin chính của màn. -->
+            <div>
+              <div class="info-label">Tổng công nợ phải trả</div>
+              <div class="info-value debt-amount"
+                   th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</div>
+              <button th:if="${not #lists.isEmpty(supplierDebts)}" type="button"
+                      class="btn btn-sm btn-outline-success mt-2"
+                      data-bs-toggle="modal" data-bs-target="#supplierDebtModal">
+                <i class="ti ti-receipt me-1"></i>
+                <span th:text="'Xem ' + ${#lists.size(supplierDebts)} + ' phiếu chưa thanh toán'">Xem công nợ</span>
+              </button>
+              <div th:if="${#lists.isEmpty(supplierDebts)}" class="text-secondary small mt-1">
+                Không còn phiếu nhập nào chưa thanh toán.
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Form chỉnh sửa (ẩn, mở bằng nút "Cập nhật thông tin") -->
-    <div class="sup-card p-4 p-md-5 mt-4" id="editForm"
+    <div class="sup-card p-4 p-md-5" id="editForm"
          th:style="${showEditForm} ? 'display:block;' : 'display:none;'">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fs-6 mb-0">Cập nhật thông tin nhà cung cấp</h2>
+        <div>
+          <h2 class="fs-6 mb-1">Cập nhật thông tin nhà cung cấp</h2>
+          <span class="sup-code-badge" th:text="${supplier.supplierCode}">NCC-000001</span>
+        </div>
         <button type="button" class="btn-close" id="btnCloseEdit" aria-label="Đóng"></button>
       </div>
 
@@ -186,7 +214,7 @@
                  th:field="*{name}"
                  th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
                  required
-                 placeholder="Nhập tên nhà cung cấp">
+                >
           <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
         </div>
 
@@ -206,7 +234,7 @@
                  maxlength="20" required
                  pattern="[0-9]{10}(-[0-9]{3})?"
                  title="10 chữ số, hoặc 10 chữ số kèm 3 số chi nhánh (vd 0101234567-001)"
-                 placeholder="VD: 0101234567 hoặc 0101234567-001">
+                >
           <div class="invalid-feedback" th:if="${#fields.hasErrors('taxCode')}" th:errors="*{taxCode}"></div>
         </div>
 
@@ -226,12 +254,12 @@
                    pattern="0(2|3|5|7|8|9)[0-9]{8}"
                    title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                    required
-                   placeholder="0900000000">
+                  >
             <div class="invalid-feedback" th:if="${#fields.hasErrors('phone')}" th:errors="*{phone}"></div>
           </div>
           <div class="col-12 col-md-6">
             <label for="editEmail" class="form-label">
-              Email <span class="text-danger">*</span>
+              Email <span class="text-secondary fw-normal">(không bắt buộc)</span>
             </label>
             <input id="editEmail" type="email" class="form-control"
                    th:field="*{email}"
@@ -243,8 +271,7 @@
                    maxlength="100"
                    pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
                    title="Chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
-                   required
-                   placeholder="supplier@example.com">
+                  >
             <div class="invalid-feedback" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
           </div>
         </div>
@@ -257,7 +284,7 @@
                     th:field="*{address}"
                     th:classappend="${#fields.hasErrors('address')} ? ' is-invalid'"
                     rows="3" required
-                    placeholder="Nhập địa chỉ nhà cung cấp"></textarea>
+                   ></textarea>
           <div class="invalid-feedback" th:if="${#fields.hasErrors('address')}" th:errors="*{address}"></div>
         </div>
 
@@ -295,6 +322,8 @@
               <th>Loại hàng</th>
               <th class="text-end">Giá nhập cuối</th>
               <th class="text-center">Trạng thái</th>
+              <th class="text-center">Ưu tiên</th>
+              <th>Ghi chú</th>
               <th class="text-end">Thao tác</th>
             </tr>
           </thead>
@@ -316,15 +345,36 @@
                 <span th:if="${sp.isActive}" class="badge badge-active rounded-pill">Đang cung ứng</span>
                 <span th:unless="${sp.isActive}" class="badge badge-inactive rounded-pill">Ngừng</span>
               </td>
+              <td class="text-center">
+                <span th:if="${sp.isPreferred}" class="badge badge-preferred rounded-pill">
+                  <i class="ti ti-star-filled me-1"></i>Ưu tiên
+                </span>
+                <span th:unless="${sp.isPreferred}" class="text-secondary">—</span>
+              </td>
+              <td class="note-cell" th:text="${sp.note != null ? sp.note : '—'}">—</td>
               <td class="text-end">
-                <a th:href="@{/owner/products/{productId}(productId=${sp.productId}, backSupplierId=${supplier.id})}"
-                   class="btn btn-sm btn-outline-success"
-                   title="Xem chi tiết sản phẩm">Xem</a>
+                <div class="d-inline-flex gap-2">
+                  <!-- data-* mang sẵn giá trị hiện tại sang modal; xem JS "sửa sản phẩm cung ứng". -->
+                  <button th:if="${currentRole == 'OWNER'}" type="button"
+                          class="btn btn-sm btn-outline-secondary btn-edit-sp"
+                          data-bs-toggle="modal" data-bs-target="#editSupplierProductModal"
+                          th:attr="data-sp-id=${sp.id},
+                                   data-sp-name=${sp.productName},
+                                   data-sp-code=${sp.productCode},
+                                   data-sp-active=${sp.isActive},
+                                   data-sp-preferred=${sp.isPreferred},
+                                   data-sp-note=${sp.note}"
+                          title="Sửa trạng thái, ưu tiên, ghi chú">Sửa</button>
+                  <a th:if="${productBasePath != null}"
+                     th:href="@{{base}/{productId}(base=${productBasePath}, productId=${sp.productId}, backSupplierId=${supplier.id})}"
+                     class="btn btn-sm btn-outline-success"
+                     title="Xem chi tiết sản phẩm">Xem</a>
+                </div>
               </td>
             </tr>
 
             <tr th:if="${#lists.isEmpty(supplierProducts)}">
-              <td colspan="6" class="text-center text-secondary py-5">
+              <td colspan="8" class="text-center text-secondary py-5">
                 <i class="ti ti-package-off d-block fs-2 mb-2 text-muted"></i>
                 Chưa có sản phẩm cung ứng nào.
               </td>
@@ -336,6 +386,93 @@
 
   </div>
 </main>
+
+<!-- ===================== Modal: công nợ phải trả nhà cung cấp ===================== -->
+<div class="modal fade" id="supplierDebtModal" tabindex="-1" aria-labelledby="supplierDebtModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+    <div class="modal-content" style="border-radius:16px;">
+
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title fs-6 mb-0" id="supplierDebtModalLabel">Công nợ phải trả nhà cung cấp</h5>
+          <small class="text-secondary">Các phiếu nhập chưa thanh toán xong, mới nhất trước.</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <span class="text-secondary small">
+            Tổng còn phải trả:
+            <span class="debt-amount fs-6"
+                  th:text="${#numbers.formatInteger((totalSupplierDebt != null ? totalSupplierDebt : 0), 1, 'COMMA') + ' ₫'}">0 ₫</span>
+          </span>
+          <span class="badge bg-light text-dark border"
+                th:text="${#lists.size(supplierDebts)} + ' phiếu'">0 phiếu</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Mã phiếu nhập</th>
+                <th>Ngày nhập</th>
+                <th class="text-center">Trạng thái</th>
+                <th>Hạn thanh toán</th>
+                <th class="text-end">Tổng tiền</th>
+                <th class="text-end">Đã trả</th>
+                <th class="text-end">Còn nợ</th>
+                <th class="text-end">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="debtBody">
+              <tr th:each="debt : ${supplierDebts}" class="debt-row">
+                <td class="fw-semibold text-secondary small" th:text="${debt.code}">PINV-000001</td>
+                <td th:text="${debt.date}">01/01/2026 10:00</td>
+                <td class="text-center">
+                  <span class="badge bg-light text-dark border" th:text="${debt.status}">Nợ</span>
+                </td>
+                <td>
+                  <span th:if="${debt.dueDate == null}" class="text-secondary">—</span>
+                  <span th:if="${debt.dueDate != null and debt.overdue}" class="badge badge-overdue rounded-pill"
+                        th:text="${debt.dueDate + ' — quá hạn'}">01/01/2026 — quá hạn</span>
+                  <span th:if="${debt.dueDate != null and !debt.overdue}" th:text="${debt.dueDate}">01/01/2026</span>
+                </td>
+                <td class="text-end"
+                    th:text="${#numbers.formatInteger((debt.totalAmount != null ? debt.totalAmount : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
+                <td class="text-end"
+                    th:text="${#numbers.formatInteger((debt.paid != null ? debt.paid : 0), 1, 'COMMA') + ' ₫'}">0 ₫</td>
+                <td class="text-end debt-amount"
+                    th:text="${#numbers.formatInteger(debt.remaining, 1, 'COMMA') + ' ₫'}">0 ₫</td>
+                <td class="text-end">
+                  <!-- Dược sĩ không có màn phiếu nhập nên không dựng link (xem purchaseInvoiceBasePath). -->
+                  <a th:if="${purchaseInvoiceBasePath != null}"
+                     th:href="@{{base}/{id}(base=${purchaseInvoiceBasePath}, id=${debt.id})}"
+                     class="btn btn-sm btn-outline-success" title="Xem chi tiết phiếu nhập">Xem</a>
+                  <span th:unless="${purchaseInvoiceBasePath != null}" class="text-secondary">—</span>
+                </td>
+              </tr>
+
+              <tr th:if="${#lists.isEmpty(supplierDebts)}">
+                <td colspan="8" class="text-center text-secondary py-5">
+                  <i class="ti ti-checkbox d-block fs-2 mb-2 text-muted"></i>
+                  Không còn công nợ nào với nhà cung cấp này.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer justify-content-between flex-wrap gap-2">
+        <span class="text-secondary small" id="debtPageInfo"></span>
+        <nav>
+          <ul class="pagination pagination-sm mb-0" id="debtPagination"></ul>
+        </nav>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ===================== Modal: chọn sản phẩm chưa cung ứng ===================== -->
 <div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
@@ -451,25 +588,179 @@
   </div>
 </div>
 
+<!-- ===================== Modal: sửa một dòng sản phẩm cung ứng ===================== -->
+<div class="modal fade" id="editSupplierProductModal" tabindex="-1"
+     aria-labelledby="editSupplierProductLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <!-- action gắn theo dòng đang sửa, do JS điền. -->
+      <form method="post" id="editSupplierProductForm"
+            th:attr="data-action-base=@{/supplier/{id}/products(id=${supplier.id})}">
+        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title fs-6 mb-0" id="editSupplierProductLabel">Sửa sản phẩm cung ứng</h5>
+            <small class="text-secondary" id="espProductLabel">—</small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="espActive" class="form-label">Trạng thái cung ứng</label>
+            <select class="form-select form-control" id="espActive" name="isActive">
+              <option value="true">Đang cung ứng</option>
+              <option value="false">Ngừng cung ứng</option>
+            </select>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" value="true" id="espPreferred" name="isPreferred">
+            <label class="form-check-label" for="espPreferred">
+              Nhà cung cấp ưu tiên cho sản phẩm này
+            </label>
+            <div class="form-text">
+              Mỗi sản phẩm chỉ có một nhà cung cấp ưu tiên — bật ở đây sẽ tự tắt ở nhà cung cấp khác.
+            </div>
+          </div>
+
+          <div class="mb-1">
+            <label for="espNote" class="form-label">Ghi chú</label>
+            <textarea class="form-control" id="espNote" name="note" rows="3" maxlength="500"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sup-outline px-3" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-sup-primary px-4">
+            <i class="ti ti-device-floppy"></i>Lưu thay đổi
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script th:inline="javascript">
   (function () {
     var editForm = document.getElementById('editForm');
+    var infoSection = document.getElementById('infoSection');
     var btnToggle = document.getElementById('btnToggleEdit');
     var btnClose  = document.getElementById('btnCloseEdit');
 
+    // Ẩn hẳn khối thông tin khi sửa: để nguyên thì form nằm giữa trang, còn thông báo lỗi của server
+    // hiện ở đầu trang — người dùng không nhìn thấy nếu không cuộn lên.
     function openEdit() {
+      if (infoSection) infoSection.style.display = 'none';
       editForm.style.display = 'block';
-      editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    function closeEdit() { editForm.style.display = 'none'; }
+    function closeEdit() {
+      editForm.style.display = 'none';
+      if (infoSection) infoSection.style.display = '';
+    }
 
     if (btnToggle) btnToggle.addEventListener('click', openEdit);
     if (btnClose)  btnClose.addEventListener('click', closeEdit);
+  })();
 
-    // Nếu form mở sẵn do lỗi validate → cuộn tới
-    if (editForm && editForm.style.display === 'block') {
-      editForm.scrollIntoView({ block: 'start' });
+  // -------- Sửa sản phẩm cung ứng: nạp giá trị của dòng vừa bấm vào modal dùng chung
+  (function () {
+    var modal = document.getElementById('editSupplierProductModal');
+    if (!modal) return;
+
+    var form = document.getElementById('editSupplierProductForm');
+    var actionBase = form.getAttribute('data-action-base');
+
+    modal.addEventListener('show.bs.modal', function (event) {
+      var trigger = event.relatedTarget;
+      if (!trigger) return;
+
+      form.action = actionBase + '/' + trigger.getAttribute('data-sp-id');
+
+      var code = trigger.getAttribute('data-sp-code') || '';
+      var name = trigger.getAttribute('data-sp-name') || '';
+      document.getElementById('espProductLabel').textContent = (code ? code + ' — ' : '') + name;
+
+      document.getElementById('espActive').value =
+        trigger.getAttribute('data-sp-active') === 'true' ? 'true' : 'false';
+      document.getElementById('espPreferred').checked =
+        trigger.getAttribute('data-sp-preferred') === 'true';
+      document.getElementById('espNote').value = trigger.getAttribute('data-sp-note') || '';
+      syncPreferredAvailability();
+    });
+
+    // Ngừng cung ứng thì không đặt ưu tiên được (server cũng chặn) — khoá luôn ô tick cho khỏi bấm nhầm.
+    function syncPreferredAvailability() {
+      var active = document.getElementById('espActive').value === 'true';
+      var preferred = document.getElementById('espPreferred');
+      preferred.disabled = !active;
+      if (!active) preferred.checked = false;
     }
+
+    document.getElementById('espActive').addEventListener('change', syncPreferredAvailability);
+  })();
+</script>
+
+<!-- Phân trang bảng công nợ trong modal. Chỉ ẩn/hiện dòng đã render sẵn — không gọi thêm server,
+     và không phụ thuộc vai trò (mọi role đều xem được công nợ). -->
+<script>
+  (function () {
+    var PAGE_SIZE = 8;
+    var body       = document.getElementById('debtBody');
+    var pageInfo   = document.getElementById('debtPageInfo');
+    var pagination = document.getElementById('debtPagination');
+    if (!body || !pageInfo || !pagination) return;
+
+    var rows = Array.prototype.slice.call(body.querySelectorAll('tr.debt-row'));
+    var currentPage = 1;
+    if (rows.length === 0) return;
+
+    function render() {
+      var total = rows.length;
+      var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (currentPage > pages) currentPage = pages;
+
+      var start = (currentPage - 1) * PAGE_SIZE;
+      var end   = start + PAGE_SIZE;
+      rows.forEach(function (r, i) { r.style.display = (i >= start && i < end) ? '' : 'none'; });
+
+      pageInfo.textContent = 'Hiển thị ' + (start + 1) + '–' + Math.min(end, total) + ' / ' + total + ' phiếu';
+      renderPagination(pages);
+    }
+
+    function renderPagination(pages) {
+      pagination.innerHTML = '';
+      if (pages <= 1) return;
+
+      function pageItem(label, page, disabled, active) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        var a = document.createElement('a');
+        a.className = 'page-link'; a.href = '#'; a.innerHTML = label;
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (disabled || active) return;
+          currentPage = page;
+          render();
+        });
+        li.appendChild(a);
+        return li;
+      }
+
+      pagination.appendChild(pageItem('&laquo;', currentPage - 1, currentPage === 1, false));
+      // cửa sổ tối đa 5 số trang quanh trang hiện tại
+      var from = Math.max(1, currentPage - 2);
+      var to   = Math.min(pages, from + 4);
+      from = Math.max(1, to - 4);
+      for (var p = from; p <= to; p++) {
+        pagination.appendChild(pageItem(String(p), p, false, p === currentPage));
+      }
+      pagination.appendChild(pageItem('&raquo;', currentPage + 1, currentPage === pages, false));
+    }
+
+    render();
   })();
 </script>
 

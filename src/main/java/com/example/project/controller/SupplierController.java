@@ -2,6 +2,7 @@ package com.example.project.controller;
 
 import com.example.project.constant.RoleConstants;
 import com.example.project.context.CurrentUserContext;
+import com.example.project.dto.request.SupplierProductUpdateRequest;
 import com.example.project.dto.request.SupplierRequest;
 import com.example.project.dto.response.SupplierResponse;
 import com.example.project.service.SupplierService;
@@ -22,12 +23,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.Map;
 
 /**
- * Shared Supplier module: the Owner has full permission; the Accountant may view the list/detail
- * and create new suppliers (BA, 2026-08-11 — Kế toán is the one who actually deals with suppliers
- * when raising a Purchase Invoice, so needs to add one on the spot); Pharmacist stays view-only.
- * Editing an existing supplier and linking supplied products remain Owner-only. All 3 roles share
- * this one {@code /supplier/**} path, so the write restrictions are enforced here with
- * {@link #requireOwner()}/{@link #requireCanCreate()} rather than at the route level.
+ * Module Nhà cung cấp dùng chung: Owner toàn quyền; Kế toán được xem danh sách/chi tiết và tạo NCC
+ * mới (BA, 2026-08-11 — Kế toán là người trực tiếp làm việc với NCC khi lập Phiếu nhập, nên cần tự
+ * thêm NCC ngay tại chỗ); Dược sĩ chỉ xem. Sửa NCC đã có và mọi thao tác trên danh sách sản phẩm
+ * cung ứng vẫn Owner-only — danh sách đó là căn cứ lập dự trù mua hàng, không phải dữ liệu thao tác
+ * hằng ngày của Kế toán (BA chốt 2026-08-15).
+ * Cả 3 role dùng chung một đường dẫn {@code /supplier/**}, nên giới hạn quyền ghi được chặn ở đây
+ * bằng {@link #requireOwner()}/{@link #requireCanCreate()} thay vì ở tầng route.
  */
 @Controller
 @RequestMapping("/supplier")
@@ -55,7 +57,7 @@ public class SupplierController {
         }
     }
 
-    // ------------------------------------------------------------------ list
+    // ------------------------------------------------------------------ danh sách
 
     @GetMapping
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
@@ -86,7 +88,7 @@ public class SupplierController {
         return "supplier/list";
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo
 
     @GetMapping("/create")
     public String createForm(Model model) {
@@ -127,10 +129,10 @@ public class SupplierController {
         return "redirect:/supplier";
     }
 
-    // Quick-add from the Purchase Invoice create form's "+" button (Owner or Accountant, whoever
-    // can create a supplier — see requireCanCreate()). Same JSON-in/JSON-out shape as the sale
-    // screen's "thêm khách hàng nhanh" endpoint (InvoiceController.createCustomerFromSelling) and
-    // the Product create form's "+" nhà sản xuất (ProducerController.quickCreateProducer).
+    // Thêm nhanh từ nút "+" ở màn tạo Phiếu nhập (Owner hoặc Kế toán — ai tạo được NCC thì dùng
+    // được nút này, xem requireCanCreate()). Cùng khuôn JSON vào/ra với endpoint "thêm khách hàng
+    // nhanh" ở màn bán hàng (InvoiceController.createCustomerFromSelling) và nút "+" nhà sản xuất
+    // ở màn tạo sản phẩm (ProducerController.quickCreateProducer).
     @PostMapping(value = "/quick-create",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -178,7 +180,7 @@ public class SupplierController {
         return Map.of("duplicate", duplicate);
     }
 
-    // ------------------------------------------------------------------ detail / update
+    // ------------------------------------------------------------------ chi tiết / sửa
 
     @GetMapping("/{id}")
     public String detail(@PathVariable Integer id, Model model,
@@ -205,11 +207,49 @@ public class SupplierController {
 
         model.addAttribute("supplierProducts", supplierService.getProducts(id));
         model.addAttribute("availableProducts", supplierService.getAvailableProducts(id));
+        model.addAttribute("supplierDebts", supplierService.getOutstandingPurchaseInvoices(id));
+        model.addAttribute("totalSupplierDebt", supplierService.getTotalDebt(id));
+        model.addAttribute("productBasePath", productBasePath());
+        model.addAttribute("purchaseInvoiceBasePath", purchaseInvoiceBasePath());
         model.addAttribute("pageTitle", "Chi tiết nhà cung cấp");
         return "supplier/detail";
     }
 
-    // --------------------------------------------------- add supplied products
+    /** Nạp lại dữ liệu màn chi tiết khi phải render lại trang vì form cập nhật lỗi. */
+    private void populateDetail(Model model, Integer id) {
+        model.addAttribute("supplier", supplierService.getById(id));
+        model.addAttribute("supplierProducts", supplierService.getProducts(id));
+        model.addAttribute("availableProducts", supplierService.getAvailableProducts(id));
+        model.addAttribute("supplierDebts", supplierService.getOutstandingPurchaseInvoices(id));
+        model.addAttribute("totalSupplierDebt", supplierService.getTotalDebt(id));
+        model.addAttribute("productBasePath", productBasePath());
+        model.addAttribute("purchaseInvoiceBasePath", purchaseInvoiceBasePath());
+        model.addAttribute("pageTitle", "Chi tiết nhà cung cấp");
+    }
+
+    /**
+     * Đường dẫn màn chi tiết hàng hóa theo vai trò đang đăng nhập. Cả 3 role đều có màn này nhưng
+     * mỗi role chỉ vào được nhánh của mình ({@code /owner|pharmacist|accountant/products/{id}}),
+     * nên viết cứng {@code /owner/products} là Kế toán và Dược sĩ bấm "Xem" sẽ ăn trang 403.
+     */
+    private String productBasePath() {
+        String role = currentUserContext.getCurrentRole();
+        return RoleConstants.isValid(role) ? "/" + RoleConstants.urlPrefix(role) + "/products" : null;
+    }
+
+    /**
+     * Đường dẫn màn chi tiết phiếu nhập, hoặc {@code null} với Dược sĩ — module Phiếu nhập chỉ mở
+     * cho Owner và Kế toán, nên dòng công nợ của Dược sĩ không có link để bấm.
+     */
+    private String purchaseInvoiceBasePath() {
+        String role = currentUserContext.getCurrentRole();
+        if (!RoleConstants.OWNER.equals(role) && !RoleConstants.ACCOUNTANT.equals(role)) {
+            return null;
+        }
+        return "/" + RoleConstants.urlPrefix(role) + "/purchase-invoices";
+    }
+
+    // --------------------------------------------------- thêm sản phẩm cung ứng
 
     @PostMapping("/{id}/products")
     public String addProducts(@PathVariable Integer id,
@@ -230,6 +270,35 @@ public class SupplierController {
         return "redirect:/supplier/" + id;
     }
 
+    /**
+     * Sửa một dòng sản phẩm cung ứng: trạng thái cung ứng, cờ ưu tiên, ghi chú. Owner-only như mọi
+     * thao tác ghi khác của màn này.
+     */
+    @PostMapping("/{id}/products/{supplierProductId}")
+    public String updateSupplierProduct(@PathVariable Integer id,
+                                        @PathVariable Integer supplierProductId,
+                                        @Valid @ModelAttribute("supplierProductForm")
+                                        SupplierProductUpdateRequest form,
+                                        BindingResult bindingResult,
+                                        RedirectAttributes redirectAttributes) {
+        requireOwner();
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("errorMessage", bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("Dữ liệu không hợp lệ"));
+            return "redirect:/supplier/" + id;
+        }
+
+        try {
+            supplierService.updateSupplierProduct(id, supplierProductId, form);
+            redirectAttributes.addFlashAttribute("successMessage", "Đã cập nhật sản phẩm cung ứng");
+        } catch (IllegalArgumentException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
+        }
+        return "redirect:/supplier/" + id;
+    }
+
     @PostMapping("/{id}")
     public String update(@PathVariable Integer id,
                          @Valid @ModelAttribute("form") SupplierRequest form,
@@ -238,11 +307,8 @@ public class SupplierController {
                          RedirectAttributes redirectAttributes) {
         requireOwner();
         if (bindingResult.hasErrors()) {
-            model.addAttribute("supplier", supplierService.getById(id));
-            model.addAttribute("supplierProducts", supplierService.getProducts(id));
-            model.addAttribute("availableProducts", supplierService.getAvailableProducts(id));
+            populateDetail(model, id);
             model.addAttribute("showEditForm", true);
-            model.addAttribute("pageTitle", "Chi tiết nhà cung cấp");
             return "supplier/detail";
         }
 
@@ -250,11 +316,8 @@ public class SupplierController {
             supplierService.update(id, form);
         } catch (IllegalArgumentException ex) {
             model.addAttribute("errorMessage", ex.getMessage());
-            model.addAttribute("supplier", supplierService.getById(id));
-            model.addAttribute("supplierProducts", supplierService.getProducts(id));
-            model.addAttribute("availableProducts", supplierService.getAvailableProducts(id));
+            populateDetail(model, id);
             model.addAttribute("showEditForm", true);
-            model.addAttribute("pageTitle", "Chi tiết nhà cung cấp");
             return "supplier/detail";
         }
 

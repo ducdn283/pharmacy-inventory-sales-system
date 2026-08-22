@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "taxperiodsnapshot")
+@Table(name = "tax_period_snapshot")
 public class Taxperiodsnapshot {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

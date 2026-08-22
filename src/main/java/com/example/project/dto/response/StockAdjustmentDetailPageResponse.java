@@ -69,7 +69,4 @@ public class StockAdjustmentDetailPageResponse {
      * {@code Hoàn thành} thì tùy loại — xem {@code StockadjustmentService.assertReversible}.
      */
     private boolean cancellable;
-
-    /** Câu giải thích vì sao không hủy được, để hiện thay cho nút Hủy. Null khi hủy được. */
-    private String cancelBlockedReason;
 }

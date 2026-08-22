@@ -13,6 +13,8 @@ import java.time.LocalDate;
  *       {@code OUT}; {@code adjustmentType} luôn là {@code COUNT} (đã gộp 04/08/2026).</li>
  *   <li><b>{@code DATE_ADJUSTMENT}</b> — dòng lệch hạn dùng. {@code direction = NONE} (không đụng
  *       tồn kho), số liệu nằm ở {@code oldExpirationDate}/{@code newExpirationDate}.</li>
+ *   <li><b>{@code DESTROY}</b> — dòng hàng không đạt chuẩn của phiếu rà soát tình trạng, luôn
+ *       {@code OUT}. {@code quantity} là số lượng KHÔNG ĐẠT CHUẨN của lô, không phải tồn cả lô.</li>
  * </ul>
  *
  * <p>Purely read-only preview data for the create screen; the server rebuilds these authoritatively
@@ -40,7 +42,7 @@ public class StockAdjustmentReviewLineResponse {
     /** Absolute discrepancy = the quantity to adjust (always &gt; 0). */
     private Integer quantity;
 
-    /** {@code COUNT} hoặc {@code DATE_ADJUSTMENT} — loại phiếu sẽ được sinh ra. */
+    /** {@code COUNT}, {@code DATE_ADJUSTMENT} hoặc {@code DESTROY} — loại phiếu sẽ được sinh ra. */
     private String adjustmentType;
     /** {@code IN} thừa, {@code OUT} thiếu, {@code NONE} với dòng sửa hạn dùng. */
     private String direction;

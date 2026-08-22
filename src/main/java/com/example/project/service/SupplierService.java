@@ -1,10 +1,13 @@
 package com.example.project.service;
 
+import com.example.project.dto.request.SupplierProductUpdateRequest;
 import com.example.project.dto.request.SupplierRequest;
 import com.example.project.dto.response.SupplierAvailableProductResponse;
+import com.example.project.dto.response.SupplierDebtInvoiceResponse;
 import com.example.project.dto.response.SupplierResponse;
 import com.example.project.dto.response.SupplierproductResponse;
 import com.example.project.entity.Product;
+import com.example.project.entity.Purchaseinvoice;
 import com.example.project.entity.Supplier;
 import com.example.project.entity.Supplierproduct;
 import com.example.project.repository.ProductRepository;
@@ -17,9 +20,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,16 +34,19 @@ public class SupplierService {
     private final SupplierRepository supplierRepository;
     private final SupplierproductRepository supplierproductRepository;
     private final ProductRepository productRepository;
+    private final PurchaseinvoiceService purchaseinvoiceService;
 
     public SupplierService(SupplierRepository supplierRepository,
                            SupplierproductRepository supplierproductRepository,
-                           ProductRepository productRepository) {
+                           ProductRepository productRepository,
+                           PurchaseinvoiceService purchaseinvoiceService) {
         this.supplierRepository = supplierRepository;
         this.supplierproductRepository = supplierproductRepository;
         this.productRepository = productRepository;
+        this.purchaseinvoiceService = purchaseinvoiceService;
     }
 
-    // ------------------------------------------------------------------ list
+    // ------------------------------------------------------------------ danh sách
 
     @Transactional(readOnly = true)
     public Page<SupplierResponse> list(String keyword, Pageable pageable) {
@@ -65,7 +73,7 @@ public class SupplierService {
         return new PageImpl<>(pageContent, pageable, filtered.size());
     }
 
-    // ------------------------------------------------------------------ stats
+    // ------------------------------------------------------------------ thống kê
 
     public record SupplierStats(long total, long withProducts, long withoutProducts, long totalProducts) {
     }
@@ -79,7 +87,7 @@ public class SupplierService {
         return new SupplierStats(total, withProducts, withoutProducts, totalProducts);
     }
 
-    // ------------------------------------------------------------------ getById
+    // ------------------------------------------------------------------ lấy theo id
 
     @Transactional(readOnly = true)
     public SupplierResponse getById(Integer id) {
@@ -98,12 +106,40 @@ public class SupplierService {
                 .toList();
     }
 
-    // ------------------------------------------------ available products picker
+    // ------------------------------------------------------------------ công nợ phải trả
 
     /**
-     * Products that are NOT yet supplied by this supplier, feeding the
-     * "Thêm sản phẩm cung ứng" picker modal. Sorted by name (search / filter /
-     * paging are handled client-side inside the modal).
+     * Các phiếu nhập của nhà cung cấp này còn nợ tiền, mới nhất trước.
+     *
+     * <p>Nguồn và cách tính lấy nguyên của {@code PurchaseinvoiceService}
+     * ({@code findPayableInvoices} + {@code remainingDebt}) — cũng chính là thứ màn Công nợ dùng —
+     * để hai màn không bao giờ báo hai con số khác nhau cho cùng một nhà cung cấp.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<SupplierDebtInvoiceResponse> getOutstandingPurchaseInvoices(Integer supplierId) {
+        return purchaseinvoiceService.findPayableInvoices().stream()
+                .filter(invoice -> invoice.getSupplierID() != null
+                        && Objects.equals(supplierId, invoice.getSupplierID().getId()))
+                .sorted(Comparator.comparing(Purchaseinvoice::getDate,
+                        Comparator.nullsLast(Comparator.<java.time.Instant>naturalOrder())).reversed())
+                .map(invoice -> SupplierDebtInvoiceResponse.from(
+                        invoice, purchaseinvoiceService.remainingDebt(invoice)))
+                .toList();
+    }
+
+    /** Tổng còn phải trả nhà cung cấp = cộng phần còn nợ của các phiếu nhập chưa trả xong. */
+    @Transactional(readOnly = true)
+    public BigDecimal getTotalDebt(Integer supplierId) {
+        return getOutstandingPurchaseInvoices(supplierId).stream()
+                .map(SupplierDebtInvoiceResponse::getRemaining)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    // ------------------------------------------------ chọn sản phẩm để thêm vào NCC
+
+    /**
+     * Sản phẩm CHƯA được nhà cung cấp này cung ứng — dữ liệu cho modal chọn "Thêm sản phẩm cung
+     * ứng". Sắp theo tên; tìm/lọc/phân trang xử lý ở phía client trong modal.
      */
     @Transactional(readOnly = true)
     public List<SupplierAvailableProductResponse> getAvailableProducts(Integer supplierId) {
@@ -116,8 +152,8 @@ public class SupplierService {
     }
 
     /**
-     * Links the given products to the supplier. Ignores blank ids, products
-     * already linked, and ids that no longer exist. Returns how many were added.
+     * Gắn các sản phẩm được chọn vào nhà cung cấp. Bỏ qua id rỗng, sản phẩm đã gắn sẵn, và id không
+     * còn tồn tại. Trả về số sản phẩm thực sự được thêm.
      */
     @Transactional
     public int addProducts(Integer supplierId, List<Integer> productIds) {
@@ -149,6 +185,74 @@ public class SupplierService {
         return added;
     }
 
+    // ------------------------------------------------ sửa một dòng sản phẩm cung ứng
+
+    /**
+     * Cập nhật trạng thái cung ứng / cờ ưu tiên / ghi chú của MỘT dòng {@code supplierproduct}.
+     *
+     * <p><b>Mỗi sản phẩm chỉ có MỘT nhà cung cấp ưu tiên.</b> Bật cờ ưu tiên ở đây sẽ tự tắt cờ đó ở
+     * mọi nhà cung cấp khác của cùng sản phẩm — cờ này để trả lời "mua hàng này thì gọi ai trước",
+     * hai NCC cùng ưu tiên là không trả lời được gì.</p>
+     *
+     * <p>Dòng đã NGỪNG cung ứng thì không được là dòng ưu tiên: gợi ý mua từ một NCC đã ngừng cấp hàng
+     * là dẫn người dùng vào ngõ cụt.</p>
+     */
+    @Transactional
+    public void updateSupplierProduct(Integer supplierId,
+                                      Integer supplierProductId,
+                                      SupplierProductUpdateRequest request) {
+        Supplierproduct supplierProduct = supplierproductRepository.findById(supplierProductId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm cung ứng"));
+
+        // Id dòng đi qua URL nên phải kiểm nó đúng là của NCC đang mở, không thì sửa được dòng của NCC khác.
+        if (supplierProduct.getSupplierID() == null
+                || !Objects.equals(supplierProduct.getSupplierID().getId(), supplierId)) {
+            throw new IllegalArgumentException("Sản phẩm cung ứng này không thuộc nhà cung cấp đang xem");
+        }
+
+        boolean active = Boolean.TRUE.equals(request.getIsActive());
+        boolean preferred = Boolean.TRUE.equals(request.getIsPreferred());
+        if (preferred && !active) {
+            throw new IllegalArgumentException(
+                    "Không đặt được nhà cung cấp ưu tiên cho sản phẩm đã ngừng cung ứng");
+        }
+
+        supplierProduct.setIsActive(active);
+        supplierProduct.setIsPreferred(preferred);
+        supplierProduct.setNote(trimToNull(request.getNote()));
+
+        if (preferred) {
+            clearPreferredOnOtherSuppliers(supplierProduct);
+        }
+
+        supplierproductRepository.save(supplierProduct);
+    }
+
+    /** Tắt cờ ưu tiên ở các dòng cùng sản phẩm nhưng khác nhà cung cấp. */
+    private void clearPreferredOnOtherSuppliers(Supplierproduct preferredRow) {
+        Integer productId = preferredRow.getProductID() != null
+                ? preferredRow.getProductID().getProductID() : null;
+        if (productId == null) {
+            return;
+        }
+        for (Supplierproduct other : supplierproductRepository.findByProductID_ProductID(productId)) {
+            if (Objects.equals(other.getId(), preferredRow.getId())
+                    || !Boolean.TRUE.equals(other.getIsPreferred())) {
+                continue;
+            }
+            other.setIsPreferred(false);
+            supplierproductRepository.save(other);
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private Set<Integer> linkedProductIds(Integer supplierId) {
         return supplierproductRepository.findBySupplierID_Id(supplierId)
                 .stream()
@@ -157,7 +261,7 @@ public class SupplierService {
                 .collect(Collectors.toCollection(java.util.HashSet::new));
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo
 
     @Transactional
     public Integer create(SupplierRequest request) {
@@ -166,14 +270,14 @@ public class SupplierService {
         Supplier supplier = new Supplier();
         supplier.setName(request.getName().trim());
         supplier.setPhone(request.getPhone().trim());
-        supplier.setEmail(request.getEmail().trim());
+        supplier.setEmail(trimToNull(request.getEmail()));
         supplier.setAddress(request.getAddress().trim());
         supplier.setTaxCode(request.getTaxCode().trim());
 
         return saveGuardingUniqueRace(supplier).getId();
     }
 
-    // ------------------------------------------------------------------ update
+    // ------------------------------------------------------------------ sửa
 
     @Transactional
     public void update(Integer id, SupplierRequest request) {
@@ -184,14 +288,14 @@ public class SupplierService {
 
         supplier.setName(request.getName().trim());
         supplier.setPhone(request.getPhone().trim());
-        supplier.setEmail(request.getEmail().trim());
+        supplier.setEmail(trimToNull(request.getEmail()));
         supplier.setAddress(request.getAddress().trim());
         supplier.setTaxCode(request.getTaxCode().trim());
 
         saveGuardingUniqueRace(supplier);
     }
 
-    // ------------------------------------------------------------------ legacy
+    // ------------------------------------------------------------------ cũ
 
     @Transactional(readOnly = true)
     public List<SupplierResponse> getAll() {
@@ -201,7 +305,7 @@ public class SupplierService {
                 .toList();
     }
 
-    // ------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------ hàm phụ trợ
 
     private boolean matchesKeyword(Supplier s, String kw) {
         if (kw.isBlank()) return true;

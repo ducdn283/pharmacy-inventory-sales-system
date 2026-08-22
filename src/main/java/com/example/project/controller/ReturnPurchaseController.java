@@ -17,11 +17,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
 
 /**
- * Supplier-return screens (list / detail / create / approve / reject) under {@code /owner/**}.
+ * Các màn trả hàng nhà cung cấp (danh sách / chi tiết / tạo / duyệt / từ chối) dưới {@code /owner/**}.
  *
- * <p>Owner-only: per the permission matrix the Pharmacist has no rights on the supplier side, so
- * there is no {@code /pharmacist} variant and no "Chờ duyệt" hand-off. Route-level access is already
- * enforced by SecurityConfig ({@code /owner/**} → OWNER).</p>
+ * <p>Owner-only: theo bảng phân quyền, Dược sĩ không có quyền gì ở phía nhà cung cấp, nên không có
+ * biến thể {@code /pharmacist} và không có bước bàn giao "Chờ duyệt". Quyền truy cập ở tầng route đã
+ * được SecurityConfig chặn sẵn ({@code /owner/**} → OWNER).</p>
  */
 @Controller
 @RequestMapping("/owner/return-purchases")

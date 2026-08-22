@@ -23,23 +23,23 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Customer returns: listing/searching, detail, creation and the approve/reject workflow.
+ * Trả hàng của khách: danh sách/tìm kiếm, chi tiết, tạo phiếu và luồng gửi duyệt/duyệt/từ chối.
  *
- * <p>Statuses (see {@link ReturnStatus}): Nháp → Chờ duyệt → Nợ / Từ chối. There is no "Duyệt"
- * state — an approved return becomes a payable ("Nợ") because the pharmacy now owes the customer the
- * not-yet-paid refund. Owner-created slips auto-approve straight to {@code Nợ}.</p>
+ * <p>Trạng thái (xem {@link ReturnStatus}): Nháp → Chờ duyệt → Nợ / Từ chối. Không có trạng thái
+ * "Duyệt" — phiếu vừa duyệt xong chuyển thẳng thành khoản phải trả ("Nợ") vì nhà thuốc đang nợ
+ * khách tiền hoàn chưa chi. Phiếu do Owner tự tạo tự động duyệt thẳng tới {@code Nợ}.</p>
  *
- * <p><strong>Approval changes stock:</strong> each restockable line goes into a brand-new batch cloned
- * from the one it was sold from — returned goods are kept in their own batch for traceability (there is
- * no "returned" flag on {@code batch}). The cash payout itself lives on a separate Expense; this service
- * only records the refund amounts on the slip.</p>
+ * <p><strong>Duyệt phiếu = đổi tồn kho:</strong> mỗi dòng hoàn kho được vào MỘT lô mới, clone từ lô
+ * đã bán ra — hàng trả về giữ riêng một lô để truy vết (bảng {@code batch} không có cờ "đã trả").
+ * Khoản chi tiền thật nằm ở một phiếu Chi riêng; service này chỉ ghi số tiền hoàn lên phiếu.</p>
  */
 @Service
 public class ReturnService {
 
     /**
-     * "No return window at all" — the meaning of a blank {@code Financialsetting.returnPolicyMaxDays}.
-     * The policy lives entirely in the financial setting; there is no hard-coded fallback on purpose.
+     * "Không giới hạn hạn trả hàng" — ý nghĩa khi {@code Financialsetting.returnPolicyMaxDays} để
+     * trống. Chính sách nằm hoàn toàn trong thiết lập tài chính; cố tình KHÔNG có giá trị mặc định
+     * hardcode.
      */
     private static final int RETURN_WINDOW_UNLIMITED = -1;
 
@@ -56,13 +56,13 @@ public class ReturnService {
      */
     private static final Duration DUPLICATE_WINDOW = Duration.ofMinutes(2);
 
-    // Invoice.date is stored as VN wall-clock LocalDateTime (see InvoiceService) — the adjustment
-    // invoice's own date must use the same convention, not a real UTC Instant.
+    // Invoice.date lưu theo giờ tường VN dạng LocalDateTime (xem InvoiceService) — ngày của hóa đơn
+    // điều chỉnh cũng phải theo đúng quy ước đó, không phải Instant UTC thật.
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
-    /** Only completed sale invoices are returnable. Matched accent/case-insensitively. */
+    /** Chỉ hóa đơn bán đã Hoàn thành mới trả được. So khớp không phân biệt dấu/hoa-thường. */
     private static final String INVOICE_STATUS_COMPLETED = "Hoàn thành";
-    /** An invoice still carrying an unpaid balance (mirrors InvoiceService.STATUS_DEBT). */
+    /** Hóa đơn còn nợ chưa trả hết (giống hệt InvoiceService.STATUS_DEBT). */
     private static final String INVOICE_STATUS_DEBT = "Còn nợ";
     /**
      * Giá trị CŨ của {@code invoice.status}: việc ký nay nằm ở 2 cột riêng {@code signAt}/{@code signBy}
@@ -81,11 +81,11 @@ public class ReturnService {
     private static final String INVOICE_TYPE_NORMAL = "Bán hàng";
     /** Giá trị cũ: hóa đơn bán hàng của nhà thuốc Nhóm 3+ khi còn phân biệt theo nhóm doanh thu. */
     private static final String INVOICE_TYPE_VAT = "Hóa đơn GTGT";
-    /** Legacy DB value before invoiceType was stored in Vietnamese. */
+    /** Giá trị cũ trong DB, từ trước khi invoiceType chuyển sang lưu tiếng Việt. */
     private static final String INVOICE_TYPE_NORMAL_LEGACY = "normal";
     /** Loại đã bị bỏ — chỉ còn dùng để NHẬN DIỆN hóa đơn điều chỉnh cũ và chặn không cho trả tiếp. */
     private static final String INVOICE_TYPE_ADJUSTMENT = "Điều chỉnh";
-    /** Legacy DB value before invoiceType was stored in Vietnamese. */
+    /** Giá trị cũ trong DB, từ trước khi invoiceType chuyển sang lưu tiếng Việt. */
     private static final String INVOICE_TYPE_ADJUSTMENT_LEGACY = "adjustment";
     /**
      * Hóa đơn thay thế — phát hành cho MỌI phiếu trả hàng, bất kể hóa đơn gốc đã ký hay chưa. Nó vô hiệu
@@ -101,13 +101,13 @@ public class ReturnService {
     private static final String INVOICE_RETURN_PARTIAL = "PARTIAL";
     private static final String INVOICE_RETURN_FULL = "FULL";
 
-    // returnType no longer describes HOW the money moves the return screen does not
-    // touch cash at all) — it only says WHO the goods went back to. Supplier slips use SUPPLIER.
+    // returnType nay KHÔNG còn mô tả tiền di chuyển kiểu gì (màn trả hàng không đụng tới tiền mặt
+    // nữa) — chỉ còn nói TRẢ CHO AI. Phiếu trả NCC dùng SUPPLIER.
     private static final String TYPE_CUSTOMER = "CUSTOMER";
 
-    // Product types (Type.sortType / Type.name) that cannot be returned. Compared
-    // accent/case-insensitively against normalize(...). Medical-device "máy" carries a warranty so it
-    // is handled via warranty, not return.
+    // Loại sản phẩm (Type.sortType / Type.name) không trả được. So khớp không phân biệt dấu/hoa-
+    // thường qua normalize(...). Thiết bị y tế "máy" có bảo hành riêng nên xử lý qua bảo hành, không
+    // qua trả hàng.
     private static final String SORT_MEDICAL_DEVICE = "thiet bi y te";
     private static final String DEVICE_MACHINE_MARK = "may";
 
@@ -115,17 +115,17 @@ public class ReturnService {
     private final ReturndetailRepository returndetailRepository;
     private final AccountRepository accountRepository;
     private final BatchRepository batchRepository;
-    // Sales invoice / detail rows are read for the TH1 flow; for TH2 (signed invoice) we also *create*
-    // a replacement invoice row here (see createReplacementInvoice) — mirroring how cloneReturnBatch
-    // creates a Batch — without calling into InvoiceService.
+    // Đọc hóa đơn bán / dòng chi tiết cho luồng TH1 (chưa ký); với TH2 (đã ký) service này còn TỰ
+    // GHI một dòng hóa đơn thay thế (xem createReplacementInvoice) — giống cách cloneReturnBatch tự
+    // tạo Batch — mà không gọi qua InvoiceService.
     private final InvoiceRepository invoiceRepository;
     private final InvoicedetailRepository invoicedetailRepository;
-    // Read-only: the pharmacy's return policy (returnPolicyMaxDays) — see getReturnWindowDays().
+    // Chỉ đọc: chính sách trả hàng của nhà thuốc (returnPolicyMaxDays) — xem getReturnWindowDays().
     private final FinancialsettingRepository financialsettingRepository;
     // Read-only: mốc kỳ thuế đã chốt gần nhất — xem lastClosedPeriodEnd().
     private final TaxperiodsnapshotRepository taxperiodsnapshotRepository;
-    // Lazily opens/reuses the acting account's shift the moment a return is actually approved
-    // (becomes Nợ) — mirrors the same hook on the Invoice side (see ShiftreportService).
+    // Mở/dùng lại ca của người thực hiện MỘT CÁCH LƯỜI — chỉ đúng lúc phiếu trả thật sự được duyệt
+    // (thành Nợ) — cùng cơ chế với hóa đơn bán (xem ShiftreportService).
     private final ShiftreportService shiftreportService;
     private final InvoiceService invoiceService;
     private final WorkflowNotificationService workflowNotificationService;
@@ -158,7 +158,7 @@ public class ReturnService {
         this.expenseService = expenseService;
     }
 
-    // ------------------------------------------------------------------ list / search
+    // ------------------------------------------------------------------ danh sách / tìm kiếm
     @Autowired
     public void setInventoryAlertEventService(
             InventoryAlertEventService inventoryAlertEventService
@@ -228,16 +228,17 @@ public class ReturnService {
     }
 
 
-    // ------------------------------------------------------------------ create screen sources
+    // ------------------------------------------------------------------ nguồn dữ liệu màn tạo
 
     /**
-     * Sale invoices a customer may still return against: completed, within the return window and not
-     * already fully returned. Read-only over the Invoice module.
+     * Các hóa đơn bán còn trả được: Hoàn thành, còn trong hạn trả hàng, và chưa trả hết. Chỉ đọc từ
+     * module Hóa đơn.
      */
     @Transactional(readOnly = true)
     public List<ReturnableInvoiceResponse> listReturnableInvoices(String keyword) {
         String normalizedKeyword = normalize(keyword);
-        // Resolved once, not per invoice — the window is a single setting row, not per-invoice data.
+        // Đọc MỘT lần, không phải theo từng hóa đơn — hạn trả hàng là một cấu hình chung, không phải
+        // dữ liệu riêng của từng hóa đơn.
         int windowDays = getReturnWindowDays();
 
         // Lọc những điều kiện RẺ (chỉ đọc cột của chính hóa đơn) TRƯỚC, rồi mới đọc dòng chi tiết cho
@@ -337,7 +338,7 @@ public class ReturnService {
         target.append(value.trim());
     }
 
-    /** The still-returnable lines of one invoice, for the create screen (JSON). */
+    /** Các dòng còn trả được của một hóa đơn, cho màn tạo phiếu (endpoint JSON). */
     @Transactional(readOnly = true)
     public List<ReturnInvoiceLineResponse> loadInvoiceLines(Integer invoiceId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
@@ -351,9 +352,9 @@ public class ReturnService {
     }
 
     /**
-     * Whether a product may be returned at all, by its {@link Type}. Blocks the medical-device "máy"
-     * sub-type (warranty items); other medical devices (có hạn / không hạn) and all drugs / goods are
-     * allowed. Unknown/missing type → allowed (don't over-block).
+     * Sản phẩm có trả được hay không, xét theo {@link Type} của nó. Chặn phân loại thiết bị y tế
+     * "máy" (hàng có bảo hành); các thiết bị y tế khác (có hạn / không hạn) và mọi thuốc/hàng hóa
+     * khác đều cho trả. Loại không xác định/thiếu → cho trả (không chặn oan).
      */
     private boolean isReturnableProductType(Product product) {
         if (product == null || product.getTypeID() == null) {
@@ -365,14 +366,14 @@ public class ReturnService {
         return !(SORT_MEDICAL_DEVICE.equals(sort) && name.contains(DEVICE_MACHINE_MARK));
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo phiếu
 
     /**
-     * Creates one customer-return slip from a chosen completed invoice.
+     * Tạo một phiếu trả hàng khách từ hóa đơn đã hoàn thành được chọn.
      *
-     * <p>Resulting status: {@code asDraft} → Nháp; otherwise the Owner auto-approves to Nợ and a
-     * Pharmacist submits to Chờ duyệt. When the slip lands in Nợ, stock is restored and the invoice's
-     * return status is updated (see {@link #applyReturnEffect}).</p>
+     * <p>Trạng thái kết quả: {@code asDraft} → Nháp; ngược lại Owner tự động duyệt thẳng thành Nợ,
+     * còn Dược sĩ thì gửi lên Chờ duyệt. Khi phiếu vào Nợ, tồn kho được hoàn lại và trạng thái trả
+     * hàng của hóa đơn được cập nhật (xem {@link #applyReturnEffect}).</p>
      *
      * <p>Trước khi ghi, phiếu được đối chiếu với các phiếu vừa lập để không tạo bản sao khi người
      * dùng bấm Tạo lần thứ hai — xem {@link #findRecentDuplicate}.</p>
@@ -405,7 +406,7 @@ public class ReturnService {
         Map<Integer, Invoicedetail> lineById = invoiceLinesOf(invoice.getId()).stream()
                 .collect(Collectors.toMap(Invoicedetail::getId, line -> line, (a, b) -> a));
 
-        // Collapse the posted rows onto the invoice lines, keeping only positive, validated quantities.
+        // Gộp các dòng gửi lên vào đúng dòng hóa đơn tương ứng, chỉ giữ số lượng dương và hợp lệ.
         Map<Integer, PreparedLine> prepared = new LinkedHashMap<>();
         for (ReturnLineRequest item : request.getItems()) {
             if (item == null || item.getInvoiceDetailId() == null
@@ -427,7 +428,7 @@ public class ReturnService {
                 throw new IllegalArgumentException("Số lượng trả của \"" + productName(line)
                         + "\" vượt quá số còn có thể trả (" + returnable + ")");
             }
-            // Hard-coded by item type (the client value is ignored) — see isRestockableUnit.
+            // Cố định theo loại hàng (giá trị client gửi lên bị bỏ qua) — xem isRestockableUnit.
             boolean restockable = isRestockableUnit(line);
             prepared.put(line.getId(), preparedLineOf(line, qty, restockable, refundRate));
         }
@@ -493,7 +494,7 @@ public class ReturnService {
             detail.setInvoiceDetailID(line.invoiceLine());
             detail.setProductID(line.invoiceLine().getProductID());
             detail.setProductUnitID(line.invoiceLine().getProductUnitID());
-            // Temporarily the batch it was sold from; repointed to a fresh return-batch on approval.
+            // Tạm trỏ về đúng lô đã bán ra; sẽ được trỏ lại sang lô hàng trả mới khi phiếu được duyệt.
             detail.setBatchID(line.invoiceLine().getBatchID());
             detail.setReturnQty(line.qty());
             detail.setBaseQtyRestored(line.baseQtyRestored());
@@ -581,7 +582,7 @@ public class ReturnService {
         return left.compareTo(right) == 0;
     }
 
-    // ------------------------------------------------------------------ submit / approve / reject
+    // ------------------------------------------------------------------ gửi duyệt / duyệt / từ chối
 
     /** Sends a Nháp slip forward: Owner auto-approves to Nợ (and restocks), Pharmacist moves to Chờ duyệt. */
     @Transactional
@@ -1024,7 +1025,7 @@ public class ReturnService {
                 + "-L" + (origBatchId != null ? origBatchId : 0), 50));
         batch.setBatchName(returnBatchName(original, ret));
         batch.setProductID(original != null ? original.getProductID() : null);
-        // Giữ liên kết về ĐÚNG dòng phiếu nhập đã mua hàng này: khách trả lại thì vẫn phải trả về NCC đó
+        // Giữ liên kết về ĐÚNG dòng phiếu nhập đã mua hàng này: khách trả lại thì vẫn có thể trả về NCC đó
         // được, mà để null là lô này vô hình với màn trả hàng NCC (bên đó chỉ nhìn lô có phiếu nhập).
         // KHÔNG phải "nhập hàng lần hai" — không cộng công nợ NCC, không sinh phiếu nhập mới.
         batch.setPurchaseDetailID(original != null ? original.getPurchaseDetailID() : null);
@@ -1151,7 +1152,7 @@ public class ReturnService {
         return INVOICE_RETURN_FULL.equals(invoiceReturnCode(invoice));
     }
 
-    // ------------------------------------------------------------------ detail
+    // ------------------------------------------------------------------ chi tiết
 
     @Transactional(readOnly = true)
     public ReturnDetailPageResponse getDetail(Integer returnId) {
@@ -1209,7 +1210,7 @@ public class ReturnService {
                 items);
     }
 
-    // ------------------------------------------------------------------ mapping helpers
+    // ------------------------------------------------------------------ hàm dựng DTO
 
     private ReturnListItemResponse toListItem(Return ret, List<Returndetail> details,
                                               Map<Integer, BigDecimal> outstandingRefund) {
@@ -1285,10 +1286,10 @@ public class ReturnService {
     }
 
     /**
-     * Restockable only when the sold unit is the manufacturer's default packaging unit
-     * ({@code productunit.isDefault}). Loose units (isDefault=false) cannot go back to
-     * stock; medical-device "máy" / prescription invoices are already blocked from return
-     * upstream. This is hard-coded (no manual checkbox).
+     * Chỉ nhập lại kho khi đơn vị bán là đơn vị đóng gói MẶC ĐỊNH của nhà sản xuất
+     * ({@code productunit.isDefault}). Đơn vị bán lẻ (isDefault=false) không nhập lại kho được;
+     * thiết bị y tế "máy" / hóa đơn thuốc kê đơn đã bị chặn trả hàng từ trước rồi. Cố định cứng thế
+     * này, không có checkbox cho người dùng tự chọn.
      */
     private boolean isRestockableUnit(Invoicedetail line) {
         Productunit unit = line.getProductUnitID();
@@ -1296,7 +1297,7 @@ public class ReturnService {
     }
 
     /**
-     * Builds a priced return line.
+     * Dựng một dòng trả hàng đã tính đủ số tiền.
      *
      * <p><b>Tỷ lệ hoàn:</b> {@code originalLineValue} là giá trị GỐC 100% (prorate từ dòng hóa đơn bán),
      * {@code lineRefund = originalLineValue × refundRate}. Chênh lệch giữa hai số là phần nhà thuốc GIỮ
@@ -1332,7 +1333,7 @@ public class ReturnService {
         return unit.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
     }
 
-    // ------------------------------------------------------------------ invoice read-only access
+    // ------------------------------------------------------------------ đọc hóa đơn (chỉ đọc)
 
     /**
      * All detail lines of one invoice. Dùng finder CÓ SẴN của module Bán hàng thay vì
@@ -1344,11 +1345,10 @@ public class ReturnService {
     }
 
     /**
-     * Returnable when: completed or still owing (chưa ký, TH1), signed (đã ký, TH2), or already partially
-     * returned. A TH1 partial return moves the status to "Đã trả hàng 1 phần"; a TH2 (signed) partial
-     * return keeps "Đã ký" — both stay eligible for further partial returns. "Còn nợ" must be included —
-     * an invoice with an unpaid balance is exactly the case a return needs to be able to touch (BA
-     * 2026-07-25: the refund should cấn trừ that very debt).
+     * Trả được khi: đã hoàn thành hoặc còn nợ (chưa ký, TH1), đã ký (TH2), hoặc đã trả một phần rồi.
+     * Trả 1 phần ở TH1 chuyển trạng thái sang "Đã trả hàng 1 phần"; trả 1 phần ở TH2 (đã ký) vẫn giữ
+     * "Đã ký" — cả hai đều còn trả tiếp được. Bắt buộc phải có "Còn nợ": hóa đơn còn nợ tiền chính là
+     * trường hợp cần trả hàng nhất (BA 2026-07-25: tiền hoàn phải cấn trừ đúng khoản nợ đó).
      */
     private boolean isReturnEligibleStatus(Invoice invoice) {
         return isStatus(invoice.getStatus(), INVOICE_STATUS_COMPLETED)
@@ -1372,8 +1372,9 @@ public class ReturnService {
     }
 
     /**
-     * A return target must be a sale or replacement invoice — never an adjustment invoice (it carries only
-     * negative delta lines, nothing sellable to return again). (invoiceType is NOT NULL.)
+     * Hóa đơn được chọn để trả phải là hóa đơn bán hoặc hóa đơn thay thế — KHÔNG BAO GIỜ là hóa đơn
+     * điều chỉnh (nó chỉ mang các dòng chênh lệch âm, không còn gì để trả tiếp). ({@code invoiceType}
+     * là NOT NULL.)
      *
      * <p><strong>"Hóa đơn GTGT" cũng là hóa đơn BÁN HÀNG.</strong> {@code InvoiceService.createSaleInvoice}
      * gán loại này thay cho "Bán hàng" khi nhà thuốc đang ở Nhóm 3+ — cùng một nghiệp vụ bán, chỉ khác
@@ -1608,16 +1609,16 @@ public class ReturnService {
     }
 
     /**
-     * The date the return window is measured from: the ROOT invoice's date, not this one's own —
-     * a replacement invoice is reissued at approval time, but the customer's actual purchase (and the
-     * clock the window runs on) is whenever the root sale happened. Nếu không đo từ F0 thì mỗi lần phát
+     * Ngày dùng để đo hạn trả hàng: ngày của hóa đơn GỐC (F0), không phải ngày của chính hóa đơn này
+     * — hóa đơn thay thế được phát hành lại đúng lúc duyệt phiếu trả, nhưng thời điểm khách mua thật
+     * (và đồng hồ tính hạn trả) vẫn phải tính từ lần bán gốc. Nếu không đo từ F0 thì mỗi lần phát
      * hành hóa đơn thay thế là RESET lại đồng hồ hạn trả, khách trả vòng 2 được cộng thêm thời gian.
      */
     private LocalDateTime effectiveSaleDate(Invoice invoice) {
         return rootOf(invoice).getDate();
     }
 
-    // ------------------------------------------------------------------ filtering / formatting
+    // ------------------------------------------------------------------ lọc / định dạng
 
     private boolean matchesKeyword(Return ret, List<Returndetail> details, String normalizedKeyword) {
         if (normalizedKeyword == null || normalizedKeyword.isBlank()) {

@@ -1,4 +1,4 @@
-INSERT INTO financialsetting (
+INSERT INTO financial_setting (
     financialSettingID,
     taxCalculationMethod,
     returnProductOnInvoiceValueRate,
@@ -33,8 +33,8 @@ SELECT
     1
 WHERE NOT EXISTS (
     SELECT 1
-    FROM financialsetting
+    FROM financial_setting
     WHERE financialSettingID = 1
 );
 
-ALTER TABLE financialsetting AUTO_INCREMENT = 2;
+ALTER TABLE financial_setting AUTO_INCREMENT = 2;

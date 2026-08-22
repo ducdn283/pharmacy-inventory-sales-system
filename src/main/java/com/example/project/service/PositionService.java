@@ -14,8 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Nghiệp vụ vị trí lưu kho ({@link Position}) phục vụ màn quản lý Owner ({@code /owner/positions/**}).
@@ -54,10 +56,31 @@ public class PositionService {
         return positionRepository.count();
     }
 
-    /** Danh sách hàng hóa — dropdown chọn sản phẩm trên form tạo/sửa Owner. */
+    /** Sản phẩm chưa có vị trí — dropdown form tạo vị trí Owner. */
     @Transactional(readOnly = true)
-    public List<Product> listProducts() {
-        return productRepository.findAllWithRelations();
+    public List<Product> listProductsWithoutPosition() {
+        Set<Integer> assigned = new HashSet<>(positionRepository.findAllAssignedProductIds());
+        return productRepository.findAllWithRelations().stream()
+                .filter(product -> !assigned.contains(product.getProductID()))
+                .toList();
+    }
+
+    /**
+     * Sản phẩm cho form sửa vị trí: sản phẩm chưa có vị trí + sản phẩm hiện tại của bản ghi đang sửa.
+     */
+    @Transactional(readOnly = true)
+    public List<Product> listProductsForUpdate(Integer positionId) {
+        Position entity = positionRepository.findById(positionId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy vị trí"));
+        Integer currentProductId = entity.getProductID() != null ? entity.getProductID().getProductID() : null;
+        Set<Integer> assigned = new HashSet<>(positionRepository.findAllAssignedProductIds());
+        if (currentProductId != null) {
+            assigned.remove(currentProductId);
+        }
+        Set<Integer> excluded = assigned;
+        return productRepository.findAllWithRelations().stream()
+                .filter(product -> !excluded.contains(product.getProductID()))
+                .toList();
     }
 
     /** Chi tiết một vị trí — form cập nhật Owner. */
@@ -68,27 +91,41 @@ public class PositionService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy vị trí"));
     }
 
-    /** Tạo vị trí mới — chỉ Owner. */
+    /** Tạo vị trí mới — chỉ Owner. Mỗi sản phẩm chỉ được gắn một vị trí. */
     @Transactional
     public PositionResponse create(PositionCreateRequest request) {
         Product product = productRepository.findById(request.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm"));
+        ensureProductHasNoPosition(product.getProductID());
 
         Position entity = new Position();
         applyForm(entity, product, request);
         return PositionResponse.from(positionRepository.save(entity));
     }
 
-    /** Cập nhật vị trí — chỉ Owner. */
+    /** Cập nhật vị trí — chỉ Owner. Không cho gán sản phẩm đã có vị trí khác. */
     @Transactional
     public PositionResponse update(Integer id, PositionCreateRequest request) {
         Position entity = positionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy vị trí"));
         Product product = productRepository.findById(request.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm"));
+        ensureProductHasNoOtherPosition(product.getProductID(), id);
 
         applyForm(entity, product, request);
         return PositionResponse.from(positionRepository.save(entity));
+    }
+
+    private void ensureProductHasNoPosition(Integer productId) {
+        if (positionRepository.existsByProductId(productId)) {
+            throw new IllegalArgumentException("Sản phẩm này đã có vị trí, không thể thêm vị trí mới");
+        }
+    }
+
+    private void ensureProductHasNoOtherPosition(Integer productId, Integer positionId) {
+        if (positionRepository.existsByProductIdAndIdNot(productId, positionId)) {
+            throw new IllegalArgumentException("Sản phẩm này đã có vị trí, không thể gán thêm vị trí mới");
+        }
     }
 
     /** Gán sản phẩm và tên vị trí từ form vào entity. */

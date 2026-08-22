@@ -24,6 +24,8 @@ public class ProcurementProductSearchResponse {
     private String barcode;
     /** Tồn kho hiện tại (đơn vị cơ sở). */
     private Integer currentStock;
+    /** Tồn kho tối đa (đơn vị cơ sở). */
+    private Integer maxStock;
     /** Tên đơn vị cơ sở — hiển thị tồn. */
     private String stockUnit;
     /** Đơn vị nhập mặc định. */
@@ -36,4 +38,8 @@ public class ProcurementProductSearchResponse {
     private List<ProcurementProductUnitResponse> units;
     /** Giá bán của đơn vị nhập hiện tại ({@code Productunit.sellPrice}). */
     private BigDecimal currentSellPrice;
+    /** Nhà cung cấp ưu tiên (supplierproduct.isPreferred) — tự chọn khi thêm dòng. */
+    private Integer preferredSupplierId;
+    /** Giá nhập của NCC ưu tiên. */
+    private BigDecimal preferredSupplierCostPrice;
 }

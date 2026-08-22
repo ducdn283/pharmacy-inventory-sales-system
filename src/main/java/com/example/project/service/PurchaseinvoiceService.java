@@ -190,19 +190,23 @@ public class PurchaseinvoiceService {
 
         LocalDate today = LocalDate.now();
 
+        // số phiếu nhập hôm nay
         long todayCount = invoices.stream()
                 .filter(invoice -> invoice.getDate() != null)
                 .filter(invoice -> toLocalDate(invoice.getDate()).equals(today))
                 .count();
 
+        // tổng giá trị nhập
         BigDecimal totalAmount = invoices.stream()
                 .map(this::safeTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // số tiền đã thanh toán
         BigDecimal paidAmount = invoices.stream()
                 .map(this::safePaid)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // số tiền còn nợ ncc
         BigDecimal debtAmount = totalAmount.subtract(paidAmount);
         if (debtAmount.compareTo(BigDecimal.ZERO) < 0) {
             debtAmount = BigDecimal.ZERO;

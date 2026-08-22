@@ -29,9 +29,16 @@ public class SupplierRequest {
     )
     private String phone;
 
-    @NotBlank(message = "Email không được để trống")
+    /**
+     * KHÔNG bắt buộc (BA chốt 2026-08-15) — nhiều nhà cung cấp chỉ liên hệ qua điện thoại.
+     *
+     * <p>Nhánh {@code ^$} trong regex là bắt buộc: {@code @Pattern} bỏ qua {@code null} nhưng KHÔNG
+     * bỏ qua chuỗi rỗng, mà ô để trống trên form gửi lên đúng là chuỗi rỗng. Bỏ trống thì
+     * {@code SupplierService} lưu {@code null} chứ không lưu {@code ""} — cột này có UNIQUE index,
+     * MySQL cho nhiều NULL nhưng hai chuỗi rỗng là trùng nhau.</p>
+     */
     @Pattern(
-            regexp = "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$",
+            regexp = "^$|^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$",
             message = "Email chỉ gồm chữ, số, '.', '-', '_' và phải có đuôi hợp lệ (ví dụ .com, .vn)"
     )
     @Size(max = 100, message = "Email không được vượt quá 100 ký tự")

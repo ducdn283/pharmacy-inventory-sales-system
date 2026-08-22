@@ -75,6 +75,23 @@
             position: relative;
         }
 
+        .product-search-toolbar { display: flex; gap: 12px; align-items: stretch; }
+        .product-search-toolbar .product-search-wrap { flex: 1; min-width: 0; }
+        .btn-view-stock { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; min-height: 48px; padding: 0 18px; border: 1px solid #6ee7b7; border-radius: 10px; background: #ecfdf5; color: #047857; font-size: 14px; font-weight: 600; white-space: nowrap; }
+        .btn-view-stock:hover { background: #d1fae5; border-color: #059669; color: #065f46; }
+        .stock-overview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .stock-overview-table th, .stock-overview-table td { padding: 10px 12px; border-bottom: 1px solid #eef0f3; }
+        .stock-overview-table th { background: #f8fafc; color: #64748b; font-weight: 600; white-space: nowrap; }
+        .stock-overview-empty { padding: 24px !important; text-align: center; color: #6b7280; }
+        .stock-modal { max-width: 920px; }
+        .stock-modal-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+        .stock-modal-toolbar label { color: #64748b; font-size: 13px; white-space: nowrap; }
+        .stock-search-input { flex: 1; }
+        .stock-sort-select { width: 130px; }
+        .btn-add-selected-stock { white-space: nowrap; }
+        .stock-row-selected { background: #ecfdf5; }
+        @media (max-width: 575.98px) { .product-search-toolbar, .stock-modal-toolbar { flex-direction: column; } .btn-view-stock, .stock-sort-select { width: 100%; } }
+
         .product-search-field {
             position: relative;
         }
@@ -160,20 +177,21 @@
         .product-line {
             --procurement-cols:
                 28px 28px
-                minmax(0, 1.45fr)
+                minmax(0, 1.3fr)
+                minmax(0, 0.5fr)
                 minmax(0, 0.52fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.88fr)
-                minmax(0, 1.1fr)
-                minmax(0, 0.72fr)
-                minmax(0, 0.76fr);
+                minmax(0, 0.52fr)
+                minmax(0, 0.82fr)
+                minmax(0, 1fr)
+                minmax(130px, 1fr)
+                minmax(140px, 1.1fr);
             display: grid;
             grid-template-columns: var(--procurement-cols);
             column-gap: 8px;
             row-gap: 0;
             align-items: center;
             width: 100%;
+            min-width: 980px;
         }
 
         .product-lines-header {
@@ -547,6 +565,25 @@
             width: 100%;
         }
 
+        .quantity-stock-warning {
+            grid-column: 3 / -1;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-top: 2px;
+            padding: 7px 10px;
+            color: #b42318;
+            font-size: 12px;
+            line-height: 1.4;
+            background: #fff5f5;
+            border: 1px solid #fecaca;
+            border-left: 3px solid #ef4444;
+            border-radius: 6px;
+        }
+
+        .quantity-stock-warning.d-none { display: none; }
+        .quantity-stock-warning::before { content: "⚠"; font-size: 16px; font-weight: 700; }
+
         .field-input {
             width: 100%;
             min-width: 0;
@@ -802,14 +839,14 @@
         .product-line.view-only-line {
             --procurement-cols:
                 28px
-                minmax(0, 1.45fr)
+                minmax(0, 1.3fr)
+                minmax(0, 0.5fr)
                 minmax(0, 0.52fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.55fr)
-                minmax(0, 0.88fr)
-                minmax(0, 1.1fr)
-                minmax(0, 0.72fr)
-                minmax(0, 0.76fr);
+                minmax(0, 0.52fr)
+                minmax(0, 0.82fr)
+                minmax(0, 1fr)
+                minmax(130px, 1fr)
+                minmax(140px, 1.1fr);
             grid-template-columns: var(--procurement-cols);
         }
 
@@ -823,6 +860,31 @@
                 white-space: normal;
             }
         }
+        /* Keep the update page aligned with the create-procurement-plan layout. */
+        .procurement-top-bar { margin-bottom: 1rem; }
+        .procurement-top-bar-inner { display: flex; align-items: stretch; }
+        .procurement-top-section { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; min-width: 0; }
+        .procurement-top-section + .procurement-top-section { border-left: 1px solid #eef0f3; }
+        .procurement-top-summary { flex: 1 1 0; min-width: 280px; max-width: 420px; }
+        .procurement-top-note { flex: 1.35 1 0; }
+        .procurement-top-actions { flex: 0 0 170px; justify-content: center; gap: 8px; }
+        .procurement-top-meta-actions { flex: 0 0 150px; justify-content: center; gap: 8px; }
+        .procurement-top-label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #64748b; white-space: nowrap; }
+        .procurement-top-label i { color: #059669; font-size: 14px; line-height: 1; }
+        .procurement-stat-grid { display: flex; flex: 1; align-items: stretch; min-height: 56px; border: 1px solid #e2e8f0; border-radius: 8px; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
+        .procurement-stat { flex: 1 1 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 10px; min-width: 0; }
+        .procurement-stat-total { flex: 1.35 1 0; }
+        .procurement-stat + .procurement-stat { border-left: 1px solid #e2e8f0; }
+        .procurement-stat-label { font-size: 11px; color: #64748b; line-height: 1.35; min-height: 2.7em; display: flex; align-items: flex-end; }
+        .procurement-stat-value { font-size: clamp(11px, 1.1vw, 16px); font-weight: 700; color: #111827; line-height: 1.25; overflow-wrap: anywhere; }
+        .procurement-stat-total .procurement-stat-value { color: #059669; }
+        .procurement-note-panel { display: flex; align-items: stretch; flex: 1; min-height: 56px; padding: 8px 10px; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #e2e8f0; border-radius: 8px; border-left: 3px solid #059669; }
+        .procurement-note-panel .order-note-input { flex: 1; min-width: 0; min-height: 40px; max-height: 72px; border: 1px solid #dbeafe; border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.4; background: #fff; resize: vertical; }
+        .procurement-top-actions .btn { min-height: 38px; padding-top: 6px; padding-bottom: 6px; font-size: 13px; font-weight: 600; }
+        .procurement-status-control { min-height: 28px; display: flex; align-items: center; }
+        .product-lines-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 991.98px) { .procurement-top-bar-inner { flex-direction: column; } .procurement-top-section { padding: 12px 14px; } .procurement-top-section + .procurement-top-section { border-left: none; border-top: 1px solid #eef0f3; } .procurement-top-summary, .procurement-top-actions, .procurement-top-meta-actions { flex: none; width: 100%; } .procurement-top-actions, .procurement-top-meta-actions { flex-direction: row; } .procurement-top-actions .btn, .procurement-top-meta-actions .btn { flex: 1; } }
+        @media (max-width: 575.98px) { .procurement-stat-grid { flex-direction: column; } .procurement-stat + .procurement-stat { border-left: none; border-top: 1px solid #e2e8f0; } .procurement-stat-label { min-height: auto; } .procurement-top-actions { flex-direction: column; } }
     </style>
 </head>
 
@@ -851,119 +913,53 @@
               th:method="${viewOnly ? 'get' : 'post'}"
               novalidate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <div class="row g-4">
-                <div class="col-12 col-lg-9">
-                    <div class="owner-card">
-                        <div th:unless="${viewOnly}" class="p-4 border-bottom">
-                            <div class="product-search-wrap">
-                                <div class="product-search-field">
-                                    <i class="ti ti-search product-search-icon"></i>
-                                    <input type="text" id="productSearchInput"
-                                           class="form-control product-search-input"
-                                           placeholder="Tìm hàng theo tên, mã hoặc barcode"
-                                           autocomplete="off">
-                                    <div id="productSearchResults" class="product-search-results"></div>
-                                </div>
-                            </div>
+            <div class="procurement-top-bar owner-card">
+                <div class="procurement-top-bar-inner">
+                    <div class="procurement-top-section procurement-top-summary">
+                        <div class="procurement-top-label"><i class="ti ti-report-analytics"></i>Tổng hợp</div>
+                        <div class="procurement-stat-grid">
+                            <div class="procurement-stat"><span class="procurement-stat-label">Số mặt hàng</span><strong class="procurement-stat-value" id="itemCountDisplay">0</strong></div>
+                            <div class="procurement-stat procurement-stat-total"><span class="procurement-stat-label">Tổng giá trị dự kiến</span><strong class="procurement-stat-value" id="totalAmountDisplay">0đ</strong></div>
                         </div>
-
-                        <div id="productLinesHeader" class="product-lines-header hidden" th:classappend="${viewOnly} ? ' view-only-header' : ''">
-                            <div></div>
-                            <div th:unless="${viewOnly}"></div>
-                            <div>Hàng hóa</div>
-                            <div class="text-center">Tồn</div>
-                            <div class="text-center">Đơn vị tồn</div>
-                            <div class="text-center">Số lượng</div>
-                            <div class="text-center">Đơn vị nhập</div>
-                            <div>Nhà cung cấp</div>
-                            <div class="text-end">Giá từng đơn vị</div>
-                            <div class="text-end">Giá ước tính</div>
+                    </div>
+                    <div class="procurement-top-section procurement-top-note">
+                        <div class="procurement-top-label"><i class="ti ti-notes"></i>Ghi chú dự trù</div>
+                        <div class="procurement-note-panel"><textarea id="procurementNote" class="order-note-input" th:field="*{note}" th:readonly="${viewOnly}" rows="2" placeholder="Nhập ghi chú cho dự trù mua hàng (nếu có)"></textarea></div>
+                    </div>
+                    <div class="procurement-top-section procurement-top-actions">
+                        <button th:unless="${viewOnly}" type="submit" class="btn btn-owner-primary w-100 btn-procurement-submit"><i class="ti ti-check me-1"></i>Cập nhật</button>
+                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100 btn-procurement-cancel" th:text="${viewOnly} ? 'Quay lại danh sách' : 'Hủy'">Hủy</a>
+                    </div>
+                    <div class="procurement-top-section procurement-top-meta-actions">
+                        <div th:if="${viewOnly}" class="plan-status-badge procurement-status-control" th:classappend="${procurementPlan.status == 'Đã hoàn thành'} ? ' status-completed-view' : ''" th:text="${procurementPlan.status}">Đã hoàn thành</div>
+                        <div th:unless="${viewOnly}" class="procurement-status-control">
+                            <input type="hidden" th:field="*{status}" id="procurementStatusInput">
+                            <label class="status-check-toggle"><input type="checkbox" id="statusCompletedToggle" th:checked="${procurementPlanForm.status == 'Đã hoàn thành'}"><span class="status-check-box" title="Đánh dấu hoàn thành"><i class="ti ti-check"></i></span><span class="status-check-text" id="statusCheckText">Đang thực hiện</span></label>
                         </div>
-
-                        <div id="detailLines"></div>
-
-                        <div id="emptyProductState" class="empty-product-state">
-                            <div><i class="ti ti-package"></i></div>
-                            <div class="fw-semibold mb-1">Chưa có hàng hóa nào</div>
-                            <div class="small">Gõ từ đầu tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div>
-                        </div>
-
-                        <div class="p-4 pt-0">
-                            <div class="text-danger small"
-                                 th:if="${#fields.hasErrors('details')}"
-                                 th:errors="*{details}"></div>
-                        </div>
+                        <button type="button" id="printProcurementPlanBtn" th:data-print-url="${basePath + '/' + procurementPlan.id + '/print'}" class="btn btn-outline-secondary w-100 btn-procurement-print"><i class="ti ti-printer me-1"></i>In dự trù</button>
                     </div>
                 </div>
+            </div>
 
-                <div class="col-12 col-lg-3 procurement-sidebar">
-                    <div class="owner-card p-4 mb-4">
-                        <h2 class="fs-6 mb-3">Thông tin dự trù</h2>
-                        <div class="plan-info-row">
-                            <span class="plan-info-label">Mã dự trù</span>
-                            <span class="plan-info-value" th:text="${procurementPlan.procurementCode}">DT-000001</span>
-                        </div>
-                        <div class="plan-info-row mb-0">
-                            <span class="plan-info-label">Trạng thái</span>
-                            <div>
-                                <span th:if="${viewOnly}"
-                                      class="plan-status-badge"
-                                      th:classappend="${procurementPlan.status == 'Đã hoàn thành'} ? ' status-completed-view' : ''"
-                                      th:text="${procurementPlan.status}">Đã hoàn thành</span>
-                                <div th:unless="${viewOnly}">
-                                    <input type="hidden" th:field="*{status}" id="procurementStatusInput">
-                                    <label class="status-check-toggle">
-                                        <input type="checkbox"
-                                               id="statusCompletedToggle"
-                                               th:checked="${procurementPlanForm.status == 'Đã hoàn thành'}">
-                                        <span class="status-check-box" title="Đánh dấu hoàn thành">
-                                            <i class="ti ti-check"></i>
-                                        </span>
-                                        <span class="status-check-text" id="statusCheckText">Đang thực hiện</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="owner-card p-4 mb-4">
-                        <h2 class="fs-6 mb-3">Tổng hợp</h2>
-                        <div class="summary-row mb-0">
-                            <span class="text-secondary">Số mặt hàng</span>
-                            <strong id="itemCountDisplay">0</strong>
-                        </div>
-                        <div class="summary-row mb-0">
-                            <span class="text-secondary">Tổng giá trị dự kiến</span>
-                            <strong class="text-success" id="totalAmountDisplay">0đ</strong>
-                        </div>
-                    </div>
-
-                    <div class="owner-card p-4 mb-4">
-                        <div class="order-note-wrap">
-                            <i class="ti ti-pencil order-note-icon"></i>
-                            <textarea id="procurementNote"
-                                      class="order-note-input"
-                                      th:field="*{note}"
-                                      th:readonly="${viewOnly}"
-                                      rows="4"
-                                      placeholder="Ghi chú dự trù"></textarea>
-                        </div>
-                    </div>
-
-                    <div class="owner-card p-4">
-                        <button type="button" id="printProcurementPlanBtn"
-                                th:data-print-url="${basePath + '/' + procurementPlan.id + '/print'}"
-                                class="btn btn-outline-secondary w-100 mb-2">
-                            <i class="ti ti-printer me-1"></i>
-                            In dự trù
-                        </button>
-                        <button th:unless="${viewOnly}" type="submit" class="btn btn-owner-primary w-100 mb-2">
-                            Cập nhật dự trù mua hàng
-                        </button>
-                        <a th:href="${basePath}" class="btn btn-outline-secondary w-100"
-                           th:text="${viewOnly} ? 'Quay lại danh sách' : 'Hủy'">Hủy</a>
+            <div class="owner-card">
+                <div th:unless="${viewOnly}" class="p-4 border-bottom">
+                    <div class="product-search-toolbar">
+                        <div class="product-search-wrap"><div class="product-search-field">
+                            <i class="ti ti-search product-search-icon"></i>
+                            <input type="text" id="productSearchInput" class="form-control product-search-input" placeholder="Tìm hàng theo tên, mã hoặc barcode" autocomplete="off">
+                            <div id="productSearchResults" class="product-search-results"></div>
+                        </div></div>
+                        <button type="button" id="viewProductStockBtn" class="btn-view-stock"><i class="ti ti-stack-2"></i><span>Xem tồn sản phẩm</span></button>
                     </div>
                 </div>
+                <div class="product-lines-scroll">
+                    <div id="productLinesHeader" class="product-lines-header hidden" th:classappend="${viewOnly} ? ' view-only-header' : ''">
+                        <div></div><div th:unless="${viewOnly}"></div><div>Hàng hóa</div><div class="text-center">Tồn</div><div class="text-center">Đơn vị tồn</div><div class="text-center">Số lượng</div><div class="text-center">Đơn vị nhập</div><div>Nhà cung cấp</div><div class="text-end">Giá từng đơn vị</div><div class="text-end">Giá ước tính</div>
+                    </div>
+                    <div id="detailLines"></div>
+                </div>
+                <div id="emptyProductState" class="empty-product-state"><div><i class="ti ti-package"></i></div><div class="fw-semibold mb-1">Chưa có hàng hóa nào</div><div class="small">Gõ từ đầu tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào dự trù</div></div>
+                <div class="p-4 pt-0"><div id="detailListError" class="text-danger small" th:if="${#fields.hasErrors('details')}" th:errors="*{details}"></div></div>
             </div>
         </form>
     </div>
@@ -993,6 +989,24 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="supplier-modal-backdrop" id="productStockModal" th:if="${!viewOnly}">
+    <div class="supplier-modal stock-modal">
+        <div class="supplier-modal-header">
+            <h2 class="fs-6 mb-0">Tồn kho sản phẩm</h2>
+            <button type="button" class="supplier-modal-close" id="closeProductStockModalBtn">&times;</button>
+        </div>
+        <div class="supplier-modal-body">
+            <div class="stock-modal-toolbar">
+                <input type="text" id="productStockSearchInput" class="form-control stock-search-input" placeholder="Gõ từ đầu tên, mã hoặc barcode" autocomplete="off">
+                <label for="productStockSortSelect">Sắp xếp tồn:</label>
+                <select id="productStockSortSelect" class="form-select stock-sort-select"><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select>
+                <button type="button" id="addSelectedStockProductsBtn" class="btn btn-owner-primary btn-add-selected-stock" disabled>Thêm vào dự trù</button>
+            </div>
+            <div class="table-responsive"><table class="stock-overview-table"><thead><tr><th class="text-center"><input type="checkbox" id="productStockSelectAll" class="form-check-input" title="Chọn tất cả"></th><th>STT</th><th>Mã</th><th>Tên sản phẩm</th><th class="text-end">Tồn tối thiểu</th><th class="text-end">Tồn tối đa</th><th class="text-end">Tồn hiện tại</th></tr></thead><tbody id="productStockModalBody"><tr><td colspan="7" class="stock-overview-empty">Đang tải...</td></tr></tbody></table></div>
         </div>
     </div>
 </div>
@@ -1208,12 +1222,29 @@
     }
 
     function buildDetailFromProduct(product, overrides = {}) {
+        const quantity = overrides.requestedQuantity != null ? overrides.requestedQuantity : 1;
+        let supplierId = overrides.supplierId != null ? overrides.supplierId : null;
+        let unitCost = overrides.unitCost != null ? overrides.unitCost : null;
+        let estimatedPrice = overrides.estimatedPrice != null ? overrides.estimatedPrice : null;
+
+        if (supplierId == null && product.preferredSupplierId != null) {
+            supplierId = product.preferredSupplierId;
+            if (unitCost == null && product.preferredSupplierCostPrice != null) {
+                unitCost = Number(product.preferredSupplierCostPrice);
+            }
+        }
+
+        if (estimatedPrice == null && unitCost != null && Number.isFinite(unitCost) && quantity > 0) {
+            estimatedPrice = unitCost * quantity;
+        }
+
         return {
             productId: product.productID,
-            requestedQuantity: overrides.requestedQuantity != null ? overrides.requestedQuantity : 1,
+            requestedQuantity: quantity,
             unit: overrides.unit != null ? overrides.unit : (product.unit || ''),
-            estimatedPrice: overrides.estimatedPrice != null ? overrides.estimatedPrice : null,
-            supplierId: overrides.supplierId != null ? overrides.supplierId : null,
+            estimatedPrice: estimatedPrice,
+            unitCost: unitCost,
+            supplierId: supplierId,
             currentStock: overrides.currentStock != null ? overrides.currentStock : getStock(product.productID)
         };
     }
@@ -1282,8 +1313,28 @@
         if (!row) {
             return;
         }
+        updateStockLimitWarning(row);
         syncEstimatedFromUnitQty(row);
         calculateSummary();
+    }
+
+    function updateStockLimitWarning(row) {
+        const warning = row.querySelector('.quantity-stock-warning');
+        const productId = Number(row.querySelector('[data-field="productId"]')?.value);
+        const product = productMap[productId];
+        if (!warning || !product) return;
+
+        const maxStock = Number(product.maxStock);
+        const currentStock = Number(product.currentStock) || 0;
+        const quantity = numberValue(row.querySelector('.quantity-input'));
+        const unitRatio = Number(product.unitRatio) || 1;
+        const projectedStock = currentStock + quantity * unitRatio;
+
+        const exceedsMaximum = Number.isFinite(maxStock) && maxStock >= 0 && projectedStock > maxStock;
+        warning.classList.toggle('d-none', !exceedsMaximum);
+        warning.textContent = exceedsMaximum
+            ? `Tồn dự kiến sau khi nhập: ${projectedStock.toLocaleString('vi-VN')} ${product.stockUnit || ''}, tồn tối đa là ${maxStock.toLocaleString('vi-VN')} ${product.stockUnit || ''}.`
+            : '';
     }
 
     function syncLineAmountsBeforeSubmit() {
@@ -1526,6 +1577,7 @@
         const hasLines = document.querySelectorAll('#detailLines .product-line').length > 0;
         document.getElementById('emptyProductState').style.display = hasLines ? 'none' : 'block';
         document.getElementById('productLinesHeader').classList.toggle('hidden', !hasLines);
+        document.getElementById('detailListError')?.classList.toggle('d-none', hasLines);
     }
 
     function reindexDetailLines() {
@@ -1672,6 +1724,7 @@
                         </div>
                     </div>
                 </div>
+                <div class="quantity-stock-warning d-none"></div>
             </div>
         `;
     }
@@ -1684,6 +1737,7 @@
         const row = atTop ? container.querySelector('.product-line') : container.lastElementChild;
         if (row) {
             row.dataset.lineOrder = String(nextLineOrder++);
+            updateStockLimitWarning(row);
         }
         sortDetailLinesBySupplier();
     }
@@ -1917,6 +1971,85 @@
         searchInput.focus();
     }
 
+    let productStockItems = [];
+    let selectedStockProductIds = new Set();
+
+    function updateStockSelectionUi() {
+        const addButton = document.getElementById('addSelectedStockProductsBtn');
+        const selectAll = document.getElementById('productStockSelectAll');
+        if (addButton) {
+            const count = selectedStockProductIds.size;
+            addButton.disabled = count === 0;
+            addButton.textContent = count ? `Thêm vào dự trù (${count})` : 'Thêm vào dự trù';
+        }
+        if (selectAll) {
+            const visibleRows = Array.from(document.querySelectorAll('#productStockModalBody .stock-product-checkbox'));
+            selectAll.checked = visibleRows.length > 0 && visibleRows.every(input => input.checked);
+            selectAll.indeterminate = !selectAll.checked && visibleRows.some(input => input.checked);
+        }
+    }
+
+    function renderProductStockRows() {
+        const body = document.getElementById('productStockModalBody');
+        const keyword = (document.getElementById('productStockSearchInput')?.value || '').trim().toLowerCase();
+        if (!body) return;
+        const rows = productStockItems.filter(item => !keyword || [item.code, item.name, item.barcode]
+            .some(value => String(value || '').toLowerCase().includes(keyword)));
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="7" class="stock-overview-empty">Không có sản phẩm phù hợp</td></tr>';
+            return;
+        }
+        body.innerHTML = rows.map((item, index) => {
+            const selected = selectedStockProductIds.has(Number(item.productID));
+            return `<tr class="${selected ? 'stock-row-selected' : ''}"><td class="text-center"><input type="checkbox" class="form-check-input stock-product-checkbox" data-product-id="${item.productID}" ${selected ? 'checked' : ''}></td><td>${index + 1}</td><td>${escapeHtml(item.code || '—')}</td><td>${escapeHtml(item.name || '—')}</td><td class="text-end">${Number(item.minStock || 0).toLocaleString('vi-VN')}</td><td class="text-end">${Number(item.maxStock || 0).toLocaleString('vi-VN')}</td><td class="text-end text-success fw-semibold">${Number(item.currentStock || 0).toLocaleString('vi-VN')}${item.stockUnit ? ' ' + escapeHtml(item.stockUnit) : ''}</td></tr>`;
+        }).join('');
+        body.querySelectorAll('.stock-product-checkbox').forEach(input => input.addEventListener('change', function () {
+            const id = Number(this.dataset.productId);
+            this.checked ? selectedStockProductIds.add(id) : selectedStockProductIds.delete(id);
+            this.closest('tr').classList.toggle('stock-row-selected', this.checked);
+            updateStockSelectionUi();
+        }));
+        updateStockSelectionUi();
+    }
+
+    async function openProductStockModal() {
+        const modal = document.getElementById('productStockModal');
+        const body = document.getElementById('productStockModalBody');
+        if (!modal || !body) return;
+        modal.classList.add('open');
+        selectedStockProductIds.clear();
+        body.innerHTML = '<tr><td colspan="7" class="stock-overview-empty">Đang tải...</td></tr>';
+        try {
+            const sort = document.getElementById('productStockSortSelect').value;
+            const response = await fetch(`${basePath}/products/stock-overview?sort=${encodeURIComponent(sort)}`);
+            if (!response.ok) throw new Error('Unable to load stock');
+            productStockItems = await response.json();
+            renderProductStockRows();
+        } catch (error) {
+            body.innerHTML = '<tr><td colspan="7" class="stock-overview-empty">Không thể tải danh sách tồn kho</td></tr>';
+        }
+    }
+
+    function closeProductStockModal() {
+        document.getElementById('productStockModal')?.classList.remove('open');
+    }
+
+    function addSelectedStockProductsToPlan() {
+        productStockItems.filter(item => selectedStockProductIds.has(Number(item.productID))).forEach(item => {
+            const product = { productID: item.productID, name: item.name, code: item.code, barcode: item.barcode,
+                currentStock: item.currentStock, maxStock: item.maxStock, stockUnit: item.stockUnit, unit: item.unit, unitRatio: item.unitRatio,
+                units: item.units || [], currentSellPrice: item.currentSellPrice,
+                preferredSupplierId: item.preferredSupplierId, preferredSupplierCostPrice: item.preferredSupplierCostPrice };
+            cacheSearchProducts([product]);
+            addProductById(product.productID, productMap[product.productID]);
+        });
+        selectedStockProductIds.clear();
+        initLineSupplierPrices();
+        toggleEmptyState();
+        calculateSummary();
+        closeProductStockModal();
+    }
+
     if (!viewOnly) {
     document.getElementById('closeSupplierModalBtn').addEventListener('click', closeSupplierModal);
     document.getElementById('supplierModal').addEventListener('click', function (event) {
@@ -1924,6 +2057,23 @@
     });
     document.getElementById('supplierSearchInput').addEventListener('input', function (event) {
         scheduleSupplierSearch(event.target.value);
+    });
+    document.getElementById('viewProductStockBtn').addEventListener('click', openProductStockModal);
+    document.getElementById('closeProductStockModalBtn').addEventListener('click', closeProductStockModal);
+    document.getElementById('productStockModal').addEventListener('click', function (event) {
+        if (event.target === this) closeProductStockModal();
+    });
+    document.getElementById('productStockSearchInput').addEventListener('input', renderProductStockRows);
+    document.getElementById('productStockSortSelect').addEventListener('change', openProductStockModal);
+    document.getElementById('addSelectedStockProductsBtn').addEventListener('click', addSelectedStockProductsToPlan);
+    document.getElementById('productStockSelectAll').addEventListener('change', function () {
+        document.querySelectorAll('#productStockModalBody .stock-product-checkbox').forEach(input => {
+            input.checked = this.checked;
+            const id = Number(input.dataset.productId);
+            this.checked ? selectedStockProductIds.add(id) : selectedStockProductIds.delete(id);
+            input.closest('tr').classList.toggle('stock-row-selected', this.checked);
+        });
+        updateStockSelectionUi();
     });
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') closeSupplierModal();
@@ -1979,14 +2129,22 @@
             .forEach(detail => {
                 const product = productMap[detail.productId];
                 if (!product) return;
-                addProductLine({
-                    productId: detail.productId,
-                    requestedQuantity: detail.requestedQuantity,
-                    unit: detail.unit,
-                    estimatedPrice: detail.estimatedPrice,
-                    supplierId: detail.supplierId,
-                    currentStock: product.currentStock
-                }, false);
+                const lineDetail = detail.supplierId != null
+                    ? {
+                        productId: detail.productId,
+                        requestedQuantity: detail.requestedQuantity,
+                        unit: detail.unit,
+                        estimatedPrice: detail.estimatedPrice,
+                        supplierId: detail.supplierId,
+                        currentStock: product.currentStock
+                    }
+                    : buildDetailFromProduct(product, {
+                        requestedQuantity: detail.requestedQuantity,
+                        unit: detail.unit,
+                        estimatedPrice: detail.estimatedPrice,
+                        currentStock: product.currentStock
+                    });
+                addProductLine(lineDetail, false);
             });
     } catch (error) {
         console.error('Không thể tải danh sách sản phẩm dự trù', error);

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In tem barcode A5</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; color: #111; background: #eef2f7; font-family: Arial, sans-serif; }
+        .toolbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center;
+            justify-content: space-between; gap: 16px; padding: 12px 20px; color: #fff; background: #1f2937; }
+        .toolbar-actions { display: flex; gap: 10px; }
+        .btn { padding: 9px 16px; border: 1px solid transparent; border-radius: 7px; cursor: pointer;
+            font-size: 14px; font-weight: 600; text-decoration: none; }
+        .btn-light { color: #111827; background: #fff; border-color: #d1d5db; }
+        .btn-primary { color: #fff; background: #087f5b; }
+        .btn-pdf { color: #fff; background: #dc2626; }
+        .sheet { display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 43.5mm;
+            width: 210mm; min-height: 148mm; margin: 18px auto; padding: 5mm; overflow: hidden;
+            background: #fff; box-shadow: 0 4px 22px rgba(15, 23, 42, .16); page-break-after: always; }
+        .sheet:last-child { page-break-after: auto; }
+        .label { display: flex; min-width: 0; height: 43.5mm; padding: 1.6mm; overflow: hidden;
+            align-items: center; flex-direction: column; justify-content: center; border: .15mm dashed #d1d5db;
+            text-align: center; }
+        .pharmacy { width: 100%; overflow: hidden; font-size: 6.3pt; font-weight: 700;
+            line-height: 2.8mm; text-overflow: ellipsis; white-space: nowrap; }
+        .product-name { display: -webkit-box; width: 100%; min-height: 6mm; margin-top: .5mm;
+            overflow: hidden; font-size: 6.2pt; font-weight: 700; line-height: 3mm;
+            -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .unit { min-height: 2.7mm; font-size: 5.7pt; line-height: 2.7mm; }
+        .barcode-image { display: block; width: 34mm; height: 8.5mm; margin-top: .5mm;
+            object-fit: fill; image-rendering: crisp-edges; }
+        .barcode-value { margin-top: .3mm; font-size: 6pt; letter-spacing: .35px; line-height: 2.7mm; }
+        .price { font-size: 8pt; font-weight: 700; line-height: 3.5mm; }
+        @page { size: A5 landscape; margin: 0; }
+        @media print {
+            body { background: #fff; }
+            .toolbar { display: none !important; }
+            .sheet { width: 210mm; height: 148mm; min-height: 148mm; margin: 0; padding: 5mm;
+                box-shadow: none; }
+            .label { border-color: transparent; }
+        }
+    </style>
+</head>
+<body>
+<div class="toolbar">
+    <div><strong>Xem trước tem barcode A5</strong> · <span th:text="${totalLabels + ' tem'}">0 tem</span></div>
+    <div class="toolbar-actions">
+        <button class="btn btn-light" type="button" onclick="window.close()">Đóng</button>
+        <form method="post" th:action="${basePath + '/barcode/pdf'}">
+            <th:block th:each="item : ${barcodeItems}">
+                <input type="hidden" name="productIds" th:value="${item.productId}">
+                <input type="hidden" name="quantities" th:value="${item.quantity}">
+            </th:block>
+            <button class="btn btn-pdf" type="submit">Xuất PDF A5</button>
+        </form>
+        <button class="btn btn-primary" type="button" onclick="window.print()">In trực tiếp</button>
+    </div>
+</div>
+
+<div id="allLabels" style="display:none">
+    <th:block th:each="item : ${barcodeItems}">
+        <th:block th:each="number : ${#numbers.sequence(1, item.quantity)}">
+            <div class="label-template">
+                <div class="pharmacy">NHÀ THUỐC HẰNG NGỌC</div>
+                <div class="product-name" th:text="${item.name}">Tên sản phẩm</div>
+                <div class="unit" th:text="${item.unitName == null ? '' : '(' + item.unitName + ')'}">(Hộp)</div>
+                <img class="barcode-image" th:src="${basePath + '/barcode/image/' + item.productId}" alt="Barcode">
+                <div class="barcode-value" th:text="${item.code}">SP000001</div>
+                <div class="price"
+                     th:text="${item.sellPrice == null ? '' : #numbers.formatDecimal(item.sellPrice, 0, 'POINT', 0, 'COMMA') + ' VND/' + (item.unitName == null ? 'đơn vị' : item.unitName)}">
+                    125,000 VND/hộp
+                </div>
+            </div>
+        </th:block>
+    </th:block>
+</div>
+
+<div id="pages"></div>
+
+<script>
+    (function () {
+        const source = Array.from(document.querySelectorAll('#allLabels .label-template'));
+        const pages = document.getElementById('pages');
+        const labelsPerPage = 15;
+        for (let start = 0; start < source.length; start += labelsPerPage) {
+            const sheet = document.createElement('section');
+            sheet.className = 'sheet';
+            source.slice(start, start + labelsPerPage).forEach(template => {
+                const label = template.cloneNode(true);
+                label.className = 'label';
+                sheet.appendChild(label);
+            });
+            pages.appendChild(sheet);
+        }
+    })();
+</script>
+</body>
+</html>

@@ -31,7 +31,7 @@ public class CustomerService {
         this.invoiceRepository = invoiceRepository;
     }
 
-    // ------------------------------------------------------------------ list
+    // ------------------------------------------------------------------ danh sách
 
     @Transactional(readOnly = true)
     public Page<CustomerResponse> list(String keyword, String type, Pageable pageable) {
@@ -54,7 +54,7 @@ public class CustomerService {
         return new PageImpl<>(content, pageable, filtered.size());
     }
 
-    // ------------------------------------------------------------------ stats
+    // ------------------------------------------------------------------ thống kê
 
     public record CustomerStats(long total, long individual, long company, long withDebt) {
     }
@@ -74,21 +74,27 @@ public class CustomerService {
         return new CustomerStats(total, individual, company, withDebt);
     }
 
-    // ------------------------------------------------------------------ getById
+    // ------------------------------------------------------------------ lấy theo id
 
     @Transactional(readOnly = true)
     public CustomerResponse getById(Integer id) {
         return CustomerResponse.from(findOrThrow(id));
     }
 
-    /** 5 hóa đơn gần nhất của khách hàng (suy ra từ FK Invoice.customerID). */
+    /**
+     * TOÀN BỘ lịch sử mua hàng của khách, mới nhất trước (BA chốt 2026-08-15 — trước đó cắt còn 5
+     * dòng gần nhất). Màn chi tiết tự phân trang ở phía client.
+     *
+     * <p>Không cắt danh sách vì hóa đơn còn nợ có thể là hóa đơn cũ: cắt bớt thì người dùng thấy
+     * tổng công nợ nhưng không biết nợ ở hóa đơn nào, phải sang màn Hóa đơn rà lại từng phiếu —
+     * đúng việc mà màn này phải làm hộ.</p>
+     */
     @Transactional(readOnly = true)
-    public List<CustomerInvoiceResponse> getRecentInvoices(Integer customerId) {
+    public List<CustomerInvoiceResponse> getInvoiceHistory(Integer customerId) {
         return invoiceRepository.findAll().stream()
                 .filter(i -> i.getCustomerID() != null && customerId.equals(i.getCustomerID().getId()))
                 .sorted(Comparator.comparing(Invoice::getDate,
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .limit(5)
                 .map(CustomerInvoiceResponse::from)
                 .toList();
     }
@@ -103,7 +109,7 @@ public class CustomerService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo
 
     @Transactional
     public Integer create(CustomerRequest req) {
@@ -113,7 +119,7 @@ public class CustomerService {
         return saveGuardingUniqueRace(c, req).getId();
     }
 
-    // ------------------------------------------------------------------ update
+    // ------------------------------------------------------------------ sửa
 
     @Transactional
     public void update(Integer id, CustomerRequest req) {
@@ -123,7 +129,7 @@ public class CustomerService {
         saveGuardingUniqueRace(c, req);
     }
 
-    // ------------------------------------------------------------------ legacy
+    // ------------------------------------------------------------------ cũ
 
     @Transactional(readOnly = true)
     public List<CustomerResponse> getAll() {
@@ -133,7 +139,7 @@ public class CustomerService {
                 .toList();
     }
 
-    // ------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------ hàm phụ trợ
 
     private Customer findOrThrow(Integer id) {
         return customerRepository.findById(id)

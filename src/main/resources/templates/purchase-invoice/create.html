@@ -356,6 +356,8 @@
             </a>
         </div>
 
+        <div th:replace="~{fragments/toast :: flash}"></div>
+
         <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
 
         <form th:action="${formAction}" th:object="${form}" method="post">
@@ -444,35 +446,11 @@
                                 </div>
                             </div>
 
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Chi phí phát sinh</label>
-                                <input type="text"
-                                       inputmode="numeric"
-                                       data-money
-                                       class="form-control"
-                                       th:field="*{additionCost}"
-                                       id="additionCost"
-                                       oninput="calculateSummary()">
-                                <div class="text-danger small mt-1"
-                                     th:if="${#fields.hasErrors('additionCost')}"
-                                     th:errors="*{additionCost}">
-                                </div>
-                            </div>
-
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Chiết khấu</label>
-                                <input type="text"
-                                       inputmode="numeric"
-                                       data-money
-                                       class="form-control"
-                                       th:field="*{discount}"
-                                       id="discount"
-                                       oninput="calculateSummary()">
-                                <div class="text-danger small mt-1"
-                                     th:if="${#fields.hasErrors('discount')}"
-                                     th:errors="*{discount}">
-                                </div>
-                            </div>
+                            <!-- Chi phí phát sinh/Chiết khấu ẩn khỏi giao diện — vẫn giữ lại field/binding
+                                 (mặc định 0, hoặc giá trị cũ của một phiếu nháp đã có từ trước) để không
+                                 phá vỡ dữ liệu đã lưu, chỉ không cho nhập mới nữa. -->
+                            <input type="hidden" th:field="*{additionCost}" id="additionCost">
+                            <input type="hidden" th:field="*{discount}" id="discount">
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label">Hạn thanh toán công nợ NCC</label>
@@ -713,16 +691,6 @@
                             <strong id="subtotalDisplay">0đ</strong>
                         </div>
 
-                        <div class="money-summary-row">
-                            <span class="text-secondary">Chi phí phát sinh</span>
-                            <strong id="additionCostDisplay">0đ</strong>
-                        </div>
-
-                        <div class="money-summary-row">
-                            <span class="text-secondary">Chiết khấu</span>
-                            <strong id="discountDisplay">0đ</strong>
-                        </div>
-
                         <hr>
 
                         <div class="money-summary-row">
@@ -813,11 +781,11 @@
                 <div class="invalid-feedback" id="newSupplierPhoneFeedback"></div>
             </div>
             <div class="mb-2">
-                <label class="form-label small mb-1" for="newSupplierEmail">Email <span class="text-danger">*</span></label>
+                <label class="form-label small mb-1" for="newSupplierEmail">Email</label>
                 <input type="email" class="form-control" id="newSupplierEmail"
                        inputmode="email" autocomplete="email" maxlength="100"
                        pattern="[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
-                       required aria-describedby="newSupplierEmailFeedback">
+                       aria-describedby="newSupplierEmailFeedback">
                 <div class="invalid-feedback" id="newSupplierEmailFeedback"></div>
             </div>
             <div class="mb-0">
@@ -1124,8 +1092,13 @@
             }
         });
 
-        const additionCost = moneyValue(document.getElementById('additionCost'));
-        const discount = moneyValue(document.getElementById('discount'));
+        // Ẩn khỏi giao diện nên không còn qua data-money/pmMoneyValue (chuỗi hiển thị dạng
+        // "1.000.000") — đọc thẳng .value, vẫn là chuỗi BigDecimal thô do Thymeleaf render
+        // ("0"/"1000000.00"), Number() parse đúng ngay, không cần bóc dấu chấm phân cách.
+        const additionCostInput = document.getElementById('additionCost');
+        const discountInput = document.getElementById('discount');
+        const additionCost = additionCostInput ? (Number(additionCostInput.value) || 0) : 0;
+        const discount = discountInput ? (Number(discountInput.value) || 0) : 0;
 
         let totalAmount = subtotal + additionCost - discount;
         if (totalAmount < 0) {
@@ -1133,8 +1106,6 @@
         }
 
         document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
-        document.getElementById('additionCostDisplay').textContent = formatMoney(additionCost);
-        document.getElementById('discountDisplay').textContent = formatMoney(discount);
         document.getElementById('totalAmountDisplay').textContent = formatMoney(totalAmount);
         // Phiếu nhập mới luôn chưa trả đồng nào, nên còn nợ = tổng tiền.
         document.getElementById('debtDisplay').textContent = formatMoney(totalAmount);
@@ -1549,7 +1520,7 @@
         const rows = document.querySelectorAll('#detailTable tbody.detail-item');
 
         if (rows.length <= 1) {
-            alert('Phiếu nhập phải có ít nhất một sản phẩm.');
+            pmToast('Phiếu nhập phải có ít nhất một sản phẩm.', 'error');
             return;
         }
 
@@ -1594,11 +1565,11 @@
             if (feedback) feedback.textContent = message;
         }
 
-        // Validate các field bắt buộc + định dạng (mã số thuế, điện thoại, email) trước khi gửi tạo nhanh NCC.
+        // Validate các field bắt buộc + định dạng (mã số thuế, điện thoại, email nếu có) trước khi gửi tạo nhanh NCC.
         function validateSupplierFields(payload) {
             Object.values(fields).forEach(clearFieldError);
 
-            if (!payload.name || !payload.taxCode || !payload.phone || !payload.email || !payload.address) {
+            if (!payload.name || !payload.taxCode || !payload.phone || !payload.address) {
                 showError('Vui lòng điền đầy đủ các trường bắt buộc');
                 return false;
             }
@@ -1612,7 +1583,7 @@
                 fields.phone.focus();
                 return false;
             }
-            if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(payload.email)) {
+            if (payload.email && !/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(payload.email)) {
                 showFieldError(fields.email, fieldMessages.email);
                 fields.email.focus();
                 return false;

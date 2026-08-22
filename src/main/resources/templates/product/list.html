@@ -66,7 +66,7 @@
             box-shadow: 0 1px 2px rgba(146, 64, 14, .08);
             text-align: left;
             transition: background-color .15s ease, border-color .15s ease,
-                        box-shadow .15s ease, transform .15s ease;
+            box-shadow .15s ease, transform .15s ease;
         }
 
         .btn-restock-plan:hover {
@@ -276,7 +276,12 @@
                 <h1 class="fs-4 mb-1">Danh sách hàng hóa</h1>
                 <p class="text-secondary mb-0">Quản lý thông tin và tồn kho hàng hóa của nhà thuốc</p>
             </div>
-            <div th:if="${basePath == '/owner/products'}" class="product-header-actions">
+            <div class="product-header-actions">
+                <button type="button"
+                        id="openBarcodeModalBtn"
+                        class="btn btn-outline-primary d-inline-flex align-items-center justify-content-center px-3">
+                    <i class="ti ti-barcode me-1"></i> In tem mã
+                </button>
                 <button th:if="${!#lists.isEmpty(restockProducts)}"
                         type="button"
                         id="openRestockModalBtn"
@@ -293,7 +298,8 @@
                         </span>
                     </span>
                 </button>
-                <a th:href="@{/owner/products/create}"
+                <a th:if="${basePath == '/owner/products'}"
+                   th:href="@{/owner/products/create}"
                    class="btn btn-stock-primary product-create-button d-inline-flex align-items-center justify-content-center px-3">
                     <i class="ti ti-plus me-1"></i> Tạo hàng hóa
                 </a>
@@ -556,6 +562,9 @@
 
     </div>
 </main>
+
+<!-- Modal lập danh sách tem: tìm sản phẩm hoặc thêm theo hóa đơn nhập. -->
+<th:block th:replace="~{product/barcode-modal :: barcodeModal(${basePath})}"></th:block>
 
 <div id="restockProductModal"
      class="restock-modal-overlay"

@@ -74,6 +74,11 @@
 
     .table thead th { font-size: 12px; color: var(--sup-muted); font-weight: 600; background: #f9fafb; white-space: nowrap; }
     .table tbody td { font-size: 13px; vertical-align: middle; }
+
+    /* nút Xem: hover nền xanh + chữ trắng (đồng bộ với màn chi tiết nhà cung cấp) */
+    .btn-outline-success:hover, .btn-outline-success:active { color: #fff !important; }
+    .debt-amount { color: #d97706; font-weight: 600; }
+    .badge-paid { background: #dcfce7; color: #166534; font-size: 11px; }
   </style>
 </head>
 
@@ -96,8 +101,9 @@
 
     <div class="row g-4">
 
-      <!-- Thông tin khách hàng (read-only) -->
-      <div class="col-12">
+      <!-- Thông tin khách hàng (read-only) — ẩn khi form cập nhật đang mở, xem JS cuối trang. -->
+      <div class="col-12" id="infoSection"
+           th:style="${showEditForm} ? 'display:none;' : ''">
         <div class="sup-card p-4 p-md-5">
 
           <!-- Header: tên/mã/loại (trái) + nút (phải) -->
@@ -109,7 +115,7 @@
               <span th:unless="${customer.customerType == 'COMPANY'}" class="type-badge individual">Cá nhân</span>
             </div>
             <div class="d-flex flex-wrap gap-2">
-              <button th:if="${currentRole != 'ACCOUNTANT'}" type="button" class="btn btn-sup-primary px-3" id="btnToggleEdit">
+              <button th:if="${currentRole == 'OWNER'}" type="button" class="btn btn-sup-primary px-3" id="btnToggleEdit">
                 <i class="ti ti-edit"></i>Cập nhật thông tin
               </button>
               <a th:href="@{/customer}" class="btn btn-sup-outline px-3">
@@ -173,7 +179,7 @@
     </div>
 
     <!-- Form chỉnh sửa (ẩn, mở bằng nút "Cập nhật thông tin") -->
-    <div th:if="${currentRole != 'ACCOUNTANT'}" class="sup-card p-4 p-md-5 mt-4" id="editForm"
+    <div th:if="${currentRole == 'OWNER'}" class="sup-card p-4 p-md-5 mt-4" id="editForm"
          th:style="${showEditForm} ? 'display:block;' : 'display:none;'">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fs-6 mb-0">Cập nhật thông tin khách hàng</h2>
@@ -209,7 +215,7 @@
                  th:field="*{name}"
                  th:classappend="${#fields.hasErrors('name')} ? ' is-invalid'"
                  required
-                 placeholder="Nhập tên khách hàng">
+                >
           <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
         </div>
 
@@ -227,7 +233,7 @@
                    pattern="0(2|3|5|7|8|9)[0-9]{8}"
                    title="10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08 hoặc 09"
                    required
-                   placeholder="0900000000">
+                  >
             <div class="invalid-feedback" th:if="${#fields.hasErrors('phoneNumber')}" th:errors="*{phoneNumber}"></div>
           </div>
           <div class="col-12 col-md-6">
@@ -241,7 +247,7 @@
                    th:attr="data-unique-id=${customer.id}"
                    data-unique-message="Mã số thuế / CCCD này đã thuộc về một khách hàng khác"
                    required
-                   th:field="*{taxCode}" maxlength="100" placeholder="Nhập mã số thuế">
+                   th:field="*{taxCode}" maxlength="100">
           </div>
         </div>
 
@@ -249,7 +255,7 @@
           <label for="editAddress" class="form-label">Địa chỉ <span class="text-danger">*</span></label>
           <input id="editAddress" type="text" class="form-control"
                  required
-                 th:field="*{address}" maxlength="100" placeholder="Nhập địa chỉ khách hàng">
+                 th:field="*{address}" maxlength="100">
         </div>
 
         <div class="row g-3 mb-3 company-field">
@@ -258,13 +264,13 @@
               <span class="text-danger">*</span></label>
             <input id="editBankAcc" type="text" class="form-control"
                    inputmode="numeric" data-digits
-                   th:field="*{bankAccountNumber}" maxlength="100" placeholder="Nhập số tài khoản">
+                   th:field="*{bankAccountNumber}" maxlength="100">
           </div>
           <div class="col-12 col-md-6">
             <label for="editBankName" class="form-label">Tên ngân hàng
               <span class="text-danger">*</span></label>
             <input id="editBankName" type="text" class="form-control"
-                   th:field="*{bankName}" maxlength="100" placeholder="Nhập tên ngân hàng">
+                   th:field="*{bankName}" maxlength="100">
           </div>
         </div>
 
@@ -287,10 +293,13 @@
 
     <!-- Lịch sử mua hàng gần đây -->
     <div class="sup-card p-4 p-md-5 mt-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fs-6 mb-0">Lịch sử mua hàng gần đây</h2>
+      <div class="d-flex justify-content-between align-items-start mb-3 gap-2 flex-wrap">
+        <div>
+          <h2 class="fs-6 mb-1">Lịch sử mua hàng</h2>
+          <small class="text-secondary">Toàn bộ hóa đơn của khách, mới nhất trước. Bấm "Xem" để mở hóa đơn.</small>
+        </div>
         <span class="badge bg-light text-dark border"
-              th:text="${(recentInvoices != null ? recentInvoices.size() : 0) + ' hóa đơn'}">0 hóa đơn</span>
+              th:text="${(invoiceHistory != null ? invoiceHistory.size() : 0) + ' hóa đơn'}">0 hóa đơn</span>
       </div>
 
       <div class="table-responsive">
@@ -300,27 +309,55 @@
               <th>Mã hóa đơn</th>
               <th>Ngày</th>
               <th class="text-end">Tổng tiền</th>
+              <th class="text-end">Đã trả</th>
+              <th class="text-end">Còn nợ</th>
+              <th class="text-end">Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            <tr th:each="inv : ${recentInvoices}">
-              <td class="fw-semibold text-secondary small" th:text="${inv.invoiceCode}">HD-000001</td>
+          <tbody id="invoiceHistoryBody">
+            <tr th:each="inv : ${invoiceHistory}" class="inv-row">
+              <td class="fw-semibold text-secondary small" th:text="${inv.invoiceCode}">00000001</td>
               <td th:text="${inv.date}">01/01/2026 10:00</td>
               <td class="text-end">
                 <span th:if="${inv.total != null}"
                       th:text="${#numbers.formatInteger(inv.total, 1, 'COMMA') + ' ₫'}">0 ₫</span>
                 <span th:unless="${inv.total != null}" class="text-secondary">—</span>
               </td>
+              <!-- Hóa đơn đã trả đủ thì để "—": cặp Đã trả/Còn nợ chỉ có ý nghĩa khi còn nợ. -->
+              <td class="text-end">
+                <span th:if="${inv.hasDebt}"
+                      th:text="${#numbers.formatInteger(inv.paid, 1, 'COMMA') + ' ₫'}">0 ₫</span>
+                <span th:unless="${inv.hasDebt}" class="text-secondary">—</span>
+              </td>
+              <td class="text-end">
+                <span th:if="${inv.hasDebt}" class="debt-amount"
+                      th:text="${#numbers.formatInteger(inv.debtAmount, 1, 'COMMA') + ' ₫'}">0 ₫</span>
+                <span th:unless="${inv.hasDebt}" class="badge badge-paid rounded-pill">Đã thanh toán</span>
+              </td>
+              <td class="text-end">
+                <a th:if="${invoiceBasePath != null}"
+                   th:href="@{{base}/{id}(base=${invoiceBasePath}, id=${inv.id})}"
+                   class="btn btn-sm btn-outline-success" title="Xem chi tiết hóa đơn">Xem</a>
+                <span th:unless="${invoiceBasePath != null}" class="text-secondary">—</span>
+              </td>
             </tr>
 
-            <tr th:if="${recentInvoices == null or #lists.isEmpty(recentInvoices)}">
-              <td colspan="3" class="text-center text-secondary py-5">
+            <tr th:if="${invoiceHistory == null or #lists.isEmpty(invoiceHistory)}">
+              <td colspan="6" class="text-center text-secondary py-5">
                 <i class="ti ti-receipt-off d-block fs-2 mb-2 text-muted"></i>
                 Khách hàng chưa có hóa đơn mua hàng nào.
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3"
+           id="invoicePagerWrap">
+        <span class="text-secondary small" id="invoicePageInfo"></span>
+        <nav>
+          <ul class="pagination pagination-sm mb-0" id="invoicePagination"></ul>
+        </nav>
       </div>
     </div>
 
@@ -331,14 +368,25 @@
   (function () {
     var editForm = document.getElementById('editForm');
     var editFormEl = document.getElementById('editFormEl');
+    var infoSection = document.getElementById('infoSection');
     var btnToggle = document.getElementById('btnToggleEdit');
     var btnClose  = document.getElementById('btnCloseEdit');
 
+    // Vai trò không được sửa thì cả khối form không được render — thoát sớm, không thì mọi dòng
+    // bên dưới ném lỗi trên null và chết cả khối script này.
+    if (!editForm || !editFormEl) return;
+
+    // Ẩn hẳn khối thông tin khi sửa: để nguyên thì form nằm giữa trang, còn thông báo lỗi của server
+    // (vd sai định dạng CCCD) hiện ở đầu trang — người dùng không nhìn thấy nếu không cuộn lên.
     function openEdit() {
+      if (infoSection) infoSection.style.display = 'none';
       editForm.style.display = 'block';
-      editForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    function closeEdit() { editForm.style.display = 'none'; }
+    function closeEdit() {
+      editForm.style.display = 'none';
+      if (infoSection) infoSection.style.display = '';
+    }
 
     if (btnToggle) btnToggle.addEventListener('click', openEdit);
     if (btnClose)  btnClose.addEventListener('click', closeEdit);
@@ -348,7 +396,6 @@
     var optIndividual = document.getElementById('optIndividual');
     var optCompany = document.getElementById('optCompany');
     var editTaxLabel = document.getElementById('editTaxLabel');
-    var editTaxInput = document.getElementById('editTax');
     // Xem chú thích ở customer/create.html: ẩn khối ngân hàng thì phải gỡ luôn `required`.
     var bankInputs = [document.getElementById('editBankAcc'), document.getElementById('editBankName')];
 
@@ -363,7 +410,6 @@
       if (optCompany) optCompany.classList.toggle('active', isCompany);
       // taxCode dùng cho cả 2 loại: doanh nghiệp = Mã số thuế, cá nhân = số CCCD/CMND.
       if (editTaxLabel) { editTaxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND'; }
-      if (editTaxInput) { editTaxInput.setAttribute('placeholder', isCompany ? 'Nhập mã số thuế' : 'Nhập số CCCD/CMND'); }
       // Mã định danh + địa chỉ bắt buộc với cả 2 loại — xem chú thích ở customer/create.html.
       bankInputs.forEach(function (input) {
         if (!input) return;
@@ -375,10 +421,72 @@
     });
     applyType();
 
-    // Nếu form mở sẵn do lỗi validate → cuộn tới
-    if (editForm && editForm.style.display === 'block') {
-      editForm.scrollIntoView({ block: 'start' });
+    // Form mở sẵn do lỗi validate: KHÔNG cuộn tới form — khối thông tin đã ẩn nên form vốn ở đầu
+    // trang, cuộn thêm là đẩy chính thông báo lỗi ra khỏi tầm nhìn (đúng lỗi cần sửa).
+  })();
+</script>
+
+<!-- Phân trang lịch sử mua hàng. ĐỂ RIÊNG một khối script: khối trên thoát sớm với vai trò không
+     được sửa khách hàng, gộp vào đó là Dược sĩ/Kế toán mất phân trang. -->
+<script>
+  (function () {
+    var PAGE_SIZE = 10;
+    var body       = document.getElementById('invoiceHistoryBody');
+    var pageInfo   = document.getElementById('invoicePageInfo');
+    var pagination = document.getElementById('invoicePagination');
+    var wrap       = document.getElementById('invoicePagerWrap');
+    if (!body || !pageInfo || !pagination || !wrap) return;
+
+    var rows = Array.prototype.slice.call(body.querySelectorAll('tr.inv-row'));
+    var currentPage = 1;
+
+    // Không có hóa đơn nào thì dòng trống của bảng đã nói đủ, ẩn hẳn thanh phân trang.
+    if (rows.length === 0) { wrap.style.display = 'none'; return; }
+
+    function render() {
+      var total = rows.length;
+      var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (currentPage > pages) currentPage = pages;
+
+      var start = (currentPage - 1) * PAGE_SIZE;
+      var end   = start + PAGE_SIZE;
+      rows.forEach(function (r, i) { r.style.display = (i >= start && i < end) ? '' : 'none'; });
+
+      pageInfo.textContent = 'Hiển thị ' + (start + 1) + '–' + Math.min(end, total) + ' / ' + total + ' hóa đơn';
+      renderPagination(pages);
     }
+
+    function renderPagination(pages) {
+      pagination.innerHTML = '';
+      if (pages <= 1) return;
+
+      function pageItem(label, page, disabled, active) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        var a = document.createElement('a');
+        a.className = 'page-link'; a.href = '#'; a.innerHTML = label;
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (disabled || active) return;
+          currentPage = page;
+          render();
+        });
+        li.appendChild(a);
+        return li;
+      }
+
+      pagination.appendChild(pageItem('&laquo;', currentPage - 1, currentPage === 1, false));
+      // cửa sổ tối đa 5 số trang quanh trang hiện tại
+      var from = Math.max(1, currentPage - 2);
+      var to   = Math.min(pages, from + 4);
+      from = Math.max(1, to - 4);
+      for (var p = from; p <= to; p++) {
+        pagination.appendChild(pageItem(String(p), p, false, p === currentPage));
+      }
+      pagination.appendChild(pageItem('&raquo;', currentPage + 1, currentPage === pages, false));
+    }
+
+    render();
   })();
 </script>
 

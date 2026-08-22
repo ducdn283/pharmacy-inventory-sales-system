@@ -19,10 +19,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.Map;
 
 /**
- * Shared Customer module: Owner and Pharmacist get full create/edit rights, Accountant is
- * view-only (per the PHÂN QUYỀN MÀN HÌNH matrix). Since all 3 roles share this one
- * {@code /customer/**} path (no role-prefixed variants), the view-only restriction is enforced
- * here with {@link #requireCanManage()} rather than at the route level.
+ * Module Khách hàng dùng chung: Owner toàn quyền; Dược sĩ chỉ được TẠO khách mới (lúc bán hàng);
+ * Kế toán chỉ xem. Cả 3 role dùng chung một đường dẫn {@code /customer/**} (không tách theo role),
+ * nên giới hạn quyền ghi được chặn ở đây bằng {@link #requireCanCreate()}/{@link #requireCanEdit()}
+ * thay vì ở tầng route.
  */
 @Controller
 @RequestMapping("/customer")
@@ -36,13 +36,24 @@ public class CustomerController {
         this.currentUserContext = currentUserContext;
     }
 
-    private void requireCanManage() {
+    /** Tạo khách mới: Owner hoặc Dược sĩ — Dược sĩ cần tạo khách ngay tại quầy khi bán hàng. */
+    private void requireCanCreate() {
         if (RoleConstants.ACCOUNTANT.equals(currentUserContext.getCurrentRole())) {
             throw new AccessDeniedException("Kế toán chỉ được xem khách hàng, không được tạo/sửa");
         }
     }
 
-    // ------------------------------------------------------------------ list
+    /**
+     * Sửa khách đã có: chỉ Owner. Tách khỏi quyền tạo vì thông tin định danh khách (CCCD/MST, tên,
+     * địa chỉ) là căn cứ xuất hóa đơn — sửa sai làm sai luôn các hóa đơn đã phát hành cho khách đó.
+     */
+    private void requireCanEdit() {
+        if (!RoleConstants.OWNER.equals(currentUserContext.getCurrentRole())) {
+            throw new AccessDeniedException("Chỉ Chủ nhà thuốc được sửa thông tin khách hàng");
+        }
+    }
+
+    // ------------------------------------------------------------------ danh sách
 
     @GetMapping
     public String list(@RequestParam(name = "keyword", required = false) String keyword,
@@ -74,11 +85,11 @@ public class CustomerController {
         return "customer/list";
     }
 
-    // ------------------------------------------------------------------ create
+    // ------------------------------------------------------------------ tạo
 
     @GetMapping("/create")
     public String createForm(Model model) {
-        requireCanManage();
+        requireCanCreate();
         if (!model.containsAttribute("form")) {
             model.addAttribute("form", new CustomerRequest());
         }
@@ -92,7 +103,7 @@ public class CustomerController {
                          @RequestParam(name = "action", defaultValue = "create") String action,
                          Model model,
                          RedirectAttributes redirectAttributes) {
-        requireCanManage();
+        requireCanCreate();
         if (bindingResult.hasErrors()) {
             model.addAttribute("pageTitle", "Tạo khách hàng");
             return "customer/create";
@@ -130,7 +141,7 @@ public class CustomerController {
     public Map<String, Boolean> checkDuplicate(@RequestParam("field") String field,
                                                @RequestParam("value") String value,
                                                @RequestParam(name = "id", required = false) Integer id) {
-        requireCanManage();
+        requireCanCreate();
         boolean duplicate = switch (field) {
             case "phoneNumber" -> customerService.isPhoneTaken(value, id);
             case "taxCode" -> customerService.isTaxCodeTaken(value, id);
@@ -139,7 +150,7 @@ public class CustomerController {
         return Map.of("duplicate", duplicate);
     }
 
-    // ------------------------------------------------------------------ detail / update
+    // ------------------------------------------------------------------ chi tiết / sửa
 
     @GetMapping("/{id}")
     public String detail(@PathVariable Integer id, Model model,
@@ -158,8 +169,9 @@ public class CustomerController {
             model.addAttribute("form", toForm(customer));
         }
 
-        model.addAttribute("recentInvoices", customerService.getRecentInvoices(id));
+        model.addAttribute("invoiceHistory", customerService.getInvoiceHistory(id));
         model.addAttribute("totalDebt", customerService.getTotalDebt(id));
+        model.addAttribute("invoiceBasePath", invoiceBasePath());
         model.addAttribute("pageTitle", "Chi tiết khách hàng");
         return "customer/detail";
     }
@@ -170,7 +182,7 @@ public class CustomerController {
                          BindingResult bindingResult,
                          Model model,
                          RedirectAttributes redirectAttributes) {
-        requireCanManage();
+        requireCanEdit();
         if (bindingResult.hasErrors()) {
             populateDetail(model, id);
             model.addAttribute("showEditForm", true);
@@ -190,13 +202,24 @@ public class CustomerController {
         return "redirect:/customer/" + id;
     }
 
-    // ------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------ hàm phụ trợ
 
     private void populateDetail(Model model, Integer id) {
         model.addAttribute("customer", customerService.getById(id));
-        model.addAttribute("recentInvoices", customerService.getRecentInvoices(id));
+        model.addAttribute("invoiceHistory", customerService.getInvoiceHistory(id));
         model.addAttribute("totalDebt", customerService.getTotalDebt(id));
+        model.addAttribute("invoiceBasePath", invoiceBasePath());
         model.addAttribute("pageTitle", "Chi tiết khách hàng");
+    }
+
+    /**
+     * Đường dẫn màn chi tiết hóa đơn theo vai trò đang đăng nhập — cả 3 role đều có màn này
+     * ({@code /owner|pharmacist|accountant/invoices/{id}}), nhưng mỗi role chỉ vào được nhánh của
+     * mình nên không được viết cứng một nhánh.
+     */
+    private String invoiceBasePath() {
+        String role = currentUserContext.getCurrentRole();
+        return RoleConstants.isValid(role) ? "/" + RoleConstants.urlPrefix(role) + "/invoices" : null;
     }
 
     private CustomerRequest toForm(CustomerResponse customer) {
