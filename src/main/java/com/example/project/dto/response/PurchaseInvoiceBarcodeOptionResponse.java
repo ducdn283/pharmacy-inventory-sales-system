@@ -2,41 +2,22 @@ package com.example.project.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 /**
- * Dữ liệu hóa đơn nhập dùng trong chức năng
- * "Thêm theo hóa đơn nhập" của modal in barcode.
+ * Thông tin hóa đơn nhập được hiển thị trong modal
+ * khi người dùng chọn thêm sản phẩm theo hóa đơn.
  */
 @Getter
-@Setter
-@NoArgsConstructor
 @AllArgsConstructor
 public class PurchaseInvoiceBarcodeOptionResponse {
 
-    /**
-     * Khóa chính của hóa đơn nhập.
-     */
-    private Integer purchaseId;
+    private final Integer purchaseId;
 
-    /**
-     * Mã hóa đơn nhập.
-     */
-    private String purchaseInvoiceCode;
+    private final String purchaseInvoiceCode;
 
-    /**
-     * Ngày tạo hóa đơn đã được định dạng để hiển thị.
-     */
-    private String dateDisplay;
+    private final String dateDisplay;
 
-    /**
-     * Tên nhà cung cấp.
-     */
-    private String supplierName;
+    private final String supplierName;
 
-    /**
-     * Trạng thái hiện tại của hóa đơn nhập.
-     */
-    private String status;
+    private final String status;
 }

@@ -2,50 +2,34 @@ package com.example.project.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 
 /**
- * Dữ liệu sản phẩm trả về cho chức năng tìm kiếm và chọn sản phẩm
- * trong modal in barcode.
+ * Sản phẩm được hiển thị trong kết quả tìm kiếm
+ * và danh sách chọn in barcode.
  */
 @Getter
-@Setter
-@NoArgsConstructor
 @AllArgsConstructor
 public class ProductBarcodeOptionResponse {
 
-    /**
-     * Khóa chính của sản phẩm.
-     */
-    private Integer productId;
+    private final Integer productId;
 
     /**
-     * Mã hàng hóa nội bộ, ví dụ: SP001.
+     * Nội dung dùng để sinh barcode Code 128.
+     * Giá trị lấy trực tiếp từ Product.code.
      */
-    private String code;
+    private final String code;
+
+    private final String name;
+
+    private final String unitName;
+
+    private final BigDecimal sellPrice;
 
     /**
-     * Tên sản phẩm.
+     * Số lượng tem mặc định.
+     * Khi thêm từ hóa đơn nhập, giá trị này là số lượng thực nhập.
      */
-    private String name;
-
-    /**
-     * Mã barcode đang được lưu trong Product.
-     */
-    private String barcode;
-
-    /**
-     * Tên đơn vị bán mặc định.
-     *
-     * Nếu sản phẩm không có đơn vị mặc định thì sử dụng đơn vị cơ bản.
-     */
-    private String unitName;
-
-    /**
-     * Giá bán của đơn vị được chọn để hiển thị trên tem.
-     */
-    private BigDecimal sellPrice;
+    private final Integer quantity;
 }
