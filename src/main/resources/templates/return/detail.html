@@ -269,12 +269,13 @@
                                     th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</td>
                                 <td></td>
                             </tr>
+                            <!-- cashRefundDue là số CÒN phải chi (đã trừ phiếu chi đã xử lý), không phải số
+                                 đã hoàn. Chi xong thì nó về 0, mà hiện "0đ" ở đây người đọc hiểu thành "hoàn
+                                 cho khách 0đ" ⇒ ẨN hẳn dòng khi không còn gì phải chi. -->
                             <tr class="fw-semibold"
-                                th:if="${detail.offsetDebtAmount != null and detail.offsetDebtAmount.signum() > 0}">
-                                <td colspan="8"
-                                    th:text="${detail.settled} ? 'Đã hoàn khách (tiền thật)'
-                                            : 'Còn phải hoàn khách (tiền thật)'">Còn phải hoàn khách (tiền thật)</td>
-                                <td th:classappend="${detail.settled} ? 'text-success' : 'text-warning'"
+                                th:if="${detail.cashRefundDue != null and detail.cashRefundDue.signum() > 0}">
+                                <td colspan="8">Còn phải hoàn khách (tiền thật)</td>
+                                <td class="text-warning"
                                     th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</td>
                                 <td></td>
                             </tr>
@@ -338,12 +339,11 @@
                                   th:text="${'−' + #numbers.formatDecimal(detail.offsetDebtAmount, 0, 'POINT', 0, 'COMMA') + 'đ'}">−50.000đ</span>
                         </div>
 
-                        <div class="d-flex justify-content-between mt-2">
-                            <span class="text-secondary"
-                                  th:text="${detail.settled} ? 'Đã hoàn khách (tiền thật)'
-                                          : 'Còn phải hoàn khách (tiền thật)'">Còn phải hoàn khách (tiền thật)</span>
-                            <strong th:classappend="${detail.settled} ? 'text-success' : ''"
-                                    th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
+                        <!-- Xem giải thích ở bảng hàng: chỉ hiện khi còn tiền phải chi. -->
+                        <div class="d-flex justify-content-between mt-2"
+                             th:if="${detail.cashRefundDue != null and detail.cashRefundDue.signum() > 0}">
+                            <span class="text-secondary">Còn phải hoàn khách (tiền thật)</span>
+                            <strong th:text="${#numbers.formatDecimal(detail.cashRefundDue, 0, 'POINT', 0, 'COMMA') + 'đ'}">70.000đ</strong>
                         </div>
 
                         <!-- Phiếu trả KHÔNG còn kê thuế. Hộ kinh doanh tính GTGT bằng doanh thu × tỷ lệ %
