@@ -321,6 +321,11 @@ public class ProcurementplanController {
         return error.getDefaultMessage();
     }
 
+
+    /**
+     * Chuẩn bị các dòng chi tiết ban đầu để template render lại form tạo/cập nhật dự trù.
+     * Bỏ qua các dòng chưa có sản phẩm và trả về danh sách rỗng khi form chưa có chi tiết.
+     */
     private List<ProcurementPlanDetailRowView> buildInitialDetailRows(ProcurementPlanCreateRequest form) {
         if (form == null || form.getDetails() == null) {
             return List.of();
