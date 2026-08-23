@@ -1522,7 +1522,7 @@
         return Number(value || 0).toLocaleString('vi-VN');
     }
 
-    /** Parses a dot-separated money input back to its raw numeric value. */
+    /** ko cho nhập số âm và thập phân( loại bỏ mọi ký tự không phải chữ số (0–9)) */
     function parseMoney(input) {
         if (!input || !input.value) return 0;
         const num = Number(String(input.value).replace(/\./g, ''));
