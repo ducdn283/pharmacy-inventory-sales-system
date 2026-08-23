@@ -644,6 +644,8 @@
         .estimated-total-input {
             font-weight: 700;
             font-size: 13px;
+            background-color: #f1f5f9;
+            cursor: not-allowed;
         }
 
         .money-input-wrap {
@@ -1718,13 +1720,8 @@
                         <input type="text" inputmode="numeric"
                                class="field-input price-input estimated-total-input"
                                data-field="estimatedPrice" value="${formatMoneyInput(lineTotalValue)}" placeholder="0"
-                               oninput="handleEstimatedInput(this)">
-                        <div class="money-stepper">
-                            <button type="button" class="money-step-btn step-up"
-                                    onclick="stepRowPrice(this, 1000)"><i class="ti ti-chevron-up"></i></button>
-                            <button type="button" class="money-step-btn step-down"
-                                    onclick="stepRowPrice(this, -1000)"><i class="ti ti-chevron-down"></i></button>
-                        </div>
+                               readonly aria-readonly="true"
+                               title="Giá ước tính được tự động tính từ giá từng đơn vị và số lượng">
                     </div>
                 </div>
                 <div class="quantity-stock-warning d-none"></div>
