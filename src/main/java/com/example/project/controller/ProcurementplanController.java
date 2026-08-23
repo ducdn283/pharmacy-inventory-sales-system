@@ -178,6 +178,9 @@ public class ProcurementplanController {
         String basePath = resolveBasePath(request);
 
         if (bindingResult.hasErrors()) {
+            model.addAttribute("validationMessages", bindingResult.getAllErrors().stream()
+                    .map(error -> error.getDefaultMessage())
+                    .toList());
             addFormPageData(request, model);
             model.addAttribute("pageTitle", "Tạo dự trù mua hàng");
             return "procurement-plan/create-procurementplan";
@@ -236,6 +239,9 @@ public class ProcurementplanController {
         String basePath = resolveBasePath(request);
 
         if (bindingResult.hasErrors()) {
+            model.addAttribute("validationMessages", bindingResult.getAllErrors().stream()
+                    .map(error -> error.getDefaultMessage())
+                    .toList());
             model.addAttribute("procurementPlan", procurementplanService.getById(id));
             model.addAttribute("viewOnly", procurementplanService.isCompleted(id));
             addFormPageData(request, model);

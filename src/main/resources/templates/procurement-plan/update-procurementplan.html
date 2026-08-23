@@ -913,6 +913,9 @@
               th:method="${viewOnly ? 'get' : 'post'}"
               novalidate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div th:if="${validationMessages != null and !validationMessages.isEmpty()}" class="alert alert-danger" role="alert">
+                <div th:each="message : ${validationMessages}" th:text="${message}"></div>
+            </div>
             <div class="procurement-top-bar owner-card">
                 <div class="procurement-top-bar-inner">
                     <div class="procurement-top-section procurement-top-summary">

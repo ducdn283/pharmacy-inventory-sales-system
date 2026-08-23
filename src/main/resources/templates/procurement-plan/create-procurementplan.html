@@ -1067,6 +1067,9 @@
               th:object="${procurementPlanForm}"
               method="post"
               novalidate>
+            <div th:if="${validationMessages != null and !validationMessages.isEmpty()}" class="alert alert-danger" role="alert">
+                <div th:each="message : ${validationMessages}" th:text="${message}"></div>
+            </div>
             <div class="procurement-top-bar owner-card">
                 <div class="procurement-top-bar-inner">
                     <div class="procurement-top-section procurement-top-summary">
