@@ -396,6 +396,7 @@
     var optIndividual = document.getElementById('optIndividual');
     var optCompany = document.getElementById('optCompany');
     var editTaxLabel = document.getElementById('editTaxLabel');
+    var editTaxInput = document.getElementById('editTax');
     // Xem chú thích ở customer/create.html: ẩn khối ngân hàng thì phải gỡ luôn `required`.
     var bankInputs = [document.getElementById('editBankAcc'), document.getElementById('editBankName')];
 
@@ -410,6 +411,13 @@
       if (optCompany) optCompany.classList.toggle('active', isCompany);
       // taxCode dùng cho cả 2 loại: doanh nghiệp = Mã số thuế, cá nhân = số CCCD/CMND.
       if (editTaxLabel) { editTaxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND'; }
+      // Đổi luôn định dạng theo loại khách — xem chú thích ở customer/create.html.
+      if (editTaxInput) {
+        editTaxInput.setAttribute('pattern', isCompany ? '[0-9]{10}(-[0-9]{3})?' : '[0-9]{9}|[0-9]{12}');
+        editTaxInput.setAttribute('title', isCompany
+          ? 'Mã số thuế gồm 10 chữ số, hoặc 10 chữ số kèm "-" và 3 chữ số chi nhánh'
+          : 'Số CCCD/CMND phải gồm 12 chữ số (CCCD) hoặc 9 chữ số (CMND)');
+      }
       // Mã định danh + địa chỉ bắt buộc với cả 2 loại — xem chú thích ở customer/create.html.
       bankInputs.forEach(function (input) {
         if (!input) return;

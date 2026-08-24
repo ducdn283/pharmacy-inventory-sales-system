@@ -463,7 +463,12 @@
                             Không thể cập nhật mật khẩu.
                         </div>
 
-                        <form method="post" th:action="@{/change-password}" novalidate>
+                        <!-- data-validate: dùng fragments/field-validation, thay vì
+                             bong bóng mặc định của trình duyệt (chữ theo ngôn ngữ máy, mỗi lần chỉ báo
+                             một ô). fragment tự tắt validate mặc định bằng
+                             JS, để JS lỗi thì trình duyệt vẫn còn chặn giúp.
+                             Form "Thông tin cá nhân" phía trên KHÔNG có data-validate nên không bị đụng tới. -->
+                        <form method="post" th:action="@{/change-password}" data-validate>
                             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
                             <div class="mb-3">
@@ -585,6 +590,9 @@
         });
     })();
 </script>
+
+<!-- Chỉ tác dụng lên form có data-validate (form đổi mật khẩu), các form khác của trang giữ nguyên. -->
+<div th:replace="~{fragments/field-validation :: fieldValidation}"></div>
 
 </body>
 </html>

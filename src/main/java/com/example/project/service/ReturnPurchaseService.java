@@ -136,7 +136,7 @@ public class ReturnPurchaseService {
 
     /**
      * Số tiền NCC chấp nhận hoàn cho phiếu đang lập — người lập gõ thẳng, KHÔNG suy ra từ tỷ lệ %
-     * (BA chốt 13/08/2026, xem {@code ReturnPurchaseCreateRequest#getRefundAmount}).
+     * (xem {@code ReturnPurchaseCreateRequest#getRefundAmount}).
      *
      * <p>Bắt buộc nhập: cố ý không mặc định về "hoàn đủ" khi bỏ trống. Đây là con số tiền thật do
      * NCC báo lại, tự điền hộ một giá trị là ghi vào phiếu một khoản không ai xác nhận.</p>
