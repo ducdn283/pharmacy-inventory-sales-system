@@ -644,6 +644,8 @@
         .estimated-total-input {
             font-weight: 700;
             font-size: 13px;
+            background-color: #f1f5f9;
+            cursor: not-allowed;
         }
 
         .money-input-wrap {
@@ -913,6 +915,9 @@
               th:method="${viewOnly ? 'get' : 'post'}"
               novalidate>
             <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div th:if="${validationMessages != null and !validationMessages.isEmpty()}" class="alert alert-danger" role="alert">
+                <div th:each="message : ${validationMessages}" th:text="${message}"></div>
+            </div>
             <div class="procurement-top-bar owner-card">
                 <div class="procurement-top-bar-inner">
                     <div class="procurement-top-section procurement-top-summary">
@@ -1054,7 +1059,7 @@
         return Number(value || 0).toLocaleString('vi-VN');
     }
 
-    /** Parses a dot-separated money input back to its raw numeric value. */
+    /** ko cho nhập số âm và thập phân( loại bỏ mọi ký tự không phải chữ số (0–9)) */
     function parseMoney(input) {
         if (!input || !input.value) return 0;
         const num = Number(String(input.value).replace(/\./g, ''));
@@ -1682,7 +1687,7 @@
                     <span class="stock-unit-display">${escapeHtml(stockUnit || '—')}</span>
                 </div>
                 <div class="qty-cell">
-                    <input type="number" min="1" class="field-input quantity-input"
+                    <input type="number" min="1" step="1" class="field-input quantity-input"
                            data-field="requestedQuantity" value="${quantity}"
                            oninput="handleQuantityInput(this)">
                 </div>
@@ -1715,13 +1720,8 @@
                         <input type="text" inputmode="numeric"
                                class="field-input price-input estimated-total-input"
                                data-field="estimatedPrice" value="${formatMoneyInput(lineTotalValue)}" placeholder="0"
-                               oninput="handleEstimatedInput(this)">
-                        <div class="money-stepper">
-                            <button type="button" class="money-step-btn step-up"
-                                    onclick="stepRowPrice(this, 1000)"><i class="ti ti-chevron-up"></i></button>
-                            <button type="button" class="money-step-btn step-down"
-                                    onclick="stepRowPrice(this, -1000)"><i class="ti ti-chevron-down"></i></button>
-                        </div>
+                               readonly aria-readonly="true"
+                               title="Giá ước tính được tự động tính từ giá từng đơn vị và số lượng">
                     </div>
                 </div>
                 <div class="quantity-stock-warning d-none"></div>
@@ -2232,6 +2232,7 @@
 </script>
 
 <div th:replace="~{fragments/confirm :: confirm}"></div>
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
 </html>

@@ -21,6 +21,8 @@ import org.springframework.beans.propertyeditors.CustomNumberEditor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.InitBinder;
@@ -178,6 +180,9 @@ public class ProcurementplanController {
         String basePath = resolveBasePath(request);
 
         if (bindingResult.hasErrors()) {
+            model.addAttribute("validationMessages", bindingResult.getAllErrors().stream()
+                    .map(this::resolveValidationMessage)
+                    .toList());
             addFormPageData(request, model);
             model.addAttribute("pageTitle", "Tạo dự trù mua hàng");
             return "procurement-plan/create-procurementplan";
@@ -236,6 +241,9 @@ public class ProcurementplanController {
         String basePath = resolveBasePath(request);
 
         if (bindingResult.hasErrors()) {
+            model.addAttribute("validationMessages", bindingResult.getAllErrors().stream()
+                    .map(this::resolveValidationMessage)
+                    .toList());
             model.addAttribute("procurementPlan", procurementplanService.getById(id));
             model.addAttribute("viewOnly", procurementplanService.isCompleted(id));
             addFormPageData(request, model);
@@ -304,6 +312,20 @@ public class ProcurementplanController {
     }
 
     /** Chuyển {@code procurementPlanForm.details} sang view hiển thị lại các dòng trên form. */
+    private String resolveValidationMessage(ObjectError error) {
+        if (error instanceof FieldError fieldError
+                && fieldError.isBindingFailure()
+                && fieldError.getField().matches("details\\[\\d+\\]\\.requestedQuantity")) {
+            return "Số lượng dự trù phải là số nguyên.";
+        }
+        return error.getDefaultMessage();
+    }
+
+
+    /**
+     * Chuẩn bị các dòng chi tiết ban đầu để template render lại form tạo/cập nhật dự trù.
+     * Bỏ qua các dòng chưa có sản phẩm và trả về danh sách rỗng khi form chưa có chi tiết.
+     */
     private List<ProcurementPlanDetailRowView> buildInitialDetailRows(ProcurementPlanCreateRequest form) {
         if (form == null || form.getDetails() == null) {
             return List.of();
