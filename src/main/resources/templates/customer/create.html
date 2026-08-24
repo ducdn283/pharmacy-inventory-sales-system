@@ -237,6 +237,7 @@
     var optIndividual = document.getElementById('optIndividual');
     var optCompany = document.getElementById('optCompany');
     var taxLabel = document.getElementById('cusTaxLabel');
+    var taxInput = document.getElementById('cusTax');
     // 2 ô ngân hàng chỉ TỒN TẠI với khách doanh nghiệp: hiện thì bắt buộc, ẩn thì gỡ `required`.
     // Không gỡ thì submit bị chặn bởi một ô người dùng không nhìn thấy — bế tắc hoàn toàn.
     var bankInputs = [document.getElementById('cusBankAcc'), document.getElementById('cusBankName')];
@@ -253,6 +254,17 @@
       optCompany.classList.toggle('active', isCompany);
       // taxCode dùng cho cả 2 loại: doanh nghiệp = Mã số thuế, cá nhân = số CCCD/CMND.
       if (taxLabel) { taxLabel.textContent = isCompany ? 'Mã số thuế' : 'Số CCCD/CMND'; }
+      // Định dạng cũng đổi theo loại khách, KHÔNG chỉ đổi tên gọi — giữ đúng luật mà
+      // CustomerService.validateTaxCode dùng lúc lưu: doanh nghiệp là MST 10 số (kèm "-3 số" chi
+      // nhánh), cá nhân là CCCD 12 số hoặc CMND 9 số. Thuộc tính pattern của HTML tự bọc ^...$ nên
+      // nhánh "hoặc" bên dưới không cần dấu neo. Hai tầng phải ra CÙNG một câu: `title` chính là câu
+      // fragments/field-validation hiện ra khi sai định dạng.
+      if (taxInput) {
+        taxInput.setAttribute('pattern', isCompany ? '[0-9]{10}(-[0-9]{3})?' : '[0-9]{9}|[0-9]{12}');
+        taxInput.setAttribute('title', isCompany
+          ? 'Mã số thuế gồm 10 chữ số, hoặc 10 chữ số kèm "-" và 3 chữ số chi nhánh'
+          : 'Số CCCD/CMND phải gồm 12 chữ số (CCCD) hoặc 9 chữ số (CMND)');
+      }
       // Ô mã định danh và địa chỉ BẮT BUỘC với cả 2 loại (`required` viết thẳng trong HTML, không
       // bật/tắt theo loại) — đổi loại khách chỉ đổi tên gọi của mã, không đổi việc phải nhập.
       bankInputs.forEach(function (input) {
