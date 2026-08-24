@@ -1687,7 +1687,7 @@
                     <span class="stock-unit-display">${escapeHtml(stockUnit || '—')}</span>
                 </div>
                 <div class="qty-cell">
-                    <input type="number" min="1" class="field-input quantity-input"
+                    <input type="number" min="1" step="1" class="field-input quantity-input"
                            data-field="requestedQuantity" value="${quantity}"
                            oninput="handleQuantityInput(this)">
                 </div>
@@ -2232,6 +2232,7 @@
 </script>
 
 <div th:replace="~{fragments/confirm :: confirm}"></div>
+<div th:replace="~{fragments/number-input :: numberInputs}"></div>
 
 </body>
 </html>
