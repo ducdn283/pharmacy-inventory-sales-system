@@ -1044,7 +1044,7 @@ public class PurchaseinvoiceService {
         int storageQuantity = calculateBaseQuantity(detail.getQuantity(), importUnit);
 
         Batch batch = new Batch();
-        batch.setBatchCode(generateBatchCode(invoice.getId(), detail.getId()));
+        batch.setBatchCode(generateBatchCode(invoice.getId(), detail.getId(), detail.getLotNumber()));
         batch.setBatchName(generateBatchName(detail));
         batch.setProductID(product);
         batch.setPurchaseDetailID(detail);
@@ -1164,15 +1164,20 @@ public class PurchaseinvoiceService {
                 .intValue();
     }
 
-    // Sinh mã lô hàng duy nhất từ id phiếu nhập + id dòng chi tiết.
-    private String generateBatchCode(Integer purchaseId, Integer purchaseDetailId) {
+    // Sinh mã lô hàng duy nhất từ id phiếu nhập + số lô (lotNumber); nếu không có số lô, rơi về id
+    // dòng chi tiết để vẫn đảm bảo batchCode luôn duy nhất (batchCode UNIQUE NOT NULL ở DB).
+    private String generateBatchCode(Integer purchaseId, Integer purchaseDetailId, String lotNumber) {
+        String suffix = lotNumber != null && !lotNumber.isBlank()
+                ? lotNumber
+                : String.format("%03d", purchaseDetailId == null ? 0 : purchaseDetailId);
+
         return "BATCH-" + String.format("%06d", purchaseId == null ? 0 : purchaseId)
-                + "-" + String.format("%03d", purchaseDetailId == null ? 0 : purchaseDetailId);
+                + "-" + suffix;
     }
 
     // Sinh tên lô hàng tự động từ id dòng chi tiết phiếu nhập.
     private String generateBatchName(Purchasedetail detail) {
-        return "LOT-" + String.format("%06d", detail.getId() == null ? 0 : detail.getId());
+        return "BAT-" + String.format("%06d", detail.getId() == null ? 0 : detail.getId());
     }
 
     /**
@@ -1307,6 +1312,11 @@ public class PurchaseinvoiceService {
             throw new IllegalArgumentException("Phiếu nhập phải có ít nhất một sản phẩm");
         }
 
+        // So sánh không phân biệt hoa/thường vì batchCode sinh trực tiếp từ lotNumber
+        // (xem generateBatchCode()) và batchCode UNIQUE ở DB thường dùng collation
+        // không phân biệt hoa/thường — trùng theo case vẫn là trùng.
+        Set<String> seenLotNumbers = new HashSet<>();
+
         for (PurchaseInvoiceDetailCreateRequest detail : request.getDetails()) {
             if (detail.getProductId() == null) {
                 throw new IllegalArgumentException("Vui lòng chọn sản phẩm");
@@ -1318,6 +1328,12 @@ public class PurchaseinvoiceService {
 
             if (detail.getImportPrice() == null || detail.getImportPrice().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("Đơn giá phải lớn hơn 0");
+            }
+
+            String lotNumber = trimToNull(detail.getLotNumber());
+            if (lotNumber != null && !seenLotNumbers.add(lotNumber.toUpperCase())) {
+                throw new IllegalArgumentException(
+                        "Số lô \"" + lotNumber + "\" bị trùng trong phiếu nhập, vui lòng nhập số lô khác nhau cho từng dòng");
             }
 
             // Quy tắc hạn sử dụng theo loại hàng cần Product đã resolve — kiểm tra trong
