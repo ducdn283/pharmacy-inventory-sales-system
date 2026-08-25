@@ -1433,10 +1433,7 @@ public class ReturnService {
         if (hasInvoiceDiscount(invoice)) {
             return false;
         }
-        // KHÔNG chặn hóa đơn còn nợ: khách còn nợ vẫn được trả hàng, tiền hoàn cấn trừ thẳng vào khoản nợ
-        // đó (netting — xem applyDebtOffset). Đặc tả bổ sung 27/07 mục 3, và PISMS_Xu_ly_Cong_no sheet
-        // "Công nợ Khách hàng" ca 3/4/5: "phần mềm KHÔNG cần bắt người dùng thanh toán xong rồi mới xử lý
-        // trả hàng". Gate cũ (bắt trả hết nợ) đã được gỡ ngày 28/07 theo đúng tài liệu này.
+        // KHÔNG chặn hóa đơn còn nợ: khách còn nợ vẫn được trả hàng, tiền hoàn cấn trừ thẳng vào khoản nợ đó.
         return withinReturnWindow(effectiveSaleDate(invoice), windowDays);
     }
 
@@ -1461,7 +1458,7 @@ public class ReturnService {
 
     private void assertReturnable(Invoice invoice) {
         if (!isNormalInvoice(invoice)) {
-            throw new IllegalArgumentException("Chỉ trả được hóa đơn bán hàng (không phải hóa đơn điều chỉnh)");
+            throw new IllegalArgumentException("Chỉ trả được hóa đơn bán hàng");
         }
         if (!isReturnEligibleStatus(invoice)) {
             throw new IllegalArgumentException("Chỉ trả được hóa đơn đã hoàn thành");
@@ -1590,7 +1587,7 @@ public class ReturnService {
         return requested.setScale(0, RoundingMode.UNNECESSARY);
     }
 
-    /** The window as the create screen phrases it: "trong 3 ngày" / "không giới hạn thời gian". */
+    /** The window as the create screen phrases it: "trong n ngày" / "không giới hạn thời gian". */
     @Transactional(readOnly = true)
     public String getReturnWindowLabel() {
         int days = getReturnWindowDays();
