@@ -63,6 +63,8 @@ public class ProductService {
     public static final String BUSINESS_STATUS_ACTIVE = "ACTIVE";
     public static final String BUSINESS_STATUS_INACTIVE = "INACTIVE";
 
+    public static final String SORT_CODE_ASC = "CODE_ASC";
+    public static final String SORT_CODE_DESC = "CODE_DESC";
     public static final String SORT_NAME_ASC = "NAME_ASC";
     public static final String SORT_NAME_DESC = "NAME_DESC";
     public static final String SORT_STOCK_ASC = "STOCK_ASC";
@@ -1313,11 +1315,10 @@ public class ProductService {
         return BUSINESS_STATUS_ACTIVE.equals(businessStatus) ? active : !active;
     }
 
-    // Dựng Comparator theo lựa chọn sắp xếp (tên/tồn kho, tăng/giảm); tên luôn là tiêu chí phụ để ổn định thứ tự.
+    // Dựng Comparator theo lựa chọn sắp xếp (mã hàng/tên/tồn kho, tăng/giảm); tên luôn là tiêu chí
+    // phụ để ổn định thứ tự. Không chọn gì (mặc định) thì sắp theo mã hàng tăng dần.
     private Comparator<ProductRowResponse> productSortComparator(String sortOrder) {
-        if (sortOrder == null || sortOrder.isBlank()) {
-            return null;
-        }
+        String effectiveSortOrder = (sortOrder == null || sortOrder.isBlank()) ? SORT_CODE_ASC : sortOrder;
 
         Collator vietnamese = Collator.getInstance(Locale.forLanguageTag("vi-VN"));
         vietnamese.setStrength(Collator.PRIMARY);
@@ -1331,8 +1332,20 @@ public class ProductService {
             return Comparator.nullsLast(Integer::compareTo)
                     .compare(left.getProductId(), right.getProductId());
         };
+        Comparator<ProductRowResponse> byCode = (left, right) -> {
+            String leftCode = left.getCode() == null ? "" : left.getCode();
+            String rightCode = right.getCode() == null ? "" : right.getCode();
+            int compared = vietnamese.compare(leftCode, rightCode);
+            if (compared != 0) {
+                return compared;
+            }
+            return Comparator.nullsLast(Integer::compareTo)
+                    .compare(left.getProductId(), right.getProductId());
+        };
 
-        return switch (sortOrder) {
+        return switch (effectiveSortOrder) {
+            case SORT_CODE_ASC -> byCode;
+            case SORT_CODE_DESC -> byCode.reversed();
             case SORT_NAME_ASC -> byName;
             case SORT_NAME_DESC -> byName.reversed();
             case SORT_STOCK_ASC -> Comparator.comparingLong(ProductRowResponse::getStock)
@@ -1340,7 +1353,7 @@ public class ProductService {
             case SORT_STOCK_DESC -> Comparator.comparingLong(ProductRowResponse::getStock)
                     .reversed()
                     .thenComparing(byName);
-            default -> null;
+            default -> byCode;
         };
     }
 

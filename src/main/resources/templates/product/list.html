@@ -412,7 +412,8 @@
                     <div class="col-12 col-md-6 col-xl-2">
                         <label class="form-label small text-secondary" for="productSortOrder">Sắp xếp</label>
                         <select class="form-select" name="sortOrder" id="productSortOrder" aria-label="Sắp xếp sản phẩm">
-                            <option value="">Sắp xếp mặc định</option>
+                            <option value="CODE_ASC" th:selected="${sortOrder == null or sortOrder == '' or sortOrder == 'CODE_ASC'}">Mã hàng: A → Z</option>
+                            <option value="CODE_DESC" th:selected="${sortOrder == 'CODE_DESC'}">Mã hàng: Z → A</option>
                             <option value="NAME_ASC" th:selected="${sortOrder == 'NAME_ASC'}">Tên: A → Z</option>
                             <option value="NAME_DESC" th:selected="${sortOrder == 'NAME_DESC'}">Tên: Z → A</option>
                             <option value="STOCK_ASC" th:selected="${sortOrder == 'STOCK_ASC'}">Tồn kho: tăng dần</option>

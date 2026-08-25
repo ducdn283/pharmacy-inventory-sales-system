@@ -59,6 +59,21 @@ class CustomAccountDetailsServiceTest {
     }
 
     @Test
+    void signInWithEmailInsteadOfUsernameReturnsPrincipal() {
+        // findByUsernameIgnoreCaseOrEmailIgnoreCase checks the SAME loginId against both columns —
+        // logging in with an email takes the identical code path as a username, just matching the
+        // other column, so there is no separate branch to exercise beyond proving it also resolves.
+        when(accountRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase("u@example.com", "u@example.com"))
+                .thenReturn(Optional.of(activeAccount()));
+        when(accountpermissionRepository.findByAccountId(1))
+                .thenReturn(List.of(perm(5, "PHARMACIST")));
+
+        AccountPrincipal principal = service.loadUserByLoginId("u@example.com");
+
+        assertEquals("PHARMACIST", principal.getPrimaryRole());
+    }
+
+    @Test
     void ownerWinsWhenAccountHoldsMultipleRoleRows() {
         when(accountRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase("u", "u"))
                 .thenReturn(Optional.of(activeAccount()));
