@@ -242,9 +242,7 @@ public class ProductPageController {
     }
 
     @GetMapping({
-            "/owner/products/barcode/search-products",
-            "/pharmacist/products/barcode/search-products",
-            "/accountant/products/barcode/search-products"
+            "/owner/products/barcode/search-products"
     })
     @ResponseBody
     public List<ProductBarcodeOptionResponse> searchBarcodeProducts(
@@ -253,9 +251,7 @@ public class ProductPageController {
     }
 
     @GetMapping({
-            "/owner/products/barcode/search-purchase-invoices",
-            "/pharmacist/products/barcode/search-purchase-invoices",
-            "/accountant/products/barcode/search-purchase-invoices"
+            "/owner/products/barcode/search-purchase-invoices"
     })
     @ResponseBody
     public List<PurchaseInvoiceBarcodeOptionResponse> searchBarcodePurchaseInvoices(
@@ -264,9 +260,7 @@ public class ProductPageController {
     }
 
     @GetMapping({
-            "/owner/products/barcode/purchase-invoices/{purchaseId}/products",
-            "/pharmacist/products/barcode/purchase-invoices/{purchaseId}/products",
-            "/accountant/products/barcode/purchase-invoices/{purchaseId}/products"
+            "/owner/products/barcode/purchase-invoices/{purchaseId}/products"
     })
     @ResponseBody
     public List<ProductBarcodeOptionResponse> getPurchaseInvoiceBarcodeProducts(
@@ -276,9 +270,7 @@ public class ProductPageController {
 
     /** Trang xem trước A5 của toàn bộ sản phẩm đã chọn trong modal. */
     @PostMapping({
-            "/owner/products/barcode/print",
-            "/pharmacist/products/barcode/print",
-            "/accountant/products/barcode/print"
+            "/owner/products/barcode/print"
     })
     public String previewBarcodes(@RequestParam("productIds") List<Integer> productIds,
                                   @RequestParam("quantities") List<Integer> quantities,
@@ -295,9 +287,7 @@ public class ProductPageController {
 
     /** Tải file PDF A5 để kiểm tra hoặc in sau. */
     @PostMapping(value = {
-            "/owner/products/barcode/pdf",
-            "/pharmacist/products/barcode/pdf",
-            "/accountant/products/barcode/pdf"
+            "/owner/products/barcode/pdf"
     }, produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> exportBarcodePdf(
             @RequestParam("productIds") List<Integer> productIds,
@@ -315,9 +305,7 @@ public class ProductPageController {
 
     /** Trả ảnh barcode PNG được sinh từ Product.code. */
     @GetMapping(value = {
-            "/owner/products/barcode/image/{productId}",
-            "/pharmacist/products/barcode/image/{productId}",
-            "/accountant/products/barcode/image/{productId}"
+            "/owner/products/barcode/image/{productId}"
     }, produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> barcodeImage(@PathVariable Integer productId) {
         try {
