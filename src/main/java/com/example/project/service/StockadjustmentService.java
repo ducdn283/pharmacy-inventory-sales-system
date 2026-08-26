@@ -899,7 +899,13 @@ public class StockadjustmentService {
                         StockAdjustmentItemRequest::getBatchId,
                         item -> item,
                         (first, second) -> {
-                            first.setQuantity(first.getQuantity() + second.getQuantity());
+                            // Cộng bằng long rồi KẸP về Integer.MAX_VALUE: hai dòng cùng lô, mỗi dòng
+                            // ~2 tỷ (gửi thẳng lên, không qua màn hình) thì phép cộng int TRÀN thành SỐ ÂM
+                            // — số âm lọt qua được kiểm "vượt tồn" ở validateSelectedBatches, rồi
+                            // applyStockEffect lấy `tồn - (-N)` = **CỘNG thêm** vào kho. Kẹp lại thì số luôn
+                            // dương và chắc chắn vượt tồn ⇒ rơi đúng câu lỗi sẵn có.
+                            long merged = (long) first.getQuantity() + (long) second.getQuantity();
+                            first.setQuantity((int) Math.min(merged, Integer.MAX_VALUE));
 
                             String firstReason = first.getReason() == null ? "" : first.getReason();
                             String secondReason = second.getReason() == null ? "" : second.getReason();
