@@ -1,6 +1,6 @@
 # Pharmacy Inventory & Sales Management System
 
-Inventory, sales, returns and shift-cash management for a family-run retail pharmacy.
+Batch-level inventory, purchasing, sales and returns for a family-run retail pharmacy.
 
 ![Java](https://img.shields.io/badge/Java-25-b07219)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.6-6DB33F)
