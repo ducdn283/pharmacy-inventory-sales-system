@@ -1241,7 +1241,8 @@
                        class="form-control form-control-sm quantity-input"
                        name="items[${index}].quantity"
                        data-field="quantity"
-                       oninput="calculateSummary()">
+                       oninput="onQuantityInput(this)">
+                <div class="text-secondary small">tối đa ${candidate.storageQuantity}</div>
             </td>
 
             <td>
@@ -1292,6 +1293,23 @@
                 input.setAttribute('name', `items[${index}].${field}`);
             });
         });
+    }
+
+    /**
+     * Kẹp số lượng về tồn của chính lô đó NGAY KHI GÕ, giống hai màn trả hàng. Chỉ có `max`
+     * trên thẻ thì trình duyệt vẫn cho gõ số tùy ý và mãi tới lúc bấm Tạo mới báo lỗi — người lập kịp
+     * thấy dòng "Tổng số lượng" cộng theo một con số không bao giờ hủy được.
+     *
+     * CHỈ ghi đè khi VƯỢT max: ô trống hay đang gõ dở thì để nguyên, không thì xóa trắng ô là nó tự
+     * nhảy về 1. Chặn thật vẫn ở StockadjustmentService.validateSelectedBatches.
+     */
+    function onQuantityInput(input) {
+        const max = parseInt(input.getAttribute('max'), 10) || 0;
+        const qty = parseInt(input.value, 10);
+        if (max > 0 && isFinite(qty) && qty > max) {
+            input.value = max;
+        }
+        calculateSummary();
     }
 
     /**

@@ -416,15 +416,25 @@ public class ReturnPurchaseService {
                 .stream().collect(Collectors.toMap(Purchasedetail::getId, line -> line, (a, b) -> a));
         Map<Integer, List<Batch>> batchesByDetail = batchesByPurchaseDetail();
 
-        // Tách mỗi dòng yêu cầu trả thành các phần theo lô (FIFO ưu tiên hạn dùng gần nhất), mỗi
-        // phần đã tính sẵn số tiền.
-        List<Chunk> chunks = new ArrayList<>();
+        // GỘP các dòng trùng cùng một dòng nhập TRƯỚC khi chia lô. Gửi thẳng lên hai dòng cùng
+        // purchaseDetailId (màn hình không bao giờ sinh ra) thì mỗi vòng lặp đọc lại CÙNG một số
+        // tồn (lúc này chưa trừ kho) nên cả hai đều lọt kiểm "vượt tồn" ⇒ phiếu có tổng gấp đôi
+        // tồn. Nháp lưu được nhưng duyệt thì luôn chết ở applyReturnEffect ⇒ phiếu kẹt vĩnh viễn.
+        Map<Integer, Integer> qtyByDetail = new LinkedHashMap<>();
         for (ReturnPurchaseLineRequest item : request.getItems()) {
             if (item == null || item.getPurchaseDetailId() == null
                     || item.getReturnQty() == null || item.getReturnQty() <= 0) {
                 continue;
             }
-            Purchasedetail line = lineById.get(item.getPurchaseDetailId());
+            qtyByDetail.merge(item.getPurchaseDetailId(), item.getReturnQty(),
+                    (a, b) -> (int) Math.min((long) a + (long) b, Integer.MAX_VALUE));
+        }
+
+        // Tách mỗi dòng yêu cầu trả thành các phần theo lô (FIFO ưu tiên hạn dùng gần nhất), mỗi
+        // phần đã tính sẵn số tiền.
+        List<Chunk> chunks = new ArrayList<>();
+        for (Map.Entry<Integer, Integer> requested : qtyByDetail.entrySet()) {
+            Purchasedetail line = lineById.get(requested.getKey());
             if (line == null) {
                 throw new IllegalArgumentException("Dòng nhập không thuộc phiếu nhập đã chọn");
             }
@@ -433,7 +443,7 @@ public class ReturnPurchaseService {
             // Input là số lượng theo ĐƠN VỊ NHẬP; tồn kho là đơn vị cơ sở (viên) → quy đổi qua tỉ lệ.
             int ratio = importRatio(batches.isEmpty() ? null : batches.get(0));
             int onHandUnit = onHand / ratio;
-            int qtyUnit = item.getReturnQty();
+            int qtyUnit = requested.getValue();
             if (qtyUnit > onHandUnit) {
                 throw new IllegalArgumentException("Số lượng trả của \"" + productName(line)
                         + "\" vượt quá tồn hiện tại (" + onHandUnit + ")");

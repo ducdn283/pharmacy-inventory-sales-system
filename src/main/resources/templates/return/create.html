@@ -294,6 +294,7 @@
                                            th:value="${form.refundRate != null} ? ${form.refundRate} : ${defaultRefundRate}">
                                     <span class="input-group-text">%</span>
                                 </div>
+                                <div class="form-text" id="refundRateHint"></div>
                             </div>
 
                             <div class="summary-line">
@@ -626,8 +627,30 @@
             return Math.min(rate, 100);
         }
 
+        /**
+         * Báo NGAY KHI GÕ khi tỷ lệ nằm ngoài (0;100] — cố ý KHÔNG tự kẹp giá trị như ô số lượng:
+         * đây là con số người lập gõ có chủ ý, sửa âm thầm là đổi số tiền hoàn khách mà họ không biết.
+         * Chặn thật vẫn ở ReturnService.resolveRefundRate.
+         */
+        function syncRefundRateWarning() {
+            const hint = document.getElementById('refundRateHint');
+            if (!refundRateInput || !hint) return;
+
+            const raw = refundRateInput.value.trim();
+            const rate = parseFloat(raw);
+            let message = '';
+            if (raw !== '' && (!isFinite(rate) || rate <= 0 || rate > 100 || rate % 1 !== 0)) {
+                message = 'Tỷ lệ hoàn phải là số nguyên từ 1 đến 100 — số đang nhập sẽ bị từ chối khi lưu.';
+            }
+
+            hint.textContent = message;
+            hint.classList.toggle('text-danger', message !== '');
+            refundRateInput.classList.toggle('is-invalid', message !== '');
+        }
+
         function recalc() {
             const rate = currentRate();
+            syncRefundRateWarning();
             let totalOriginal = 0;
             let totalRefund = 0;
             let itemCount = 0;

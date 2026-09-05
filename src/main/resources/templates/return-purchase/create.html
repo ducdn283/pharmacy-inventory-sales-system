@@ -476,6 +476,8 @@
             // ReturnPurchaseService.resolveRefundAmount, ô này chỉ để xem trước.
             let totalRefund = refundAmountInput ? (window.pmMoneyValue ? pmMoneyValue(refundAmountInput) : 0) : 0;
             if (!isFinite(totalRefund) || totalRefund < 0) totalRefund = 0;
+            // Giữ lại số NGƯỜI LẬP GÕ trước khi kẹp, để còn biết mà cảnh báo là họ đang vượt trần.
+            const enteredRefund = totalRefund;
             if (totalRefund > totalOriginal) totalRefund = totalOriginal;
 
             // Chia tiền hoàn về từng dòng theo tỷ trọng giá trị gốc — khớp allocateRefund() ở server.
@@ -496,9 +498,21 @@
             summaryItems.textContent = itemCount;
             summaryOriginal.textContent = formatMoney(totalOriginal);
             summaryRefund.textContent = formatMoney(totalRefund);
+            // Vượt trần thì báo NGAY KHI GÕ, nhưng CỐ Ý không tự sửa ô: đây là số tiền NCC báo lại,
+            // kẹp âm thầm là ghi vào phiếu một khoản khác với khoản họ vừa thỏa thuận. Chặn thật ở
+            // ReturnPurchaseService.resolveRefundAmount.
+            // Chưa chọn dòng hàng nào thì IM LẶNG: lúc đó trần đang là 0 nên mọi số đều "vượt",
+            // mà câu đúng phải báo lúc đó là "chưa chọn dòng hàng" — server đã lo.
+            const overRefund = totalOriginal > 0 && enteredRefund > totalOriginal;
             if (refundAmountHint) {
-                refundAmountHint.textContent = 'Tối đa ' + formatMoney(totalOriginal)
-                    + ' (giá trị hàng trả).';
+                refundAmountHint.textContent = overRefund
+                    ? 'Vượt giá trị hàng trả (tối đa ' + formatMoney(totalOriginal)
+                        + ') — số đang nhập sẽ bị từ chối khi lưu.'
+                    : 'Tối đa ' + formatMoney(totalOriginal) + ' (giá trị hàng trả).';
+                refundAmountHint.classList.toggle('text-danger', overRefund);
+            }
+            if (refundAmountInput) {
+                refundAmountInput.classList.toggle('is-invalid', overRefund);
             }
 
             let offsetForConfirm = 0;
