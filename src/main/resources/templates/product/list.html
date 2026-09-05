@@ -277,10 +277,12 @@
                 <p class="text-secondary mb-0">Quản lý thông tin và tồn kho hàng hóa của nhà thuốc</p>
             </div>
             <div class="product-header-actions">
-                <button type="button"
+                <button th:if="${basePath == '/owner/products'}"
+                        type="button"
                         id="openBarcodeModalBtn"
                         class="btn btn-outline-primary d-inline-flex align-items-center justify-content-center px-3">
-                    <i class="ti ti-barcode me-1"></i> In tem mã
+                    <i class="ti ti-barcode me-1"></i>
+                    In tem mã
                 </button>
                 <button th:if="${!#lists.isEmpty(restockProducts)}"
                         type="button"
@@ -565,7 +567,9 @@
 </main>
 
 <!-- Modal lập danh sách tem: tìm sản phẩm hoặc thêm theo hóa đơn nhập. -->
-<th:block th:replace="~{product/barcode-modal :: barcodeModal(${basePath})}"></th:block>
+<th:block th:if="${basePath == '/owner/products'}"
+          th:replace="~{product/barcode-modal :: barcodeModal(${basePath})}">
+</th:block>
 
 <div id="restockProductModal"
      class="restock-modal-overlay"
